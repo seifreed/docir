@@ -437,42 +437,42 @@ impl OoxmlParser {
         Option<NodeId>,
         Option<NodeId>,
     ) {
-        let styles_id = doc_rels
-            .get_first_by_type(rel_type::STYLES)
-            .and_then(|rel| {
-                let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-                let xml = zip.read_file_string(&part_path).ok()?;
-                let id = parser.parse_styles(&xml).ok()?;
-                if let Some(IRNode::StyleSet(set)) = parser.store_mut().get_mut(id) {
-                    set.span = Some(SourceSpan::new(&part_path));
-                }
-                Some(id)
-            });
-
-        let styles_with_effects_id = if zip.contains("word/stylesWithEffects.xml") {
-            let part_path = "word/stylesWithEffects.xml";
-            zip.read_file_string(part_path).ok().and_then(|xml| {
-                let id = parser.parse_styles_with_effects(&xml).ok()?;
+        let styles_id = self.parse_docx_part_by_rel(
+            zip,
+            main_part_path,
+            doc_rels,
+            rel_type::STYLES,
+            |part_path, xml| {
+                let id = parser.parse_styles(xml).ok()?;
                 if let Some(IRNode::StyleSet(set)) = parser.store_mut().get_mut(id) {
                     set.span = Some(SourceSpan::new(part_path));
                 }
                 Some(id)
-            })
-        } else {
-            None
-        };
+            },
+        );
 
-        let numbering_id = doc_rels
-            .get_first_by_type(rel_type::NUMBERING)
-            .and_then(|rel| {
-                let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-                let xml = zip.read_file_string(&part_path).ok()?;
-                let id = parser.parse_numbering(&xml).ok()?;
-                if let Some(IRNode::NumberingSet(set)) = parser.store_mut().get_mut(id) {
-                    set.span = Some(SourceSpan::new(&part_path));
+        let styles_with_effects_id =
+            self.parse_docx_part_by_path(zip, "word/stylesWithEffects.xml", |part_path, xml| {
+                let id = parser.parse_styles_with_effects(xml).ok()?;
+                if let Some(IRNode::StyleSet(set)) = parser.store_mut().get_mut(id) {
+                    set.span = Some(SourceSpan::new(part_path));
                 }
                 Some(id)
             });
+
+        let numbering_id = self.parse_docx_part_by_rel(
+            zip,
+            main_part_path,
+            doc_rels,
+            rel_type::NUMBERING,
+            |part_path, xml| {
+                let id = parser.parse_numbering(xml).ok()?;
+                if let Some(IRNode::NumberingSet(set)) = parser.store_mut().get_mut(id) {
+                    set.span = Some(SourceSpan::new(part_path));
+                }
+                Some(id)
+            },
+        );
 
         let comments = doc_rels
             .get_first_by_type(rel_type::COMMENTS)
@@ -552,41 +552,47 @@ impl OoxmlParser {
             })
             .unwrap_or_default();
 
-        let settings_id = doc_rels
-            .get_first_by_type(rel_type::SETTINGS)
-            .and_then(|rel| {
-                let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-                let xml = zip.read_file_string(&part_path).ok()?;
-                let id = parser.parse_settings(&xml).ok()?;
+        let settings_id = self.parse_docx_part_by_rel(
+            zip,
+            main_part_path,
+            doc_rels,
+            rel_type::SETTINGS,
+            |part_path, xml| {
+                let id = parser.parse_settings(xml).ok()?;
                 if let Some(IRNode::WordSettings(settings)) = parser.store_mut().get_mut(id) {
-                    settings.span = Some(SourceSpan::new(&part_path));
+                    settings.span = Some(SourceSpan::new(part_path));
                 }
                 Some(id)
-            });
+            },
+        );
 
-        let web_settings_id = doc_rels
-            .get_first_by_type(rel_type::WEB_SETTINGS)
-            .and_then(|rel| {
-                let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-                let xml = zip.read_file_string(&part_path).ok()?;
-                let id = parser.parse_web_settings(&xml).ok()?;
+        let web_settings_id = self.parse_docx_part_by_rel(
+            zip,
+            main_part_path,
+            doc_rels,
+            rel_type::WEB_SETTINGS,
+            |part_path, xml| {
+                let id = parser.parse_web_settings(xml).ok()?;
                 if let Some(IRNode::WebSettings(settings)) = parser.store_mut().get_mut(id) {
-                    settings.span = Some(SourceSpan::new(&part_path));
+                    settings.span = Some(SourceSpan::new(part_path));
                 }
                 Some(id)
-            });
+            },
+        );
 
-        let mut font_table_id = doc_rels
-            .get_first_by_type(rel_type::FONT_TABLE)
-            .and_then(|rel| {
-                let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-                let xml = zip.read_file_string(&part_path).ok()?;
-                let id = parser.parse_font_table(&xml).ok()?;
+        let mut font_table_id = self.parse_docx_part_by_rel(
+            zip,
+            main_part_path,
+            doc_rels,
+            rel_type::FONT_TABLE,
+            |part_path, xml| {
+                let id = parser.parse_font_table(xml).ok()?;
                 if let Some(IRNode::FontTable(table)) = parser.store_mut().get_mut(id) {
-                    table.span = Some(SourceSpan::new(&part_path));
+                    table.span = Some(SourceSpan::new(part_path));
                 }
                 Some(id)
-            });
+            },
+        );
         if font_table_id.is_none() && zip.contains("word/fontTable.xml") {
             if let Ok(xml) = zip.read_file_string("word/fontTable.xml") {
                 if let Ok(id) = parser.parse_font_table(&xml) {
@@ -598,41 +604,28 @@ impl OoxmlParser {
             }
         }
 
-        let comments_ext_id = if zip.contains("word/commentsExtended.xml") {
-            zip.read_file_string("word/commentsExtended.xml")
-                .ok()
-                .and_then(|xml| {
-                    let id = parser.parse_comments_extended(&xml).ok()?;
-                    if let Some(IRNode::CommentExtensionSet(set)) = parser.store_mut().get_mut(id) {
-                        set.span = Some(SourceSpan::new("word/commentsExtended.xml"));
-                    }
-                    Some(id)
-                })
-        } else {
-            None
-        };
+        let comments_ext_id =
+            self.parse_docx_part_by_path(zip, "word/commentsExtended.xml", |part_path, xml| {
+                let id = parser.parse_comments_extended(xml).ok()?;
+                if let Some(IRNode::CommentExtensionSet(set)) = parser.store_mut().get_mut(id) {
+                    set.span = Some(SourceSpan::new(part_path));
+                }
+                Some(id)
+            });
 
-        let comments_id_map_id = if zip.contains("word/commentsIds.xml") {
-            zip.read_file_string("word/commentsIds.xml")
-                .ok()
-                .and_then(|xml| {
-                    let id = parser.parse_comments_ids(&xml).ok()?;
-                    if let Some(IRNode::CommentIdMap(map)) = parser.store_mut().get_mut(id) {
-                        map.span = Some(SourceSpan::new("word/commentsIds.xml"));
-                    }
-                    Some(id)
-                })
-        } else {
-            None
-        };
+        let comments_id_map_id =
+            self.parse_docx_part_by_path(zip, "word/commentsIds.xml", |part_path, xml| {
+                let id = parser.parse_comments_ids(xml).ok()?;
+                if let Some(IRNode::CommentIdMap(map)) = parser.store_mut().get_mut(id) {
+                    map.span = Some(SourceSpan::new(part_path));
+                }
+                Some(id)
+            });
 
-        let glossary_id = if zip.contains("word/glossary/document.xml") {
-            zip.read_file_string("word/glossary/document.xml")
-                .ok()
-                .and_then(|xml| parser.parse_glossary_document(&xml, doc_rels).ok())
-        } else {
-            None
-        };
+        let glossary_id =
+            self.parse_docx_part_by_path(zip, "word/glossary/document.xml", |_, xml| {
+                parser.parse_glossary_document(xml, doc_rels).ok()
+            });
 
         (
             styles_id,
@@ -702,6 +695,41 @@ impl OoxmlParser {
             }
         }
         Relationships::default()
+    }
+
+    fn parse_docx_part_by_rel<R, F>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        main_part_path: &str,
+        doc_rels: &Relationships,
+        rel_type: &str,
+        mut parse: F,
+    ) -> Option<NodeId>
+    where
+        R: Read + Seek,
+        F: FnMut(&str, &str) -> Option<NodeId>,
+    {
+        let rel = doc_rels.get_first_by_type(rel_type)?;
+        let part_path = Relationships::resolve_target(main_part_path, &rel.target);
+        let xml = zip.read_file_string(&part_path).ok()?;
+        parse(&part_path, &xml)
+    }
+
+    fn parse_docx_part_by_path<R, F>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        part_path: &str,
+        mut parse: F,
+    ) -> Option<NodeId>
+    where
+        R: Read + Seek,
+        F: FnMut(&str, &str) -> Option<NodeId>,
+    {
+        if !zip.contains(part_path) {
+            return None;
+        }
+        let xml = zip.read_file_string(part_path).ok()?;
+        parse(part_path, &xml)
     }
 
     /// Parse an XLSX document.
