@@ -8,12 +8,12 @@ use docir_core::ir::{
     TextAlignment,
 };
 use docir_core::ir::{
-    Field, FieldInstruction, FieldKind, Hyperlink, IRNode, MediaAsset, MediaType, NumberingInfo,
-    Paragraph, Run, RunProperties, Style, StyleSet, StyleType, Table, TableCell,
-    TableCellProperties, TableRow, TableWidth, TableWidthType,
+    Field, FieldInstruction, FieldKind, Hyperlink, IRNode, MediaType, NumberingInfo, Paragraph,
+    Run, RunProperties, Style, StyleSet, StyleType, Table, TableCell, TableCellProperties,
+    TableRow, TableWidth, TableWidthType,
 };
 use docir_core::normalize::normalize_store;
-use docir_core::security::{ExternalRefType, ExternalReference, OleObject};
+use docir_core::security::{ExternalRefType, ExternalReference};
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
 use encoding_rs::Encoding;
@@ -21,6 +21,10 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek};
 use std::path::Path;
+
+mod objects;
+
+use self::objects::{finalize_object, finalize_picture, ObjectContext, ObjectTextTarget};
 
 /// Parser for RTF documents.
 pub struct RtfParser {
@@ -166,22 +170,6 @@ struct ColorTable {
 struct FieldContext {
     instruction: String,
     runs: Vec<NodeId>,
-}
-
-#[derive(Debug, Default)]
-struct ObjectContext {
-    class_name: Option<String>,
-    object_name: Option<String>,
-    data_hex_len: usize,
-    media_type: Option<MediaType>,
-    pic_width: Option<u32>,
-    pic_height: Option<u32>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ObjectTextTarget {
-    Class,
-    Name,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -392,7 +380,7 @@ fn parse_rtf(
                     }
                     GroupKind::Object => {
                         if let Some(obj) = ctx.object_stack.pop() {
-                            if let Some(ole_id) = finalize_object(obj, store, ctx) {
+                            if let Some(ole_id) = finalize_object(obj, store) {
                                 ctx.ole_objects.push(ole_id);
                             }
                         }
@@ -1626,41 +1614,6 @@ fn create_external_ref(
         return Some(id);
     }
     None
-}
-
-fn finalize_object(
-    object: ObjectContext,
-    store: &mut IrStore,
-    _ctx: &mut RtfParseContext,
-) -> Option<NodeId> {
-    let mut ole = OleObject::new();
-    ole.name = object
-        .object_name
-        .clone()
-        .or_else(|| object.class_name.clone());
-    ole.prog_id = object.class_name.clone();
-    ole.size_bytes = (object.data_hex_len / 2) as u64;
-    let ole_id = ole.id;
-    store.insert(IRNode::OleObject(ole));
-    Some(ole_id)
-}
-
-fn finalize_picture(object: ObjectContext, store: &mut IrStore) -> Option<NodeId> {
-    let size = (object.data_hex_len / 2) as u64;
-    let media_type = object.media_type.unwrap_or(MediaType::Image);
-    let mut asset = MediaAsset::new("rtf/pict", media_type, size);
-    if let Some(mt) = object.media_type {
-        asset.content_type = match mt {
-            MediaType::Image => Some("image/rtf".to_string()),
-            MediaType::Audio => Some("audio/rtf".to_string()),
-            MediaType::Video => Some("video/rtf".to_string()),
-            MediaType::Other => None,
-        };
-    }
-    asset.span = Some(SourceSpan::new("rtf"));
-    let id = asset.id;
-    store.insert(IRNode::MediaAsset(asset));
-    Some(id)
 }
 
 fn run_properties_from_state(ctx: &RtfParseContext) -> RunProperties {
