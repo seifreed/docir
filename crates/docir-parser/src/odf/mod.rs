@@ -3,6 +3,7 @@
 use crate::error::ParseError;
 use crate::parser::{enforce_input_size, ParsedDocument, ParserConfig};
 use crate::security_utils::parse_dde_formula;
+use crate::text_utils::parse_text_alignment;
 use crate::zip_handler::SecureZipReader;
 use aes::Aes128;
 use aes::Aes256;
@@ -5275,17 +5276,6 @@ fn parse_font_size(value: &str) -> Option<u32> {
         .trim_end_matches("cm")
         .trim_end_matches("mm");
     num.parse::<f32>().ok().map(|v| v.round() as u32)
-}
-
-fn parse_text_alignment(value: &str) -> Option<docir_core::ir::TextAlignment> {
-    match value.to_ascii_lowercase().as_str() {
-        "left" => Some(docir_core::ir::TextAlignment::Left),
-        "center" => Some(docir_core::ir::TextAlignment::Center),
-        "right" => Some(docir_core::ir::TextAlignment::Right),
-        "justify" => Some(docir_core::ir::TextAlignment::Justify),
-        "distribute" => Some(docir_core::ir::TextAlignment::Distribute),
-        _ => None,
-    }
 }
 
 fn merge_styles(existing: &mut StyleSet, incoming: &mut StyleSet) {

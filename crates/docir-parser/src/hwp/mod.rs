@@ -3,6 +3,7 @@
 use crate::error::ParseError;
 use crate::ole::Cfb;
 use crate::parser::{enforce_input_size, ParsedDocument, ParserConfig};
+use crate::text_utils::parse_text_alignment;
 use crate::zip_handler::SecureZipReader;
 use aes::Aes128;
 use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
@@ -1209,15 +1210,7 @@ fn style_run_props_from_run(run: RunProperties) -> StyleRunProperties {
 fn parse_hwpx_paragraph_props(e: &BytesStart) -> StyleParagraphProperties {
     let mut props = StyleParagraphProperties::default();
     if let Some(align) = attr_any(e, &[b"align", b"alignment", b"textAlign"]) {
-        let align = align.to_ascii_lowercase();
-        props.alignment = match align.as_str() {
-            "left" => Some(docir_core::ir::TextAlignment::Left),
-            "center" => Some(docir_core::ir::TextAlignment::Center),
-            "right" => Some(docir_core::ir::TextAlignment::Right),
-            "justify" | "justified" => Some(docir_core::ir::TextAlignment::Justify),
-            "distribute" => Some(docir_core::ir::TextAlignment::Distribute),
-            _ => None,
-        };
+        props.alignment = parse_text_alignment(&align);
     }
     let mut indent = docir_core::ir::Indentation::default();
     let mut has_indent = false;
