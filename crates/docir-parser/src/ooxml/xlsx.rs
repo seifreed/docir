@@ -22,6 +22,8 @@ use quick_xml::Reader;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
+mod xlm;
+
 /// XLSX parser for workbook.xml and worksheets.
 pub struct XlsxParser {
     store: IrStore,
@@ -179,34 +181,7 @@ impl XlsxParser {
             document.content.push(sheet_id);
         }
 
-        if !auto_open_targets.is_empty() && !self.security_info.xlm_macros.is_empty() {
-            let mut any_marked = false;
-            for target in &auto_open_targets {
-                if let Some(target) = target {
-                    let target_upper = target.to_ascii_uppercase();
-                    for macro_entry in self.security_info.xlm_macros.iter_mut() {
-                        if macro_entry.sheet_name.to_ascii_uppercase() == target_upper {
-                            macro_entry.has_auto_open = true;
-                            any_marked = true;
-                        }
-                    }
-                }
-            }
-            if !any_marked {
-                for macro_entry in self.security_info.xlm_macros.iter_mut() {
-                    macro_entry.has_auto_open = true;
-                }
-            }
-            self.security_info
-                .threat_indicators
-                .push(docir_security::make_indicator(
-                    docir_core::security::ThreatIndicatorType::XlmMacro,
-                    docir_core::security::ThreatLevel::Critical,
-                    "XLM Auto_Open defined name detected".to_string(),
-                    Some(workbook_path.to_string()),
-                    None,
-                ));
-        }
+        self.finalize_auto_open_targets(&auto_open_targets, workbook_path);
 
         // Pivot caches
         for cache_ref in workbook_info.pivot_cache_refs {
@@ -324,15 +299,7 @@ impl XlsxParser {
         self.current_xlm_index = None;
 
         if kind == SheetKind::MacroSheet {
-            let mut xlm = docir_core::security::XlmMacro {
-                sheet_name: sheet.name.clone(),
-                sheet_state: sheet.state,
-                dangerous_functions: Vec::new(),
-                macro_cells: Vec::new(),
-                has_auto_open: false,
-            };
-            self.security_info.xlm_macros.push(xlm);
-            self.current_xlm_index = Some(self.security_info.xlm_macros.len() - 1);
+            self.begin_macro_sheet(sheet);
         }
 
         let mut columns: HashMap<u32, ColumnDefinition> = HashMap::new();
@@ -1231,69 +1198,7 @@ impl XlsxParser {
                 });
         }
 
-        // XLM macro detection (macro sheets)
-        if self.current_sheet_kind == Some(SheetKind::MacroSheet) {
-            if let Some(idx) = self.current_xlm_index {
-                if let Some(xlm) = self.security_info.xlm_macros.get_mut(idx) {
-                    xlm.macro_cells.push(docir_core::security::XlmMacroCell {
-                        cell_ref: cell_ref.to_string(),
-                        formula: text.to_string(),
-                    });
-
-                    let had_auto_open = xlm.has_auto_open;
-                    if upper.contains("AUTO_OPEN") || upper.contains("AUTO.OPEN") {
-                        xlm.has_auto_open = true;
-                    }
-
-                    if let Some(func) = extract_formula_function(&upper) {
-                        for &danger in docir_core::security::DANGEROUS_XLM_FUNCTIONS {
-                            if func == danger {
-                                let args = parse_formula_args_text(text);
-                                xlm.dangerous_functions
-                                    .push(docir_core::security::XlmFunction {
-                                        name: func.to_string(),
-                                        arguments: args,
-                                        cell_ref: cell_ref.to_string(),
-                                    });
-                                self.security_info.threat_indicators.push(
-                                    docir_security::make_indicator(
-                                        docir_core::security::ThreatIndicatorType::XlmMacro,
-                                        docir_core::security::ThreatLevel::Critical,
-                                        format!("XLM macro function {} at {}", func, cell_ref),
-                                        Some(sheet_path.to_string()),
-                                        None,
-                                    ),
-                                );
-                            }
-                        }
-                    }
-
-                    if xlm.has_auto_open && !had_auto_open {
-                        self.security_info
-                            .threat_indicators
-                            .push(docir_security::make_indicator(
-                                docir_core::security::ThreatIndicatorType::XlmMacro,
-                                docir_core::security::ThreatLevel::Critical,
-                                "XLM Auto_Open macro detected".to_string(),
-                                Some(sheet_path.to_string()),
-                                None,
-                            ));
-                    }
-
-                    if xlm.sheet_state != SheetState::Visible && xlm.macro_cells.len() == 1 {
-                        self.security_info
-                            .threat_indicators
-                            .push(docir_security::make_indicator(
-                                docir_core::security::ThreatIndicatorType::HiddenMacroSheet,
-                                docir_core::security::ThreatLevel::High,
-                                format!("Hidden macro sheet: {}", xlm.sheet_name),
-                                Some(sheet_path.to_string()),
-                                None,
-                            ));
-                    }
-                }
-            }
-        }
+        self.record_xlm_formula(cell_ref, text, &upper, sheet_path);
     }
 }
 
