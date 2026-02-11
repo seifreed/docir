@@ -60,6 +60,8 @@ impl OoxmlParser {
             m.normalization_ms = start.elapsed().as_millis();
         }
 
+        docir_security::populate_security_indicators(&mut store, root_id);
+
         Ok(ParsedDocument {
             root_id,
             format: DocumentFormat::Spreadsheet,
@@ -170,6 +172,8 @@ impl OoxmlParser {
         if let Some(m) = metrics.as_mut() {
             m.normalization_ms = start.elapsed().as_millis();
         }
+
+        docir_security::populate_security_indicators(&mut store, doc_id);
 
         Ok(ParsedDocument {
             root_id: doc_id,

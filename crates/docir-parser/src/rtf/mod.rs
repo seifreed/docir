@@ -13,10 +13,7 @@ use docir_core::ir::{
     TableCellProperties, TableRow, TableWidth, TableWidthType,
 };
 use docir_core::normalize::normalize_store;
-use docir_core::security::{
-    ExternalRefType, ExternalReference, OleObject, ThreatIndicator, ThreatIndicatorType,
-    ThreatLevel,
-};
+use docir_core::security::{ExternalRefType, ExternalReference, OleObject};
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
 use encoding_rs::Encoding;
@@ -98,12 +95,12 @@ impl RtfParser {
         for ole in ctx.ole_objects {
             doc.security.ole_objects.push(ole);
         }
-        doc.security.threat_indicators.extend(ctx.threat_indicators);
-        doc.security.recalculate_threat_level();
 
         let root_id = doc.id;
         store.insert(IRNode::Document(doc));
         normalize_store(&mut store, root_id);
+
+        docir_security::populate_security_indicators(&mut store, root_id);
 
         Ok(ParsedDocument {
             root_id,
@@ -246,7 +243,6 @@ struct RtfParseContext {
     media_assets: Vec<NodeId>,
     external_refs: Vec<NodeId>,
     ole_objects: Vec<NodeId>,
-    threat_indicators: Vec<ThreatIndicator>,
     current_text: String,
     current_props: RtfStyleState,
     max_group_depth: usize,
@@ -304,7 +300,6 @@ impl RtfParseContext {
             media_assets: Vec::new(),
             external_refs: Vec::new(),
             ole_objects: Vec::new(),
-            threat_indicators: Vec::new(),
             current_text: String::new(),
             current_props: RtfStyleState::default(),
             max_group_depth,
@@ -1621,21 +1616,12 @@ fn tokenize_field_instruction(text: &str) -> Vec<String> {
 fn create_external_ref(
     instr: &str,
     store: &mut IrStore,
-    ctx: &mut RtfParseContext,
+    _ctx: &mut RtfParseContext,
 ) -> Option<NodeId> {
     if let Some((target, _, _)) = parse_hyperlink_instruction(instr) {
         let mut ext = ExternalReference::new(ExternalRefType::Hyperlink, target.clone());
         ext.span = Some(SourceSpan::new("rtf"));
         let id = ext.id;
-        if ext.is_remote() {
-            ctx.threat_indicators.push(docir_security::make_indicator(
-                ThreatIndicatorType::RemoteResource,
-                ThreatLevel::Medium,
-                format!("Remote resource: {}", ext.target),
-                Some("rtf".to_string()),
-                Some(id),
-            ));
-        }
         store.insert(IRNode::ExternalReference(ext));
         return Some(id);
     }
@@ -1645,7 +1631,7 @@ fn create_external_ref(
 fn finalize_object(
     object: ObjectContext,
     store: &mut IrStore,
-    ctx: &mut RtfParseContext,
+    _ctx: &mut RtfParseContext,
 ) -> Option<NodeId> {
     let mut ole = OleObject::new();
     ole.name = object
@@ -1656,13 +1642,6 @@ fn finalize_object(
     ole.size_bytes = (object.data_hex_len / 2) as u64;
     let ole_id = ole.id;
     store.insert(IRNode::OleObject(ole));
-    ctx.threat_indicators.push(docir_security::make_indicator(
-        ThreatIndicatorType::OleObject,
-        ThreatLevel::High,
-        "Embedded OLE object".to_string(),
-        Some("rtf".to_string()),
-        Some(ole_id),
-    ));
     Some(ole_id)
 }
 

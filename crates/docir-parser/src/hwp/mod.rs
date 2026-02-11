@@ -18,7 +18,6 @@ use docir_core::ir::{
 use docir_core::normalize::normalize_store;
 use docir_core::security::{
     ExternalRefType, ExternalReference, MacroModule, MacroModuleType, MacroProject, OleObject,
-    ThreatIndicatorType, ThreatLevel,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -296,17 +295,6 @@ impl HwpParser {
                 &mut diagnostics,
             );
             for ext in externals {
-                if ext.is_remote() {
-                    doc.security
-                        .threat_indicators
-                        .push(docir_security::make_indicator(
-                            ThreatIndicatorType::RemoteResource,
-                            ThreatLevel::Medium,
-                            format!("Remote resource: {}", ext.target),
-                            ext.span.as_ref().map(|s| s.file_path.clone()),
-                            None,
-                        ));
-                }
                 let id = ext.id;
                 store.insert(IRNode::ExternalReference(ext));
                 doc.security.external_refs.push(id);
@@ -323,20 +311,9 @@ impl HwpParser {
                     let id = ole.id;
                     store.insert(IRNode::OleObject(ole));
                     doc.security.ole_objects.push(id);
-                    doc.security
-                        .threat_indicators
-                        .push(docir_security::make_indicator(
-                            ThreatIndicatorType::OleObject,
-                            ThreatLevel::High,
-                            "Embedded OLE object".to_string(),
-                            Some(path.clone()),
-                            Some(id),
-                        ));
                 }
             }
         }
-
-        doc.security.recalculate_threat_level();
 
         doc.shared_parts = shared_parts;
         doc.content = sections;
@@ -350,6 +327,8 @@ impl HwpParser {
         let root_id = doc.id;
         store.insert(IRNode::Document(doc));
         normalize_store(&mut store, root_id);
+
+        docir_security::populate_security_indicators(&mut store, root_id);
 
         Ok(ParsedDocument {
             root_id,
@@ -535,6 +514,8 @@ impl HwpxParser {
         let root_id = doc.id;
         store.insert(IRNode::Document(doc));
         normalize_store(&mut store, root_id);
+
+        docir_security::populate_security_indicators(&mut store, root_id);
 
         Ok(ParsedDocument {
             root_id,
@@ -1435,15 +1416,6 @@ fn scan_hwpx_security<R: Read + Seek>(
                 let id = ole.id;
                 store.insert(IRNode::OleObject(ole));
                 doc.security.ole_objects.push(id);
-                doc.security
-                    .threat_indicators
-                    .push(docir_security::make_indicator(
-                        ThreatIndicatorType::OleObject,
-                        ThreatLevel::High,
-                        "Embedded OLE object".to_string(),
-                        Some(path.clone()),
-                        Some(id),
-                    ));
             }
         }
 
@@ -1503,30 +1475,10 @@ fn scan_hwpx_security<R: Read + Seek>(
                 let id = ole.id;
                 store.insert(IRNode::OleObject(ole));
                 doc.security.ole_objects.push(id);
-                doc.security
-                    .threat_indicators
-                    .push(docir_security::make_indicator(
-                        ThreatIndicatorType::OleObject,
-                        ThreatLevel::High,
-                        "Embedded OLE object".to_string(),
-                        Some(path.clone()),
-                        Some(id),
-                    ));
             }
         }
     }
     for ext in external_refs {
-        if ext.is_remote() {
-            doc.security
-                .threat_indicators
-                .push(docir_security::make_indicator(
-                    ThreatIndicatorType::RemoteResource,
-                    ThreatLevel::Medium,
-                    format!("Remote resource: {}", ext.target),
-                    ext.span.as_ref().map(|s| s.file_path.clone()),
-                    None,
-                ));
-        }
         let id = ext.id;
         store.insert(IRNode::ExternalReference(ext));
         doc.security.external_refs.push(id);
@@ -1535,21 +1487,11 @@ fn scan_hwpx_security<R: Read + Seek>(
         let mut project = MacroProject::new();
         project.name = Some("HWPX Scripts".to_string());
         project.modules = macro_modules;
+        project.has_auto_exec = has_autoexec;
         project.span = Some(SourceSpan::new("package"));
         let project_id = project.id;
         store.insert(IRNode::MacroProject(project));
         doc.security.macro_project = Some(project_id);
-        if has_autoexec {
-            doc.security
-                .threat_indicators
-                .push(docir_security::make_indicator(
-                    ThreatIndicatorType::AutoExecMacro,
-                    ThreatLevel::Critical,
-                    "Auto-exec script detected".to_string(),
-                    None,
-                    Some(project_id),
-                ));
-        }
     }
     if encrypted_flag {
         diagnostics.entries.push(DiagnosticEntry {
@@ -1572,7 +1514,6 @@ fn scan_hwpx_security<R: Read + Seek>(
         store.insert(IRNode::Diagnostics(diagnostics));
         doc.diagnostics.push(diag_id);
     }
-    doc.security.recalculate_threat_level();
 }
 
 fn scan_hwpx_external_refs(xml: &str, source: &str) -> Vec<ExternalReference> {

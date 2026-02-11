@@ -64,6 +64,8 @@ impl OoxmlParser {
             m.normalization_ms = start.elapsed().as_millis();
         }
 
+        docir_security::populate_security_indicators(&mut store, root_id);
+
         Ok(ParsedDocument {
             root_id,
             format: DocumentFormat::Presentation,

@@ -22,8 +22,7 @@ use docir_core::ir::{
 };
 use docir_core::normalize::normalize_store;
 use docir_core::security::{
-    ExternalRefType, ExternalReference, MacroProject, OleObject, SecurityInfo, ThreatIndicatorType,
-    ThreatLevel,
+    ExternalRefType, ExternalReference, MacroProject, OleObject, SecurityInfo,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -1279,14 +1278,6 @@ impl OoxmlParser {
 
                 if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
                     doc.security.macro_project = Some(macro_id);
-                    Self::push_threat_indicator(
-                        doc,
-                        ThreatIndicatorType::AutoExecMacro,
-                        ThreatLevel::Critical,
-                        format!("VBA macro project found at {}", vba_path),
-                        Some(vba_path.to_string()),
-                        Some(macro_id),
-                    );
                 }
             }
         }
@@ -1308,14 +1299,6 @@ impl OoxmlParser {
 
             if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
                 doc.security.ole_objects.push(ole_id);
-                Self::push_threat_indicator(
-                    doc,
-                    ThreatIndicatorType::OleObject,
-                    ThreatLevel::High,
-                    format!("OLE object found at {}", ole_path),
-                    Some(ole_path),
-                    Some(ole_id),
-                );
             }
         }
 
@@ -1337,14 +1320,6 @@ impl OoxmlParser {
                 store.insert(IRNode::ActiveXControl(control));
                 if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
                     doc.security.activex_controls.push(id);
-                    Self::push_threat_indicator(
-                        doc,
-                        ThreatIndicatorType::ActiveXControl,
-                        ThreatLevel::High,
-                        format!("ActiveX control found at {}", path),
-                        Some(path.clone()),
-                        Some(id),
-                    );
                 }
             }
 
@@ -1366,14 +1341,6 @@ impl OoxmlParser {
                                 store.insert(IRNode::OleObject(ole_object));
                                 if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
                                     doc.security.ole_objects.push(ole_id);
-                                    Self::push_threat_indicator(
-                                        doc,
-                                        ThreatIndicatorType::ActiveXControl,
-                                        ThreatLevel::High,
-                                        format!("ActiveX control binary found at {}", bin_path),
-                                        Some(bin_path),
-                                        Some(ole_id),
-                                    );
                                 }
                             }
                         }
@@ -1428,31 +1395,7 @@ impl OoxmlParser {
             }
         }
 
-        // Recalculate threat level
-        if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-            doc.security.recalculate_threat_level();
-        }
-
         Ok(())
-    }
-
-    fn push_threat_indicator(
-        doc: &mut Document,
-        indicator_type: ThreatIndicatorType,
-        severity: ThreatLevel,
-        description: String,
-        location: Option<String>,
-        node_id: Option<NodeId>,
-    ) {
-        doc.security
-            .threat_indicators
-            .push(docir_security::make_indicator(
-                indicator_type,
-                severity,
-                description,
-                location,
-                node_id,
-            ));
     }
 
     /// Detect and extract macro project information.

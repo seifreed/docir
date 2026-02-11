@@ -22,7 +22,7 @@ use docir_core::ir::{
 };
 use docir_core::security::{
     DdeField, ExternalRefType, ExternalReference, MacroModule, MacroModuleType, MacroProject,
-    OleObject, ThreatIndicatorType, ThreatLevel,
+    OleObject,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -458,37 +458,6 @@ impl OdfParser {
         }
         ole_objects.extend(scan_embedded_objects(&file_names, &mut zip));
 
-        let mut threat_indicators = Vec::new();
-        for ext in &external_refs {
-            if ext.is_remote() {
-                threat_indicators.push(docir_security::make_indicator(
-                    ThreatIndicatorType::RemoteResource,
-                    ThreatLevel::Medium,
-                    format!("Remote resource: {}", ext.target),
-                    ext.span.as_ref().map(|s| s.file_path.clone()),
-                    None,
-                ));
-            }
-        }
-        for _ in &ole_objects {
-            threat_indicators.push(docir_security::make_indicator(
-                ThreatIndicatorType::OleObject,
-                ThreatLevel::High,
-                "Embedded OLE object".to_string(),
-                None,
-                None,
-            ));
-        }
-        for dde in &formula_scan.dde_fields {
-            threat_indicators.push(docir_security::make_indicator(
-                ThreatIndicatorType::DdeCommand,
-                ThreatLevel::High,
-                format!("DDE formula: {}", dde.instruction),
-                dde.location.as_ref().map(|span| span.file_path.clone()),
-                None,
-            ));
-        }
-
         for ext in external_refs {
             let id = ext.id;
             store.insert(IRNode::ExternalReference(ext));
@@ -502,8 +471,6 @@ impl OdfParser {
         security
             .dde_fields
             .extend(formula_scan.dde_fields.drain(..));
-        security.threat_indicators.extend(threat_indicators);
-        security.recalculate_threat_level();
         doc.security = security;
 
         if let Some(sig_xml) = signatures_xml.as_deref() {
@@ -577,6 +544,8 @@ impl OdfParser {
 
         let doc_id = doc.id;
         store.insert(IRNode::Document(doc));
+
+        docir_security::populate_security_indicators(&mut store, doc_id);
 
         Ok(ParsedDocument {
             root_id: doc_id,
@@ -5496,6 +5465,7 @@ fn parse_odf_header_footer_block(
 mod tests {
     use super::*;
     use crate::parser::DocumentParser;
+    use docir_core::security::ThreatIndicatorType;
     use std::io::{Cursor, Write};
     use zip::write::FileOptions;
     use zip::ZipWriter;
