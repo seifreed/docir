@@ -6,12 +6,12 @@ use docir_core::visitor::{IrVisitor, NodeCounter, PreOrderWalker, VisitControl, 
 use docir_parser::ParserConfig;
 use std::path::PathBuf;
 
-use crate::commands::util::build_parser;
+use crate::commands::util::build_app;
 
 pub fn run(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
     // Parse the document
-    let parser = build_parser(parser_config);
-    let parsed = parser
+    let app = build_app(parser_config);
+    let parsed = app
         .parse_file(&input)
         .with_context(|| format!("Failed to parse {}", input.display()))?;
 

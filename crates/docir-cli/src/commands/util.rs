@@ -1,8 +1,9 @@
 //! Shared CLI helpers.
 
 use anyhow::{bail, Result};
+use docir_app::DocirApp;
 use docir_core::types::{DocumentFormat, NodeType};
-use docir_parser::{DocumentParser, ParserConfig};
+use docir_parser::ParserConfig;
 use serde::Serialize;
 use std::fs::File;
 use std::io::{self, Write};
@@ -49,8 +50,8 @@ pub fn parse_doc_format(input: &str) -> Result<DocumentFormat> {
     Ok(fmt)
 }
 
-pub fn build_parser(config: &ParserConfig) -> DocumentParser {
-    DocumentParser::with_config(config.clone())
+pub fn build_app(config: &ParserConfig) -> DocirApp {
+    DocirApp::new(config.clone())
 }
 
 pub fn write_json_output<T: Serialize>(

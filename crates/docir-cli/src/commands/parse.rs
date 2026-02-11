@@ -2,12 +2,11 @@
 
 use anyhow::{Context, Result};
 use docir_parser::ParserConfig;
-use docir_serialization::json::to_json;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::commands::util::build_parser;
+use crate::commands::util::build_app;
 use crate::OutputFormat;
 
 pub fn run(
@@ -18,16 +17,16 @@ pub fn run(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     // Parse the document
-    let parser = build_parser(parser_config);
-    let parsed = parser
+    let app = build_app(parser_config);
+    let parsed = app
         .parse_file(&input)
         .with_context(|| format!("Failed to parse {}", input.display()))?;
 
     // Serialize based on format
     let output_data = match format {
-        OutputFormat::Json => {
-            to_json(&parsed.store, parsed.root_id, pretty).context("Failed to serialize to JSON")?
-        }
+        OutputFormat::Json => app
+            .serialize_json(&parsed, pretty)
+            .context("Failed to serialize to JSON")?,
     };
 
     // Write output

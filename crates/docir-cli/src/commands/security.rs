@@ -1,21 +1,19 @@
 //! Security command implementation.
 
-use crate::commands::util::build_parser;
+use crate::commands::util::build_app;
 use anyhow::{Context, Result};
 use docir_parser::ParserConfig;
-use docir_security::SecurityAnalyzer;
 use std::path::PathBuf;
 
 pub fn run(input: PathBuf, json: bool, verbose: bool, parser_config: &ParserConfig) -> Result<()> {
     // Parse the document
-    let parser = build_parser(parser_config);
-    let parsed = parser
+    let app = build_app(parser_config);
+    let parsed = app
         .parse_file(&input)
         .with_context(|| format!("Failed to parse {}", input.display()))?;
 
     // Run security analysis
-    let mut analyzer = SecurityAnalyzer::new();
-    let result = analyzer.analyze(&parsed.store, parsed.root_id);
+    let result = app.analyze_security(&parsed);
 
     if json {
         // Output as JSON
