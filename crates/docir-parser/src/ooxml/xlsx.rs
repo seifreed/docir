@@ -1,5 +1,6 @@
 //! XLSX workbook and worksheet parsing.
 
+use crate::diagnostics::push_warning;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::zip_handler::SecureZipReader;
@@ -7,12 +8,12 @@ use docir_core::ir::{
     parse_cell_reference, BorderDef, BorderSide, CalcChain, CalcChainEntry, Cell, CellAlignment,
     CellError, CellFormat, CellFormula, CellProtection, CellValue, ChartData, ColumnDefinition,
     ConditionalFormat, ConditionalRule, ConnectionEntry, ConnectionPart, DataValidation,
-    DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document, DxfStyle, ExternalLinkPart,
-    ExternalLinkSheet, FillDef, FontDef, FormulaType, IRNode, MergedCellRange, NumberFormat,
-    PivotCache, PivotCacheRecords, PivotTable, QueryTablePart, Shape, ShapeType, SharedStringItem,
-    SharedStringTable, SheetComment, SheetKind, SheetMetadata, SheetMetadataType, SheetPageMargins,
-    SheetState, SlicerPart, SpreadsheetStyles, TableColumn, TableDefinition, TableStyleDef,
-    TableStyleInfo, TimelinePart, Worksheet, WorksheetDrawing,
+    Diagnostics, Document, DxfStyle, ExternalLinkPart, ExternalLinkSheet, FillDef, FontDef,
+    FormulaType, IRNode, MergedCellRange, NumberFormat, PivotCache, PivotCacheRecords, PivotTable,
+    QueryTablePart, Shape, ShapeType, SharedStringItem, SharedStringTable, SheetComment, SheetKind,
+    SheetMetadata, SheetMetadataType, SheetPageMargins, SheetState, SlicerPart, SpreadsheetStyles,
+    TableColumn, TableDefinition, TableStyleDef, TableStyleInfo, TimelinePart, Worksheet,
+    WorksheetDrawing,
 };
 use docir_core::security::{ExternalRefType, ExternalReference, SecurityInfo};
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
@@ -58,15 +59,6 @@ impl XlsxParser {
             current_xlm_index: None,
             diagnostics: Diagnostics::new(),
         }
-    }
-
-    fn push_warning(&mut self, code: &str, message: String, path: Option<&str>) {
-        self.diagnostics.entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Warning,
-            code: code.to_string(),
-            message,
-            path: path.map(|p| p.to_string()),
-        });
     }
 
     /// Parses the workbook and all worksheets.
@@ -151,7 +143,8 @@ impl XlsxParser {
             let rel = match workbook_rels.get(&sheet.rel_id) {
                 Some(rel) => rel,
                 None => {
-                    self.push_warning(
+                    push_warning(
+                        &mut self.diagnostics,
                         "MISSING_RELATIONSHIP",
                         format!("Missing relationship for sheet relId {}", sheet.rel_id),
                         Some(workbook_path),

@@ -1,14 +1,15 @@
 //! PPTX presentation and slide parsing.
 
+use crate::diagnostics::push_warning;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{
-    DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document, GridColumn, IRNode, NotesSlide,
-    Paragraph, PptxComment, PptxCommentAuthor, PresentationInfo, PresentationProperties,
-    PresentationTag, Run, Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeTransform,
-    ShapeType, Slide, SlideAnimation, SlideSize, SlideTransition, SmartArtPart, Table, TableCell,
-    TableRow, TableStyle, TableStyleSet, TextAlignment, ViewProperties,
+    Diagnostics, Document, GridColumn, IRNode, NotesSlide, Paragraph, PptxComment,
+    PptxCommentAuthor, PresentationInfo, PresentationProperties, PresentationTag, Run, Shape,
+    ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeTransform, ShapeType, Slide, SlideAnimation,
+    SlideSize, SlideTransition, SmartArtPart, Table, TableCell, TableRow, TableStyle,
+    TableStyleSet, TextAlignment, ViewProperties,
 };
 use docir_core::security::{ExternalRefType, ExternalReference, SecurityInfo};
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
@@ -39,15 +40,6 @@ impl PptxParser {
             comment_authors: HashMap::new(),
             diagnostics: Diagnostics::new(),
         }
-    }
-
-    fn push_warning(&mut self, code: &str, message: String, path: Option<&str>) {
-        self.diagnostics.entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Warning,
-            code: code.to_string(),
-            message,
-            path: path.map(|p| p.to_string()),
-        });
     }
 
     fn set_comment_authors(&mut self, authors: &[PptxCommentAuthor]) {
@@ -86,7 +78,8 @@ impl PptxParser {
             let rel = match presentation_rels.get(&rel_id) {
                 Some(rel) => rel,
                 None => {
-                    self.push_warning(
+                    push_warning(
+                        &mut self.diagnostics,
                         "MISSING_RELATIONSHIP",
                         format!("Missing relationship for slide relId {}", rel_id),
                         Some(presentation_path),
