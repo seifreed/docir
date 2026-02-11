@@ -21,8 +21,8 @@ use docir_core::ir::{
 };
 use docir_core::normalize::normalize_store;
 use docir_core::security::{
-    ExternalRefType, ExternalReference, MacroProject, OleObject, SecurityInfo, ThreatIndicator,
-    ThreatIndicatorType, ThreatLevel,
+    ExternalRefType, ExternalReference, MacroProject, OleObject, SecurityInfo, ThreatIndicatorType,
+    ThreatLevel,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -1773,13 +1773,15 @@ impl OoxmlParser {
         location: Option<String>,
         node_id: Option<NodeId>,
     ) {
-        doc.security.threat_indicators.push(ThreatIndicator {
-            indicator_type,
-            severity,
-            description,
-            location,
-            node_id,
-        });
+        doc.security
+            .threat_indicators
+            .push(docir_security::make_indicator(
+                indicator_type,
+                severity,
+                description,
+                location,
+                node_id,
+            ));
     }
 
     /// Detect and extract macro project information.
