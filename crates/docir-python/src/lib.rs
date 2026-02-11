@@ -1,11 +1,12 @@
 //! Python bindings for docir.
 
+use docir_app::DocirApp;
 use docir_core::ir::IrNode as IrNodeTrait;
 use docir_core::query::Query;
 use docir_core::types::{DocumentFormat, NodeType};
 use docir_core::visitor::{NodeCounter, PreOrderWalker};
-use docir_parser::OoxmlParser;
-use docir_rules::{RuleEngine, RuleProfile};
+use docir_parser::ParserConfig;
+use docir_rules::RuleProfile;
 use docir_serialization::{IrSerializer, JsonSerializer};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -14,8 +15,8 @@ use std::path::Path;
 
 #[pyfunction]
 fn parse_json(path: String, pretty: Option<bool>) -> PyResult<String> {
-    let parser = OoxmlParser::new();
-    let parsed = parser
+    let app = DocirApp::new(ParserConfig::default());
+    let parsed = app
         .parse_file(Path::new(&path))
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
     let serializer = if pretty.unwrap_or(false) {
@@ -30,8 +31,8 @@ fn parse_json(path: String, pretty: Option<bool>) -> PyResult<String> {
 
 #[pyfunction]
 fn rules(path: String, profile_json: Option<String>, pretty: Option<bool>) -> PyResult<String> {
-    let parser = OoxmlParser::new();
-    let parsed = parser
+    let app = DocirApp::new(ParserConfig::default());
+    let parsed = app
         .parse_file(Path::new(&path))
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
@@ -41,8 +42,7 @@ fn rules(path: String, profile_json: Option<String>, pretty: Option<bool>) -> Py
         RuleProfile::default()
     };
 
-    let engine = RuleEngine::with_default_rules();
-    let report = engine.run_with_profile(&parsed.store, parsed.root_id, &profile);
+    let report = app.run_rules(&parsed, &profile);
 
     if pretty.unwrap_or(false) {
         serde_json::to_string_pretty(&report).map_err(|e| PyValueError::new_err(e.to_string()))
@@ -61,8 +61,8 @@ fn query(
     has_macros: Option<bool>,
     pretty: Option<bool>,
 ) -> PyResult<String> {
-    let parser = OoxmlParser::new();
-    let parsed = parser
+    let app = DocirApp::new(ParserConfig::default());
+    let parsed = app
         .parse_file(Path::new(&path))
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
@@ -103,8 +103,8 @@ fn query(
 
 #[pyfunction]
 fn summary(path: String) -> PyResult<String> {
-    let parser = OoxmlParser::new();
-    let parsed = parser
+    let app = DocirApp::new(ParserConfig::default());
+    let parsed = app
         .parse_file(Path::new(&path))
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
 

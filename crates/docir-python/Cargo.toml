@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow = { workspace = true }
 docir-core = { workspace = true }
+docir-app = { workspace = true }
 docir-parser = { workspace = true }
 docir-rules = { workspace = true }
 docir-serialization = { workspace = true }
