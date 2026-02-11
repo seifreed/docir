@@ -1,0 +1,58 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/docir-app",
+    "crates/docir-core",
+    "crates/docir-parser",
+    "crates/docir-security",
+    "crates/docir-serialization",
+    "crates/docir-cli",
+    "crates/docir-diff",
+    "crates/docir-rules",
+    "crates/docir-python",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Marc Rivero López"]
+license = "GPL-3.0"
+repository = "https://github.com/seifreed/docir"
+description = "Document Intermediate Representation for Microsoft Office formats"
+
+[workspace.dependencies]
+# Core
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+
+# Parsing
+zip = "2.2"
+quick-xml = "0.37"
+encoding_rs = "0.8"
+calamine = "0.24"
+
+# Security
+sha2 = "0.10"
+sha1 = "0.10"
+pbkdf2 = "0.12"
+base64 = "0.22"
+aes = "0.8"
+cbc = "0.1"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Internal crates
+docir-core = { path = "crates/docir-core" }
+docir-app = { path = "crates/docir-app" }
+docir-parser = { path = "crates/docir-parser" }
+docir-security = { path = "crates/docir-security" }
+docir-serialization = { path = "crates/docir-serialization" }
+docir-diff = { path = "crates/docir-diff" }
+docir-rules = { path = "crates/docir-rules" }

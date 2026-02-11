@@ -1,0 +1,62 @@
+//! Spreadsheet connections part (xl/connections.xml).
+
+use crate::types::{NodeId, SourceSpan};
+use serde::{Deserialize, Serialize};
+
+/// Connection part containing all workbook connections.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionPart {
+    pub id: NodeId,
+    pub entries: Vec<ConnectionEntry>,
+    pub span: Option<SourceSpan>,
+}
+
+impl ConnectionPart {
+    pub fn new() -> Self {
+        Self {
+            id: NodeId::new(),
+            entries: Vec::new(),
+            span: None,
+        }
+    }
+}
+
+/// A single connection entry (from connections.xml).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionEntry {
+    pub connection_id: Option<u32>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub connection_type: Option<u32>,
+    pub refreshed_version: Option<u32>,
+    pub refresh_on_load: Option<bool>,
+    pub save_data: Option<bool>,
+    pub background: Option<bool>,
+    pub connection: Option<String>,
+    pub command: Option<String>,
+    pub command_type: Option<u32>,
+    pub source_file: Option<String>,
+    pub connection_file: Option<String>,
+    pub url: Option<String>,
+}
+
+impl ConnectionEntry {
+    pub fn new() -> Self {
+        Self {
+            connection_id: None,
+            name: None,
+            description: None,
+            connection_type: None,
+            refreshed_version: None,
+            refresh_on_load: None,
+            save_data: None,
+            background: None,
+            connection: None,
+            command: None,
+            command_type: None,
+            source_file: None,
+            connection_file: None,
+            url: None,
+        }
+    }
+}

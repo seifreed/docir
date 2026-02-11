@@ -1,0 +1,99 @@
+{
+  "fixtures": [
+    {
+      "path": "fixtures/rtf/list_styles.rtf",
+      "format": "RTF",
+      "description": "Stylesheet + list override + paragraph styles"
+    },
+    {
+      "path": "fixtures/rtf/table_borders.rtf",
+      "format": "RTF",
+      "description": "Table cell widths, borders, shading"
+    },
+    {
+      "path": "fixtures/rtf/object_fields.rtf",
+      "format": "RTF",
+      "description": "Field instructions + OLE object"
+    },
+    {
+      "path": "fixtures/ooxml/minimal.docx",
+      "format": "DOCX",
+      "description": "Minimal DOCX document"
+    },
+    {
+      "path": "fixtures/ooxml/minimal.xlsx",
+      "format": "XLSX",
+      "description": "Minimal XLSX workbook"
+    },
+    {
+      "path": "fixtures/ooxml/minimal.pptx",
+      "format": "PPTX",
+      "description": "Minimal PPTX presentation"
+    },
+    {
+      "path": "fixtures/ooxml/minimal.xlsb",
+      "format": "XLSB",
+      "description": "Minimal XLSB workbook"
+    },
+    {
+      "path": "fixtures/ooxml/values.xlsb",
+      "format": "XLSB",
+      "description": "XLSB workbook with known values"
+    },
+    {
+      "path": "fixtures/odf/minimal.odt",
+      "format": "ODT",
+      "description": "Minimal ODT document"
+    },
+    {
+      "path": "fixtures/odf/minimal.ods",
+      "format": "ODS",
+      "description": "Minimal ODS spreadsheet"
+    },
+    {
+      "path": "fixtures/odf/minimal.odp",
+      "format": "ODP",
+      "description": "Minimal ODP presentation"
+    },
+    {
+      "path": "fixtures/hwpx/minimal.hwpx",
+      "format": "HWPX",
+      "description": "Minimal HWPX document"
+    },
+    {
+      "path": "fixtures/hwp/minimal.hwp",
+      "format": "HWP",
+      "description": "Minimal HWP legacy document"
+    },
+    {
+      "path": "fixtures/ooxml/rich.docx",
+      "format": "DOCX",
+      "description": "Rich DOCX with comments/footnotes/header/footer/styles/numbering"
+    },
+    {
+      "path": "fixtures/ooxml/rich.xlsx",
+      "format": "XLSX",
+      "description": "Rich XLSX with sharedStrings/styles"
+    },
+    {
+      "path": "fixtures/ooxml/rich.pptx",
+      "format": "PPTX",
+      "description": "Rich PPTX with master/layout"
+    },
+    {
+      "path": "fixtures/odf/rich.odt",
+      "format": "ODT",
+      "description": "Rich ODT with annotation+footnote+styles"
+    },
+    {
+      "path": "fixtures/hwpx/rich.hwpx",
+      "format": "HWPX",
+      "description": "Rich HWPX with header/footer/master/styles"
+    },
+    {
+      "path": "fixtures/rtf/rich.rtf",
+      "format": "RTF",
+      "description": "Rich RTF with lists/styles/tables/fields/ole"
+    }
+  ]
+}

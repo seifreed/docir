@@ -1,0 +1,20 @@
+[package]
+name = "docir-python"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Python bindings for docir"
+
+[lib]
+name = "docir"
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = { workspace = true }
+docir-core = { workspace = true }
+docir-parser = { workspace = true }
+docir-rules = { workspace = true }
+docir-serialization = { workspace = true }
+serde_json = { workspace = true }
+pyo3 = { version = "0.21", features = ["extension-module", "abi3-py37"] }

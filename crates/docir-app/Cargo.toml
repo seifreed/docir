@@ -1,0 +1,16 @@
+[package]
+name = "docir-app"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Application layer for docir workflows"
+
+[dependencies]
+anyhow = { workspace = true }
+docir-core = { workspace = true }
+docir-parser = { workspace = true }
+docir-security = { workspace = true }
+docir-serialization = { workspace = true }
+docir-diff = { workspace = true }
+docir-rules = { workspace = true }

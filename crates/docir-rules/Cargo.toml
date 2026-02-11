@@ -1,0 +1,15 @@
+[package]
+name = "docir-rules"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Rule engine for docir IR"
+
+[dependencies]
+docir-core = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+docir-parser = { workspace = true }
+zip = { workspace = true }
