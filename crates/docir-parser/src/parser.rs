@@ -12,6 +12,7 @@ use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
 use crate::ooxml::shared as shared_parts;
 use crate::ooxml::xlsx::XlsxParser;
 use crate::rtf::RtfParser;
+use crate::security_utils::parse_dde_instruction;
 use crate::zip_handler::{SecureZipReader, ZipConfig};
 use docir_core::ir::column_to_letter;
 use docir_core::ir::{
@@ -2171,48 +2172,6 @@ fn parse_activex_xml(xml: &str, _path: &str) -> Option<docir_core::security::Act
     } else {
         None
     }
-}
-
-fn parse_dde_instruction(instruction: &str) -> Option<docir_core::security::DdeField> {
-    let upper = instruction.to_ascii_uppercase();
-    if !upper.contains("DDE") {
-        return None;
-    }
-    let field_type = if upper.contains("DDEAUTO") {
-        docir_core::security::DdeFieldType::DdeAuto
-    } else {
-        docir_core::security::DdeFieldType::Dde
-    };
-
-    let mut parts = Vec::new();
-    let mut current = String::new();
-    let mut in_quotes = false;
-    for ch in instruction.chars() {
-        if ch == '"' {
-            in_quotes = !in_quotes;
-            if !in_quotes && !current.is_empty() {
-                parts.push(current.clone());
-                current.clear();
-            }
-            continue;
-        }
-        if in_quotes {
-            current.push(ch);
-        }
-    }
-
-    let application = parts.get(0).cloned().unwrap_or_default();
-    let topic = parts.get(1).cloned().unwrap_or_default();
-    let item = parts.get(2).cloned().unwrap_or_default();
-
-    Some(docir_core::security::DdeField {
-        field_type,
-        application,
-        topic: if topic.is_empty() { None } else { Some(topic) },
-        item: if item.is_empty() { None } else { Some(item) },
-        instruction: instruction.to_string(),
-        location: None,
-    })
 }
 
 fn map_calamine_error(err: calamine::CellErrorType) -> CellError {

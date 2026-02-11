@@ -3,6 +3,7 @@
 use crate::diagnostics::push_warning;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
+use crate::security_utils::parse_dde_formula;
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{
     parse_cell_reference, BorderDef, BorderSide, CalcChain, CalcChainEntry, Cell, CellAlignment,
@@ -711,22 +712,13 @@ impl XlsxParser {
 
         // DDE detection in Excel formulas
         if upper.starts_with("DDEAUTO") || upper.starts_with("DDE") {
-            let field_type = if upper.starts_with("DDEAUTO") {
-                docir_core::security::DdeFieldType::DdeAuto
-            } else {
-                docir_core::security::DdeFieldType::Dde
-            };
-            let (app, topic, item) = parse_formula_args(text);
-            self.security_info
-                .dde_fields
-                .push(docir_core::security::DdeField {
-                    field_type,
-                    application: app.unwrap_or_else(|| "unknown".to_string()),
-                    topic,
-                    item,
-                    instruction: text.to_string(),
-                    location: Some(SourceSpan::new(sheet_path).with_xml_path(cell_ref)),
-                });
+            if let Some(dde) = parse_dde_formula(
+                text,
+                SourceSpan::new(sheet_path).with_xml_path(cell_ref),
+                true,
+            ) {
+                self.security_info.dde_fields.push(dde);
+            }
         }
 
         self.record_xlm_formula(cell_ref, text, &upper, sheet_path);
@@ -2816,15 +2808,6 @@ fn extract_formula_function(formula_upper: &str) -> Option<String> {
     let trimmed = trimmed.strip_prefix('=').unwrap_or(trimmed);
     let idx = trimmed.find('(')?;
     Some(trimmed[..idx].trim().to_string())
-}
-
-fn parse_formula_args(formula: &str) -> (Option<String>, Option<String>, Option<String>) {
-    let args = parse_formula_args_text(formula).unwrap_or_default();
-    let mut iter = args.split(',').map(|s| s.trim().to_string());
-    let app = iter.next().filter(|s| !s.is_empty());
-    let topic = iter.next().filter(|s| !s.is_empty());
-    let item = iter.next().filter(|s| !s.is_empty());
-    (app, topic, item)
 }
 
 fn parse_formula_args_text(formula: &str) -> Option<String> {

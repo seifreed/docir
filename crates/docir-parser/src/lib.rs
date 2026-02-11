@@ -11,6 +11,7 @@ pub mod ole;
 pub mod ooxml;
 pub mod parser;
 pub mod rtf;
+mod security_utils;
 pub mod zip_handler;
 
 pub use error::ParseError;

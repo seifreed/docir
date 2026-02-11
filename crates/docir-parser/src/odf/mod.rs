@@ -2,6 +2,7 @@
 
 use crate::error::ParseError;
 use crate::parser::{enforce_input_size, ParsedDocument, ParserConfig};
+use crate::security_utils::parse_dde_formula;
 use crate::zip_handler::SecureZipReader;
 use aes::Aes128;
 use aes::Aes256;
@@ -19,8 +20,8 @@ use docir_core::ir::{
     Worksheet, WorksheetDrawing,
 };
 use docir_core::security::{
-    DdeField, DdeFieldType, ExternalRefType, ExternalReference, MacroModule, MacroModuleType,
-    MacroProject, OleObject, ThreatIndicatorType, ThreatLevel,
+    DdeField, ExternalRefType, ExternalReference, MacroModule, MacroModuleType, MacroProject,
+    OleObject, ThreatIndicatorType, ThreatLevel,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -2038,77 +2039,6 @@ fn extract_quoted_strings(input: &str) -> Vec<String> {
     out
 }
 
-fn split_formula_args(args: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut current = String::new();
-    let mut in_quotes = false;
-    let mut quote_char = '\0';
-    for ch in args.chars() {
-        if (ch == '"' || ch == '\'') && (!in_quotes || ch == quote_char) {
-            in_quotes = !in_quotes;
-            if in_quotes {
-                quote_char = ch;
-            }
-            continue;
-        }
-        if !in_quotes && (ch == ';' || ch == ',') {
-            let trimmed = current.trim();
-            if !trimmed.is_empty() {
-                out.push(trimmed.to_string());
-            }
-            current.clear();
-            continue;
-        }
-        current.push(ch);
-    }
-    let trimmed = current.trim();
-    if !trimmed.is_empty() {
-        out.push(trimmed.to_string());
-    }
-    out
-}
-
-fn parse_dde_formula(formula: &str, location: &str) -> Option<DdeField> {
-    let trimmed = formula.trim();
-    let upper = trimmed.to_ascii_uppercase();
-    let (field_type, args_start) = if let Some(idx) = upper.find("DDEAUTO(") {
-        (DdeFieldType::DdeAuto, idx + "DDEAUTO(".len())
-    } else if let Some(idx) = upper.find("DDE(") {
-        (DdeFieldType::Dde, idx + "DDE(".len())
-    } else {
-        return None;
-    };
-    let args_end = trimmed.rfind(')')?;
-    if args_end <= args_start {
-        return None;
-    }
-    let args = &trimmed[args_start..args_end];
-    let parts = split_formula_args(args);
-    if parts.is_empty() {
-        return None;
-    }
-    let application = parts
-        .get(0)?
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_string();
-    let topic = parts
-        .get(1)
-        .map(|v| v.trim().trim_matches('"').trim_matches('\'').to_string());
-    let item = parts
-        .get(2)
-        .map(|v| v.trim().trim_matches('"').trim_matches('\'').to_string());
-    Some(DdeField {
-        field_type,
-        application,
-        topic,
-        item,
-        instruction: formula.to_string(),
-        location: Some(SourceSpan::new(location)),
-    })
-}
-
 fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
     let mut scan = OdfFormulaScan::default();
     let mut reader = Reader::from_str(xml);
@@ -2126,7 +2056,9 @@ fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
                     if formula.contains('{') || formula.contains('}') {
                         has_array = true;
                     }
-                    if let Some(dde) = parse_dde_formula(&formula, "content.xml") {
+                    if let Some(dde) =
+                        parse_dde_formula(&formula, SourceSpan::new("content.xml"), false)
+                    {
                         scan.dde_fields.push(dde);
                     }
                     let func_names = extract_formula_functions(&formula);
