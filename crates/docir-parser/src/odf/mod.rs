@@ -1,5 +1,6 @@
 //! ODF (OpenDocument) parsing support.
 
+use crate::diagnostics::{push_entry, push_info, push_warning};
 use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::input::enforce_input_size;
@@ -9,14 +10,13 @@ use crate::xml_utils::{attr_value, read_event};
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{
     BookmarkEnd, BookmarkStart, Cell, CellFormula, CellValue, ChartData, Comment, CommentReference,
-    ConditionalFormat, ConditionalRule, DataValidation, DefinedName, DiagnosticEntry,
-    DiagnosticSeverity, Diagnostics, Document, Endnote, ExtensionPart, ExtensionPartKind, Field,
-    FieldInstruction, FieldKind, Footer, Footnote, Header, IRNode, MediaAsset, MediaType,
-    MergedCellRange, NumberingInfo, Paragraph, ParagraphProperties, PivotCache, PivotCacheRecords,
-    PivotTable, Revision, RevisionType, Run, Section, Shape, ShapeText, ShapeTextParagraph,
-    ShapeTextRun, ShapeTransform, ShapeType, Slide, SlideAnimation, SlideTransition, Style,
-    StyleSet, StyleType, Table, TableCell, TableCellProperties, TableRow, Worksheet,
-    WorksheetDrawing,
+    ConditionalFormat, ConditionalRule, DataValidation, DefinedName, DiagnosticSeverity,
+    Diagnostics, Document, Endnote, ExtensionPart, ExtensionPartKind, Field, FieldInstruction,
+    FieldKind, Footer, Footnote, Header, IRNode, MediaAsset, MediaType, MergedCellRange,
+    NumberingInfo, Paragraph, ParagraphProperties, PivotCache, PivotCacheRecords, PivotTable,
+    Revision, RevisionType, Run, Section, Shape, ShapeText, ShapeTextParagraph, ShapeTextRun,
+    ShapeTransform, ShapeType, Slide, SlideAnimation, SlideTransition, Style, StyleSet, StyleType,
+    Table, TableCell, TableCellProperties, TableRow, Worksheet, WorksheetDrawing,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -129,27 +129,26 @@ impl OdfParser {
 
         if fast_mode {
             let size = content_size.unwrap_or(0);
-            diagnostics.entries.push(DiagnosticEntry {
-                severity: DiagnosticSeverity::Info,
-                code: "ODF_FAST_MODE".to_string(),
-                message: format!(
+            push_info(
+                &mut diagnostics,
+                "ODF_FAST_MODE",
+                format!(
                     "ODF fast mode enabled (content.xml: {} bytes, threshold: {} bytes, sample_rows: {}, sample_cols: {})",
                     size,
                     self.config.odf.fast_threshold_bytes,
                     self.config.odf.fast_sample_rows,
                     self.config.odf.fast_sample_cols
                 ),
-                path: Some("content.xml".to_string()),
-            });
+                Some("content.xml"),
+            );
             if content_xml.is_none() {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Warning,
-                    code: "ODF_FAST_SKIP_SCAN".to_string(),
-                    message:
-                        "Fast mode skipped content.xml security scans to reduce processing time"
-                            .to_string(),
-                    path: Some("content.xml".to_string()),
-                });
+                push_warning(
+                    &mut diagnostics,
+                    "ODF_FAST_SKIP_SCAN",
+                    "Fast mode skipped content.xml security scans to reduce processing time"
+                        .to_string(),
+                    Some("content.xml"),
+                );
             }
         }
         let mut manifest_index: HashMap<String, Option<String>> = HashMap::new();
@@ -157,16 +156,16 @@ impl OdfParser {
             let path = entry.path.clone();
             let media_type = entry.media_type.clone();
             manifest_index.insert(path.clone(), media_type.clone());
-            diagnostics.entries.push(DiagnosticEntry {
-                severity: DiagnosticSeverity::Info,
-                code: "ODF_PART".to_string(),
-                message: format!(
+            push_info(
+                &mut diagnostics,
+                "ODF_PART",
+                format!(
                     "ODF part: {} (media-type: {})",
                     path,
                     media_type.clone().unwrap_or_else(|| "(none)".to_string())
                 ),
-                path: Some(path),
-            });
+                Some(&path),
+            );
         }
 
         let mut file_names: Vec<String> = zip.file_names().map(|name| name.to_string()).collect();
@@ -196,21 +195,21 @@ impl OdfParser {
         if let Some(xml) = styles_xml.as_deref() {
             let masters = parse_master_pages(xml);
             for name in masters {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Info,
-                    code: "ODF_MASTER_PAGE".to_string(),
-                    message: format!("ODF master page detected: {}", name),
-                    path: Some("styles.xml".to_string()),
-                });
+                push_info(
+                    &mut diagnostics,
+                    "ODF_MASTER_PAGE",
+                    format!("ODF master page detected: {}", name),
+                    Some("styles.xml"),
+                );
             }
             let layouts = parse_page_layouts(xml);
             for name in layouts {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Info,
-                    code: "ODF_PAGE_LAYOUT".to_string(),
-                    message: format!("ODF page layout detected: {}", name),
-                    path: Some("styles.xml".to_string()),
-                });
+                push_info(
+                    &mut diagnostics,
+                    "ODF_PAGE_LAYOUT",
+                    format!("ODF page layout detected: {}", name),
+                    Some("styles.xml"),
+                );
             }
             let (headers, footers) = parse_odf_headers_footers(xml, &mut store, &self.config)?;
             for header_id in headers {
@@ -236,21 +235,21 @@ impl OdfParser {
                 }
                 let masters = parse_master_pages(xml);
                 for name in masters {
-                    diagnostics.entries.push(DiagnosticEntry {
-                        severity: DiagnosticSeverity::Info,
-                        code: "ODF_MASTER_PAGE".to_string(),
-                        message: format!("ODF master page detected: {}", name),
-                        path: Some("content.xml".to_string()),
-                    });
+                    push_info(
+                        &mut diagnostics,
+                        "ODF_MASTER_PAGE",
+                        format!("ODF master page detected: {}", name),
+                        Some("content.xml"),
+                    );
                 }
                 let layouts = parse_page_layouts(xml);
                 for name in layouts {
-                    diagnostics.entries.push(DiagnosticEntry {
-                        severity: DiagnosticSeverity::Info,
-                        code: "ODF_PAGE_LAYOUT".to_string(),
-                        message: format!("ODF page layout detected: {}", name),
-                        path: Some("content.xml".to_string()),
-                    });
+                    push_info(
+                        &mut diagnostics,
+                        "ODF_PAGE_LAYOUT",
+                        format!("ODF page layout detected: {}", name),
+                        Some("content.xml"),
+                    );
                 }
             }
         }
@@ -276,15 +275,15 @@ impl OdfParser {
                     let part_id = part.id;
                     store.insert(IRNode::ExtensionPart(part));
                     doc.shared_parts.push(part_id);
-                    diagnostics.entries.push(DiagnosticEntry {
-                        severity: DiagnosticSeverity::Info,
-                        code: "ODF_LAZY_SHEET".to_string(),
-                        message: format!(
+                    push_info(
+                        &mut diagnostics,
+                        "ODF_LAZY_SHEET",
+                        format!(
                             "Lazy sheet range stored for {} ({}-{})",
                             sheet_name, chunk.start, chunk.end
                         ),
-                        path: Some("content.xml".to_string()),
-                    });
+                        Some("content.xml"),
+                    );
                 }
             }
         }
@@ -353,28 +352,28 @@ impl OdfParser {
         let encrypted_entries = encrypted_manifest_entries(&manifest_entries);
         for entry in &manifest_entries {
             if let Some(message) = format_odf_encryption_metadata(entry) {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Info,
-                    code: "ODF_ENCRYPTION_META".to_string(),
+                push_info(
+                    &mut diagnostics,
+                    "ODF_ENCRYPTION_META",
                     message,
-                    path: Some("META-INF/manifest.xml".to_string()),
-                });
+                    Some("META-INF/manifest.xml"),
+                );
             }
         }
         if !encrypted_entries.is_empty() {
-            diagnostics.entries.push(DiagnosticEntry {
-                severity: DiagnosticSeverity::Warning,
-                code: "ODF_ENCRYPTION".to_string(),
-                message: "ODF encrypted content detected in manifest".to_string(),
-                path: Some("META-INF/manifest.xml".to_string()),
-            });
+            push_warning(
+                &mut diagnostics,
+                "ODF_ENCRYPTION",
+                "ODF encrypted content detected in manifest".to_string(),
+                Some("META-INF/manifest.xml"),
+            );
             for path in encrypted_entries {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Warning,
-                    code: "ODF_ENCRYPTED_PART".to_string(),
-                    message: format!("Encrypted ODF part not decrypted: {}", path),
-                    path: Some("META-INF/manifest.xml".to_string()),
-                });
+                push_warning(
+                    &mut diagnostics,
+                    "ODF_ENCRYPTED_PART",
+                    format!("Encrypted ODF part not decrypted: {}", path),
+                    Some("META-INF/manifest.xml"),
+                );
             }
         }
 
@@ -387,12 +386,13 @@ impl OdfParser {
         if let Some(xml) = content_xml.as_deref() {
             for filter in scan_odf_filters(xml) {
                 let mut diag = Diagnostics::new();
-                diag.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Info,
-                    code: "ODF_FILTER".to_string(),
-                    message: format!("ODF filter detected: {}", filter),
-                    path: Some("content.xml".to_string()),
-                });
+                push_entry(
+                    &mut diag.entries,
+                    DiagnosticSeverity::Info,
+                    "ODF_FILTER",
+                    format!("ODF filter detected: {}", filter),
+                    Some("content.xml"),
+                );
                 let diag_id = diag.id;
                 store.insert(IRNode::Diagnostics(diag));
                 doc.diagnostics.push(diag_id);

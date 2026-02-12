@@ -1,5 +1,6 @@
 //! HWP/HWPX parsing (Hangul Word Processor).
 
+use crate::diagnostics::{push_info, push_warning};
 use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::input::{enforce_input_size, read_all_with_limit};
@@ -12,11 +13,11 @@ use aes::Aes128;
 use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
 use cbc::Decryptor;
 use docir_core::ir::{
-    Comment, CommentReference, DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document, Endnote,
-    ExtensionPart, ExtensionPartKind, Footer, Footnote, Header, IRNode, MediaAsset, MediaType,
-    NumberingInfo, Paragraph, Revision, RevisionType, Run, RunProperties, Section, Shape,
-    ShapeType, Style, StyleParagraphProperties, StyleRunProperties, StyleSet, StyleType, Table,
-    TableAlignment, TableCell, TableProperties, TableRow, TableWidth, TableWidthType,
+    Comment, CommentReference, Diagnostics, Document, Endnote, ExtensionPart, ExtensionPartKind,
+    Footer, Footnote, Header, IRNode, MediaAsset, MediaType, NumberingInfo, Paragraph, Revision,
+    RevisionType, Run, RunProperties, Section, Shape, ShapeType, Style, StyleParagraphProperties,
+    StyleRunProperties, StyleSet, StyleType, Table, TableAlignment, TableCell, TableProperties,
+    TableRow, TableWidth, TableWidthType,
 };
 use docir_core::normalize::normalize_store;
 use docir_core::security::{
@@ -88,15 +89,15 @@ impl HwpParser {
             .read_stream("FileHeader")
             .ok_or_else(|| ParseError::MissingPart("FileHeader".to_string()))?;
         let header = parse_file_header(&header_data)?;
-        diagnostics.entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "HWP_HEADER".to_string(),
-            message: format!(
+        push_info(
+            &mut diagnostics,
+            "HWP_HEADER",
+            format!(
                 "HWP header: version=0x{:08X} flags=0x{:08X}",
                 header.version, header.flags
             ),
-            path: Some("FileHeader".to_string()),
-        });
+            Some("FileHeader"),
+        );
 
         let compressed = header.flags & 0x01 != 0;
         let encrypted = header.flags & 0x02 != 0;
@@ -105,37 +106,36 @@ impl HwpParser {
         let try_raw_encrypted = encrypted && hwp_password.is_none();
         let allow_parse = !encrypted || force_parse || hwp_password.is_some() || try_raw_encrypted;
         if encrypted {
-            diagnostics.entries.push(DiagnosticEntry {
-                severity: DiagnosticSeverity::Warning,
-                code: "HWP_ENCRYPTED".to_string(),
-                message: "HWP file is encrypted; content parsing skipped".to_string(),
-                path: Some("FileHeader".to_string()),
-            });
+            push_warning(
+                &mut diagnostics,
+                "HWP_ENCRYPTED",
+                "HWP file is encrypted; content parsing skipped".to_string(),
+                Some("FileHeader"),
+            );
             if force_parse {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Warning,
-                    code: "HWP_FORCE_PARSE".to_string(),
-                    message: "HWP force-parse enabled for encrypted file".to_string(),
-                    path: Some("FileHeader".to_string()),
-                });
+                push_warning(
+                    &mut diagnostics,
+                    "HWP_FORCE_PARSE",
+                    "HWP force-parse enabled for encrypted file".to_string(),
+                    Some("FileHeader"),
+                );
             }
             if hwp_password.is_some() {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Info,
-                    code: "HWP_DECRYPT_ATTEMPT".to_string(),
-                    message: "HWP decryption attempt enabled".to_string(),
-                    path: Some("FileHeader".to_string()),
-                });
+                push_info(
+                    &mut diagnostics,
+                    "HWP_DECRYPT_ATTEMPT",
+                    "HWP decryption attempt enabled".to_string(),
+                    Some("FileHeader"),
+                );
             }
             if try_raw_encrypted {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Warning,
-                    code: "HWP_ENCRYPTED_PARTIAL".to_string(),
-                    message:
-                        "HWP encrypted without password; attempting partial parse of readable streams"
-                            .to_string(),
-                    path: Some("FileHeader".to_string()),
-                });
+                push_warning(
+                    &mut diagnostics,
+                    "HWP_ENCRYPTED_PARTIAL",
+                    "HWP encrypted without password; attempting partial parse of readable streams"
+                        .to_string(),
+                    Some("FileHeader"),
+                );
             }
         }
 
@@ -183,13 +183,12 @@ impl HwpParser {
             ) {
                 Some(bytes) => bytes,
                 None => {
-                    diagnostics.entries.push(DiagnosticEntry {
-                        severity: DiagnosticSeverity::Warning,
-                        code: "HWP_DOCINFO_SKIP".to_string(),
-                        message: "DocInfo skipped due to encryption or decryption failure"
-                            .to_string(),
-                        path: Some("DocInfo".to_string()),
-                    });
+                    push_warning(
+                        &mut diagnostics,
+                        "HWP_DOCINFO_SKIP",
+                        "DocInfo skipped due to encryption or decryption failure".to_string(),
+                        Some("DocInfo"),
+                    );
                     Vec::new()
                 }
             };
@@ -198,21 +197,21 @@ impl HwpParser {
                     docinfo_section_count = parse_docinfo_section_count(&bytes)?;
                 }
                 Err(err) => {
-                    diagnostics.entries.push(DiagnosticEntry {
-                        severity: DiagnosticSeverity::Warning,
-                        code: "HWP_DECOMPRESS_FAIL".to_string(),
-                        message: err.to_string(),
-                        path: Some("DocInfo".to_string()),
-                    });
+                    push_warning(
+                        &mut diagnostics,
+                        "HWP_DECOMPRESS_FAIL",
+                        err.to_string(),
+                        Some("DocInfo"),
+                    );
                 }
             }
             if let Some(count) = docinfo_section_count {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Info,
-                    code: "HWP_SECTION_COUNT".to_string(),
-                    message: format!("DocInfo section count: {}", count),
-                    path: Some("DocInfo".to_string()),
-                });
+                push_info(
+                    &mut diagnostics,
+                    "HWP_SECTION_COUNT",
+                    format!("DocInfo section count: {}", count),
+                    Some("DocInfo"),
+                );
             }
         }
 
@@ -237,12 +236,12 @@ impl HwpParser {
                     let data = match maybe_decompress_stream(&data, compressed, path) {
                         Ok(bytes) => bytes,
                         Err(err) => {
-                            diagnostics.entries.push(DiagnosticEntry {
-                                severity: DiagnosticSeverity::Warning,
-                                code: "HWP_DECOMPRESS_FAIL".to_string(),
-                                message: err.to_string(),
-                                path: Some(path.clone()),
-                            });
+                            push_warning(
+                                &mut diagnostics,
+                                "HWP_DECOMPRESS_FAIL",
+                                err.to_string(),
+                                Some(path),
+                            );
                             continue;
                         }
                     };
@@ -260,16 +259,16 @@ impl HwpParser {
 
         if let Some(expected) = docinfo_section_count {
             if expected as usize != sections.len() {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Warning,
-                    code: "HWP_SECTION_MISMATCH".to_string(),
-                    message: format!(
+                push_warning(
+                    &mut diagnostics,
+                    "HWP_SECTION_MISMATCH",
+                    format!(
                         "section count mismatch: docinfo={} parsed={}",
                         expected,
                         sections.len()
                     ),
-                    path: Some("DocInfo".to_string()),
-                });
+                    Some("DocInfo"),
+                );
             }
         }
 
@@ -996,20 +995,20 @@ fn scan_hwpx_security<R: Read + Seek>(
         store.insert(IRNode::MacroProject(project));
     }
     if encrypted_flag {
-        diagnostics.entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Warning,
-            code: "HWPX_ENCRYPTED".to_string(),
-            message: "HWPX encrypted content detected".to_string(),
-            path: None,
-        });
+        push_warning(
+            &mut diagnostics,
+            "HWPX_ENCRYPTED",
+            "HWPX encrypted content detected".to_string(),
+            None,
+        );
     }
     if protected_flag {
-        diagnostics.entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "HWPX_PROTECTED".to_string(),
-            message: "HWPX protected content detected".to_string(),
-            path: None,
-        });
+        push_info(
+            &mut diagnostics,
+            "HWPX_PROTECTED",
+            "HWPX protected content detected".to_string(),
+            None,
+        );
     }
     if !diagnostics.entries.is_empty() {
         let diag_id = diagnostics.id;
@@ -1057,12 +1056,12 @@ fn build_hwp_diagnostics(format: DocumentFormat, paths: &[String]) -> Diagnostic
     diagnostics.span = Some(SourceSpan::new("package"));
 
     for path in paths {
-        diagnostics.entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "HWP_PART".to_string(),
-            message: format!("part: {}", path),
-            path: Some(path.clone()),
-        });
+        push_info(
+            &mut diagnostics,
+            "HWP_PART",
+            format!("part: {}", path),
+            Some(path),
+        );
     }
 
     for spec in registry {
@@ -1074,15 +1073,15 @@ fn build_hwp_diagnostics(format: DocumentFormat, paths: &[String]) -> Diagnostic
             }
         }
         if !matched {
-            diagnostics.entries.push(DiagnosticEntry {
-                severity: DiagnosticSeverity::Warning,
-                code: "COVERAGE_MISSING".to_string(),
-                message: format!(
+            push_warning(
+                &mut diagnostics,
+                "COVERAGE_MISSING",
+                format!(
                     "missing part for pattern {} (expected parser={})",
                     spec.pattern, spec.expected_parser
                 ),
-                path: Some(spec.pattern.to_string()),
-            });
+                Some(spec.pattern),
+            );
         }
     }
 
@@ -1338,31 +1337,31 @@ fn prepare_hwp_stream_data(
         match decrypt_hwp_stream(data, password, source) {
             Ok(bytes) => return Some(bytes),
             Err(err) => {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Warning,
-                    code: "HWP_DECRYPT_FAIL".to_string(),
-                    message: err.to_string(),
-                    path: Some(source.to_string()),
-                });
+                push_warning(
+                    diagnostics,
+                    "HWP_DECRYPT_FAIL",
+                    err.to_string(),
+                    Some(source),
+                );
             }
         }
     }
     if force_parse {
-        diagnostics.entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Warning,
-            code: "HWP_FORCE_PARSE_STREAM".to_string(),
-            message: "HWP force-parse: using raw encrypted stream bytes".to_string(),
-            path: Some(source.to_string()),
-        });
+        push_warning(
+            diagnostics,
+            "HWP_FORCE_PARSE_STREAM",
+            "HWP force-parse: using raw encrypted stream bytes".to_string(),
+            Some(source),
+        );
         return Some(data.to_vec());
     }
     if try_raw_encrypted {
-        diagnostics.entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Warning,
-            code: "HWP_ENCRYPTED_RAW_STREAM".to_string(),
-            message: "HWP encrypted without password: trying raw stream bytes".to_string(),
-            path: Some(source.to_string()),
-        });
+        push_warning(
+            diagnostics,
+            "HWP_ENCRYPTED_RAW_STREAM",
+            "HWP encrypted without password: trying raw stream bytes".to_string(),
+            Some(source),
+        );
         return Some(data.to_vec());
     }
     None
@@ -1413,15 +1412,15 @@ fn dump_hwp_streams(
                 }
             }
         }
-        diagnostics.entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "HWP_STREAM_DUMP".to_string(),
-            message: format!(
+        push_info(
+            diagnostics,
+            "HWP_STREAM_DUMP",
+            format!(
                 "stream: {}, size={}, compressed={}, sha256={}, decompress={}",
                 path, size, compressed, hash_hex, decompress_status
             ),
-            path: Some(path.clone()),
-        });
+            Some(path),
+        );
     }
 }
 fn parse_default_jscript(data: &[u8], store: &mut IrStore, source: &str) -> Option<NodeId> {
@@ -1533,12 +1532,12 @@ fn scan_hwp_external_refs(
             let data = match maybe_decompress_stream(&data, compressed, path) {
                 Ok(bytes) => bytes,
                 Err(err) => {
-                    diagnostics.entries.push(DiagnosticEntry {
-                        severity: DiagnosticSeverity::Warning,
-                        code: "HWP_DECOMPRESS_FAIL".to_string(),
-                        message: err.to_string(),
-                        path: Some(path.clone()),
-                    });
+                    push_warning(
+                        diagnostics,
+                        "HWP_DECOMPRESS_FAIL",
+                        err.to_string(),
+                        Some(path),
+                    );
                     continue;
                 }
             };

@@ -1,3 +1,4 @@
+use crate::diagnostics::push_entry;
 use crate::ooxml::content_types::ContentTypes;
 use crate::ooxml::part_registry;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, IRNode, IrNode as IrNodeTrait};
@@ -66,35 +67,39 @@ pub(super) fn build_coverage_diagnostics(
                     "{} part: {} (content-type={}, parser={})",
                     status, path, ct_str, spec.expected_parser
                 );
-                entries.push(DiagnosticEntry {
-                    severity: if status == "complete" {
-                        DiagnosticSeverity::Info
-                    } else {
-                        DiagnosticSeverity::Warning
-                    },
-                    code: "COVERAGE_PART".to_string(),
-                    message: message.clone(),
-                    path: Some(path.clone()),
-                });
-                entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Info,
-                    code: "COVERAGE_PART_ROW".to_string(),
+                let severity = if status == "complete" {
+                    DiagnosticSeverity::Info
+                } else {
+                    DiagnosticSeverity::Warning
+                };
+                push_entry(
+                    &mut entries,
+                    severity,
+                    "COVERAGE_PART",
+                    message.clone(),
+                    Some(path),
+                );
+                push_entry(
+                    &mut entries,
+                    DiagnosticSeverity::Info,
+                    "COVERAGE_PART_ROW",
                     message,
-                    path: Some(path.clone()),
-                });
+                    Some(path),
+                );
             }
         }
         if !matched {
             missing += 1;
-            entries.push(DiagnosticEntry {
-                severity: DiagnosticSeverity::Warning,
-                code: "COVERAGE_MISSING".to_string(),
-                message: format!(
+            push_entry(
+                &mut entries,
+                DiagnosticSeverity::Warning,
+                "COVERAGE_MISSING",
+                format!(
                     "missing part for pattern {} (expected parser={})",
                     spec.pattern, spec.expected_parser
                 ),
-                path: Some(spec.pattern.to_string()),
-            });
+                Some(spec.pattern),
+            );
         }
     }
 
@@ -111,54 +116,59 @@ pub(super) fn build_coverage_diagnostics(
     }
     inventory.sort_by(|a, b| a.0.cmp(&b.0));
     for (path, ct) in inventory {
-        entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "CONTENT_TYPE_INVENTORY".to_string(),
-            message: format!("content-type: {} => {}", path, ct),
-            path: Some(path),
-        });
+        push_entry(
+            &mut entries,
+            DiagnosticSeverity::Info,
+            "CONTENT_TYPE_INVENTORY",
+            format!("content-type: {} => {}", path, ct),
+            Some(&path),
+        );
     }
     unknown_ct_paths.sort();
     for path in &unknown_ct_paths {
-        entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Warning,
-            code: "CONTENT_TYPE_UNKNOWN".to_string(),
-            message: format!("no content-type entry for path {}", path),
-            path: Some(path.clone()),
-        });
+        push_entry(
+            &mut entries,
+            DiagnosticSeverity::Warning,
+            "CONTENT_TYPE_UNKNOWN",
+            format!("no content-type entry for path {}", path),
+            Some(path),
+        );
     }
 
-    entries.push(DiagnosticEntry {
-        severity: DiagnosticSeverity::Info,
-        code: "COVERAGE_SUMMARY".to_string(),
-        message: format!(
+    push_entry(
+        &mut entries,
+        DiagnosticSeverity::Info,
+        "COVERAGE_SUMMARY",
+        format!(
             "coverage summary: matched={}, complete={}, pending={}, missing_patterns={}, unknown_content_types={}",
             matched_parts, complete, pending, missing, unknown_ct_paths.len()
         ),
-        path: None,
-    });
-    entries.push(DiagnosticEntry {
-        severity: DiagnosticSeverity::Info,
-        code: "COVERAGE_COUNTS".to_string(),
-        message: format!(
+        None,
+    );
+    push_entry(
+        &mut entries,
+        DiagnosticSeverity::Info,
+        "COVERAGE_COUNTS",
+        format!(
             "counts: complete={}, pending={}, missing_patterns={}, unknown_content_types={}",
             complete,
             pending,
             missing,
             unknown_ct_paths.len()
         ),
-        path: None,
-    });
+        None,
+    );
 
     let mut hist: Vec<(String, usize)> = ct_histogram.into_iter().collect();
     hist.sort_by(|a, b| a.0.cmp(&b.0));
     for (ct, count) in hist {
-        entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "CONTENT_TYPE_HISTOGRAM".to_string(),
-            message: format!("content-type-count: {} => {}", ct, count),
-            path: Some(ct),
-        });
+        push_entry(
+            &mut entries,
+            DiagnosticSeverity::Info,
+            "CONTENT_TYPE_HISTOGRAM",
+            format!("content-type-count: {} => {}", ct, count),
+            Some(&ct),
+        );
     }
 
     entries

@@ -1,3 +1,4 @@
+use crate::diagnostics::push_entry;
 use crate::security_utils::parse_dde_formula;
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity};
@@ -193,23 +194,25 @@ pub(crate) fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
         buf.clear();
     }
     if !unsupported.is_empty() {
-        scan.diagnostics.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "ODF_FORMULA_UNSUPPORTED_FUNCTION".to_string(),
-            message: format!(
+        push_entry(
+            &mut scan.diagnostics,
+            DiagnosticSeverity::Info,
+            "ODF_FORMULA_UNSUPPORTED_FUNCTION",
+            format!(
                 "Unsupported ODF formula functions detected: {}",
                 unsupported.join(", ")
             ),
-            path: Some("content.xml".to_string()),
-        });
+            Some("content.xml"),
+        );
     }
     if has_array {
-        scan.diagnostics.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "ODF_FORMULA_ARRAY".to_string(),
-            message: "ODF array formula detected (not fully evaluated)".to_string(),
-            path: Some("content.xml".to_string()),
-        });
+        push_entry(
+            &mut scan.diagnostics,
+            DiagnosticSeverity::Info,
+            "ODF_FORMULA_ARRAY",
+            "ODF array formula detected (not fully evaluated)".to_string(),
+            Some("content.xml"),
+        );
     }
     scan
 }
@@ -239,12 +242,13 @@ pub(crate) fn scan_odf_protection(xml: &str) -> Vec<DiagnosticEntry> {
         buf.clear();
     }
     if protected {
-        entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "ODF_PROTECTED_CONTENT".to_string(),
-            message: "ODF protected content detected".to_string(),
-            path: Some("content.xml".to_string()),
-        });
+        push_entry(
+            &mut entries,
+            DiagnosticSeverity::Info,
+            "ODF_PROTECTED_CONTENT",
+            "ODF protected content detected".to_string(),
+            Some("content.xml"),
+        );
     }
     entries
 }
@@ -282,28 +286,31 @@ pub(crate) fn scan_odf_advanced_features(xml: &str) -> Vec<DiagnosticEntry> {
         buf.clear();
     }
     if conditional_advanced {
-        entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "ODF_CONDITIONAL_ADVANCED".to_string(),
-            message: "Advanced conditional formatting detected".to_string(),
-            path: Some("content.xml".to_string()),
-        });
+        push_entry(
+            &mut entries,
+            DiagnosticSeverity::Info,
+            "ODF_CONDITIONAL_ADVANCED",
+            "Advanced conditional formatting detected".to_string(),
+            Some("content.xml"),
+        );
     }
     if pivot_advanced {
-        entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "ODF_PIVOT_ADVANCED".to_string(),
-            message: "Advanced pivot table features detected".to_string(),
-            path: Some("content.xml".to_string()),
-        });
+        push_entry(
+            &mut entries,
+            DiagnosticSeverity::Info,
+            "ODF_PIVOT_ADVANCED",
+            "Advanced pivot table features detected".to_string(),
+            Some("content.xml"),
+        );
     }
     if odp_advanced {
-        entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "ODF_ODP_OBJECTS".to_string(),
-            message: "ODP embedded objects detected".to_string(),
-            path: Some("content.xml".to_string()),
-        });
+        push_entry(
+            &mut entries,
+            DiagnosticSeverity::Info,
+            "ODF_ODP_OBJECTS",
+            "ODP embedded objects detected".to_string(),
+            Some("content.xml"),
+        );
     }
     entries
 }

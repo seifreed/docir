@@ -1,4 +1,5 @@
 use super::*;
+use crate::diagnostics::{push_info, push_warning};
 use aes::{Aes128, Aes256};
 use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
 use cbc::Decryptor;
@@ -128,12 +129,12 @@ pub(super) fn handle_content_xml<R: Read + Seek>(
             if let (Some(password), Some(encryption)) = (password, encryption) {
                 match decrypt_odf_part(zip.read_file("content.xml")?, encryption, password) {
                     Ok(bytes) => {
-                        diagnostics.entries.push(DiagnosticEntry {
-                            severity: DiagnosticSeverity::Info,
-                            code: "ODF_DECRYPT_OK".to_string(),
-                            message: "ODF encrypted content.xml decrypted successfully".to_string(),
-                            path: Some("content.xml".to_string()),
-                        });
+                        push_info(
+                            diagnostics,
+                            "ODF_DECRYPT_OK",
+                            "ODF encrypted content.xml decrypted successfully".to_string(),
+                            Some("content.xml"),
+                        );
                         bytes
                     }
                     Err(message) => {
@@ -144,14 +145,13 @@ pub(super) fn handle_content_xml<R: Read + Seek>(
                     }
                 }
             } else {
-                diagnostics.entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Warning,
-                    code: "ODF_DECRYPT_SKIPPED".to_string(),
-                    message:
-                        "ODF content.xml is encrypted but no password or encryption data is available"
-                            .to_string(),
-                    path: Some("content.xml".to_string()),
-                });
+                push_warning(
+                    diagnostics,
+                    "ODF_DECRYPT_SKIPPED",
+                    "ODF content.xml is encrypted but no password or encryption data is available"
+                        .to_string(),
+                    Some("content.xml"),
+                );
                 Vec::new()
             }
         } else {

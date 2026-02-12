@@ -1,5 +1,6 @@
 //! Main OOXML parser orchestrator.
 
+use crate::diagnostics::{push_info, push_warning};
 use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::hwp::is_hwpx_mimetype;
@@ -16,8 +17,8 @@ use crate::xml_utils::local_name;
 use crate::zip_handler::{SecureZipReader, ZipConfig};
 use docir_core::ir::column_to_letter;
 use docir_core::ir::{
-    Cell, CellError, CellValue, DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document,
-    ExtensionPart, ExtensionPartKind, IRNode, MediaAsset, SheetKind, SheetState, Worksheet,
+    Cell, CellError, CellValue, Diagnostics, Document, ExtensionPart, ExtensionPartKind, IRNode,
+    MediaAsset, SheetKind, SheetState, Worksheet,
 };
 use docir_core::normalize::normalize_store;
 use docir_core::security::SecurityInfo;
@@ -757,12 +758,12 @@ impl OoxmlParser {
             extension_ids.push(part_id);
             unparsed_count += 1;
 
-            diagnostics.entries.push(DiagnosticEntry {
-                severity: DiagnosticSeverity::Warning,
-                code: "UNPARSED_PART".to_string(),
-                message: format!("No parser registered for part: {}", path),
-                path: Some(path),
-            });
+            push_warning(
+                &mut diagnostics,
+                "UNPARSED_PART",
+                format!("No parser registered for part: {}", path),
+                Some(&path),
+            );
         }
 
         let format = match store.get(root_id) {
@@ -776,12 +777,12 @@ impl OoxmlParser {
             &seen_paths,
         );
         diagnostics.entries.extend(coverage_entries);
-        diagnostics.entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "UNPARSED_SUMMARY".to_string(),
-            message: format!("unparsed parts: {}", unparsed_count),
-            path: None,
-        });
+        push_info(
+            &mut diagnostics,
+            "UNPARSED_SUMMARY",
+            format!("unparsed parts: {}", unparsed_count),
+            None,
+        );
 
         if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
             doc.shared_parts.extend(extension_ids);
