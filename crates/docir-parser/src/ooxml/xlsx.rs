@@ -187,7 +187,7 @@ impl XlsxParser {
             document.content.push(sheet_id);
         }
 
-        self.finalize_auto_open_targets(&auto_open_targets, workbook_path);
+        self.finalize_auto_open_targets(&auto_open_targets);
 
         // Pivot caches
         for cache_ref in workbook_info.pivot_cache_refs {
