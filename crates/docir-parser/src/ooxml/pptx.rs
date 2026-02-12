@@ -744,40 +744,20 @@ fn parse_transform(
 }
 
 fn parse_text_body(reader: &mut Reader<&[u8]>, slide_path: &str) -> Result<ShapeText, ParseError> {
-    let mut paragraphs = Vec::new();
-    let mut buf = Vec::new();
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                if e.name().as_ref() == b"a:p" {
-                    let paragraph = parse_text_paragraph(reader, slide_path)?;
-                    paragraphs.push(paragraph);
-                }
-            }
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"p:txBody" {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: slide_path.to_string(),
-                    message: e.to_string(),
-                });
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(ShapeText { paragraphs })
+    parse_text_body_with_end(reader, slide_path, b"p:txBody")
 }
 
 fn parse_text_body_table(
     reader: &mut Reader<&[u8]>,
     slide_path: &str,
+) -> Result<ShapeText, ParseError> {
+    parse_text_body_with_end(reader, slide_path, b"a:txBody")
+}
+
+fn parse_text_body_with_end(
+    reader: &mut Reader<&[u8]>,
+    slide_path: &str,
+    end_tag: &[u8],
 ) -> Result<ShapeText, ParseError> {
     let mut paragraphs = Vec::new();
     let mut buf = Vec::new();
@@ -791,7 +771,7 @@ fn parse_text_body_table(
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"a:txBody" {
+                if e.name().as_ref() == end_tag {
                     break;
                 }
             }
