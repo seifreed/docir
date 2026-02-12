@@ -3,6 +3,7 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::xml_utils::xml_error;
+use crate::xml_utils::local_name;
 use docir_core::ir::{
     ConnectionEntry, ConnectionPart, ExternalLinkPart, ExternalLinkSheet, QueryTablePart,
     SlicerPart, TimelinePart,
@@ -10,8 +11,6 @@ use docir_core::ir::{
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
 use quick_xml::Reader;
-
-use super::XlsxParser;
 
 pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<ConnectionPart, ParseError> {
     let mut reader = Reader::from_str(xml);
@@ -263,12 +262,12 @@ pub(crate) fn parse_external_link_part(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
-                let local = XlsxParser::local_name(&name_buf);
+                let local = local_name(&name_buf);
                 match local {
                     b"externalLink" => {
                         // placeholder for type if present
                         for attr in e.attributes().flatten() {
-                            let key = XlsxParser::local_name(attr.key.as_ref());
+                            let key = local_name(attr.key.as_ref());
                             if key == b"linkType" || key == b"type" {
                                 part.link_type =
                                     Some(String::from_utf8_lossy(&attr.value).to_string());
@@ -282,7 +281,7 @@ pub(crate) fn parse_external_link_part(
                             r_id: None,
                         };
                         for attr in e.attributes().flatten() {
-                            let key = XlsxParser::local_name(attr.key.as_ref());
+                            let key = local_name(attr.key.as_ref());
                             let val = String::from_utf8_lossy(&attr.value).to_string();
                             if key == b"val" || key == b"name" {
                                 sheet.name = Some(val);
@@ -297,7 +296,7 @@ pub(crate) fn parse_external_link_part(
                     }
                     b"externalBook" => {
                         for attr in e.attributes().flatten() {
-                            let key = XlsxParser::local_name(attr.key.as_ref());
+                            let key = local_name(attr.key.as_ref());
                             if key == b"id" || key == b"rid" || key == b"rId" {
                                 let rel_id = String::from_utf8_lossy(&attr.value).to_string();
                                 if let Some(rels) = rels {
@@ -339,10 +338,10 @@ pub(crate) fn parse_slicer_part(xml: &str, path: &str) -> Result<SlicerPart, Par
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
-                let local = XlsxParser::local_name(&name_buf);
+                let local = local_name(&name_buf);
                 if local == b"slicer" {
                     for attr in e.attributes().flatten() {
-                        let key = XlsxParser::local_name(attr.key.as_ref());
+                        let key = local_name(attr.key.as_ref());
                         let val = String::from_utf8_lossy(&attr.value).to_string();
                         match key {
                             b"name" => slicer.name = Some(val),
@@ -377,10 +376,10 @@ pub(crate) fn parse_timeline_part(xml: &str, path: &str) -> Result<TimelinePart,
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
-                let local = XlsxParser::local_name(&name_buf);
+                let local = local_name(&name_buf);
                 if local == b"timeline" {
                     for attr in e.attributes().flatten() {
-                        let key = XlsxParser::local_name(attr.key.as_ref());
+                        let key = local_name(attr.key.as_ref());
                         let val = String::from_utf8_lossy(&attr.value).to_string();
                         match key {
                             b"name" => timeline.name = Some(val),
@@ -413,11 +412,11 @@ pub(crate) fn parse_query_table_part(xml: &str, path: &str) -> Result<QueryTable
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
-                let local = XlsxParser::local_name(&name_buf);
+                let local = local_name(&name_buf);
                 match local {
                     b"queryTable" => {
                         for attr in e.attributes().flatten() {
-                            let key = XlsxParser::local_name(attr.key.as_ref());
+                            let key = local_name(attr.key.as_ref());
                             let val = String::from_utf8_lossy(&attr.value).to_string();
                             match key {
                                 b"name" => query.name = Some(val),
@@ -428,7 +427,7 @@ pub(crate) fn parse_query_table_part(xml: &str, path: &str) -> Result<QueryTable
                     }
                     b"dbPr" => {
                         for attr in e.attributes().flatten() {
-                            let key = XlsxParser::local_name(attr.key.as_ref());
+                            let key = local_name(attr.key.as_ref());
                             let val = String::from_utf8_lossy(&attr.value).to_string();
                             if key == b"command" {
                                 query.command = Some(val.clone());
@@ -440,7 +439,7 @@ pub(crate) fn parse_query_table_part(xml: &str, path: &str) -> Result<QueryTable
                     }
                     b"webPr" => {
                         for attr in e.attributes().flatten() {
-                            let key = XlsxParser::local_name(attr.key.as_ref());
+                            let key = local_name(attr.key.as_ref());
                             let val = String::from_utf8_lossy(&attr.value).to_string();
                             if key == b"url" {
                                 query.url = Some(val.clone());

@@ -5,6 +5,7 @@ use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file, read_a
 use crate::ole::Cfb;
 use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
+use crate::xml_utils::{attr_value_by_suffix, local_name};
 use crate::zip_handler::SecureZipReader;
 use aes::Aes128;
 use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
@@ -567,20 +568,6 @@ fn revision_type_from_local(local: &[u8]) -> Option<RevisionType> {
     }
 }
 
-fn attr_value_by_suffix(e: &BytesStart<'_>, suffixes: &[&[u8]]) -> Option<String> {
-    for attr in e.attributes().flatten() {
-        let key = attr.key.as_ref();
-        for suffix in suffixes {
-            if key.ends_with(suffix) {
-                if let Ok(value) = attr.unescape_value() {
-                    return Some(value.to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
 fn parse_hwpx_shape(
     e: &BytesStart<'_>,
     local: &[u8],
@@ -1003,14 +990,6 @@ fn parse_hwpx_section(
     finalize_table_hwpx(&mut current_table, &mut current_cell, &mut content, store);
 
     Ok(content)
-}
-
-fn local_name(name: &[u8]) -> &[u8] {
-    if let Some(pos) = name.iter().rposition(|b| *b == b':') {
-        &name[pos + 1..]
-    } else {
-        name
-    }
 }
 
 fn finalize_paragraph_hwpx(

@@ -3,6 +3,7 @@
 use super::field::parse_field_instruction;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
+use crate::xml_utils::attr_value;
 use docir_core::ir::{
     Border, BorderStyle, CellMargins, CellVerticalAlignment, Comment, CommentExtension,
     CommentExtensionSet, CommentIdMap, CommentIdMapEntry, CommentRangeEnd, CommentRangeStart,
@@ -4850,15 +4851,6 @@ fn parse_num_abstract_id(reader: &mut Reader<&[u8]>) -> Result<u32, ParseError> 
         buf.clear();
     }
     Ok(abstract_id)
-}
-
-fn attr_value(start: &BytesStart, key: &[u8]) -> Option<String> {
-    for attr in start.attributes().flatten() {
-        if attr.key.as_ref() == key {
-            return Some(String::from_utf8_lossy(&attr.value).to_string());
-        }
-    }
-    None
 }
 
 fn skip_to_end(reader: &mut Reader<&[u8]>, end: &[u8]) -> Result<(), ParseError> {

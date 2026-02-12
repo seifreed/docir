@@ -2,12 +2,11 @@
 
 use crate::error::ParseError;
 use crate::ooxml::xml_utils::xml_error;
+use crate::xml_utils::local_name;
 use docir_core::ir::{SheetMetadata, SheetMetadataType};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
 use quick_xml::Reader;
-
-use super::XlsxParser;
 
 pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadata, ParseError> {
     let mut reader = Reader::from_str(xml);
@@ -20,12 +19,12 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
-                let local = XlsxParser::local_name(&name_buf);
+                let local = local_name(&name_buf);
                 match local {
                     b"metadataType" => {
                         let mut mtype = SheetMetadataType::new();
                         for attr in e.attributes().flatten() {
-                            let key = XlsxParser::local_name(attr.key.as_ref());
+                            let key = local_name(attr.key.as_ref());
                             let val = String::from_utf8_lossy(&attr.value).to_string();
                             match key {
                                 b"name" => mtype.name = Some(val),
@@ -45,7 +44,7 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
                     }
                     b"cellMetadata" => {
                         for attr in e.attributes().flatten() {
-                            let key = XlsxParser::local_name(attr.key.as_ref());
+                            let key = local_name(attr.key.as_ref());
                             if key == b"count" {
                                 metadata.cell_metadata_count =
                                     String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
@@ -54,7 +53,7 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
                     }
                     b"valueMetadata" => {
                         for attr in e.attributes().flatten() {
-                            let key = XlsxParser::local_name(attr.key.as_ref());
+                            let key = local_name(attr.key.as_ref());
                             if key == b"count" {
                                 metadata.value_metadata_count =
                                     String::from_utf8_lossy(&attr.value).parse::<u32>().ok();

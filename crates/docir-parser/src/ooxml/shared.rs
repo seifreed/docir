@@ -2,6 +2,7 @@
 
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
+use crate::xml_utils::local_name;
 use docir_core::ir::{
     ChartData, ChartSeries, CustomXmlPart, DigitalSignature, DrawingPart, ExtensionPart,
     ExtensionPartKind, IRNode, MediaType, PeoplePart, PersonEntry, RelationshipEntry,
@@ -318,13 +319,6 @@ pub fn parse_chart_data(xml: &str, chart_path: &str, store: &mut IrStore) -> Opt
     let id = chart.id;
     store.insert(IRNode::ChartData(chart));
     Some(id)
-}
-
-fn local_name(name: &[u8]) -> &[u8] {
-    match name.iter().rposition(|b| *b == b':') {
-        Some(pos) => &name[pos + 1..],
-        None => name,
-    }
 }
 
 pub fn parse_web_extension(xml: &str, path: &str) -> Result<WebExtension, ParseError> {

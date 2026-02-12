@@ -13,6 +13,7 @@ use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
 use crate::ooxml::xlsx::XlsxParser;
 use crate::rtf::RtfParser;
 use crate::security_utils::parse_dde_instruction;
+use crate::xml_utils::local_name;
 use crate::zip_handler::{SecureZipReader, ZipConfig};
 use docir_core::ir::column_to_letter;
 use docir_core::ir::{
@@ -1993,13 +1994,6 @@ fn parse_chart_data(
     let id = chart.id;
     store.insert(IRNode::ChartData(chart));
     Ok(id)
-}
-
-fn local_name(name: &[u8]) -> &[u8] {
-    match name.iter().rposition(|b| *b == b':') {
-        Some(pos) => &name[pos + 1..],
-        None => name,
-    }
 }
 
 /// Convert a .rels path to its source part path when possible.

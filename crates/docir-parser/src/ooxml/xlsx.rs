@@ -4,6 +4,7 @@ use crate::diagnostics::push_warning;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
+use crate::xml_utils::attr_value;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     parse_cell_reference, CalcChain, CalcChainEntry, Cell, CellError, CellFormula, CellValue,
@@ -424,13 +425,6 @@ impl XlsxParser {
 
     fn parse_chart(&mut self, xml: &str, chart_path: &str) -> Option<NodeId> {
         crate::ooxml::shared::parse_chart_data(xml, chart_path, &mut self.store)
-    }
-
-    pub(crate) fn local_name(name: &[u8]) -> &[u8] {
-        match name.iter().rposition(|b| *b == b':') {
-            Some(pos) => &name[pos + 1..],
-            None => name,
-        }
     }
 
     fn parse_cell(
@@ -934,14 +928,6 @@ fn parse_threaded_comments(
     }
 
     Ok(out)
-}
-
-fn attr_value(start: &BytesStart, key: &[u8]) -> Option<String> {
-    start
-        .attributes()
-        .flatten()
-        .find(|a| a.key.as_ref() == key)
-        .map(|a| String::from_utf8_lossy(&a.value).to_string())
 }
 
 fn map_cell_error(value: &str) -> CellError {

@@ -14,6 +14,7 @@ pub mod parser;
 pub mod rtf;
 mod security_utils;
 mod text_utils;
+pub(crate) mod xml_utils;
 pub mod zip_handler;
 
 pub use error::ParseError;

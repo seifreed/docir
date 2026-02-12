@@ -4,6 +4,7 @@ use crate::error::ParseError;
 use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file};
 use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
+use crate::xml_utils::attr_value;
 use crate::zip_handler::SecureZipReader;
 use aes::Aes128;
 use aes::Aes256;
@@ -748,15 +749,6 @@ fn parse_content(
         }
         _ => Ok(OdfContentResult::default()),
     }
-}
-
-fn attr_value(e: &BytesStart<'_>, name: &[u8]) -> Option<String> {
-    for attr in e.attributes().flatten() {
-        if attr.key.as_ref() == name {
-            return Some(String::from_utf8_lossy(&attr.value).to_string());
-        }
-    }
-    None
 }
 
 fn build_odf_macro_project(
