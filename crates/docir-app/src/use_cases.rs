@@ -21,23 +21,29 @@ impl<'a, P: ParserPort> ParseDocument<'a, P> {
 
     pub(crate) fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> Result<ParsedDocument> {
         let mut parsed = self.parser.parse_file(path)?;
-        let root_id = parsed.root_id();
-        populate_security_indicators(parsed.store_mut(), root_id);
+        EnrichSecurity::run(&mut parsed);
         Ok(parsed)
     }
 
     pub(crate) fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument> {
         let mut parsed = self.parser.parse_bytes(data)?;
-        let root_id = parsed.root_id();
-        populate_security_indicators(parsed.store_mut(), root_id);
+        EnrichSecurity::run(&mut parsed);
         Ok(parsed)
     }
 
     pub(crate) fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument> {
         let mut parsed = self.parser.parse_reader(reader)?;
+        EnrichSecurity::run(&mut parsed);
+        Ok(parsed)
+    }
+}
+
+pub(crate) struct EnrichSecurity;
+
+impl EnrichSecurity {
+    pub(crate) fn run(parsed: &mut ParsedDocument) {
         let root_id = parsed.root_id();
         populate_security_indicators(parsed.store_mut(), root_id);
-        Ok(parsed)
     }
 }
 

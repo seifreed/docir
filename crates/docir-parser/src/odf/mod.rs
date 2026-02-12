@@ -144,9 +144,9 @@ impl OdfParser {
                 message: format!(
                     "ODF fast mode enabled (content.xml: {} bytes, threshold: {} bytes, sample_rows: {}, sample_cols: {})",
                     size,
-                    self.config.odf_fast_threshold_bytes,
-                    self.config.odf_fast_sample_rows,
-                    self.config.odf_fast_sample_cols
+                    self.config.odf.fast_threshold_bytes,
+                    self.config.odf.fast_sample_rows,
+                    self.config.odf.fast_sample_cols
                 ),
                 path: Some("content.xml".to_string()),
             });

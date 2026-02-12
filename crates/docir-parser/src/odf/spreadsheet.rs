@@ -326,7 +326,8 @@ pub(super) fn parse_content_spreadsheet_parallel(
     }
 
     let max_threads = config
-        .odf_parallel_max_threads
+        .odf
+        .parallel_max_threads
         .or_else(|| thread::available_parallelism().ok().map(|n| n.get()))
         .unwrap_or(1)
         .max(1);

@@ -108,7 +108,7 @@ pub(super) fn handle_content_xml<R: Read + Seek>(
     if zip.contains("content.xml") {
         let size = zip.file_size("content.xml")?;
         content_size = Some(size);
-        if let Some(max_bytes) = config.odf_max_bytes {
+        if let Some(max_bytes) = config.odf.max_bytes {
             if size > max_bytes {
                 return Err(ParseError::ResourceLimit(format!(
                     "ODF content.xml too large: {} bytes (max: {} bytes)",
@@ -117,13 +117,13 @@ pub(super) fn handle_content_xml<R: Read + Seek>(
             }
         }
         if format == DocumentFormat::OdfSpreadsheet
-            && (config.odf_force_fast || size >= config.odf_fast_threshold_bytes)
+            && (config.odf.force_fast || size >= config.odf.fast_threshold_bytes)
         {
             fast_mode = true;
         }
 
         let xml_bytes = if content_encrypted {
-            let password = config.odf_password.as_deref();
+            let password = config.odf.password.as_deref();
             let encryption = content_entry.and_then(|entry| entry.encryption.as_ref());
             if let (Some(password), Some(encryption)) = (password, encryption) {
                 match decrypt_odf_part(zip.read_file("content.xml")?, encryption, password) {
@@ -164,7 +164,7 @@ pub(super) fn handle_content_xml<R: Read + Seek>(
                 content_xml = Some(String::from_utf8_lossy(&xml_bytes).to_string());
             }
             let use_parallel = format == DocumentFormat::OdfSpreadsheet
-                && config.odf_parallel_sheets
+                && config.odf.parallel_sheets
                 && !fast_mode;
             let content_result = if use_parallel {
                 let limits = Arc::new(OdfAtomicLimits::new(config, fast_mode));

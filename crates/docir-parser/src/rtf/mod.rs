@@ -77,8 +77,8 @@ impl RtfParser {
         let mut doc = docir_core::ir::Document::new(DocumentFormat::Rtf);
 
         let mut ctx = RtfParseContext::new(
-            self.config.rtf_max_group_depth,
-            self.config.rtf_max_object_hex_len,
+            self.config.rtf.max_group_depth,
+            self.config.rtf.max_object_hex_len,
         );
         let mut cursor = RtfCursor::new(&data);
         parse_rtf(&mut cursor, &mut ctx, &mut store)?;
@@ -1902,7 +1902,7 @@ mod tests {
     fn rtf_group_depth_limit() {
         let data = b"{\\rtf1{{{a}}}}";
         let mut config = ParserConfig::default();
-        config.rtf_max_group_depth = 3;
+        config.rtf.max_group_depth = 3;
         let parser = RtfParser::with_config(config);
         let err = parser
             .parse_bytes(data)
@@ -1919,7 +1919,7 @@ mod tests {
     fn rtf_object_hex_limit() {
         let data = b"{\\rtf1{\\object{\\objdata 0102030405}}}";
         let mut config = ParserConfig::default();
-        config.rtf_max_object_hex_len = 4;
+        config.rtf.max_object_hex_len = 4;
         let parser = RtfParser::with_config(config);
         let err = parser
             .parse_bytes(data)

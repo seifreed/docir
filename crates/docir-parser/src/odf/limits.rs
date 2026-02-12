@@ -28,11 +28,11 @@ impl OdfLimits {
     pub(super) fn new(config: &ParserConfig, fast_mode: bool) -> Self {
         Self {
             fast_mode,
-            sample_rows: config.odf_fast_sample_rows,
-            sample_cols: config.odf_fast_sample_cols,
-            max_cells: config.odf_max_cells,
-            max_rows: config.odf_max_rows,
-            max_paragraphs: config.odf_max_paragraphs,
+            sample_rows: config.odf.fast_sample_rows,
+            sample_cols: config.odf.fast_sample_cols,
+            max_cells: config.odf.max_cells,
+            max_rows: config.odf.max_rows,
+            max_paragraphs: config.odf.max_paragraphs,
             cells: StdCell::new(0),
             rows: StdCell::new(0),
             paragraphs: StdCell::new(0),
@@ -101,11 +101,11 @@ impl OdfAtomicLimits {
     pub(super) fn new(config: &ParserConfig, fast_mode: bool) -> Self {
         Self {
             fast_mode,
-            sample_rows: config.odf_fast_sample_rows,
-            sample_cols: config.odf_fast_sample_cols,
-            max_cells: config.odf_max_cells,
-            max_rows: config.odf_max_rows,
-            max_paragraphs: config.odf_max_paragraphs,
+            sample_rows: config.odf.fast_sample_rows,
+            sample_cols: config.odf.fast_sample_cols,
+            max_cells: config.odf.max_cells,
+            max_rows: config.odf.max_rows,
+            max_paragraphs: config.odf.max_paragraphs,
             cells: AtomicU64::new(0),
             rows: AtomicU64::new(0),
             paragraphs: AtomicU64::new(0),

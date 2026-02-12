@@ -107,8 +107,8 @@ impl HwpParser {
 
         let compressed = header.flags & 0x01 != 0;
         let encrypted = header.flags & 0x02 != 0;
-        let force_parse = self.config.hwp_force_parse_encrypted;
-        let hwp_password = self.config.hwp_password.as_deref();
+        let force_parse = self.config.hwp.force_parse_encrypted;
+        let hwp_password = self.config.hwp.password.as_deref();
         let try_raw_encrypted = encrypted && hwp_password.is_none();
         let allow_parse = !encrypted || force_parse || hwp_password.is_some() || try_raw_encrypted;
         if encrypted {
@@ -146,7 +146,7 @@ impl HwpParser {
             }
         }
 
-        if self.config.hwp_dump_streams {
+        if self.config.hwp.dump_streams {
             dump_hwp_streams(
                 &cfb,
                 &stream_names,

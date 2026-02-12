@@ -525,46 +525,46 @@ fn build_parser_config(cli: &Cli) -> ParserConfig {
         config.max_input_size = value;
     }
     if cli.odf_fast {
-        config.odf_force_fast = true;
+        config.odf.force_fast = true;
     }
     if let Some(value) = cli.odf_fast_threshold_bytes {
-        config.odf_fast_threshold_bytes = value;
+        config.odf.fast_threshold_bytes = value;
     }
     if let Some(value) = cli.odf_fast_sample_rows {
-        config.odf_fast_sample_rows = value;
+        config.odf.fast_sample_rows = value;
     }
     if let Some(value) = cli.odf_fast_sample_cols {
-        config.odf_fast_sample_cols = value;
+        config.odf.fast_sample_cols = value;
     }
     if let Some(value) = cli.odf_max_cells {
-        config.odf_max_cells = (value != 0).then_some(value);
+        config.odf.max_cells = (value != 0).then_some(value);
     }
     if let Some(value) = cli.odf_max_rows {
-        config.odf_max_rows = (value != 0).then_some(value);
+        config.odf.max_rows = (value != 0).then_some(value);
     }
     if let Some(value) = cli.odf_max_paragraphs {
-        config.odf_max_paragraphs = (value != 0).then_some(value);
+        config.odf.max_paragraphs = (value != 0).then_some(value);
     }
     if let Some(value) = cli.odf_max_bytes {
-        config.odf_max_bytes = (value != 0).then_some(value);
+        config.odf.max_bytes = (value != 0).then_some(value);
     }
     if cli.odf_parallel_sheets {
-        config.odf_parallel_sheets = true;
+        config.odf.parallel_sheets = true;
     }
     if let Some(value) = cli.odf_parallel_max_threads {
-        config.odf_parallel_max_threads = Some(value);
+        config.odf.parallel_max_threads = Some(value);
     }
     if let Some(password) = cli.odf_password.as_ref() {
-        config.odf_password = Some(password.clone());
+        config.odf.password = Some(password.clone());
     }
     if cli.hwp_force_parse_encrypted {
-        config.hwp_force_parse_encrypted = true;
+        config.hwp.force_parse_encrypted = true;
     }
     if let Some(password) = cli.hwp_password.as_ref() {
-        config.hwp_password = Some(password.clone());
+        config.hwp.password = Some(password.clone());
     }
     if cli.hwp_dump_streams {
-        config.hwp_dump_streams = true;
+        config.hwp.dump_streams = true;
     }
     if cli.metrics {
         config.enable_metrics = true;
