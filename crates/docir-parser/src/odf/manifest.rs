@@ -25,6 +25,21 @@ pub struct OdfEncryptionData {
     pub key_size: Option<u32>,
 }
 
+impl Default for OdfEncryptionData {
+    fn default() -> Self {
+        Self {
+            checksum_type: None,
+            checksum: None,
+            algorithm_name: None,
+            init_vector: None,
+            key_derivation_name: None,
+            salt: None,
+            iteration_count: None,
+            key_size: None,
+        }
+    }
+}
+
 pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
     let mut entries = Vec::new();
     let mut reader = Reader::from_str(xml);
@@ -36,82 +51,26 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"manifest:file-entry" => {
-                    let path = super::attr_value(&e, b"manifest:full-path").unwrap_or_default();
-                    let media_type = super::attr_value(&e, b"manifest:media-type");
-                    current_entry = Some(OdfManifestEntry {
-                        path,
-                        media_type,
-                        encryption: None,
-                    });
+                    current_entry = Some(parse_manifest_entry(&e));
                 }
                 b"manifest:encryption-data" => {
                     if let Some(entry) = current_entry.as_mut() {
-                        let mut enc =
-                            entry
-                                .encryption
-                                .take()
-                                .unwrap_or_else(|| OdfEncryptionData {
-                                    checksum_type: None,
-                                    checksum: None,
-                                    algorithm_name: None,
-                                    init_vector: None,
-                                    key_derivation_name: None,
-                                    salt: None,
-                                    iteration_count: None,
-                                    key_size: None,
-                                });
-                        enc.checksum_type = super::attr_value(&e, b"manifest:checksum-type");
-                        enc.checksum = super::attr_value(&e, b"manifest:checksum")
-                            .and_then(|v| decode_base64_bytes(&v));
+                        let mut enc = entry.encryption.take().unwrap_or_default();
+                        apply_encryption_data_attrs(&mut enc, &e);
                         entry.encryption = Some(enc);
                     }
                 }
                 b"manifest:algorithm" => {
                     if let Some(entry) = current_entry.as_mut() {
-                        let mut enc =
-                            entry
-                                .encryption
-                                .take()
-                                .unwrap_or_else(|| OdfEncryptionData {
-                                    checksum_type: None,
-                                    checksum: None,
-                                    algorithm_name: None,
-                                    init_vector: None,
-                                    key_derivation_name: None,
-                                    salt: None,
-                                    iteration_count: None,
-                                    key_size: None,
-                                });
-                        enc.algorithm_name = super::attr_value(&e, b"manifest:algorithm-name");
-                        enc.init_vector = super::attr_value(&e, b"manifest:initialisation-vector")
-                            .and_then(|v| decode_base64_bytes(&v));
-                        enc.key_size = super::attr_value(&e, b"manifest:key-size")
-                            .and_then(|v| v.parse::<u32>().ok());
+                        let mut enc = entry.encryption.take().unwrap_or_default();
+                        apply_algorithm_attrs(&mut enc, &e);
                         entry.encryption = Some(enc);
                     }
                 }
                 b"manifest:key-derivation" => {
                     if let Some(entry) = current_entry.as_mut() {
-                        let mut enc =
-                            entry
-                                .encryption
-                                .take()
-                                .unwrap_or_else(|| OdfEncryptionData {
-                                    checksum_type: None,
-                                    checksum: None,
-                                    algorithm_name: None,
-                                    init_vector: None,
-                                    key_derivation_name: None,
-                                    salt: None,
-                                    iteration_count: None,
-                                    key_size: None,
-                                });
-                        enc.key_derivation_name =
-                            super::attr_value(&e, b"manifest:key-derivation-name");
-                        enc.salt = super::attr_value(&e, b"manifest:salt")
-                            .and_then(|v| decode_base64_bytes(&v));
-                        enc.iteration_count = super::attr_value(&e, b"manifest:iteration-count")
-                            .and_then(|v| v.parse::<u32>().ok());
+                        let mut enc = entry.encryption.take().unwrap_or_default();
+                        apply_key_derivation_attrs(&mut enc, &e);
                         entry.encryption = Some(enc);
                     }
                 }
@@ -119,82 +78,26 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
                 b"manifest:file-entry" => {
-                    let path = super::attr_value(&e, b"manifest:full-path").unwrap_or_default();
-                    let media_type = super::attr_value(&e, b"manifest:media-type");
-                    entries.push(OdfManifestEntry {
-                        path,
-                        media_type,
-                        encryption: None,
-                    });
+                    entries.push(parse_manifest_entry(&e));
                 }
                 b"manifest:encryption-data" => {
                     if let Some(entry) = current_entry.as_mut() {
-                        let mut enc =
-                            entry
-                                .encryption
-                                .take()
-                                .unwrap_or_else(|| OdfEncryptionData {
-                                    checksum_type: None,
-                                    checksum: None,
-                                    algorithm_name: None,
-                                    init_vector: None,
-                                    key_derivation_name: None,
-                                    salt: None,
-                                    iteration_count: None,
-                                    key_size: None,
-                                });
-                        enc.checksum_type = super::attr_value(&e, b"manifest:checksum-type");
-                        enc.checksum = super::attr_value(&e, b"manifest:checksum")
-                            .and_then(|v| decode_base64_bytes(&v));
+                        let mut enc = entry.encryption.take().unwrap_or_default();
+                        apply_encryption_data_attrs(&mut enc, &e);
                         entry.encryption = Some(enc);
                     }
                 }
                 b"manifest:algorithm" => {
                     if let Some(entry) = current_entry.as_mut() {
-                        let mut enc =
-                            entry
-                                .encryption
-                                .take()
-                                .unwrap_or_else(|| OdfEncryptionData {
-                                    checksum_type: None,
-                                    checksum: None,
-                                    algorithm_name: None,
-                                    init_vector: None,
-                                    key_derivation_name: None,
-                                    salt: None,
-                                    iteration_count: None,
-                                    key_size: None,
-                                });
-                        enc.algorithm_name = super::attr_value(&e, b"manifest:algorithm-name");
-                        enc.init_vector = super::attr_value(&e, b"manifest:initialisation-vector")
-                            .and_then(|v| decode_base64_bytes(&v));
-                        enc.key_size = super::attr_value(&e, b"manifest:key-size")
-                            .and_then(|v| v.parse::<u32>().ok());
+                        let mut enc = entry.encryption.take().unwrap_or_default();
+                        apply_algorithm_attrs(&mut enc, &e);
                         entry.encryption = Some(enc);
                     }
                 }
                 b"manifest:key-derivation" => {
                     if let Some(entry) = current_entry.as_mut() {
-                        let mut enc =
-                            entry
-                                .encryption
-                                .take()
-                                .unwrap_or_else(|| OdfEncryptionData {
-                                    checksum_type: None,
-                                    checksum: None,
-                                    algorithm_name: None,
-                                    init_vector: None,
-                                    key_derivation_name: None,
-                                    salt: None,
-                                    iteration_count: None,
-                                    key_size: None,
-                                });
-                        enc.key_derivation_name =
-                            super::attr_value(&e, b"manifest:key-derivation-name");
-                        enc.salt = super::attr_value(&e, b"manifest:salt")
-                            .and_then(|v| decode_base64_bytes(&v));
-                        enc.iteration_count = super::attr_value(&e, b"manifest:iteration-count")
-                            .and_then(|v| v.parse::<u32>().ok());
+                        let mut enc = entry.encryption.take().unwrap_or_default();
+                        apply_key_derivation_attrs(&mut enc, &e);
                         entry.encryption = Some(enc);
                     }
                 }
@@ -220,6 +123,35 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
     }
 
     Ok(entries)
+}
+
+fn parse_manifest_entry(e: &quick_xml::events::BytesStart<'_>) -> OdfManifestEntry {
+    let path = super::attr_value(e, b"manifest:full-path").unwrap_or_default();
+    let media_type = super::attr_value(e, b"manifest:media-type");
+    OdfManifestEntry {
+        path,
+        media_type,
+        encryption: None,
+    }
+}
+
+fn apply_encryption_data_attrs(enc: &mut OdfEncryptionData, e: &quick_xml::events::BytesStart<'_>) {
+    enc.checksum_type = super::attr_value(e, b"manifest:checksum-type");
+    enc.checksum = super::attr_value(e, b"manifest:checksum").and_then(|v| decode_base64_bytes(&v));
+}
+
+fn apply_algorithm_attrs(enc: &mut OdfEncryptionData, e: &quick_xml::events::BytesStart<'_>) {
+    enc.algorithm_name = super::attr_value(e, b"manifest:algorithm-name");
+    enc.init_vector = super::attr_value(e, b"manifest:initialisation-vector")
+        .and_then(|v| decode_base64_bytes(&v));
+    enc.key_size = super::attr_value(e, b"manifest:key-size").and_then(|v| v.parse::<u32>().ok());
+}
+
+fn apply_key_derivation_attrs(enc: &mut OdfEncryptionData, e: &quick_xml::events::BytesStart<'_>) {
+    enc.key_derivation_name = super::attr_value(e, b"manifest:key-derivation-name");
+    enc.salt = super::attr_value(e, b"manifest:salt").and_then(|v| decode_base64_bytes(&v));
+    enc.iteration_count =
+        super::attr_value(e, b"manifest:iteration-count").and_then(|v| v.parse::<u32>().ok());
 }
 
 pub fn is_manifest_entry_encrypted(entry: &OdfManifestEntry) -> bool {
