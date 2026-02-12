@@ -2,6 +2,33 @@
 
 use super::spreadsheet::parse_content_spreadsheet_fast;
 use super::*;
+use crate::xml_utils::xml_error;
+
+struct OdfTextState {
+    in_text: bool,
+    list_stack: Vec<ListContext>,
+    list_id_map: HashMap<String, u32>,
+    next_list_id: u32,
+    comment_counter: u32,
+    content_result: OdfContentResult,
+    pending_inline_nodes: Vec<NodeId>,
+    revisions: Vec<NodeId>,
+}
+
+impl OdfTextState {
+    fn new() -> Self {
+        Self {
+            in_text: false,
+            list_stack: Vec::new(),
+            list_id_map: HashMap::new(),
+            next_list_id: 1,
+            comment_counter: 1,
+            content_result: OdfContentResult::default(),
+            pending_inline_nodes: Vec::new(),
+            revisions: Vec::new(),
+        }
+    }
+}
 
 pub(super) fn parse_content_text(
     xml: &[u8],
@@ -17,224 +44,212 @@ pub(super) fn parse_content_text(
 
     let mut section = Section::new();
     section.name = Some("body".to_string());
-    let mut in_text = false;
-    let mut list_stack: Vec<ListContext> = Vec::new();
-    let mut list_id_map: HashMap<String, u32> = HashMap::new();
-    let mut next_list_id = 1u32;
-    let mut comment_counter = 1u32;
-    let mut content_result = OdfContentResult::default();
-
-    let mut pending_inline_nodes: Vec<NodeId> = Vec::new();
-    let mut revisions: Vec<NodeId> = Vec::new();
+    let mut state = OdfTextState::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"office:text" => in_text = true,
-                b"text:list" if in_text => {
-                    let style_name = attr_value(&e, b"text:style-name").unwrap_or_default();
-                    let num_id = list_id_map.entry(style_name).or_insert_with(|| {
-                        let id = next_list_id;
-                        next_list_id += 1;
-                        id
-                    });
-                    let level = list_stack.len() as u32;
-                    list_stack.push(ListContext {
-                        num_id: *num_id,
-                        level,
-                    });
-                }
-                b"text:p" | b"text:h" if in_text => {
-                    let outline_level =
-                        attr_value(&e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
-                    let numbering = list_stack.last().map(|ctx| NumberingInfo {
-                        num_id: ctx.num_id,
-                        level: ctx.level,
-                        format: None,
-                    });
-                    let paragraph_id = parse_paragraph(
-                        &mut reader,
-                        e.name().as_ref(),
-                        numbering,
-                        outline_level,
-                        store,
-                        &mut pending_inline_nodes,
-                        limits,
-                    )?;
-                    section.content.extend(pending_inline_nodes.drain(..));
-                    section.content.push(paragraph_id);
-                }
-                b"table:table" if in_text => {
-                    let table_id = parse_table(&mut reader, store, limits)?;
-                    section.content.extend(pending_inline_nodes.drain(..));
-                    section.content.push(table_id);
-                }
-                b"office:annotation" if in_text => {
-                    let comment_id = format!("odf-annotation-{}", comment_counter);
-                    comment_counter += 1;
-                    let comment_node = parse_annotation(&mut reader, &comment_id, store, limits)?;
-                    content_result.comments.push(comment_node);
-                    let comment_ref = CommentReference::new(comment_id);
-                    let ref_id = comment_ref.id;
-                    store.insert(IRNode::CommentReference(comment_ref));
-                    section.content.push(ref_id);
-                }
-                b"text:note" if in_text => {
-                    let note_class = attr_value(&e, b"text:note-class")
-                        .unwrap_or_else(|| "footnote".to_string());
-                    let note_id = format!("odf-note-{}", comment_counter);
-                    comment_counter += 1;
-                    let note = parse_note(&mut reader, &note_id, &note_class, store, limits)?;
-                    match note_class.as_str() {
-                        "endnote" => content_result.endnotes.push(note),
-                        _ => content_result.footnotes.push(note),
-                    }
-                }
-                b"text:bookmark-start" if in_text => {
-                    if let Some(name) = attr_value(&e, b"text:name") {
-                        let mut bookmark = BookmarkStart::new(name.clone());
-                        bookmark.name = Some(name);
-                        let bookmark_id = bookmark.id;
-                        store.insert(IRNode::BookmarkStart(bookmark));
-                        section.content.push(bookmark_id);
-                    }
-                }
-                b"text:bookmark-end" if in_text => {
-                    if let Some(name) = attr_value(&e, b"text:name") {
-                        let bookmark = BookmarkEnd::new(name);
-                        let bookmark_id = bookmark.id;
-                        store.insert(IRNode::BookmarkEnd(bookmark));
-                        section.content.push(bookmark_id);
-                    }
-                }
-                b"text:reference-mark-start" if in_text => {
-                    if let Some(name) = attr_value(&e, b"text:name") {
-                        let mut bookmark = BookmarkStart::new(name.clone());
-                        bookmark.name = Some(name);
-                        let bookmark_id = bookmark.id;
-                        store.insert(IRNode::BookmarkStart(bookmark));
-                        section.content.push(bookmark_id);
-                    }
-                }
-                b"text:reference-mark-end" if in_text => {
-                    if let Some(name) = attr_value(&e, b"text:name") {
-                        let bookmark = BookmarkEnd::new(name);
-                        let bookmark_id = bookmark.id;
-                        store.insert(IRNode::BookmarkEnd(bookmark));
-                        section.content.push(bookmark_id);
-                    }
-                }
-                b"text:date" if in_text => {
-                    let mut field = Field::new(Some("DATE".to_string()));
-                    field.instruction_parsed = Some(FieldInstruction {
-                        kind: FieldKind::Date,
-                        args: Vec::new(),
-                        switches: Vec::new(),
-                    });
-                    let field_id = field.id;
-                    store.insert(IRNode::Field(field));
-                    section.content.push(field_id);
-                }
-                b"text:time" if in_text => {
-                    let field = Field::new(Some("TIME".to_string()));
-                    let field_id = field.id;
-                    store.insert(IRNode::Field(field));
-                    section.content.push(field_id);
-                }
-                b"draw:frame" if in_text => {
-                    if let Some(shape_id) = parse_draw_frame(&mut reader, &e, store)? {
-                        section.content.push(shape_id);
-                    }
-                }
-                b"text:tracked-changes" if in_text => {
-                    let mut tracked = parse_tracked_changes(&mut reader, store, limits)?;
-                    revisions.append(&mut tracked);
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"text:bookmark-start" if in_text => {
-                    if let Some(name) = attr_value(&e, b"text:name") {
-                        let mut bookmark = BookmarkStart::new(name.clone());
-                        bookmark.name = Some(name);
-                        let bookmark_id = bookmark.id;
-                        store.insert(IRNode::BookmarkStart(bookmark));
-                        section.content.push(bookmark_id);
-                    }
-                }
-                b"text:bookmark-end" if in_text => {
-                    if let Some(name) = attr_value(&e, b"text:name") {
-                        let bookmark = BookmarkEnd::new(name);
-                        let bookmark_id = bookmark.id;
-                        store.insert(IRNode::BookmarkEnd(bookmark));
-                        section.content.push(bookmark_id);
-                    }
-                }
-                b"text:reference-mark-start" if in_text => {
-                    if let Some(name) = attr_value(&e, b"text:name") {
-                        let mut bookmark = BookmarkStart::new(name.clone());
-                        bookmark.name = Some(name);
-                        let bookmark_id = bookmark.id;
-                        store.insert(IRNode::BookmarkStart(bookmark));
-                        section.content.push(bookmark_id);
-                    }
-                }
-                b"text:reference-mark-end" if in_text => {
-                    if let Some(name) = attr_value(&e, b"text:name") {
-                        let bookmark = BookmarkEnd::new(name);
-                        let bookmark_id = bookmark.id;
-                        store.insert(IRNode::BookmarkEnd(bookmark));
-                        section.content.push(bookmark_id);
-                    }
-                }
-                b"text:date" if in_text => {
-                    let mut field = Field::new(Some("DATE".to_string()));
-                    field.instruction_parsed = Some(FieldInstruction {
-                        kind: FieldKind::Date,
-                        args: Vec::new(),
-                        switches: Vec::new(),
-                    });
-                    let field_id = field.id;
-                    store.insert(IRNode::Field(field));
-                    section.content.push(field_id);
-                }
-                b"text:time" if in_text => {
-                    let field = Field::new(Some("TIME".to_string()));
-                    let field_id = field.id;
-                    store.insert(IRNode::Field(field));
-                    section.content.push(field_id);
-                }
-                b"draw:frame" if in_text => {}
-                _ => {}
-            },
-            Ok(Event::End(e)) => match e.name().as_ref() {
-                b"office:text" => in_text = false,
-                b"text:list" => {
-                    list_stack.pop();
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => {
+                handle_text_start(&e, &mut reader, store, limits, &mut section, &mut state)?
+            }
+            Ok(Event::Empty(e)) => handle_text_empty(&e, store, &mut section, &mut state),
+            Ok(Event::End(e)) => handle_text_end(&e, &mut state),
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
+                return Err(xml_error("content.xml", e));
             }
             _ => {}
         }
         buf.clear();
     }
 
-    section.content.extend(revisions);
+    section.content.extend(state.revisions);
     let section_id = section.id;
     store.insert(IRNode::Section(section));
     let mut result = OdfContentResult::default();
     result.content.push(section_id);
-    result.comments = content_result.comments;
-    result.footnotes = content_result.footnotes;
-    result.endnotes = content_result.endnotes;
+    result.comments = state.content_result.comments;
+    result.footnotes = state.content_result.footnotes;
+    result.endnotes = state.content_result.endnotes;
     Ok(result)
+}
+
+fn handle_text_start(
+    e: &BytesStart<'_>,
+    reader: &mut Reader<std::io::Cursor<&[u8]>>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    section: &mut Section,
+    state: &mut OdfTextState,
+) -> Result<(), ParseError> {
+    match e.name().as_ref() {
+        b"office:text" => state.in_text = true,
+        b"text:list" if state.in_text => {
+            let style_name = attr_value(e, b"text:style-name").unwrap_or_default();
+            let num_id = state.list_id_map.entry(style_name).or_insert_with(|| {
+                let id = state.next_list_id;
+                state.next_list_id += 1;
+                id
+            });
+            let level = state.list_stack.len() as u32;
+            state.list_stack.push(ListContext {
+                num_id: *num_id,
+                level,
+            });
+        }
+        b"text:p" | b"text:h" if state.in_text => {
+            let outline_level =
+                attr_value(e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
+            let numbering = state.list_stack.last().map(|ctx| NumberingInfo {
+                num_id: ctx.num_id,
+                level: ctx.level,
+                format: None,
+            });
+            let paragraph_id = parse_paragraph(
+                reader,
+                e.name().as_ref(),
+                numbering,
+                outline_level,
+                store,
+                &mut state.pending_inline_nodes,
+                limits,
+            )?;
+            section.content.extend(state.pending_inline_nodes.drain(..));
+            section.content.push(paragraph_id);
+        }
+        b"table:table" if state.in_text => {
+            let table_id = parse_table(reader, store, limits)?;
+            section.content.extend(state.pending_inline_nodes.drain(..));
+            section.content.push(table_id);
+        }
+        b"office:annotation" if state.in_text => {
+            let comment_id = format!("odf-annotation-{}", state.comment_counter);
+            state.comment_counter += 1;
+            let comment_node = parse_annotation(reader, &comment_id, store, limits)?;
+            state.content_result.comments.push(comment_node);
+            let comment_ref = CommentReference::new(comment_id);
+            let ref_id = comment_ref.id;
+            store.insert(IRNode::CommentReference(comment_ref));
+            section.content.push(ref_id);
+        }
+        b"text:note" if state.in_text => {
+            let note_class =
+                attr_value(e, b"text:note-class").unwrap_or_else(|| "footnote".to_string());
+            let note_id = format!("odf-note-{}", state.comment_counter);
+            state.comment_counter += 1;
+            let note = parse_note(reader, &note_id, &note_class, store, limits)?;
+            match note_class.as_str() {
+                "endnote" => state.content_result.endnotes.push(note),
+                _ => state.content_result.footnotes.push(note),
+            }
+        }
+        b"text:bookmark-start" if state.in_text => {
+            push_bookmark_start(e, store, section);
+        }
+        b"text:bookmark-end" if state.in_text => {
+            push_bookmark_end(e, store, section);
+        }
+        b"text:reference-mark-start" if state.in_text => {
+            push_bookmark_start(e, store, section);
+        }
+        b"text:reference-mark-end" if state.in_text => {
+            push_bookmark_end(e, store, section);
+        }
+        b"text:date" if state.in_text => {
+            push_date_field(store, section);
+        }
+        b"text:time" if state.in_text => {
+            push_time_field(store, section);
+        }
+        b"draw:frame" if state.in_text => {
+            if let Some(shape_id) = parse_draw_frame(reader, e, store)? {
+                section.content.push(shape_id);
+            }
+        }
+        b"text:tracked-changes" if state.in_text => {
+            let mut tracked = parse_tracked_changes(reader, store, limits)?;
+            state.revisions.append(&mut tracked);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_text_empty(
+    e: &BytesStart<'_>,
+    store: &mut IrStore,
+    section: &mut Section,
+    state: &mut OdfTextState,
+) {
+    match e.name().as_ref() {
+        b"text:bookmark-start" if state.in_text => {
+            push_bookmark_start(e, store, section);
+        }
+        b"text:bookmark-end" if state.in_text => {
+            push_bookmark_end(e, store, section);
+        }
+        b"text:reference-mark-start" if state.in_text => {
+            push_bookmark_start(e, store, section);
+        }
+        b"text:reference-mark-end" if state.in_text => {
+            push_bookmark_end(e, store, section);
+        }
+        b"text:date" if state.in_text => {
+            push_date_field(store, section);
+        }
+        b"text:time" if state.in_text => {
+            push_time_field(store, section);
+        }
+        b"draw:frame" if state.in_text => {}
+        _ => {}
+    }
+}
+
+fn handle_text_end(e: &quick_xml::events::BytesEnd<'_>, state: &mut OdfTextState) {
+    match e.name().as_ref() {
+        b"office:text" => state.in_text = false,
+        b"text:list" => {
+            state.list_stack.pop();
+        }
+        _ => {}
+    }
+}
+
+fn push_bookmark_start(e: &BytesStart<'_>, store: &mut IrStore, section: &mut Section) {
+    if let Some(name) = attr_value(e, b"text:name") {
+        let mut bookmark = BookmarkStart::new(name.clone());
+        bookmark.name = Some(name);
+        let bookmark_id = bookmark.id;
+        store.insert(IRNode::BookmarkStart(bookmark));
+        section.content.push(bookmark_id);
+    }
+}
+
+fn push_bookmark_end(e: &BytesStart<'_>, store: &mut IrStore, section: &mut Section) {
+    if let Some(name) = attr_value(e, b"text:name") {
+        let bookmark = BookmarkEnd::new(name);
+        let bookmark_id = bookmark.id;
+        store.insert(IRNode::BookmarkEnd(bookmark));
+        section.content.push(bookmark_id);
+    }
+}
+
+fn push_date_field(store: &mut IrStore, section: &mut Section) {
+    let mut field = Field::new(Some("DATE".to_string()));
+    field.instruction_parsed = Some(FieldInstruction {
+        kind: FieldKind::Date,
+        args: Vec::new(),
+        switches: Vec::new(),
+    });
+    let field_id = field.id;
+    store.insert(IRNode::Field(field));
+    section.content.push(field_id);
+}
+
+fn push_time_field(store: &mut IrStore, section: &mut Section) {
+    let field = Field::new(Some("TIME".to_string()));
+    let field_id = field.id;
+    store.insert(IRNode::Field(field));
+    section.content.push(field_id);
 }
 
 pub(super) fn build_paragraph(
