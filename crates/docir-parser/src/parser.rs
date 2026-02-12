@@ -25,6 +25,7 @@ use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::path::Path;
 
 mod coverage;
 mod dispatch;
@@ -134,6 +135,8 @@ pub struct ParserConfig {
     pub compute_hashes: bool,
     /// Enforce minimal required parts per format.
     pub enforce_required_parts: bool,
+    /// Perform security scanning during parse.
+    pub scan_security_on_parse: bool,
     /// Collect parse timing metrics.
     pub enable_metrics: bool,
     /// Maximum allowed input size for top-level parser entrypoints.
@@ -154,6 +157,7 @@ impl Default for ParserConfig {
             extract_macro_source: false,
             compute_hashes: true,
             enforce_required_parts: true,
+            scan_security_on_parse: true,
             enable_metrics: false,
             max_input_size: 512 * 1024 * 1024,
             odf: OdfConfig::default(),
@@ -794,71 +798,6 @@ impl OoxmlParser {
         Ok(())
     }
 
-    /// Scan for security-relevant content.
-    fn scan_security_content<R: Read + Seek>(
-        &self,
-        zip: &mut SecureZipReader<R>,
-        store: &mut IrStore,
-        _content_types: &ContentTypes,
-    ) -> Result<(), ParseError> {
-        let scanner = security::SecurityScanner::new(&self.config);
-        self.scan_vba_projects(&scanner, zip, store)?;
-        self.scan_ole_objects(&scanner, zip, store)?;
-        scanner.scan_activex_controls(zip, store)?;
-        scanner.scan_word_external_relationships(zip, store)?;
-
-        Ok(())
-    }
-
-    fn scan_vba_projects<R: Read + Seek>(
-        &self,
-        scanner: &security::SecurityScanner<'_>,
-        zip: &mut SecureZipReader<R>,
-        store: &mut IrStore,
-    ) -> Result<(), ParseError> {
-        let mut builder = docir_core::ir::IrBuilder::new(store);
-        let vba_paths = [
-            "word/vbaProject.bin",
-            "xl/vbaProject.bin",
-            "ppt/vbaProject.bin",
-        ];
-        for vba_path in &vba_paths {
-            if zip.contains(vba_path) {
-                let (mut macro_project, modules) = scanner.detect_macro_project(zip, vba_path)?;
-                for module in modules {
-                    let id = module.id;
-                    builder.insert(IRNode::MacroModule(module));
-                    macro_project.modules.push(id);
-                }
-                builder.insert(IRNode::MacroProject(macro_project));
-            }
-        }
-        Ok(())
-    }
-
-    fn scan_ole_objects<R: Read + Seek>(
-        &self,
-        scanner: &security::SecurityScanner<'_>,
-        zip: &mut SecureZipReader<R>,
-        store: &mut IrStore,
-    ) -> Result<(), ParseError> {
-        let mut builder = docir_core::ir::IrBuilder::new(store);
-        let ole_files: Vec<String> = zip
-            .list_prefix("word/embeddings/")
-            .into_iter()
-            .chain(zip.list_prefix("xl/embeddings/"))
-            .chain(zip.list_prefix("ppt/embeddings/"))
-            .filter(|p| p.ends_with(".bin") || p.ends_with(".ole"))
-            .map(|s| s.to_string())
-            .collect();
-
-        for ole_path in ole_files {
-            let ole_object = scanner.detect_ole_object(zip, &ole_path)?;
-            builder.insert(IRNode::OleObject(ole_object));
-        }
-        Ok(())
-    }
-
     fn link_shapes_to_shared_parts(&self, store: &mut IrStore) {
         use docir_core::ir::IRNode;
         use docir_core::types::NodeType;
@@ -1016,6 +955,37 @@ impl DocumentParser {
         Err(ParseError::UnsupportedFormat(
             "Unknown package format (missing [Content_Types].xml and mimetype)".to_string(),
         ))
+    }
+
+    /// Parses from a file and returns parsed document with raw bytes.
+    pub fn parse_file_with_bytes<P: AsRef<Path>>(
+        &self,
+        path: P,
+    ) -> Result<(ParsedDocument, Vec<u8>), ParseError> {
+        let reader = crate::input::open_reader(path)?;
+        let data = read_all_with_limit(reader, self.config.max_input_size)?;
+        let parsed = self.parse_bytes(&data)?;
+        Ok((parsed, data))
+    }
+
+    /// Parses from a reader and returns parsed document with raw bytes.
+    pub fn parse_reader_with_bytes<R: Read + Seek>(
+        &self,
+        reader: R,
+    ) -> Result<(ParsedDocument, Vec<u8>), ParseError> {
+        let data = read_all_with_limit(reader, self.config.max_input_size)?;
+        let parsed = self.parse_bytes(&data)?;
+        Ok((parsed, data))
+    }
+
+    /// Scans OOXML security artifacts from raw bytes into an existing store.
+    pub fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> Result<(), ParseError> {
+        if !is_zip_container(data) {
+            return Ok(());
+        }
+        let mut zip = SecureZipReader::new(Cursor::new(data), self.config.zip_config.clone())?;
+        let scanner = security::SecurityScanner::new(&self.config);
+        scanner.scan_zip(&mut zip, store)
     }
 }
 

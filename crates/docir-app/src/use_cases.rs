@@ -2,7 +2,7 @@ use crate::{
     AppResult, ParsedDocument, ParserPort, RulesEnginePort, SecurityAnalyzerPort,
     SecurityEnricherPort,
 };
-use docir_core::types::NodeId;
+use docir_core::types::{DocumentFormat, NodeId};
 use docir_core::visitor::IrStore;
 use docir_diff::{DiffEngine, DiffResult};
 use docir_rules::{RuleProfile, RuleReport};
@@ -23,21 +23,36 @@ impl<'a, P: ParserPort> ParseDocument<'a, P> {
     }
 
     pub(crate) fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> AppResult<ParsedDocument> {
-        let mut parsed = self.parser.parse_file(path)?;
+        let (mut parsed, data) = self.parser.parse_file_with_bytes(path)?;
+        self.scan_security_if_needed(&data, &mut parsed)?;
         EnrichSecurity::run(self.enricher, &mut parsed);
         Ok(parsed)
     }
 
     pub(crate) fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
         let mut parsed = self.parser.parse_bytes(data)?;
+        self.scan_security_if_needed(data, &mut parsed)?;
         EnrichSecurity::run(self.enricher, &mut parsed);
         Ok(parsed)
     }
 
     pub(crate) fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
-        let mut parsed = self.parser.parse_reader(reader)?;
+        let (mut parsed, data) = self.parser.parse_reader_with_bytes(reader)?;
+        self.scan_security_if_needed(&data, &mut parsed)?;
         EnrichSecurity::run(self.enricher, &mut parsed);
         Ok(parsed)
+    }
+
+    fn scan_security_if_needed(&self, data: &[u8], parsed: &mut ParsedDocument) -> AppResult<()> {
+        match parsed.format() {
+            DocumentFormat::WordProcessing
+            | DocumentFormat::Spreadsheet
+            | DocumentFormat::Presentation => {
+                self.parser.scan_security_bytes(data, parsed.store_mut())?;
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
 

@@ -11,16 +11,75 @@ use docir_core::visitor::IrStore;
 use std::collections::HashSet;
 use std::io::{Read, Seek};
 
-pub(super) struct SecurityScanner<'a> {
+pub struct SecurityScanner<'a> {
     config: &'a ParserConfig,
 }
 
 impl<'a> SecurityScanner<'a> {
-    pub(super) fn new(config: &'a ParserConfig) -> Self {
+    pub fn new(config: &'a ParserConfig) -> Self {
         Self { config }
     }
 
-    pub(super) fn scan_activex_controls<R: Read + Seek>(
+    pub fn scan_zip<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+    ) -> Result<(), ParseError> {
+        self.scan_vba_projects(zip, store)?;
+        self.scan_ole_objects(zip, store)?;
+        self.scan_activex_controls(zip, store)?;
+        self.scan_word_external_relationships(zip, store)?;
+        Ok(())
+    }
+
+    fn scan_vba_projects<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+    ) -> Result<(), ParseError> {
+        let mut builder = docir_core::ir::IrBuilder::new(store);
+        let vba_paths = [
+            "word/vbaProject.bin",
+            "xl/vbaProject.bin",
+            "ppt/vbaProject.bin",
+        ];
+        for vba_path in &vba_paths {
+            if zip.contains(vba_path) {
+                let (mut macro_project, modules) = self.detect_macro_project(zip, vba_path)?;
+                for module in modules {
+                    let id = module.id;
+                    builder.insert(IRNode::MacroModule(module));
+                    macro_project.modules.push(id);
+                }
+                builder.insert(IRNode::MacroProject(macro_project));
+            }
+        }
+        Ok(())
+    }
+
+    fn scan_ole_objects<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+    ) -> Result<(), ParseError> {
+        let mut builder = docir_core::ir::IrBuilder::new(store);
+        let ole_files: Vec<String> = zip
+            .list_prefix("word/embeddings/")
+            .into_iter()
+            .chain(zip.list_prefix("xl/embeddings/"))
+            .chain(zip.list_prefix("ppt/embeddings/"))
+            .filter(|p| p.ends_with(".bin") || p.ends_with(".ole"))
+            .map(|s| s.to_string())
+            .collect();
+
+        for ole_path in ole_files {
+            let ole_object = self.detect_ole_object(zip, &ole_path)?;
+            builder.insert(IRNode::OleObject(ole_object));
+        }
+        Ok(())
+    }
+
+    fn scan_activex_controls<R: Read + Seek>(
         &self,
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
@@ -65,7 +124,7 @@ impl<'a> SecurityScanner<'a> {
         Ok(())
     }
 
-    pub(super) fn scan_word_external_relationships<R: Read + Seek>(
+    fn scan_word_external_relationships<R: Read + Seek>(
         &self,
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
@@ -98,7 +157,7 @@ impl<'a> SecurityScanner<'a> {
         Ok(())
     }
 
-    pub(super) fn detect_macro_project<R: Read + Seek>(
+    fn detect_macro_project<R: Read + Seek>(
         &self,
         zip: &mut SecureZipReader<R>,
         path: &str,
@@ -165,7 +224,7 @@ impl<'a> SecurityScanner<'a> {
         Ok((project, modules_out))
     }
 
-    pub(super) fn detect_ole_object<R: Read + Seek>(
+    fn detect_ole_object<R: Read + Seek>(
         &self,
         zip: &mut SecureZipReader<R>,
         path: &str,

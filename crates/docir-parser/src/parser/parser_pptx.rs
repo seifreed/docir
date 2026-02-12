@@ -38,10 +38,13 @@ impl OoxmlParser {
             m.shared_parts_ms = start.elapsed().as_millis();
         }
 
-        let start = std::time::Instant::now();
-        self.scan_security_content(zip, &mut store, content_types)?;
-        if let Some(m) = metrics.as_mut() {
-            m.security_scan_ms = start.elapsed().as_millis();
+        if self.config.scan_security_on_parse {
+            let start = std::time::Instant::now();
+            let scanner = security::SecurityScanner::new(&self.config);
+            scanner.scan_zip(zip, &mut store)?;
+            if let Some(m) = metrics.as_mut() {
+                m.security_scan_ms = start.elapsed().as_millis();
+            }
         }
 
         // Link shapes/animations to shared parts (charts, SmartArt, media, OLE)

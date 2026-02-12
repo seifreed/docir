@@ -89,6 +89,15 @@ pub trait ParserPort {
     fn parse_file<P: AsRef<Path>>(&self, path: P) -> AppResult<ParsedDocument>;
     fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument>;
     fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument>;
+    fn parse_file_with_bytes<P: AsRef<Path>>(
+        &self,
+        path: P,
+    ) -> AppResult<(ParsedDocument, Vec<u8>)>;
+    fn parse_reader_with_bytes<R: Read + Seek>(
+        &self,
+        reader: R,
+    ) -> AppResult<(ParsedDocument, Vec<u8>)>;
+    fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> AppResult<()>;
 }
 
 impl ParserPort for DocumentParser {
@@ -108,6 +117,28 @@ impl ParserPort for DocumentParser {
         self.parse_reader(reader)
             .map(ParsedDocument::new)
             .map_err(Into::into)
+    }
+
+    fn parse_file_with_bytes<P: AsRef<Path>>(
+        &self,
+        path: P,
+    ) -> AppResult<(ParsedDocument, Vec<u8>)> {
+        self.parse_file_with_bytes(path)
+            .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
+            .map_err(Into::into)
+    }
+
+    fn parse_reader_with_bytes<R: Read + Seek>(
+        &self,
+        reader: R,
+    ) -> AppResult<(ParsedDocument, Vec<u8>)> {
+        self.parse_reader_with_bytes(reader)
+            .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
+            .map_err(Into::into)
+    }
+
+    fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> AppResult<()> {
+        self.scan_security_bytes(data, store).map_err(Into::into)
     }
 }
 
@@ -184,6 +215,8 @@ pub struct DocirApp<P: ParserPort = DocumentParser> {
 impl DocirApp<DocumentParser> {
     /// Creates a new app instance with the provided parser config.
     pub fn new(config: ParserConfig) -> Self {
+        let mut config = config;
+        config.scan_security_on_parse = false;
         Self::with_parser(DocumentParser::with_config(config))
     }
 }
