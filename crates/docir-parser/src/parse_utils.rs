@@ -1,5 +1,6 @@
 use crate::parser::ParsedDocument;
 use docir_core::ir::{Diagnostics, Document, IRNode};
+use docir_core::normalize::normalize_store;
 use docir_core::types::DocumentFormat;
 use docir_core::visitor::IrStore;
 
@@ -29,4 +30,14 @@ pub(crate) fn finalize_document(
         store,
         metrics: None,
     }
+}
+
+pub(crate) fn finalize_and_normalize(
+    format: DocumentFormat,
+    store: IrStore,
+    doc: Document,
+) -> ParsedDocument {
+    let mut parsed = finalize_document(format, store, doc);
+    normalize_store(&mut parsed.store, parsed.root_id);
+    parsed
 }

@@ -16,7 +16,6 @@ use docir_core::ir::{
     StyleRunProperties, StyleSet, StyleType, Table, TableAlignment, TableCell, TableProperties,
     TableRow, TableWidth, TableWidthType,
 };
-use docir_core::normalize::normalize_store;
 use docir_core::security::{
     ExternalRefType, ExternalReference, MacroModule, MacroModuleType, MacroProject, OleObject,
 };

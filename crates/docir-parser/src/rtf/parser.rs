@@ -3,9 +3,9 @@
 use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::input::read_all_with_limit;
+use crate::parse_utils::finalize_and_normalize;
 use crate::parser::{ParsedDocument, ParserConfig};
 use docir_core::ir::IRNode;
-use docir_core::normalize::normalize_store;
 use docir_core::types::DocumentFormat;
 use docir_core::visitor::IrStore;
 use std::io::{Read, Seek};
@@ -70,15 +70,6 @@ impl RtfParser {
             doc.shared_parts.push(media);
         }
 
-        let root_id = doc.id;
-        store.insert(IRNode::Document(doc));
-        normalize_store(&mut store, root_id);
-
-        Ok(ParsedDocument {
-            root_id,
-            format: DocumentFormat::Rtf,
-            store,
-            metrics: None,
-        })
+        Ok(finalize_and_normalize(DocumentFormat::Rtf, store, doc))
     }
 }

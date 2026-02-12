@@ -1,5 +1,5 @@
 use super::*;
-use crate::parse_utils::{finalize_document, init_store_and_document};
+use crate::parse_utils::{finalize_and_normalize, init_store_and_document};
 
 impl HwpParser {
     pub fn parse_reader<R: Read + Seek>(
@@ -192,10 +192,7 @@ impl HwpParser {
 
         attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);
 
-        let root_id = doc.id;
-        let mut parsed = finalize_document(DocumentFormat::Hwp, store, doc);
-        normalize_store(&mut parsed.store, root_id);
-        Ok(parsed)
+        Ok(finalize_and_normalize(DocumentFormat::Hwp, store, doc))
     }
 
     fn build_header_context<'a>(
@@ -418,9 +415,6 @@ impl HwpxParser {
         let diagnostics = build_hwp_diagnostics(DocumentFormat::Hwpx, &file_names);
         attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);
 
-        let root_id = doc.id;
-        let mut parsed = finalize_document(DocumentFormat::Hwpx, store, doc);
-        normalize_store(&mut parsed.store, root_id);
-        Ok(parsed)
+        Ok(finalize_and_normalize(DocumentFormat::Hwpx, store, doc))
     }
 }
