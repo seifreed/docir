@@ -7,8 +7,8 @@ use docir_core::visitor::IrStore;
 use docir_diff::DiffResult;
 use docir_parser::parser::ParseMetrics as ParserParseMetrics;
 use docir_parser::parser::ParsedDocument as ParserParsedDocument;
+use docir_parser::ParseError;
 pub use docir_parser::ParserConfig;
-use docir_parser::{scan_security_bytes, DocumentParser, ParseError};
 pub use docir_rules::RuleProfile;
 use docir_rules::{RuleEngine, RuleReport};
 use docir_security::analyzer::AnalysisResult;
@@ -19,9 +19,11 @@ use std::io::{Read, Seek};
 use std::path::Path;
 use thiserror::Error;
 
+mod adapters;
 mod summary;
 mod use_cases;
 
+pub use adapters::AppParser;
 pub use summary::{
     summarize_document, DocumentSummary, MetadataSummary, NodeCount, ParseMetricsSummary,
     SecuritySummary, TextStatsSummary, ThreatIndicatorSummary,
@@ -105,107 +107,9 @@ pub trait ParserPort {
     ) -> AppResult<(ParsedDocument, Vec<u8>)>;
 }
 
-impl ParserPort for DocumentParser {
-    fn parse_file<P: AsRef<Path>>(&self, path: P) -> AppResult<ParsedDocument> {
-        self.parse_file(path)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
-    }
-
-    fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
-        self.parse_bytes(data)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
-    }
-
-    fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
-        self.parse_reader(reader)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
-    }
-
-    fn parse_file_with_bytes<P: AsRef<Path>>(
-        &self,
-        path: P,
-    ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        self.parse_file_with_bytes(path)
-            .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
-            .map_err(Into::into)
-    }
-
-    fn parse_reader_with_bytes<R: Read + Seek>(
-        &self,
-        reader: R,
-    ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        self.parse_reader_with_bytes(reader)
-            .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
-            .map_err(Into::into)
-    }
-}
-
 /// Security scanning port for application workflows.
 pub trait SecurityScannerPort {
     fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> AppResult<()>;
-}
-
-pub struct AppParser {
-    parser: DocumentParser,
-    config: ParserConfig,
-}
-
-impl AppParser {
-    pub fn new(parser: DocumentParser, config: ParserConfig) -> Self {
-        Self { parser, config }
-    }
-}
-
-impl ParserPort for AppParser {
-    fn parse_file<P: AsRef<Path>>(&self, path: P) -> AppResult<ParsedDocument> {
-        self.parser
-            .parse_file(path)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
-    }
-
-    fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
-        self.parser
-            .parse_bytes(data)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
-    }
-
-    fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
-        self.parser
-            .parse_reader(reader)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
-    }
-
-    fn parse_file_with_bytes<P: AsRef<Path>>(
-        &self,
-        path: P,
-    ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        self.parser
-            .parse_file_with_bytes(path)
-            .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
-            .map_err(Into::into)
-    }
-
-    fn parse_reader_with_bytes<R: Read + Seek>(
-        &self,
-        reader: R,
-    ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        self.parser
-            .parse_reader_with_bytes(reader)
-            .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
-            .map_err(Into::into)
-    }
-}
-
-impl SecurityScannerPort for AppParser {
-    fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> AppResult<()> {
-        scan_security_bytes(&self.config, data, store).map_err(Into::into)
-    }
 }
 
 /// Security analysis port for application workflows.
@@ -283,8 +187,7 @@ impl DocirApp<AppParser> {
     pub fn new(config: ParserConfig) -> Self {
         let mut config = config;
         config.scan_security_on_parse = false;
-        let parser = DocumentParser::with_config(config.clone());
-        Self::with_parser(AppParser::new(parser, config))
+        Self::with_parser(AppParser::with_config(config))
     }
 }
 

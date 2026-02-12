@@ -16,6 +16,7 @@ pub mod ooxml;
 pub mod parser;
 mod registry_utils;
 pub mod rtf;
+mod security_scan;
 mod security_utils;
 mod text_utils;
 pub(crate) mod xml_utils;
@@ -27,6 +28,7 @@ pub use hwp::{HwpParser, HwpxParser};
 pub use odf::OdfParser;
 pub use parser::{DocumentParser, OoxmlParser};
 pub use rtf::RtfParser;
+pub use security_scan::{DefaultSecurityScanner, SecurityScanner};
 
 use crate::zip_handler::SecureZipReader;
 use docir_core::visitor::IrStore;
@@ -42,8 +44,8 @@ pub fn scan_security_bytes(
         return Ok(());
     }
     let mut zip = SecureZipReader::new(Cursor::new(data), config.zip_config.clone())?;
-    let scanner = parser::security::SecurityScanner::new(config);
-    scanner.scan_zip(&mut zip, store)
+    let scanner = security_scan::DefaultSecurityScanner;
+    scanner.scan_ooxml(config, &mut zip, store)
 }
 
 fn is_zip_container(data: &[u8]) -> bool {

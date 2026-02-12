@@ -35,16 +35,14 @@ mod manifest;
 mod ods;
 mod paragraph;
 mod presentation;
-mod security;
+pub(crate) mod security;
 mod security_helpers;
 mod spreadsheet;
 mod text;
 
-use self::security::{
-    scan_embedded_objects, scan_external_links, scan_odf_advanced_features, scan_odf_filters,
-    scan_odf_formula_security, scan_odf_objects, scan_odf_protection, OdfFormulaScan,
-};
+use self::security::scan_odf_filters;
 use self::security_helpers::{build_odf_macro_project, parse_odf_signatures};
+use crate::security_scan::{DefaultSecurityScanner, SecurityScanner};
 
 use container::{handle_content_xml, load_meta};
 use io::{collect_manifest_index, collect_shared_parts};
@@ -264,45 +262,17 @@ impl OdfParser {
             store.insert(IRNode::MacroProject(project));
         }
 
-        let mut formula_scan = OdfFormulaScan::default();
-        if let Some(xml) = content_xml.as_deref() {
-            formula_scan = scan_odf_formula_security(xml);
-            diagnostics
-                .entries
-                .extend(formula_scan.diagnostics.drain(..));
-            diagnostics.entries.extend(scan_odf_protection(xml));
-            diagnostics.entries.extend(scan_odf_advanced_features(xml));
-        }
-
-        let mut external_refs = Vec::new();
-        if let Some(xml) = content_xml.as_deref() {
-            external_refs.extend(scan_external_links(xml, "content.xml"));
-        }
-        if let Some(xml) = styles_xml.as_deref() {
-            external_refs.extend(scan_external_links(xml, "styles.xml"));
-        }
-        if let Some(xml) = settings_xml.as_deref() {
-            external_refs.extend(scan_external_links(xml, "settings.xml"));
-        }
-        external_refs.extend(formula_scan.external_refs.drain(..));
-
-        let mut ole_objects = Vec::new();
-        if let Some(xml) = content_xml.as_deref() {
-            let (oles, ole_links) = scan_odf_objects(xml);
-            ole_objects.extend(oles);
-            external_refs.extend(ole_links);
-        }
-        ole_objects.extend(scan_embedded_objects(&file_names, &mut zip));
-
-        for ext in external_refs {
-            store.insert(IRNode::ExternalReference(ext));
-        }
-        for ole in ole_objects {
-            store.insert(IRNode::OleObject(ole));
-        }
-        doc.security
-            .dde_fields
-            .extend(formula_scan.dde_fields.drain(..));
+        let scanner = DefaultSecurityScanner;
+        scanner.scan_odf(
+            content_xml.as_deref(),
+            styles_xml.as_deref(),
+            settings_xml.as_deref(),
+            &file_names,
+            &mut zip,
+            &mut store,
+            &mut doc,
+            &mut diagnostics,
+        );
 
         if let Some(sig_xml) = signatures_xml.as_deref() {
             let sigs = parse_odf_signatures(sig_xml);
