@@ -2380,10 +2380,7 @@ fn parse_paragraph(
     header_footer_map: Option<&HashMap<String, NodeId>>,
 ) -> Result<ParagraphParse, ParseError> {
     let mut para = Paragraph::new();
-    let mut field_active = false;
-    let mut field_instr = String::new();
-    let mut field_runs: Vec<NodeId> = Vec::new();
-    let mut field_instr_done = false;
+    let mut field_state = FieldState::new();
     let mut section_ref: Option<SectionRef> = None;
     let mut buf = Vec::new();
 
@@ -2397,47 +2394,16 @@ fn parse_paragraph(
                     let run = parse_run(parser, reader, rels)?;
                     let run_id = run.run_id;
                     para.runs.push(run_id);
-                    for emb in run.embedded {
-                        para.runs.push(emb);
+                    for emb in &run.embedded {
+                        para.runs.push(*emb);
                     }
-                    if field_active {
-                        field_runs.push(run_id);
-                        if run.has_instr && !field_instr_done {
-                            field_instr.push_str(&run.text);
-                        }
-                    }
-                    if let Some(char_type) = run.field_char.as_deref() {
-                        match char_type {
-                            "begin" => {
-                                field_active = true;
-                                field_instr_done = false;
-                                field_instr.clear();
-                                field_runs.clear();
-                            }
-                            "separate" => {
-                                field_instr_done = true;
-                            }
-                            "end" => {
-                                if field_active {
-                                    let instr = if field_instr.trim().is_empty() {
-                                        None
-                                    } else {
-                                        Some(field_instr.trim().to_string())
-                                    };
-                                    let mut field = Field::new(instr);
-                                    field.runs = field_runs.clone();
-                                    let field_id = field.id;
-                                    parser.store.insert(docir_core::ir::IRNode::Field(field));
-                                    para.runs.push(field_id);
-                                }
-                                field_active = false;
-                                field_instr_done = false;
-                                field_instr.clear();
-                                field_runs.clear();
-                            }
-                            _ => {}
-                        }
-                    }
+                    update_field_from_run(&run, run_id, &mut field_state);
+                    handle_field_char(
+                        parser,
+                        &mut para,
+                        &mut field_state,
+                        run.field_char.as_deref(),
+                    );
                 }
                 b"w:hyperlink" => {
                     let link_id = parse_hyperlink(parser, reader, rels, &e)?;
@@ -2616,6 +2582,79 @@ fn parse_paragraph(
     let id = para.id;
     parser.store.insert(docir_core::ir::IRNode::Paragraph(para));
     Ok(ParagraphParse { id, section_ref })
+}
+
+struct FieldState {
+    active: bool,
+    instr_done: bool,
+    instr: String,
+    runs: Vec<NodeId>,
+}
+
+impl FieldState {
+    fn new() -> Self {
+        Self {
+            active: false,
+            instr_done: false,
+            instr: String::new(),
+            runs: Vec::new(),
+        }
+    }
+
+    fn start(&mut self) {
+        self.active = true;
+        self.instr_done = false;
+        self.instr.clear();
+        self.runs.clear();
+    }
+
+    fn separate(&mut self) {
+        self.instr_done = true;
+    }
+
+    fn finish(&mut self) {
+        self.active = false;
+        self.instr_done = false;
+        self.instr.clear();
+        self.runs.clear();
+    }
+}
+
+fn update_field_from_run(run: &RunParse, run_id: NodeId, state: &mut FieldState) {
+    if state.active {
+        state.runs.push(run_id);
+        if run.has_instr && !state.instr_done {
+            state.instr.push_str(&run.text);
+        }
+    }
+}
+
+fn handle_field_char(
+    parser: &mut DocxParser,
+    para: &mut Paragraph,
+    state: &mut FieldState,
+    char_type: Option<&str>,
+) {
+    match char_type {
+        Some("begin") => state.start(),
+        Some("separate") => state.separate(),
+        Some("end") => {
+            if state.active {
+                let instr = if state.instr.trim().is_empty() {
+                    None
+                } else {
+                    Some(state.instr.trim().to_string())
+                };
+                let mut field = Field::new(instr);
+                field.runs = state.runs.clone();
+                let field_id = field.id;
+                parser.store.insert(docir_core::ir::IRNode::Field(field));
+                para.runs.push(field_id);
+            }
+            state.finish();
+        }
+        _ => {}
+    }
 }
 
 fn parse_paragraph_simple(
