@@ -1,6 +1,5 @@
-use super::{
-    find_stream_case, hex, parse_vba_project_text, vba_decompress, OoxmlParser, ParseError,
-};
+use super::utils::find_stream_case;
+use super::{hex, parse_vba_project_text, vba_decompress, OoxmlParser, ParseError};
 use crate::ooxml::part_utils::get_rels_path;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
 use crate::zip_handler::SecureZipReader;

@@ -34,6 +34,7 @@ mod parser_pptx;
 mod parser_xlsx;
 mod security;
 mod shared_parts;
+mod utils;
 
 /// ODF parsing configuration.
 #[derive(Debug, Clone)]
@@ -897,7 +898,7 @@ impl OoxmlParser {
                 continue;
             };
             if let Some(target) = shape.media_target.as_ref() {
-                if let Some(id) = resolve_media_asset(&media_by_path, target) {
+                if let Some(id) = utils::resolve_media_asset(&media_by_path, target) {
                     shape.media_asset = Some(id);
                 }
                 if let Some(id) = chart_by_path.get(target) {
@@ -930,7 +931,7 @@ impl OoxmlParser {
             };
             for anim in &mut slide.animations {
                 if let Some(target) = anim.target.as_ref() {
-                    if let Some(id) = resolve_media_asset(&media_by_path, target) {
+                    if let Some(id) = utils::resolve_media_asset(&media_by_path, target) {
                         anim.media_asset = Some(id);
                     }
                 }
@@ -1030,27 +1031,6 @@ where
     R: Read + Seek,
 {
     parser.parse_reader(reader)
-}
-
-fn resolve_media_asset(media_by_path: &HashMap<String, NodeId>, target: &str) -> Option<NodeId> {
-    if let Some(id) = media_by_path.get(target) {
-        return Some(*id);
-    }
-    let trimmed = target.trim_start_matches('/');
-    for (path, id) in media_by_path {
-        if path.ends_with(trimmed) || trimmed.ends_with(path) {
-            return Some(*id);
-        }
-    }
-    None
-}
-
-fn find_stream_case<'a>(streams: &'a [String], name: &str) -> Option<&'a str> {
-    let target = name.to_ascii_uppercase();
-    streams
-        .iter()
-        .find(|s| s.to_ascii_uppercase() == target)
-        .map(|s| s.as_str())
 }
 
 fn parse_vba_project_text(
