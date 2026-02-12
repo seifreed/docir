@@ -1,4 +1,3 @@
-
 use super::*;
 use docir_core::types::NodeType;
 use docir_core::IrSummary;
