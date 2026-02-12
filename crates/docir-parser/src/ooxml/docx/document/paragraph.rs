@@ -292,6 +292,16 @@ fn handle_field_char(
     }
 }
 
+fn alignment_from_val(val: &str) -> TextAlignment {
+    match val {
+        "center" => TextAlignment::Center,
+        "right" => TextAlignment::Right,
+        "both" => TextAlignment::Justify,
+        "distribute" => TextAlignment::Distribute,
+        _ => TextAlignment::Left,
+    }
+}
+
 pub(super) fn parse_paragraph_properties(
     reader: &mut Reader<&[u8]>,
     para: &mut Paragraph,
@@ -321,13 +331,7 @@ pub(super) fn parse_paragraph_properties(
                 }
                 b"w:jc" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
-                        para.properties.alignment = match val.as_str() {
-                            "center" => Some(TextAlignment::Center),
-                            "right" => Some(TextAlignment::Right),
-                            "both" => Some(TextAlignment::Justify),
-                            "distribute" => Some(TextAlignment::Distribute),
-                            _ => Some(TextAlignment::Left),
-                        };
+                        para.properties.alignment = Some(alignment_from_val(val.as_str()));
                     }
                 }
                 b"w:ind" => {
