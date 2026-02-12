@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{local_name, xml_error};
+use crate::xml_utils::{local_name, read_event};
 use docir_core::ir::{WebExtension, WebExtensionProperty, WebExtensionTaskpane};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -14,8 +14,8 @@ pub fn parse_web_extension(xml: &str, path: &str) -> Result<WebExtension, ParseE
 
     let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+        match read_event(&mut reader, &mut buf, path)? {
+            Event::Start(e) | Event::Empty(e) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
                 match local {
@@ -73,10 +73,7 @@ pub fn parse_web_extension(xml: &str, path: &str) -> Result<WebExtension, ParseE
                     _ => {}
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
@@ -97,8 +94,8 @@ pub fn parse_web_extension_taskpanes(
 
     let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+        match read_event(&mut reader, &mut buf, path)? {
+            Event::Start(e) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
                 if local == b"taskpane" {
@@ -133,7 +130,7 @@ pub fn parse_web_extension_taskpanes(
                     }
                 }
             }
-            Ok(Event::Empty(e)) => {
+            Event::Empty(e) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
                 if local == b"taskpane" {
@@ -168,7 +165,7 @@ pub fn parse_web_extension_taskpanes(
                     }
                 }
             }
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
                 if local == b"taskpane" {
@@ -177,10 +174,7 @@ pub fn parse_web_extension_taskpanes(
                     }
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();

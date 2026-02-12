@@ -1,7 +1,7 @@
 //! OOXML relationships parser (.rels files).
 
 use crate::error::ParseError;
-use crate::xml_utils::reader_from_str;
+use crate::xml_utils::{read_event, reader_from_str};
 use quick_xml::events::Event;
 use std::collections::HashMap;
 
@@ -51,8 +51,8 @@ impl Relationships {
         let mut buf = Vec::new();
 
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
+            match read_event(&mut reader, &mut buf, ".rels")? {
+                Event::Empty(e) | Event::Start(e) => {
                     if e.name().as_ref() == b"Relationship" {
                         let mut id = None;
                         let mut rel_type = None;
@@ -94,13 +94,7 @@ impl Relationships {
                         }
                     }
                 }
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: ".rels".to_string(),
-                        message: e.to_string(),
-                    });
-                }
+                Event::Eof => break,
                 _ => {}
             }
             buf.clear();

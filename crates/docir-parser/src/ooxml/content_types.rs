@@ -1,7 +1,7 @@
 //! [Content_Types].xml parser.
 
 use crate::error::ParseError;
-use crate::xml_utils::reader_from_str;
+use crate::xml_utils::{read_event, reader_from_str};
 use quick_xml::events::Event;
 use std::collections::HashMap;
 
@@ -23,8 +23,8 @@ impl ContentTypes {
         let mut buf = Vec::new();
 
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
+            match read_event(&mut reader, &mut buf, "[Content_Types].xml")? {
+                Event::Empty(e) | Event::Start(e) => {
                     match e.name().as_ref() {
                         b"Default" => {
                             let mut extension = None;
@@ -75,13 +75,7 @@ impl ContentTypes {
                         _ => {}
                     }
                 }
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: "[Content_Types].xml".to_string(),
-                        message: e.to_string(),
-                    });
-                }
+                Event::Eof => break,
                 _ => {}
             }
             buf.clear();

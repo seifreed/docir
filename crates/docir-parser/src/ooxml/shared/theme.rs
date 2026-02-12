@@ -1,6 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::reader_from_str;
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{read_event, reader_from_str};
 use docir_core::ir::{Theme, ThemeColor, ThemeFontScheme};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -19,8 +18,8 @@ pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
     let mut in_minor_font = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match read_event(&mut reader, &mut buf, path)? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"a:theme" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"name" {
@@ -68,7 +67,7 @@ pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
                     }
                 }
             },
-            Ok(Event::Empty(e)) => {
+            Event::Empty(e) => {
                 if in_clr_scheme {
                     let mut color_value: Option<String> = None;
                     if e.name().as_ref() == b"a:srgbClr" {
@@ -105,7 +104,7 @@ pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
                     }
                 }
             }
-            Ok(Event::End(e)) => match e.name().as_ref() {
+            Event::End(e) => match e.name().as_ref() {
                 b"a:clrScheme" => {
                     in_clr_scheme = false;
                 }
@@ -115,10 +114,7 @@ pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
                     current_color_name = None;
                 }
             },
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();

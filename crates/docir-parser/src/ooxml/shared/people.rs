@@ -1,6 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::reader_from_str;
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{read_event, reader_from_str};
 use docir_core::ir::{PeoplePart, PersonEntry};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -13,8 +12,8 @@ pub fn parse_people_part(xml: &str, path: &str) -> Result<PeoplePart, ParseError
 
     let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+        match read_event(&mut reader, &mut buf, path)? {
+            Event::Start(e) | Event::Empty(e) => {
                 if e.name().as_ref().ends_with(b"person") {
                     let mut entry = PersonEntry {
                         person_id: None,
@@ -46,10 +45,7 @@ pub fn parse_people_part(xml: &str, path: &str) -> Result<PeoplePart, ParseError
                     }
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
