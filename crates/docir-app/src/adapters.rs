@@ -1,28 +1,34 @@
 //! Infrastructure adapters for application ports.
 
-use crate::{AppResult, ParsedDocument, ParserPort, SecurityScannerPort};
+use crate::{AppResult, ParsedDocument, ParserConfig, ParserPort, SecurityScannerPort};
 use docir_core::visitor::IrStore;
 use docir_parser::zip_handler::SecureZipReader;
-use docir_parser::{
-    DefaultSecurityScanner, DocumentParser, ParseError, ParserConfig, SecurityScanner,
-};
+use docir_parser::{DefaultSecurityScanner, DocumentParser, ParseError, SecurityScanner};
 use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 
 /// Parser adapter that bundles a configured parser with its config.
 pub struct AppParser {
     parser: DocumentParser,
-    config: ParserConfig,
+    config: docir_parser::ParserConfig,
 }
 
 impl AppParser {
     pub fn new(parser: DocumentParser, config: ParserConfig) -> Self {
-        Self { parser, config }
+        let parser_config = config.to_parser_config();
+        Self {
+            parser,
+            config: parser_config,
+        }
     }
 
     pub fn with_config(config: ParserConfig) -> Self {
-        let parser = DocumentParser::with_config(config.clone());
-        Self::new(parser, config)
+        let parser_config = config.to_parser_config();
+        let parser = DocumentParser::with_config(parser_config.clone());
+        Self {
+            parser,
+            config: parser_config,
+        }
     }
 }
 
@@ -114,7 +120,7 @@ impl SecurityScannerPort for AppParser {
 }
 
 fn scan_security_bytes(
-    config: &ParserConfig,
+    config: &docir_parser::ParserConfig,
     data: &[u8],
     store: &mut IrStore,
 ) -> Result<(), ParseError> {

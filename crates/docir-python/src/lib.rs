@@ -1,6 +1,7 @@
 //! Python bindings for docir.
 
 use docir_app::DocirApp;
+use docir_app::ParserConfig;
 use docir_core::ir::IrNode as IrNodeTrait;
 use docir_core::query::Query;
 use docir_core::types::{
@@ -8,7 +9,6 @@ use docir_core::types::{
     DocumentFormat, NodeType,
 };
 use docir_core::visitor::{NodeCounter, PreOrderWalker};
-use docir_parser::ParserConfig;
 use docir_rules::RuleProfile;
 use docir_serialization::{IrSerializer, JsonSerializer};
 use pyo3::exceptions::PyValueError;

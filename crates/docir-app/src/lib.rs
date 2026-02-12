@@ -5,10 +5,8 @@ use docir_core::security::SecurityInfo;
 use docir_core::types::{DocumentFormat, NodeId};
 use docir_core::visitor::IrStore;
 use docir_diff::DiffResult;
-use docir_parser::parser::ParseMetrics as ParserParseMetrics;
 use docir_parser::parser::ParsedDocument as ParserParsedDocument;
 use docir_parser::ParseError;
-pub use docir_parser::ParserConfig;
 pub use docir_rules::RuleProfile;
 use docir_rules::{RuleEngine, RuleReport};
 use docir_security::analyzer::AnalysisResult;
@@ -20,10 +18,12 @@ use std::path::Path;
 use thiserror::Error;
 
 mod adapters;
+mod config;
 mod summary;
 mod use_cases;
 
 pub use adapters::AppParser;
+pub use config::{HwpConfig, OdfConfig, ParseMetrics, ParserConfig, RtfConfig, ZipConfig};
 pub use summary::{
     summarize_document, DocumentSummary, MetadataSummary, NodeCount, ParseMetricsSummary,
     SecuritySummary, TextStatsSummary, ThreatIndicatorSummary,
@@ -51,12 +51,9 @@ pub struct ParsedDocument {
     metrics: Option<ParseMetrics>,
 }
 
-/// Application-level parse metrics.
-pub type ParseMetrics = ParserParseMetrics;
-
 impl ParsedDocument {
     pub(crate) fn new(inner: ParserParsedDocument) -> Self {
-        let metrics = inner.metrics.clone();
+        let metrics = inner.metrics.as_ref().map(ParseMetrics::from_parser);
         Self { inner, metrics }
     }
 
