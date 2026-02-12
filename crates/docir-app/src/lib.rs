@@ -3,18 +3,23 @@
 use anyhow::Result;
 use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
-use docir_diff::{DiffEngine, DiffResult};
+use docir_diff::DiffResult;
 use docir_parser::parser::ParsedDocument;
 pub use docir_parser::ParserConfig;
 use docir_parser::{DocumentParser, ParseError};
 pub use docir_rules::RuleProfile;
-use docir_rules::{RuleEngine, RuleReport};
+use docir_rules::RuleReport;
 use docir_security::analyzer::AnalysisResult;
-use docir_security::{populate_security_indicators, SecurityAnalyzer};
-use docir_serialization::json::to_json;
+use docir_security::SecurityAnalyzer;
 use std::io::{Read, Seek};
 use std::path::Path;
 
+mod use_cases;
+
+use use_cases::{
+    AnalyzeSecurity, DefaultSecurityAnalyzerFactory, DiffDocuments, ParseDocument, RunRules,
+    SerializeDocument,
+};
 /// Parser port for application workflows.
 pub trait ParserPort {
     fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError>;
@@ -63,7 +68,7 @@ impl DocirApp<DocumentParser> {
 impl<P: ParserPort> DocirApp<P> {
     /// Creates a new app instance with a custom parser implementation.
     pub fn with_parser(parser: P) -> Self {
-        Self::with_parser_and_security(parser, || Box::new(SecurityAnalyzer::new()))
+        Self::with_parser_and_security(parser, DefaultSecurityAnalyzerFactory::build)
     }
 
     /// Creates a new app instance with custom parser and security analyzer factory.
@@ -79,44 +84,36 @@ impl<P: ParserPort> DocirApp<P> {
 
     /// Parses a file from disk.
     pub fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> Result<ParsedDocument> {
-        let mut parsed = self.parser.parse_file(path)?;
-        populate_security_indicators(&mut parsed.store, parsed.root_id);
-        Ok(parsed)
+        ParseDocument::new(&self.parser).parse_file(path)
     }
 
     /// Parses from bytes.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument> {
-        let mut parsed = self.parser.parse_bytes(data)?;
-        populate_security_indicators(&mut parsed.store, parsed.root_id);
-        Ok(parsed)
+        ParseDocument::new(&self.parser).parse_bytes(data)
     }
 
     /// Parses from a reader.
     pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument> {
-        let mut parsed = self.parser.parse_reader(reader)?;
-        populate_security_indicators(&mut parsed.store, parsed.root_id);
-        Ok(parsed)
+        ParseDocument::new(&self.parser).parse_reader(reader)
     }
 
     /// Serializes a parsed document to JSON.
     pub fn serialize_json(&self, parsed: &ParsedDocument, pretty: bool) -> Result<String> {
-        Ok(to_json(&parsed.store, parsed.root_id, pretty)?)
+        SerializeDocument::to_json(parsed, pretty)
     }
 
     /// Runs security analysis for a parsed document.
     pub fn analyze_security(&self, parsed: &ParsedDocument) -> AnalysisResult {
-        let mut analyzer = (self.security_analyzer_factory)();
-        analyzer.analyze(&parsed.store, parsed.root_id)
+        AnalyzeSecurity::new(&self.security_analyzer_factory).run(&parsed.store, parsed.root_id)
     }
 
     /// Runs rules for a parsed document.
     pub fn run_rules(&self, parsed: &ParsedDocument, profile: &RuleProfile) -> RuleReport {
-        let engine = RuleEngine::with_default_rules();
-        engine.run_with_profile(&parsed.store, parsed.root_id, profile)
+        RunRules::run_with_profile(&parsed.store, parsed.root_id, profile)
     }
 
     /// Computes a diff between two parsed documents.
     pub fn diff(&self, left: &ParsedDocument, right: &ParsedDocument) -> DiffResult {
-        DiffEngine::diff(&left.store, left.root_id, &right.store, right.root_id)
+        DiffDocuments::diff(left, right)
     }
 }
