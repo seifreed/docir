@@ -1,5 +1,5 @@
 use super::*;
-use crate::ooxml::part_utils::read_relationships;
+use crate::ooxml::part_utils::read_xml_part_and_rels;
 
 impl OoxmlParser {
     /// Parse a DOCX document.
@@ -10,11 +10,8 @@ impl OoxmlParser {
         content_types: &ContentTypes,
         metrics: &mut Option<ParseMetrics>,
     ) -> Result<ParsedDocument, ParseError> {
-        // Read main document
-        let document_xml = zip.read_file_string(main_part_path)?;
-
-        // Get document relationships
-        let doc_rels = read_relationships(zip, main_part_path)?;
+        // Read main document + relationships
+        let (document_xml, doc_rels) = read_xml_part_and_rels(zip, main_part_path)?;
 
         // Parse document
         let mut docx_parser = DocxParser::new();
@@ -86,22 +83,7 @@ impl OoxmlParser {
             }
         }
 
-        // Link shapes/animations to shared parts (charts, SmartArt, media, OLE)
-        self.link_shapes_to_shared_parts(&mut store);
-
-        // Extension parts + diagnostics
-        let start = std::time::Instant::now();
-        self.add_extension_parts_and_diagnostics(zip, content_types, &mut store, root_id)?;
-        if let Some(m) = metrics.as_mut() {
-            m.extension_parts_ms = start.elapsed().as_millis();
-        }
-
-        // Deterministic normalization
-        let start = std::time::Instant::now();
-        normalize_store(&mut store, root_id);
-        if let Some(m) = metrics.as_mut() {
-            m.normalization_ms = start.elapsed().as_millis();
-        }
+        self.post_process_ooxml(zip, content_types, &mut store, root_id, metrics)?;
 
         Ok(ParsedDocument {
             root_id,

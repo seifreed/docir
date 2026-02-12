@@ -1,5 +1,5 @@
 use super::*;
-use crate::ooxml::part_utils::read_relationships;
+use crate::ooxml::part_utils::read_xml_part_and_rels;
 
 impl OoxmlParser {
     pub(super) fn parse_pptx<R: Read + Seek>(
@@ -9,9 +9,7 @@ impl OoxmlParser {
         content_types: &ContentTypes,
         metrics: &mut Option<ParseMetrics>,
     ) -> Result<ParsedDocument, ParseError> {
-        let presentation_xml = zip.read_file_string(main_part_path)?;
-
-        let presentation_rels = read_relationships(zip, main_part_path)?;
+        let (presentation_xml, presentation_rels) = read_xml_part_and_rels(zip, main_part_path)?;
 
         let mut parser = PptxParser::new();
         let root_id = parser.parse_presentation(
@@ -47,20 +45,7 @@ impl OoxmlParser {
             }
         }
 
-        // Link shapes/animations to shared parts (charts, SmartArt, media, OLE)
-        self.link_shapes_to_shared_parts(&mut store);
-
-        let start = std::time::Instant::now();
-        self.add_extension_parts_and_diagnostics(zip, content_types, &mut store, root_id)?;
-        if let Some(m) = metrics.as_mut() {
-            m.extension_parts_ms = start.elapsed().as_millis();
-        }
-
-        let start = std::time::Instant::now();
-        normalize_store(&mut store, root_id);
-        if let Some(m) = metrics.as_mut() {
-            m.normalization_ms = start.elapsed().as_millis();
-        }
+        self.post_process_ooxml(zip, content_types, &mut store, root_id, metrics)?;
 
         Ok(ParsedDocument {
             root_id,
