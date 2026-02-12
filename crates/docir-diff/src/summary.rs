@@ -13,47 +13,13 @@ mod presentation;
 mod spreadsheet;
 
 pub(crate) fn summarize(node: &IRNode, store: &IrStore) -> String {
+    if let Some(summary) = spreadsheet::summarize(node, store) {
+        return summary;
+    }
+    if let Some(summary) = presentation::summarize(node, store) {
+        return summary;
+    }
     match node {
-        IRNode::Worksheet(_)
-        | IRNode::Cell(_)
-        | IRNode::SharedStringTable(_)
-        | IRNode::ConnectionPart(_)
-        | IRNode::SpreadsheetStyles(_)
-        | IRNode::DefinedName(_)
-        | IRNode::ConditionalFormat(_)
-        | IRNode::DataValidation(_)
-        | IRNode::TableDefinition(_)
-        | IRNode::PivotTable(_)
-        | IRNode::PivotCache(_)
-        | IRNode::PivotCacheRecords(_)
-        | IRNode::WorkbookProperties(_)
-        | IRNode::CalcChain(_)
-        | IRNode::SheetComment(_)
-        | IRNode::SheetMetadata(_)
-        | IRNode::WorksheetDrawing(_)
-        | IRNode::ChartData(_)
-        | IRNode::ExternalLinkPart(_)
-        | IRNode::SlicerPart(_)
-        | IRNode::TimelinePart(_)
-        | IRNode::QueryTablePart(_) => {
-            spreadsheet::summarize(node, store).expect("spreadsheet summary missing for node")
-        }
-        IRNode::Slide(_)
-        | IRNode::Shape(_)
-        | IRNode::SlideMaster(_)
-        | IRNode::SlideLayout(_)
-        | IRNode::NotesMaster(_)
-        | IRNode::HandoutMaster(_)
-        | IRNode::NotesSlide(_)
-        | IRNode::PresentationProperties(_)
-        | IRNode::ViewProperties(_)
-        | IRNode::TableStyleSet(_)
-        | IRNode::PptxCommentAuthor(_)
-        | IRNode::PptxComment(_)
-        | IRNode::PresentationTag(_)
-        | IRNode::PresentationInfo(_) => {
-            presentation::summarize(node, store).expect("presentation summary missing for node")
-        }
         IRNode::Document(doc) => summarize_document(doc),
         IRNode::Section(section) => summarize_section(section),
         IRNode::Paragraph(para) => summarize_paragraph(para, store),
@@ -136,6 +102,7 @@ pub(crate) fn summarize(node: &IRNode, store: &IrStore) -> String {
         IRNode::VmlShape(shape) => summarize_vml_shape(shape),
         IRNode::DrawingPart(part) => summarize_drawing_part(part),
         IRNode::Diagnostics(diag) => format!("entries={}", diag.entries.len()),
+        _ => unreachable!("summary missing for node"),
     }
 }
 
