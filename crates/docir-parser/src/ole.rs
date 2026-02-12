@@ -1,6 +1,7 @@
 //! Minimal OLE Compound File Binary (CFB) parser for VBA extraction.
 
 use crate::error::ParseError;
+use crate::zip_handler::PackageReader;
 use std::collections::HashMap;
 
 const SIGNATURE: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
@@ -149,6 +150,10 @@ impl Cfb {
         Some(data[..entry.size as usize].to_vec())
     }
 
+    pub fn has_stream(&self, path: &str) -> bool {
+        self.streams.contains_key(path) || self.streams.contains_key(&path.replace('\\', "/"))
+    }
+
     pub fn list_streams(&self) -> Vec<String> {
         let mut keys: Vec<String> = self.streams.keys().cloned().collect();
         keys.sort();
@@ -160,6 +165,35 @@ impl Cfb {
             .get(path)
             .or_else(|| self.streams.get(&path.replace('\\', "/")))
             .map(|entry| entry.size)
+    }
+}
+
+pub struct CfbReader<'a> {
+    cfb: &'a Cfb,
+}
+
+impl<'a> CfbReader<'a> {
+    pub fn new(cfb: &'a Cfb) -> Self {
+        Self { cfb }
+    }
+}
+
+impl PackageReader for CfbReader<'_> {
+    fn contains(&self, name: &str) -> bool {
+        self.cfb.has_stream(name)
+    }
+
+    fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
+        let bytes = self
+            .cfb
+            .read_stream(name)
+            .ok_or_else(|| ParseError::MissingPart(name.to_string()))?;
+        String::from_utf8(bytes)
+            .map_err(|e| ParseError::Encoding(format!("Invalid UTF-8 in {}: {}", name, e)))
+    }
+
+    fn file_names(&self) -> Vec<String> {
+        self.cfb.list_streams()
     }
 }
 
