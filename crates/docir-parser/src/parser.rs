@@ -104,59 +104,102 @@ impl OoxmlParser {
         let data = read_all_with_limit(reader, self.config.max_input_size)?;
         let mut zip =
             SecureZipReader::new(Cursor::new(data.as_slice()), self.config.zip_config.clone())?;
-        let mut metrics = if self.config.enable_metrics {
+        let mut metrics = self.init_metrics();
+        let content_types = self.read_content_types(&mut zip, &mut metrics)?;
+        let format = self.detect_format(&content_types)?;
+        let package_rels = self.read_package_relationships(&mut zip, &mut metrics)?;
+        let main_part_path = self.resolve_main_part(&package_rels)?;
+
+        if self.config.enforce_required_parts {
+            self.validate_structure(&mut zip, format, &main_part_path)?;
+        }
+
+        let mut parsed = self.parse_main(
+            &mut zip,
+            data.as_slice(),
+            format,
+            &main_part_path,
+            &content_types,
+            &mut metrics,
+        )?;
+        if let Some(m) = metrics {
+            parsed.metrics = Some(m);
+        }
+        Ok(parsed)
+    }
+
+    fn init_metrics(&self) -> Option<ParseMetrics> {
+        if self.config.enable_metrics {
             Some(ParseMetrics::default())
         } else {
             None
-        };
+        }
+    }
 
-        // Parse [Content_Types].xml
+    fn read_content_types<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        metrics: &mut Option<ParseMetrics>,
+    ) -> Result<ContentTypes, ParseError> {
         let start = std::time::Instant::now();
         let content_types_xml = zip.read_file_string("[Content_Types].xml")?;
         let content_types = ContentTypes::parse(&content_types_xml)?;
         if let Some(m) = metrics.as_mut() {
             m.content_types_ms = start.elapsed().as_millis();
         }
+        Ok(content_types)
+    }
 
-        // Detect format
-        let format = content_types
+    fn detect_format(&self, content_types: &ContentTypes) -> Result<DocumentFormat, ParseError> {
+        content_types
             .detect_format()
-            .ok_or_else(|| ParseError::UnsupportedFormat("Unknown OOXML format".to_string()))?;
+            .ok_or_else(|| ParseError::UnsupportedFormat("Unknown OOXML format".to_string()))
+    }
 
-        // Parse package relationships
+    fn read_package_relationships<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        metrics: &mut Option<ParseMetrics>,
+    ) -> Result<Relationships, ParseError> {
         let start = std::time::Instant::now();
         let rels_xml = zip.read_file_string("_rels/.rels")?;
-        let package_rels = Relationships::parse(&rels_xml)?;
+        let rels = Relationships::parse(&rels_xml)?;
         if let Some(m) = metrics.as_mut() {
             m.relationships_ms = start.elapsed().as_millis();
         }
+        Ok(rels)
+    }
 
-        // Find main document part
+    fn resolve_main_part(&self, package_rels: &Relationships) -> Result<String, ParseError> {
         let main_rel = package_rels
             .get_first_by_type(rel_type::OFFICE_DOCUMENT)
             .ok_or_else(|| ParseError::MissingPart("Office document relationship".to_string()))?;
+        Ok(Relationships::resolve_target("", &main_rel.target))
+    }
 
-        let main_part_path = Relationships::resolve_target("", &main_rel.target);
-
-        if self.config.enforce_required_parts {
-            self.validate_structure(&mut zip, format, &main_part_path)?;
-        }
-
-        // Parse based on format
+    fn parse_main<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        data: &[u8],
+        format: DocumentFormat,
+        main_part_path: &str,
+        content_types: &ContentTypes,
+        metrics: &mut Option<ParseMetrics>,
+    ) -> Result<ParsedDocument, ParseError> {
         let start = std::time::Instant::now();
-        let mut parsed = match format {
+        let parsed = match format {
             DocumentFormat::WordProcessing => {
-                self.parse_docx(&mut zip, &main_part_path, &content_types, &mut metrics)
+                self.parse_docx(zip, main_part_path, content_types, metrics)
             }
             DocumentFormat::Spreadsheet => {
                 if main_part_path.ends_with(".bin") {
-                    self.parse_xlsb(&mut zip, data.as_slice(), &content_types, &mut metrics)
+                    self.parse_xlsb(zip, data, content_types, metrics)
                 } else {
-                    self.parse_xlsx(&mut zip, &main_part_path, &content_types, &mut metrics)
+                    self.parse_xlsx(zip, main_part_path, content_types, metrics)
                 }
             }
             DocumentFormat::Presentation => {
-                self.parse_pptx(&mut zip, &main_part_path, &content_types, &mut metrics)
+                self.parse_pptx(zip, main_part_path, content_types, metrics)
             }
             _ => {
                 return Err(ParseError::UnsupportedFormat(
@@ -166,9 +209,6 @@ impl OoxmlParser {
         }?;
         if let Some(m) = metrics.as_mut() {
             m.main_parse_ms = start.elapsed().as_millis();
-        }
-        if let Some(m) = metrics {
-            parsed.metrics = Some(m);
         }
         Ok(parsed)
     }
