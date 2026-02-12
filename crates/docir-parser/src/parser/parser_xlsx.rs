@@ -1,12 +1,13 @@
 use super::*;
 use crate::ooxml::part_utils::read_xml_part_and_rels;
 use crate::parse_utils::init_store_and_document;
+use crate::zip_handler::PackageReader;
 
 impl OoxmlParser {
     /// Parse an XLSX document.
-    pub(super) fn parse_xlsx<R: Read + Seek>(
+    pub(super) fn parse_xlsx(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         main_part_path: &str,
         content_types: &ContentTypes,
         metrics: &mut Option<ParseMetrics>,
@@ -53,9 +54,9 @@ impl OoxmlParser {
     }
 
     /// Parse an XLSB document using calamine for binary sheets.
-    pub(super) fn parse_xlsb<R: Read + Seek>(
+    pub(super) fn parse_xlsb(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         data: &[u8],
         content_types: &ContentTypes,
         metrics: &mut Option<ParseMetrics>,

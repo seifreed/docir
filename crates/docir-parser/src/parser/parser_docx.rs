@@ -1,11 +1,12 @@
 use super::*;
 use crate::ooxml::part_utils::read_xml_part_and_rels;
+use crate::zip_handler::PackageReader;
 
 impl OoxmlParser {
     /// Parse a DOCX document.
-    pub(super) fn parse_docx<R: Read + Seek>(
+    pub(super) fn parse_docx(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         main_part_path: &str,
         content_types: &ContentTypes,
         metrics: &mut Option<ParseMetrics>,

@@ -1,11 +1,12 @@
 use super::*;
 use crate::ooxml::part_utils::insert_shared_part;
+use crate::zip_handler::PackageReader;
 
 impl PptxParser {
-    pub(super) fn load_presentation_parts<R: Read + Seek>(
+    pub(super) fn load_presentation_parts(
         &mut self,
         document: &mut Document,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
     ) -> Result<(), ParseError> {
         // Presentation properties
         if let Some(props) = parse_xml_part_with_span(
@@ -66,8 +67,8 @@ impl PptxParser {
         // Tags
         let tag_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("ppt/tags/") && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for tag_path in tag_paths {
             let tag_xml = zip.read_file_string(&tag_path)?;
@@ -92,8 +93,8 @@ impl PptxParser {
         // SmartArt parts
         let diagram_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("ppt/diagrams/") && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in diagram_paths {
             let xml = zip.read_file_string(&path)?;

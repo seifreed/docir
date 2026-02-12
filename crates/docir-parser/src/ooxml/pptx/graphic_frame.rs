@@ -1,4 +1,5 @@
 use super::*;
+use crate::zip_handler::PackageReader;
 
 pub(super) struct GraphicFrameState {
     pub(super) chart_rel: Option<String>,
@@ -160,12 +161,12 @@ impl PptxParser {
         Ok(())
     }
 
-    pub(super) fn apply_graphic_frame_relationships<R: Read + Seek>(
+    pub(super) fn apply_graphic_frame_relationships(
         &mut self,
         shape: &mut Shape,
         slide_path: &str,
         relationships: &Relationships,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         state: &GraphicFrameState,
     ) -> Result<(), ParseError> {
         if let Some(rel_id) = state.ole_rel.as_ref() {

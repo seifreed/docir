@@ -7,7 +7,7 @@ use crate::ooxml::part_utils::{
 };
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::xml_utils::read_event;
-use crate::zip_handler::SecureZipReader;
+use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     Diagnostics, Document, GridColumn, IRNode, NotesSlide, Paragraph, PptxCommentAuthor,
     PresentationInfo, PresentationProperties, PresentationTag, Run, Shape, ShapeText,
@@ -21,7 +21,6 @@ use docir_core::visitor::IrStore;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use std::collections::{HashMap, HashSet};
-use std::io::{Read, Seek};
 
 mod builder;
 mod comments;
@@ -73,12 +72,12 @@ impl PptxParser {
         self.store
     }
 
-    fn parse_shapes_from_xml<R: Read + Seek>(
+    fn parse_shapes_from_xml(
         &mut self,
         xml: &str,
         slide_path: &str,
         relationships: &Relationships,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
     ) -> Result<Vec<NodeId>, ParseError> {
         let mut reader = Reader::from_str(xml);
         reader.config_mut().trim_text(true);
@@ -832,7 +831,7 @@ fn parse_notes_slide(
     path: &str,
     rels: &Relationships,
     parser: &mut PptxParser,
-    zip: &mut SecureZipReader<impl Read + Seek>,
+    zip: &mut impl PackageReader,
 ) -> Result<(NotesSlide, String), ParseError> {
     let mut slide = NotesSlide::new();
     slide.span = Some(SourceSpan::new(path));

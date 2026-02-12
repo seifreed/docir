@@ -1,11 +1,12 @@
 use super::graphic_frame::GraphicFrameState;
 use super::*;
 use crate::xml_utils::reader_from_str;
+use crate::zip_handler::PackageReader;
 
 impl PptxParser {
-    pub(super) fn parse_slide<R: Read + Seek>(
+    pub(super) fn parse_slide(
         &mut self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         xml: &str,
         slide_number: u32,
         slide_path: &str,
@@ -133,12 +134,12 @@ impl PptxParser {
         Ok(slide_id)
     }
 
-    pub(super) fn parse_slide_layout<R: Read + Seek>(
+    pub(super) fn parse_slide_layout(
         &mut self,
         xml: &str,
         layout_path: &str,
         relationships: &Relationships,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
     ) -> Result<NodeId, ParseError> {
         let mut layout = docir_core::ir::SlideLayout::new();
         layout.span = Some(SourceSpan::new(layout_path));
@@ -297,13 +298,13 @@ impl PptxParser {
         Ok(shape)
     }
 
-    pub(super) fn parse_shape_graphic_frame<R: Read + Seek>(
+    pub(super) fn parse_shape_graphic_frame(
         &mut self,
         reader: &mut Reader<&[u8]>,
         _start: &BytesStart,
         slide_path: &str,
         relationships: &Relationships,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
     ) -> Result<Shape, ParseError> {
         let mut shape = Shape::new(ShapeType::Custom);
         shape.span = Some(SourceSpan::new(slide_path));

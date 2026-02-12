@@ -1,10 +1,11 @@
 use super::*;
 use crate::diagnostics::attach_diagnostics_if_any_to_store;
+use crate::zip_handler::PackageReader;
 
 impl OoxmlParser {
-    pub(super) fn post_process_ooxml<R: Read + Seek>(
+    pub(super) fn post_process_ooxml(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         content_types: &ContentTypes,
         store: &mut IrStore,
         root_id: NodeId,
@@ -28,9 +29,9 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn add_extension_parts_and_diagnostics<R: Read + Seek>(
+    fn add_extension_parts_and_diagnostics(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         content_types: &ContentTypes,
         store: &mut IrStore,
         root_id: NodeId,
@@ -71,8 +72,8 @@ impl OoxmlParser {
 
         let all_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| !p.ends_with('/') && !p.starts_with("[trash]/"))
-            .map(|s| s.to_string())
             .collect();
         for path in all_paths {
             if seen_paths.contains(&path) {
@@ -102,7 +103,7 @@ impl OoxmlParser {
         let coverage_entries = coverage::build_coverage_diagnostics(
             format,
             content_types,
-            zip.file_names().map(|s| s.to_string()).collect(),
+            zip.file_names(),
             &seen_paths,
         );
         diagnostics.entries.extend(coverage_entries);

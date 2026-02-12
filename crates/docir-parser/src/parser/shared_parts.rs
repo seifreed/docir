@@ -1,11 +1,12 @@
 use super::*;
 use crate::ooxml::shared as ooxml_shared;
+use crate::zip_handler::PackageReader;
 
 impl OoxmlParser {
     /// Parse shared/package parts (themes, media, custom XML, relationships, signatures, legacy).
-    pub(crate) fn parse_shared_parts<R: Read + Seek>(
+    pub(crate) fn parse_shared_parts(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         content_types: &ContentTypes,
         store: &mut IrStore,
         root_id: NodeId,
@@ -38,17 +39,17 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_relationship_graphs<R: Read + Seek>(
+    fn parse_relationship_graphs(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
         shared_ids: &mut Vec<NodeId>,
         seen_parts: &mut std::collections::HashSet<String>,
     ) -> Result<(), ParseError> {
         let rel_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.ends_with(".rels"))
-            .map(|s| s.to_string())
             .collect();
         for rel_path in rel_paths {
             let rels_xml = zip.read_file_string(&rel_path)?;
@@ -63,17 +64,17 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_themes<R: Read + Seek>(
+    fn parse_themes(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
         shared_ids: &mut Vec<NodeId>,
         seen_parts: &mut std::collections::HashSet<String>,
     ) -> Result<(), ParseError> {
         let theme_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.contains("/theme/") && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in theme_paths {
             let theme_xml = zip.read_file_string(&path)?;
@@ -89,9 +90,9 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_media_assets<R: Read + Seek>(
+    fn parse_media_assets(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         content_types: &ContentTypes,
         store: &mut IrStore,
         shared_ids: &mut Vec<NodeId>,
@@ -99,8 +100,8 @@ impl OoxmlParser {
     ) -> Result<(), ParseError> {
         let media_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.contains("/media/"))
-            .map(|s| s.to_string())
             .collect();
         self.parse_media_paths(
             zip,
@@ -112,9 +113,9 @@ impl OoxmlParser {
         )
     }
 
-    fn parse_thumbnails<R: Read + Seek>(
+    fn parse_thumbnails(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         content_types: &ContentTypes,
         store: &mut IrStore,
         shared_ids: &mut Vec<NodeId>,
@@ -122,8 +123,8 @@ impl OoxmlParser {
     ) -> Result<(), ParseError> {
         let thumbnail_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("docProps/thumbnail."))
-            .map(|s| s.to_string())
             .collect();
         self.parse_media_paths(
             zip,
@@ -135,9 +136,9 @@ impl OoxmlParser {
         )
     }
 
-    fn parse_media_paths<R: Read + Seek>(
+    fn parse_media_paths(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         content_types: &ContentTypes,
         store: &mut IrStore,
         shared_ids: &mut Vec<NodeId>,
@@ -165,9 +166,9 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_chart_parts<R: Read + Seek>(
+    fn parse_chart_parts(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
         doc_format: DocumentFormat,
         shared_ids: &mut Vec<NodeId>,
@@ -181,8 +182,8 @@ impl OoxmlParser {
         };
         let chart_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with(chart_prefix) && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in chart_paths {
             let xml = zip.read_file_string(&path)?;
@@ -193,9 +194,9 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_smartart_parts<R: Read + Seek>(
+    fn parse_smartart_parts(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
         doc_format: DocumentFormat,
         shared_ids: &mut Vec<NodeId>,
@@ -206,8 +207,8 @@ impl OoxmlParser {
         }
         let diagram_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("word/diagrams/") && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in diagram_paths {
             let xml = zip.read_file_string(&path)?;
@@ -220,9 +221,9 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_people_part<R: Read + Seek>(
+    fn parse_people_part(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
         doc_format: DocumentFormat,
         shared_ids: &mut Vec<NodeId>,
@@ -240,9 +241,9 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_web_extensions<R: Read + Seek>(
+    fn parse_web_extensions(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
         doc_format: DocumentFormat,
         shared_ids: &mut Vec<NodeId>,
@@ -253,8 +254,8 @@ impl OoxmlParser {
         }
         let ext_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("word/webExtensions/") && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in ext_paths {
             let xml = zip.read_file_string(&path)?;
@@ -276,17 +277,17 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_custom_xml_parts<R: Read + Seek>(
+    fn parse_custom_xml_parts(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
         shared_ids: &mut Vec<NodeId>,
         seen_parts: &mut std::collections::HashSet<String>,
     ) -> Result<(), ParseError> {
         let custom_xml_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("customXml/") && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in custom_xml_paths {
             let xml = zip.read_file_string(&path)?;
@@ -300,17 +301,17 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_signatures<R: Read + Seek>(
+    fn parse_signatures(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
         shared_ids: &mut Vec<NodeId>,
         seen_parts: &mut std::collections::HashSet<String>,
     ) -> Result<(), ParseError> {
         let sig_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("_xmlsignatures/") && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in sig_paths {
             let xml = zip.read_file_string(&path)?;
@@ -324,9 +325,9 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_extension_parts<R: Read + Seek>(
+    fn parse_extension_parts(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         content_types: &ContentTypes,
         store: &mut IrStore,
         shared_ids: &mut Vec<NodeId>,
@@ -334,8 +335,8 @@ impl OoxmlParser {
     ) -> Result<(), ParseError> {
         let extension_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| content_types.is_extension_part(p))
-            .map(|s| s.to_string())
             .collect();
         for path in extension_paths {
             if seen_parts.contains(&path) {

@@ -15,7 +15,7 @@ use crate::ooxml::relationships::{rel_type, Relationships};
 use crate::ooxml::xlsx::XlsxParser;
 use crate::rtf::is_rtf_bytes;
 use crate::xml_utils::local_name;
-use crate::zip_handler::SecureZipReader;
+use crate::zip_handler::{PackageReader, SecureZipReader};
 use docir_core::ir::column_to_letter;
 use docir_core::ir::{
     Cell, CellError, CellValue, Diagnostics, Document, ExtensionPart, ExtensionPartKind, IRNode,
@@ -152,9 +152,9 @@ impl OoxmlParser {
         }
     }
 
-    fn read_content_types<R: Read + Seek>(
+    fn read_content_types(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         metrics: &mut Option<ParseMetrics>,
     ) -> Result<ContentTypes, ParseError> {
         let start = std::time::Instant::now();
@@ -172,9 +172,9 @@ impl OoxmlParser {
             .ok_or_else(|| ParseError::UnsupportedFormat("Unknown OOXML format".to_string()))
     }
 
-    fn read_package_relationships<R: Read + Seek>(
+    fn read_package_relationships(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         metrics: &mut Option<ParseMetrics>,
     ) -> Result<Relationships, ParseError> {
         let start = std::time::Instant::now();
@@ -193,9 +193,9 @@ impl OoxmlParser {
         Ok(Relationships::resolve_target("", &main_rel.target))
     }
 
-    fn parse_main<R: Read + Seek>(
+    fn parse_main(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         data: &[u8],
         format: DocumentFormat,
         main_part_path: &str,
@@ -229,9 +229,9 @@ impl OoxmlParser {
         Ok(parsed)
     }
 
-    fn validate_structure<R: Read + Seek>(
+    fn validate_structure(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         format: DocumentFormat,
         main_part_path: &str,
     ) -> Result<(), ParseError> {
@@ -270,9 +270,9 @@ impl OoxmlParser {
         Ok(())
     }
 
-    fn parse_docx_word_parts<R: Read + Seek>(
+    fn parse_docx_word_parts(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
@@ -412,9 +412,9 @@ impl OoxmlParser {
         }
     }
 
-    fn parse_docx_headers_footers<R: Read + Seek>(
+    fn parse_docx_headers_footers(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
@@ -450,9 +450,9 @@ impl OoxmlParser {
         Ok(map)
     }
 
-    fn parse_docx_comments<R: Read + Seek>(
+    fn parse_docx_comments(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
@@ -493,9 +493,9 @@ impl OoxmlParser {
         comments
     }
 
-    fn parse_docx_notes<R: Read + Seek>(
+    fn parse_docx_notes(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
@@ -532,9 +532,9 @@ impl OoxmlParser {
             .unwrap_or_default()
     }
 
-    fn parse_docx_font_table<R: Read + Seek>(
+    fn parse_docx_font_table(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
@@ -567,16 +567,15 @@ impl OoxmlParser {
         font_table_id
     }
 
-    fn parse_docx_part_by_rel<R, F>(
+    fn parse_docx_part_by_rel<F>(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         main_part_path: &str,
         doc_rels: &Relationships,
         rel_type: &str,
         mut parse: F,
     ) -> Option<NodeId>
     where
-        R: Read + Seek,
         F: FnMut(&str, &str) -> Option<NodeId>,
     {
         let (part_path, xml) =
@@ -584,9 +583,9 @@ impl OoxmlParser {
         parse(&part_path, &xml)
     }
 
-    fn parse_docx_part_by_rel_with_span<R, F, S>(
+    fn parse_docx_part_by_rel_with_span<F, S>(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         main_part_path: &str,
         doc_rels: &Relationships,
         rel_type: &str,
@@ -595,7 +594,6 @@ impl OoxmlParser {
         set_span: S,
     ) -> Option<NodeId>
     where
-        R: Read + Seek,
         F: FnOnce(&mut DocxParser, &str, &str) -> Option<NodeId>,
         S: FnOnce(&mut IrStore, NodeId, &str),
     {
@@ -606,30 +604,28 @@ impl OoxmlParser {
         Some(id)
     }
 
-    fn parse_docx_part_by_path<R, F>(
+    fn parse_docx_part_by_path<F>(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         part_path: &str,
         mut parse: F,
     ) -> Option<NodeId>
     where
-        R: Read + Seek,
         F: FnMut(&str, &str) -> Option<NodeId>,
     {
         let xml = read_xml_part(zip, part_path).ok()??;
         parse(part_path, &xml)
     }
 
-    fn parse_docx_part_by_path_with_span<R, F, S>(
+    fn parse_docx_part_by_path_with_span<F, S>(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         part_path: &str,
         parser: &mut DocxParser,
         parse: F,
         set_span: S,
     ) -> Option<NodeId>
     where
-        R: Read + Seek,
         F: FnOnce(&mut DocxParser, &str, &str) -> Option<NodeId>,
         S: FnOnce(&mut IrStore, NodeId, &str),
     {

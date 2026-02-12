@@ -1,15 +1,14 @@
 use super::{OoxmlParser, ParseError};
 use crate::xml_utils::reader_from_str;
-use crate::zip_handler::SecureZipReader;
+use crate::zip_handler::PackageReader;
 use docir_core::ir::{CustomProperty, DocumentMetadata, PropertyValue};
 use docir_core::types::NodeId;
-use std::io::{Read, Seek};
 
 impl OoxmlParser {
     /// Parse document metadata.
-    pub(super) fn parse_metadata<R: Read + Seek>(
+    pub(super) fn parse_metadata(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
     ) -> Result<Option<NodeId>, ParseError> {
         if zip.contains("docProps/core.xml") {
             let metadata = self.build_metadata(zip);
@@ -20,10 +19,7 @@ impl OoxmlParser {
     }
 
     /// Build metadata from core.xml and app.xml.
-    pub(super) fn build_metadata<R: Read + Seek>(
-        &self,
-        zip: &mut SecureZipReader<R>,
-    ) -> Option<DocumentMetadata> {
+    pub(super) fn build_metadata(&self, zip: &mut impl PackageReader) -> Option<DocumentMetadata> {
         let mut metadata = DocumentMetadata::new();
 
         // Parse core.xml (Dublin Core properties)

@@ -1,11 +1,12 @@
 use super::*;
 use crate::diagnostics::attach_diagnostics_if_any;
+use crate::zip_handler::PackageReader;
 
 impl PptxParser {
     /// Parses the presentation and slides.
-    pub fn parse_presentation<R: Read + Seek>(
+    pub fn parse_presentation(
         &mut self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         presentation_xml: &str,
         presentation_rels: &Relationships,
         presentation_path: &str,
