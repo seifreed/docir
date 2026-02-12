@@ -3,6 +3,27 @@ use crate::ooxml::part_utils::{read_relationships, read_xml_part_and_rels};
 use crate::xml_utils::{reader_from_str, xml_error};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DataValidation, SheetPageMargins};
+use quick_xml::events::BytesStart;
+
+struct WorksheetParseAccum {
+    columns: HashMap<u32, ColumnDefinition>,
+    merged_cells: Vec<MergedCellRange>,
+    cells: Vec<NodeId>,
+    conditional_formats: Vec<NodeId>,
+    data_validations: Vec<NodeId>,
+}
+
+impl WorksheetParseAccum {
+    fn new() -> Self {
+        Self {
+            columns: HashMap::new(),
+            merged_cells: Vec::new(),
+            cells: Vec::new(),
+            conditional_formats: Vec::new(),
+            data_validations: Vec::new(),
+        }
+    }
+}
 
 impl XlsxParser {
     pub(super) fn parse_worksheet(
@@ -29,121 +50,20 @@ impl XlsxParser {
             self.begin_macro_sheet(sheet);
         }
 
-        let mut columns: HashMap<u32, ColumnDefinition> = HashMap::new();
-        let mut merged_cells: Vec<MergedCellRange> = Vec::new();
-        let mut cells: Vec<NodeId> = Vec::new();
-        let mut conditional_formats: Vec<NodeId> = Vec::new();
-        let mut data_validations: Vec<NodeId> = Vec::new();
-
-        let mut reader = reader_from_str(xml);
-
-        let mut buf = Vec::new();
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"dimension" => {
-                        if let Some(val) = attr_value(&e, b"ref") {
-                            worksheet.dimension = Some(val);
-                        }
-                    }
-                    b"tabColor" => {
-                        worksheet.tab_color = parse_color_attr(&e);
-                    }
-                    b"pageMargins" => {
-                        worksheet.page_margins = parse_page_margins(&e);
-                    }
-                    b"c" => {
-                        let cell = self.parse_cell(&mut reader, &e, sheet_path)?;
-                        let cell_id = cell.id;
-                        self.store.insert(IRNode::Cell(cell));
-                        cells.push(cell_id);
-                    }
-                    b"conditionalFormatting" => {
-                        let fmt = parse_conditional_formatting(&mut reader, &e, sheet_path)?;
-                        let id = fmt.id;
-                        self.store.insert(IRNode::ConditionalFormat(fmt));
-                        conditional_formats.push(id);
-                    }
-                    b"dataValidations" => {
-                        let vals = parse_data_validations(&mut reader, sheet_path)?;
-                        for val in vals {
-                            let id = val.id;
-                            self.store.insert(IRNode::DataValidation(val));
-                            data_validations.push(id);
-                        }
-                    }
-                    b"col" => {
-                        parse_column(&e, &mut columns);
-                    }
-                    b"mergeCell" => {
-                        if let Some(range) = parse_merge_cell(&e) {
-                            merged_cells.push(range);
-                        }
-                    }
-                    b"hyperlink" => {
-                        self.handle_hyperlink(&e, relationships, sheet_path);
-                    }
-                    _ => {}
-                },
-                Ok(Event::Empty(e)) => match e.name().as_ref() {
-                    b"dimension" => {
-                        if let Some(val) = attr_value(&e, b"ref") {
-                            worksheet.dimension = Some(val);
-                        }
-                    }
-                    b"tabColor" => {
-                        worksheet.tab_color = parse_color_attr(&e);
-                    }
-                    b"pageMargins" => {
-                        worksheet.page_margins = parse_page_margins(&e);
-                    }
-                    b"c" => {
-                        let cell = self.parse_empty_cell(&e, sheet_path)?;
-                        let cell_id = cell.id;
-                        self.store.insert(IRNode::Cell(cell));
-                        cells.push(cell_id);
-                    }
-                    b"conditionalFormatting" => {
-                        let fmt = parse_conditional_formatting_empty(&e, sheet_path);
-                        let id = fmt.id;
-                        self.store.insert(IRNode::ConditionalFormat(fmt));
-                        conditional_formats.push(id);
-                    }
-                    b"dataValidations" => {
-                        // Empty container, nothing to add
-                    }
-                    b"col" => {
-                        parse_column(&e, &mut columns);
-                    }
-                    b"mergeCell" => {
-                        if let Some(range) = parse_merge_cell(&e) {
-                            merged_cells.push(range);
-                        }
-                    }
-                    b"hyperlink" => {
-                        self.handle_hyperlink(&e, relationships, sheet_path);
-                    }
-                    _ => {}
-                },
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(xml_error(sheet_path, e));
-                }
-                _ => {}
-            }
-            buf.clear();
-        }
+        let mut accum = self.parse_worksheet_xml(xml, sheet_path, relationships, &mut worksheet)?;
 
         // Deterministic ordering
-        let mut columns_sorted: Vec<ColumnDefinition> = columns.into_values().collect();
+        let mut columns_sorted: Vec<ColumnDefinition> = accum.columns.into_values().collect();
         columns_sorted.sort_by_key(|c| c.index);
-        merged_cells.sort_by_key(|r| (r.start_row, r.start_col, r.end_row, r.end_col));
+        accum
+            .merged_cells
+            .sort_by_key(|r| (r.start_row, r.start_col, r.end_row, r.end_col));
 
         worksheet.columns = columns_sorted;
-        worksheet.merged_cells = merged_cells;
-        worksheet.cells = cells;
-        worksheet.conditional_formats = conditional_formats;
-        worksheet.data_validations = data_validations;
+        worksheet.merged_cells = accum.merged_cells;
+        worksheet.cells = accum.cells;
+        worksheet.conditional_formats = accum.conditional_formats;
+        worksheet.data_validations = accum.data_validations;
 
         // Drawings (images/charts)
         let mut drawings: Vec<NodeId> = Vec::new();
@@ -239,6 +159,152 @@ impl XlsxParser {
         let ws_id = worksheet.id;
         self.store.insert(IRNode::Worksheet(worksheet));
         Ok(ws_id)
+    }
+
+    fn parse_worksheet_xml(
+        &mut self,
+        xml: &str,
+        sheet_path: &str,
+        relationships: &Relationships,
+        worksheet: &mut Worksheet,
+    ) -> Result<WorksheetParseAccum, ParseError> {
+        let mut accum = WorksheetParseAccum::new();
+        let mut reader = reader_from_str(xml);
+        let mut buf = Vec::new();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) => self.handle_worksheet_start(
+                    &e,
+                    &mut reader,
+                    sheet_path,
+                    relationships,
+                    worksheet,
+                    &mut accum,
+                )?,
+                Ok(Event::Empty(e)) => self.handle_worksheet_empty(
+                    &e,
+                    sheet_path,
+                    relationships,
+                    worksheet,
+                    &mut accum,
+                )?,
+                Ok(Event::Eof) => break,
+                Err(e) => return Err(xml_error(sheet_path, e)),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        Ok(accum)
+    }
+
+    fn handle_worksheet_start(
+        &mut self,
+        e: &BytesStart<'_>,
+        reader: &mut quick_xml::Reader<&[u8]>,
+        sheet_path: &str,
+        relationships: &Relationships,
+        worksheet: &mut Worksheet,
+        accum: &mut WorksheetParseAccum,
+    ) -> Result<(), ParseError> {
+        match e.name().as_ref() {
+            b"dimension" => {
+                if let Some(val) = attr_value(e, b"ref") {
+                    worksheet.dimension = Some(val);
+                }
+            }
+            b"tabColor" => {
+                worksheet.tab_color = parse_color_attr(e);
+            }
+            b"pageMargins" => {
+                worksheet.page_margins = parse_page_margins(e);
+            }
+            b"c" => {
+                let cell = self.parse_cell(reader, e, sheet_path)?;
+                let cell_id = cell.id;
+                self.store.insert(IRNode::Cell(cell));
+                accum.cells.push(cell_id);
+            }
+            b"conditionalFormatting" => {
+                let fmt = parse_conditional_formatting(reader, e, sheet_path)?;
+                let id = fmt.id;
+                self.store.insert(IRNode::ConditionalFormat(fmt));
+                accum.conditional_formats.push(id);
+            }
+            b"dataValidations" => {
+                let vals = parse_data_validations(reader, sheet_path)?;
+                for val in vals {
+                    let id = val.id;
+                    self.store.insert(IRNode::DataValidation(val));
+                    accum.data_validations.push(id);
+                }
+            }
+            b"col" => {
+                parse_column(e, &mut accum.columns);
+            }
+            b"mergeCell" => {
+                if let Some(range) = parse_merge_cell(e) {
+                    accum.merged_cells.push(range);
+                }
+            }
+            b"hyperlink" => {
+                self.handle_hyperlink(e, relationships, sheet_path);
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_worksheet_empty(
+        &mut self,
+        e: &BytesStart<'_>,
+        sheet_path: &str,
+        relationships: &Relationships,
+        worksheet: &mut Worksheet,
+        accum: &mut WorksheetParseAccum,
+    ) -> Result<(), ParseError> {
+        match e.name().as_ref() {
+            b"dimension" => {
+                if let Some(val) = attr_value(e, b"ref") {
+                    worksheet.dimension = Some(val);
+                }
+            }
+            b"tabColor" => {
+                worksheet.tab_color = parse_color_attr(e);
+            }
+            b"pageMargins" => {
+                worksheet.page_margins = parse_page_margins(e);
+            }
+            b"c" => {
+                let cell = self.parse_empty_cell(e, sheet_path)?;
+                let cell_id = cell.id;
+                self.store.insert(IRNode::Cell(cell));
+                accum.cells.push(cell_id);
+            }
+            b"conditionalFormatting" => {
+                let fmt = parse_conditional_formatting_empty(e, sheet_path);
+                let id = fmt.id;
+                self.store.insert(IRNode::ConditionalFormat(fmt));
+                accum.conditional_formats.push(id);
+            }
+            b"dataValidations" => {
+                // Empty container, nothing to add
+            }
+            b"col" => {
+                parse_column(e, &mut accum.columns);
+            }
+            b"mergeCell" => {
+                if let Some(range) = parse_merge_cell(e) {
+                    accum.merged_cells.push(range);
+                }
+            }
+            b"hyperlink" => {
+                self.handle_hyperlink(e, relationships, sheet_path);
+            }
+            _ => {}
+        }
+        Ok(())
     }
 
     fn parse_chartsheet(
