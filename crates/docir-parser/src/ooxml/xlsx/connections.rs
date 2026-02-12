@@ -3,13 +3,13 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::xml_utils::xml_error;
-use crate::xml_utils::local_name;
+use crate::xml_utils::{attr_bool, attr_u32, attr_value, local_name};
 use docir_core::ir::{
     ConnectionEntry, ConnectionPart, ExternalLinkPart, ExternalLinkSheet, QueryTablePart,
     SlicerPart, TimelinePart,
 };
 use docir_core::types::SourceSpan;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
 pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<ConnectionPart, ParseError> {
@@ -26,91 +26,24 @@ pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<Connection
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"connection" => {
                     let mut entry = ConnectionEntry::new();
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"id" => {
-                                entry.connection_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"name" => {
-                                entry.name = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            b"description" => {
-                                entry.description =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            b"type" => {
-                                entry.connection_type =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"refreshedVersion" => {
-                                entry.refreshed_version =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"refreshOnLoad" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                entry.refresh_on_load =
-                                    Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                            }
-                            b"saveData" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                entry.save_data = Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                            }
-                            b"background" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                entry.background = Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                            }
-                            b"sourceFile" => {
-                                entry.source_file =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                            b"odcFile" => {
-                                entry.connection_file =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                            _ => {}
-                        }
-                    }
+                    apply_connection_attrs(&mut entry, &e);
                     current = Some(entry);
                 }
                 b"dbPr" => {
                     if let Some(entry) = current.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"connection" => {
-                                    entry.connection =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string())
-                                }
-                                b"command" => {
-                                    entry.command =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string())
-                                }
-                                b"commandType" => {
-                                    entry.command_type =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                                }
-                                _ => {}
-                            }
-                        }
+                        apply_dbpr_attrs(entry, &e);
                     }
                 }
                 b"webPr" => {
                     if let Some(entry) = current.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"url" {
-                                entry.url = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
+                        if let Some(url) = attr_value(&e, b"url") {
+                            entry.url = Some(url);
                         }
                     }
                 }
                 b"textPr" => {
                     if let Some(entry) = current.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"sourceFile" || attr.key.as_ref() == b"file" {
-                                entry.source_file =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
+                        apply_textpr_attrs(entry, &e);
                     }
                 }
                 _ => {}
@@ -118,91 +51,24 @@ pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<Connection
             Ok(Event::Empty(e)) => match e.name().as_ref() {
                 b"connection" => {
                     let mut entry = ConnectionEntry::new();
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"id" => {
-                                entry.connection_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"name" => {
-                                entry.name = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            b"description" => {
-                                entry.description =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            b"type" => {
-                                entry.connection_type =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"refreshedVersion" => {
-                                entry.refreshed_version =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"refreshOnLoad" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                entry.refresh_on_load =
-                                    Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                            }
-                            b"saveData" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                entry.save_data = Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                            }
-                            b"background" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                entry.background = Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                            }
-                            b"sourceFile" => {
-                                entry.source_file =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                            b"odcFile" => {
-                                entry.connection_file =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                            _ => {}
-                        }
-                    }
+                    apply_connection_attrs(&mut entry, &e);
                     part.entries.push(entry);
                 }
                 b"dbPr" => {
                     if let Some(entry) = current.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"connection" => {
-                                    entry.connection =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string())
-                                }
-                                b"command" => {
-                                    entry.command =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string())
-                                }
-                                b"commandType" => {
-                                    entry.command_type =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                                }
-                                _ => {}
-                            }
-                        }
+                        apply_dbpr_attrs(entry, &e);
                     }
                 }
                 b"webPr" => {
                     if let Some(entry) = current.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"url" {
-                                entry.url = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
+                        if let Some(url) = attr_value(&e, b"url") {
+                            entry.url = Some(url);
                         }
                     }
                 }
                 b"textPr" => {
                     if let Some(entry) = current.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"sourceFile" || attr.key.as_ref() == b"file" {
-                                entry.source_file =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
+                        apply_textpr_attrs(entry, &e);
                     }
                 }
                 _ => {}
@@ -224,6 +90,29 @@ pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<Connection
     }
 
     Ok(part)
+}
+
+fn apply_connection_attrs(entry: &mut ConnectionEntry, e: &BytesStart<'_>) {
+    entry.connection_id = attr_u32(e, b"id");
+    entry.name = attr_value(e, b"name");
+    entry.description = attr_value(e, b"description");
+    entry.connection_type = attr_u32(e, b"type");
+    entry.refreshed_version = attr_u32(e, b"refreshedVersion");
+    entry.refresh_on_load = attr_bool(e, b"refreshOnLoad");
+    entry.save_data = attr_bool(e, b"saveData");
+    entry.background = attr_bool(e, b"background");
+    entry.source_file = attr_value(e, b"sourceFile");
+    entry.connection_file = attr_value(e, b"odcFile");
+}
+
+fn apply_dbpr_attrs(entry: &mut ConnectionEntry, e: &BytesStart<'_>) {
+    entry.connection = attr_value(e, b"connection");
+    entry.command = attr_value(e, b"command");
+    entry.command_type = attr_u32(e, b"commandType");
+}
+
+fn apply_textpr_attrs(entry: &mut ConnectionEntry, e: &BytesStart<'_>) {
+    entry.source_file = attr_value(e, b"sourceFile").or_else(|| attr_value(e, b"file"));
 }
 
 pub(crate) fn connection_targets(part: &ConnectionPart) -> Vec<String> {
