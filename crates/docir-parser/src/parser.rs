@@ -367,40 +367,43 @@ impl OoxmlParser {
         Option<NodeId>,
         Option<NodeId>,
     ) {
-        let styles_id = self.parse_docx_part_by_rel(
+        let styles_id = self.parse_docx_part_by_rel_with_span(
             zip,
             main_part_path,
             doc_rels,
             rel_type::STYLES,
-            |part_path, xml| {
-                let id = parser.parse_styles(xml).ok()?;
-                if let Some(IRNode::StyleSet(set)) = parser.store_mut().get_mut(id) {
+            parser,
+            |parser, _part_path, xml| parser.parse_styles(xml).ok(),
+            |store, id, part_path| {
+                if let Some(IRNode::StyleSet(set)) = store.get_mut(id) {
                     set.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
             },
         );
 
-        let styles_with_effects_id =
-            self.parse_docx_part_by_path(zip, "word/stylesWithEffects.xml", |part_path, xml| {
-                let id = parser.parse_styles_with_effects(xml).ok()?;
-                if let Some(IRNode::StyleSet(set)) = parser.store_mut().get_mut(id) {
+        let styles_with_effects_id = self.parse_docx_part_by_path_with_span(
+            zip,
+            "word/stylesWithEffects.xml",
+            parser,
+            |parser, _part_path, xml| parser.parse_styles_with_effects(xml).ok(),
+            |store, id, part_path| {
+                if let Some(IRNode::StyleSet(set)) = store.get_mut(id) {
                     set.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
-            });
+            },
+        );
 
-        let numbering_id = self.parse_docx_part_by_rel(
+        let numbering_id = self.parse_docx_part_by_rel_with_span(
             zip,
             main_part_path,
             doc_rels,
             rel_type::NUMBERING,
-            |part_path, xml| {
-                let id = parser.parse_numbering(xml).ok()?;
-                if let Some(IRNode::NumberingSet(set)) = parser.store_mut().get_mut(id) {
+            parser,
+            |parser, _part_path, xml| parser.parse_numbering(xml).ok(),
+            |store, id, part_path| {
+                if let Some(IRNode::NumberingSet(set)) = store.get_mut(id) {
                     set.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
             },
         );
 
@@ -482,45 +485,45 @@ impl OoxmlParser {
             })
             .unwrap_or_default();
 
-        let settings_id = self.parse_docx_part_by_rel(
+        let settings_id = self.parse_docx_part_by_rel_with_span(
             zip,
             main_part_path,
             doc_rels,
             rel_type::SETTINGS,
-            |part_path, xml| {
-                let id = parser.parse_settings(xml).ok()?;
-                if let Some(IRNode::WordSettings(settings)) = parser.store_mut().get_mut(id) {
+            parser,
+            |parser, _part_path, xml| parser.parse_settings(xml).ok(),
+            |store, id, part_path| {
+                if let Some(IRNode::WordSettings(settings)) = store.get_mut(id) {
                     settings.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
             },
         );
 
-        let web_settings_id = self.parse_docx_part_by_rel(
+        let web_settings_id = self.parse_docx_part_by_rel_with_span(
             zip,
             main_part_path,
             doc_rels,
             rel_type::WEB_SETTINGS,
-            |part_path, xml| {
-                let id = parser.parse_web_settings(xml).ok()?;
-                if let Some(IRNode::WebSettings(settings)) = parser.store_mut().get_mut(id) {
+            parser,
+            |parser, _part_path, xml| parser.parse_web_settings(xml).ok(),
+            |store, id, part_path| {
+                if let Some(IRNode::WebSettings(settings)) = store.get_mut(id) {
                     settings.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
             },
         );
 
-        let mut font_table_id = self.parse_docx_part_by_rel(
+        let mut font_table_id = self.parse_docx_part_by_rel_with_span(
             zip,
             main_part_path,
             doc_rels,
             rel_type::FONT_TABLE,
-            |part_path, xml| {
-                let id = parser.parse_font_table(xml).ok()?;
-                if let Some(IRNode::FontTable(table)) = parser.store_mut().get_mut(id) {
+            parser,
+            |parser, _part_path, xml| parser.parse_font_table(xml).ok(),
+            |store, id, part_path| {
+                if let Some(IRNode::FontTable(table)) = store.get_mut(id) {
                     table.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
             },
         );
         if font_table_id.is_none() && zip.contains("word/fontTable.xml") {
@@ -534,23 +537,29 @@ impl OoxmlParser {
             }
         }
 
-        let comments_ext_id =
-            self.parse_docx_part_by_path(zip, "word/commentsExtended.xml", |part_path, xml| {
-                let id = parser.parse_comments_extended(xml).ok()?;
-                if let Some(IRNode::CommentExtensionSet(set)) = parser.store_mut().get_mut(id) {
+        let comments_ext_id = self.parse_docx_part_by_path_with_span(
+            zip,
+            "word/commentsExtended.xml",
+            parser,
+            |parser, _part_path, xml| parser.parse_comments_extended(xml).ok(),
+            |store, id, part_path| {
+                if let Some(IRNode::CommentExtensionSet(set)) = store.get_mut(id) {
                     set.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
-            });
+            },
+        );
 
-        let comments_id_map_id =
-            self.parse_docx_part_by_path(zip, "word/commentsIds.xml", |part_path, xml| {
-                let id = parser.parse_comments_ids(xml).ok()?;
-                if let Some(IRNode::CommentIdMap(map)) = parser.store_mut().get_mut(id) {
+        let comments_id_map_id = self.parse_docx_part_by_path_with_span(
+            zip,
+            "word/commentsIds.xml",
+            parser,
+            |parser, _part_path, xml| parser.parse_comments_ids(xml).ok(),
+            |store, id, part_path| {
+                if let Some(IRNode::CommentIdMap(map)) = store.get_mut(id) {
                     map.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
-            });
+            },
+        );
 
         let glossary_id =
             self.parse_docx_part_by_path(zip, "word/glossary/document.xml", |_, xml| {
@@ -629,6 +638,29 @@ impl OoxmlParser {
         parse(&part_path, &xml)
     }
 
+    fn parse_docx_part_by_rel_with_span<R, F, S>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        main_part_path: &str,
+        doc_rels: &Relationships,
+        rel_type: &str,
+        parser: &mut DocxParser,
+        parse: F,
+        set_span: S,
+    ) -> Option<NodeId>
+    where
+        R: Read + Seek,
+        F: FnOnce(&mut DocxParser, &str, &str) -> Option<NodeId>,
+        S: FnOnce(&mut IrStore, NodeId, &str),
+    {
+        let rel = doc_rels.get_first_by_type(rel_type)?;
+        let part_path = Relationships::resolve_target(main_part_path, &rel.target);
+        let xml = zip.read_file_string(&part_path).ok()?;
+        let id = parse(parser, &part_path, &xml)?;
+        set_span(parser.store_mut(), id, &part_path);
+        Some(id)
+    }
+
     fn parse_docx_part_by_path<R, F>(
         &self,
         zip: &mut SecureZipReader<R>,
@@ -644,6 +676,28 @@ impl OoxmlParser {
         }
         let xml = zip.read_file_string(part_path).ok()?;
         parse(part_path, &xml)
+    }
+
+    fn parse_docx_part_by_path_with_span<R, F, S>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        part_path: &str,
+        parser: &mut DocxParser,
+        parse: F,
+        set_span: S,
+    ) -> Option<NodeId>
+    where
+        R: Read + Seek,
+        F: FnOnce(&mut DocxParser, &str, &str) -> Option<NodeId>,
+        S: FnOnce(&mut IrStore, NodeId, &str),
+    {
+        if !zip.contains(part_path) {
+            return None;
+        }
+        let xml = zip.read_file_string(part_path).ok()?;
+        let id = parse(parser, part_path, &xml)?;
+        set_span(parser.store_mut(), id, part_path);
+        Some(id)
     }
 
     fn add_extension_parts_and_diagnostics<R: Read + Seek>(
