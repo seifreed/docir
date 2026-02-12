@@ -1,4 +1,5 @@
 use super::*;
+use crate::ooxml::part_utils::read_relationships;
 
 impl OoxmlParser {
     /// Parse an XLSX document.
@@ -11,13 +12,7 @@ impl OoxmlParser {
     ) -> Result<ParsedDocument, ParseError> {
         let workbook_xml = zip.read_file_string(main_part_path)?;
 
-        let rels_path = Self::get_rels_path(main_part_path);
-        let workbook_rels = if zip.contains(&rels_path) {
-            let rels_xml = zip.read_file_string(&rels_path)?;
-            Relationships::parse(&rels_xml)?
-        } else {
-            Relationships::default()
-        };
+        let workbook_rels = read_relationships(zip, main_part_path)?;
 
         let mut parser = XlsxParser::new();
         let root_id = parser.parse_workbook(zip, &workbook_xml, &workbook_rels, main_part_path)?;

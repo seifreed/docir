@@ -9,6 +9,7 @@ use crate::ole::{is_ole_container, Cfb};
 use crate::ooxml::content_types::ContentTypes;
 use crate::ooxml::docx::DocxParser;
 use crate::ooxml::part_registry;
+use crate::ooxml::part_utils::{get_rels_path, read_relationships_optional};
 use crate::ooxml::pptx::PptxParser;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
 use crate::ooxml::xlsx::XlsxParser;
@@ -373,7 +374,7 @@ impl OoxmlParser {
             .get_first_by_type(rel_type::COMMENTS)
             .and_then(|rel| {
                 let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-                let rels = self.read_part_relationships(zip, &part_path);
+                let rels = read_relationships_optional(zip, &part_path);
                 zip.read_file_string(&part_path).ok().and_then(|xml| {
                     let ids = parser.parse_comments(&xml, &rels).ok()?;
                     for id in &ids {
@@ -386,7 +387,7 @@ impl OoxmlParser {
             })
             .unwrap_or_default();
         let comments = if comments.is_empty() && zip.contains("word/comments.xml") {
-            let rels = self.read_part_relationships(zip, "word/comments.xml");
+            let rels = read_relationships_optional(zip, "word/comments.xml");
             if let Ok(xml) = zip.read_file_string("word/comments.xml") {
                 if let Ok(ids) = parser.parse_comments(&xml, &rels) {
                     for id in &ids {
@@ -409,7 +410,7 @@ impl OoxmlParser {
             .get_first_by_type(rel_type::FOOTNOTES)
             .and_then(|rel| {
                 let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-                let rels = self.read_part_relationships(zip, &part_path);
+                let rels = read_relationships_optional(zip, &part_path);
                 zip.read_file_string(&part_path).ok().and_then(|xml| {
                     let ids = parser
                         .parse_notes(
@@ -432,7 +433,7 @@ impl OoxmlParser {
             .get_first_by_type(rel_type::ENDNOTES)
             .and_then(|rel| {
                 let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-                let rels = self.read_part_relationships(zip, &part_path);
+                let rels = read_relationships_optional(zip, &part_path);
                 zip.read_file_string(&part_path).ok().and_then(|xml| {
                     let ids = parser
                         .parse_notes(&xml, crate::ooxml::docx::document::NoteKind::Endnote, &rels)
@@ -549,7 +550,7 @@ impl OoxmlParser {
 
         for rel in doc_rels.get_by_type(rel_type::HEADER) {
             let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-            let rels = self.read_part_relationships(zip, &part_path);
+            let rels = read_relationships_optional(zip, &part_path);
             let xml = zip.read_file_string(&part_path)?;
             let node_id = parser.parse_header_footer(
                 &xml,
@@ -562,7 +563,7 @@ impl OoxmlParser {
 
         for rel in doc_rels.get_by_type(rel_type::FOOTER) {
             let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-            let rels = self.read_part_relationships(zip, &part_path);
+            let rels = read_relationships_optional(zip, &part_path);
             let xml = zip.read_file_string(&part_path)?;
             let node_id = parser.parse_header_footer(
                 &xml,
@@ -574,22 +575,6 @@ impl OoxmlParser {
         }
 
         Ok(map)
-    }
-
-    fn read_part_relationships<R: Read + Seek>(
-        &self,
-        zip: &mut SecureZipReader<R>,
-        part_path: &str,
-    ) -> Relationships {
-        let rels_path = Self::get_rels_path(part_path);
-        if zip.contains(&rels_path) {
-            if let Ok(rels_xml) = zip.read_file_string(&rels_path) {
-                if let Ok(rels) = Relationships::parse(&rels_xml) {
-                    return rels;
-                }
-            }
-        }
-        Relationships::default()
     }
 
     fn parse_docx_part_by_rel<R, F>(
@@ -1029,7 +1014,7 @@ impl OoxmlParser {
                 }
             }
 
-            let rels_path = Self::get_rels_path(&path);
+            let rels_path = get_rels_path(&path);
             if zip.contains(&rels_path) {
                 if let Ok(rels_xml) = zip.read_file_string(&rels_path) {
                     if let Ok(rels) = Relationships::parse(&rels_xml) {
@@ -1208,17 +1193,6 @@ impl OoxmlParser {
         }
 
         Ok(ole)
-    }
-
-    /// Get the relationships file path for a given part.
-    fn get_rels_path(part_path: &str) -> String {
-        if let Some(idx) = part_path.rfind('/') {
-            let dir = &part_path[..idx + 1];
-            let file = &part_path[idx + 1..];
-            format!("{}_rels/{}.rels", dir, file)
-        } else {
-            format!("_rels/{}.rels", part_path)
-        }
     }
 
     fn link_shapes_to_shared_parts(&self, store: &mut IrStore) {

@@ -1,4 +1,5 @@
 use super::*;
+use crate::ooxml::part_utils::read_relationships;
 
 impl OoxmlParser {
     pub(super) fn parse_pptx<R: Read + Seek>(
@@ -10,13 +11,7 @@ impl OoxmlParser {
     ) -> Result<ParsedDocument, ParseError> {
         let presentation_xml = zip.read_file_string(main_part_path)?;
 
-        let rels_path = Self::get_rels_path(main_part_path);
-        let presentation_rels = if zip.contains(&rels_path) {
-            let rels_xml = zip.read_file_string(&rels_path)?;
-            Relationships::parse(&rels_xml)?
-        } else {
-            Relationships::default()
-        };
+        let presentation_rels = read_relationships(zip, main_part_path)?;
 
         let mut parser = PptxParser::new();
         let root_id = parser.parse_presentation(

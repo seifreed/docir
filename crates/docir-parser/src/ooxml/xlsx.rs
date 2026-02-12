@@ -2,6 +2,7 @@
 
 use crate::diagnostics::push_warning;
 use crate::error::ParseError;
+use crate::ooxml::part_utils::read_relationships;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
 use crate::xml_utils::attr_value;
@@ -260,13 +261,7 @@ impl XlsxParser {
 
             let sheet_xml = zip.read_file_string(&sheet_path)?;
 
-            let rels_path = get_rels_path(&sheet_path);
-            let sheet_rels = if zip.contains(&rels_path) {
-                let rels_xml = zip.read_file_string(&rels_path)?;
-                Relationships::parse(&rels_xml)?
-            } else {
-                Relationships::default()
-            };
+            let sheet_rels = read_relationships(zip, &sheet_path)?;
 
             self.process_external_relationships(&sheet_rels, &sheet_path);
 
@@ -1064,16 +1059,6 @@ fn classify_relationship(rel_type_uri: &str) -> ExternalRefType {
         ExternalRefType::DataConnection
     } else {
         ExternalRefType::Other
-    }
-}
-
-pub(crate) fn get_rels_path(part_path: &str) -> String {
-    if let Some(idx) = part_path.rfind('/') {
-        let dir = &part_path[..idx + 1];
-        let file = &part_path[idx + 1..];
-        format!("{dir}_rels/{file}.rels")
-    } else {
-        format!("_rels/{part_path}.rels")
     }
 }
 

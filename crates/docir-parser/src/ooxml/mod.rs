@@ -3,6 +3,7 @@
 pub mod content_types;
 pub mod docx;
 pub mod part_registry;
+pub mod part_utils;
 pub mod pptx;
 pub mod relationships;
 pub mod shared;

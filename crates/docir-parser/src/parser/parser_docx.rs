@@ -1,4 +1,5 @@
 use super::*;
+use crate::ooxml::part_utils::read_relationships;
 
 impl OoxmlParser {
     /// Parse a DOCX document.
@@ -13,13 +14,7 @@ impl OoxmlParser {
         let document_xml = zip.read_file_string(main_part_path)?;
 
         // Get document relationships
-        let rels_path = Self::get_rels_path(main_part_path);
-        let doc_rels = if zip.contains(&rels_path) {
-            let rels_xml = zip.read_file_string(&rels_path)?;
-            Relationships::parse(&rels_xml)?
-        } else {
-            Relationships::default()
-        };
+        let doc_rels = read_relationships(zip, main_part_path)?;
 
         // Parse document
         let mut docx_parser = DocxParser::new();

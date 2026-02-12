@@ -2,6 +2,7 @@
 
 use crate::diagnostics::push_warning;
 use crate::error::ParseError;
+use crate::ooxml::part_utils::read_relationships;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{
@@ -98,13 +99,7 @@ impl PptxParser {
 
             let slide_xml = zip.read_file_string(&slide_path)?;
 
-            let rels_path = get_rels_path(&slide_path);
-            let slide_rels = if zip.contains(&rels_path) {
-                let rels_xml = zip.read_file_string(&rels_path)?;
-                Relationships::parse(&rels_xml)?
-            } else {
-                Relationships::default()
-            };
+            let slide_rels = read_relationships(zip, &slide_path)?;
 
             self.process_external_relationships(&slide_rels, &slide_path);
 
@@ -113,12 +108,7 @@ impl PptxParser {
             {
                 let notes_path = Relationships::resolve_target(&slide_path, &rel.target);
                 if let Ok(notes_xml) = zip.read_file_string(&notes_path) {
-                    let notes_rels = if zip.contains(&get_rels_path(&notes_path)) {
-                        let rels_xml = zip.read_file_string(&get_rels_path(&notes_path))?;
-                        Relationships::parse(&rels_xml)?
-                    } else {
-                        Relationships::default()
-                    };
+                    let notes_rels = read_relationships(zip, &notes_path)?;
                     let (notes_node, notes_text) =
                         parse_notes_slide(&notes_xml, &notes_path, &notes_rels, self, zip)?;
                     let notes_id = notes_node.id;
@@ -235,13 +225,7 @@ impl PptxParser {
                 continue;
             }
             let master_xml = zip.read_file_string(&master_path)?;
-            let rels_path = get_rels_path(&master_path);
-            let master_rels = if zip.contains(&rels_path) {
-                let rels_xml = zip.read_file_string(&rels_path)?;
-                Relationships::parse(&rels_xml)?
-            } else {
-                Relationships::default()
-            };
+            let master_rels = read_relationships(zip, &master_path)?;
 
             let master_name = extract_c_sld_name(&master_xml);
             let master_shapes =
@@ -1763,16 +1747,6 @@ fn classify_relationship(rel_type_uri: &str) -> ExternalRefType {
         ExternalRefType::DataConnection
     } else {
         ExternalRefType::Other
-    }
-}
-
-fn get_rels_path(part_path: &str) -> String {
-    if let Some(idx) = part_path.rfind('/') {
-        let dir = &part_path[..idx + 1];
-        let file = &part_path[idx + 1..];
-        format!("{}_rels/{}.rels", dir, file)
-    } else {
-        format!("_rels/{}.rels", part_path)
     }
 }
 

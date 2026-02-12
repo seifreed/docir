@@ -1,4 +1,5 @@
 use super::*;
+use crate::ooxml::part_utils::read_relationships;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DataValidation, SheetPageMargins};
 
@@ -155,13 +156,7 @@ impl XlsxParser {
                 continue;
             }
             let drawing_xml = zip.read_file_string(&drawing_path)?;
-            let rels_path = get_rels_path(&drawing_path);
-            let drawing_rels = if zip.contains(&rels_path) {
-                let rels_xml = zip.read_file_string(&rels_path)?;
-                Relationships::parse(&rels_xml)?
-            } else {
-                Relationships::default()
-            };
+            let drawing_rels = read_relationships(zip, &drawing_path)?;
             let drawing_id = self.parse_drawing(&drawing_xml, &drawing_path, &drawing_rels, zip)?;
             drawings.push(drawing_id);
         }
@@ -329,13 +324,7 @@ impl XlsxParser {
             if !zip.contains(&external_path) {
                 continue;
             }
-            let rels_path = get_rels_path(&external_path);
-            let rels = if zip.contains(&rels_path) {
-                let rels_xml = zip.read_file_string(&rels_path)?;
-                Relationships::parse(&rels_xml)?
-            } else {
-                Relationships::default()
-            };
+            let rels = read_relationships(zip, &external_path)?;
             if let Ok(xml) = zip.read_file_string(&external_path) {
                 if let Ok(mut part) = parse_external_link_part(&xml, &external_path, Some(&rels)) {
                     part.span = Some(SourceSpan::new(&external_path));
@@ -448,21 +437,17 @@ impl XlsxParser {
         }
 
         // Try to read pivot cache records
-        let rels_path = get_rels_path(cache_path);
-        if zip.contains(&rels_path) {
-            let rels_xml = zip.read_file_string(&rels_path)?;
-            let rels = Relationships::parse(&rels_xml)?;
-            if let Some(rel) = rels.get_first_by_type(rel_type::PIVOT_CACHE_RECORDS) {
-                let records_path = Relationships::resolve_target(cache_path, &rel.target);
-                if zip.contains(&records_path) {
-                    let records_xml = zip.read_file_string(&records_path)?;
-                    let mut records = parse_pivot_cache_records(&records_xml, &records_path)?;
-                    records.cache_id = Some(cache_id);
-                    cache.record_count = records.record_count;
-                    let rec_id = records.id;
-                    self.store.insert(IRNode::PivotCacheRecords(records));
-                    cache.records = Some(rec_id);
-                }
+        let rels = read_relationships(zip, cache_path)?;
+        if let Some(rel) = rels.get_first_by_type(rel_type::PIVOT_CACHE_RECORDS) {
+            let records_path = Relationships::resolve_target(cache_path, &rel.target);
+            if zip.contains(&records_path) {
+                let records_xml = zip.read_file_string(&records_path)?;
+                let mut records = parse_pivot_cache_records(&records_xml, &records_path)?;
+                records.cache_id = Some(cache_id);
+                cache.record_count = records.record_count;
+                let rec_id = records.id;
+                self.store.insert(IRNode::PivotCacheRecords(records));
+                cache.records = Some(rec_id);
             }
         }
 
