@@ -130,7 +130,7 @@ impl OoxmlParser {
 
             if let Some(src) = data {
                 let source = String::from_utf8_lossy(&src).to_string();
-                let analysis = docir_security::analyze_vba_source(&source);
+                let analysis = docir_core::security::analyze_vba_source(&source);
                 auto_exec.extend(analysis.auto_exec_procedures.clone());
                 module.procedures = analysis.procedures;
                 module.suspicious_calls = analysis.suspicious_calls;
