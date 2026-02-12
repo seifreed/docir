@@ -201,6 +201,11 @@ impl FromStr for DocumentFormat {
     }
 }
 
+/// Parses a document format from string input.
+pub fn parse_document_format(input: &str) -> Result<DocumentFormat, ParseEnumError> {
+    DocumentFormat::from_str(input)
+}
+
 /// Node type discriminant for the IR tree.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -344,6 +349,11 @@ impl FromStr for NodeType {
         };
         Ok(ty)
     }
+}
+
+/// Parses a node type from string input.
+pub fn parse_node_type(input: &str) -> Result<NodeType, ParseEnumError> {
+    NodeType::from_str(input)
 }
 
 impl fmt::Display for NodeType {

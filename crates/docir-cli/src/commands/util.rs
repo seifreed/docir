@@ -3,19 +3,21 @@
 use anyhow::{anyhow, Result};
 use docir_app::DocirApp;
 use docir_app::ParserConfig;
-use docir_core::types::{DocumentFormat, NodeType};
+use docir_core::types::{
+    parse_document_format as parse_core_document_format, parse_node_type as parse_core_node_type,
+    DocumentFormat, NodeType,
+};
 use serde::Serialize;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
-use std::str::FromStr;
 
 pub fn parse_node_type(input: &str) -> Result<NodeType> {
-    NodeType::from_str(input).map_err(|e| anyhow!(e))
+    parse_core_node_type(input).map_err(|e| anyhow!(e))
 }
 
 pub fn parse_doc_format(input: &str) -> Result<DocumentFormat> {
-    DocumentFormat::from_str(input).map_err(|e| anyhow!(e))
+    parse_core_document_format(input).map_err(|e| anyhow!(e))
 }
 
 pub fn build_app(config: &ParserConfig) -> DocirApp {

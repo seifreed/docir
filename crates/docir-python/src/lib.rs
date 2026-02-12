@@ -3,7 +3,10 @@
 use docir_app::DocirApp;
 use docir_core::ir::IrNode as IrNodeTrait;
 use docir_core::query::Query;
-use docir_core::types::{DocumentFormat, NodeType};
+use docir_core::types::{
+    parse_document_format as parse_core_document_format, parse_node_type as parse_core_node_type,
+    DocumentFormat, NodeType,
+};
 use docir_core::visitor::{NodeCounter, PreOrderWalker};
 use docir_parser::ParserConfig;
 use docir_rules::RuleProfile;
@@ -12,7 +15,6 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use serde_json::json;
 use std::path::Path;
-use std::str::FromStr;
 
 #[pyfunction]
 fn parse_json(path: String, pretty: Option<bool>) -> PyResult<String> {
@@ -149,11 +151,11 @@ fn summary(path: String) -> PyResult<String> {
 }
 
 fn parse_node_type(input: &str) -> PyResult<NodeType> {
-    NodeType::from_str(input).map_err(|e| PyValueError::new_err(e.to_string()))
+    parse_core_node_type(input).map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
 fn parse_doc_format(input: &str) -> PyResult<DocumentFormat> {
-    DocumentFormat::from_str(input).map_err(|e| PyValueError::new_err(e.to_string()))
+    parse_core_document_format(input).map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
 #[pymodule]
