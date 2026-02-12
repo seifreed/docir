@@ -37,7 +37,7 @@ pub(crate) use styles::{parse_color_attr, parse_styles};
 pub(crate) use tables::{
     parse_pivot_cache_records, parse_pivot_table_definition, parse_table_definition,
 };
-use workbook::{auto_open_target_from_defined_name, parse_workbook_info, SheetInfo};
+use workbook::{auto_open_target_from_defined_name, parse_workbook_info, SheetInfo, WorkbookInfo};
 
 /// XLSX parser for workbook.xml and worksheets.
 pub struct XlsxParser {
@@ -87,16 +87,78 @@ impl XlsxParser {
         self.process_external_relationships(workbook_rels, workbook_path);
 
         let workbook_info = parse_workbook_info(workbook_xml)?;
+        let WorkbookInfo {
+            sheets,
+            defined_names,
+            workbook_properties,
+            pivot_cache_refs,
+        } = workbook_info;
 
-        // Workbook properties
-        if let Some(mut props) = workbook_info.workbook_properties {
+        self.load_workbook_properties(&mut document, workbook_properties, workbook_path);
+        self.load_shared_strings(&mut document, zip)?;
+        self.load_styles(&mut document, zip)?;
+        self.load_calc_chain(&mut document, zip)?;
+        self.load_people_part(&mut document, zip)?;
+        let auto_open_targets = self.load_defined_names(&mut document, defined_names);
+
+        // Sheets
+        self.load_sheets(&mut document, zip, workbook_path, workbook_rels, sheets)?;
+
+        self.finalize_auto_open_targets(&auto_open_targets);
+
+        // Pivot caches
+        self.load_pivot_caches(
+            &mut document,
+            zip,
+            workbook_path,
+            workbook_rels,
+            pivot_cache_refs,
+        )?;
+
+        self.parse_external_links_and_connections(zip, workbook_path, workbook_rels)?;
+
+        self.load_sheet_metadata(&mut document, zip)?;
+        self.load_slicer_parts(&mut document, zip)?;
+        self.load_timeline_parts(&mut document, zip)?;
+        self.load_query_tables(&mut document, zip)?;
+
+        document.shared_parts.extend(self.chart_nodes.drain(..));
+        document.security = std::mem::take(&mut self.security_info);
+        document.security.recalculate_threat_level();
+
+        let mut diagnostics = std::mem::replace(&mut self.diagnostics, Diagnostics::new());
+        if !diagnostics.entries.is_empty() {
+            diagnostics.span = Some(SourceSpan::new(workbook_path));
+            let diag_id = diagnostics.id;
+            self.store.insert(IRNode::Diagnostics(diagnostics));
+            document.diagnostics.push(diag_id);
+        }
+
+        let doc_id = document.id;
+        self.store.insert(IRNode::Document(document));
+
+        Ok(doc_id)
+    }
+
+    fn load_workbook_properties(
+        &mut self,
+        document: &mut Document,
+        workbook_properties: Option<docir_core::ir::WorkbookProperties>,
+        workbook_path: &str,
+    ) {
+        if let Some(mut props) = workbook_properties {
             props.span = Some(SourceSpan::new(workbook_path));
             let props_id = props.id;
             self.store.insert(IRNode::WorkbookProperties(props));
             document.workbook_properties = Some(props_id);
         }
+    }
 
-        // Shared strings
+    fn load_shared_strings(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         if zip.contains("xl/sharedStrings.xml") {
             let shared_xml = zip.read_file_string("xl/sharedStrings.xml")?;
             let (table, strings) = parse_shared_strings_table(&shared_xml)?;
@@ -105,8 +167,14 @@ impl XlsxParser {
             self.store.insert(IRNode::SharedStringTable(table));
             document.shared_strings = Some(table_id);
         }
+        Ok(())
+    }
 
-        // Styles
+    fn load_styles(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         if zip.contains("xl/styles.xml") {
             let styles_xml = zip.read_file_string("xl/styles.xml")?;
             let mut styles = parse_styles(&styles_xml, "xl/styles.xml")?;
@@ -115,8 +183,14 @@ impl XlsxParser {
             self.store.insert(IRNode::SpreadsheetStyles(styles));
             document.spreadsheet_styles = Some(styles_id);
         }
+        Ok(())
+    }
 
-        // Calculation chain
+    fn load_calc_chain(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         if zip.contains("xl/calcChain.xml") {
             let chain_xml = zip.read_file_string("xl/calcChain.xml")?;
             let mut chain = parse_calc_chain(&chain_xml, "xl/calcChain.xml")?;
@@ -125,8 +199,14 @@ impl XlsxParser {
             self.store.insert(IRNode::CalcChain(chain));
             document.shared_parts.push(chain_id);
         }
+        Ok(())
+    }
 
-        // People part (coauthoring)
+    fn load_people_part(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         if zip.contains("xl/persons/person.xml") {
             let xml = zip.read_file_string("xl/persons/person.xml")?;
             let mut people =
@@ -136,10 +216,16 @@ impl XlsxParser {
             self.store.insert(IRNode::PeoplePart(people));
             document.shared_parts.push(id);
         }
+        Ok(())
+    }
 
-        // Defined names
+    fn load_defined_names(
+        &mut self,
+        document: &mut Document,
+        defined_names: Vec<docir_core::ir::DefinedName>,
+    ) -> Vec<Option<String>> {
         let mut auto_open_targets: Vec<Option<String>> = Vec::new();
-        for defined in workbook_info.defined_names {
+        for defined in defined_names {
             if let Some(target) = auto_open_target_from_defined_name(&defined) {
                 auto_open_targets.push(target);
             }
@@ -147,9 +233,17 @@ impl XlsxParser {
             self.store.insert(IRNode::DefinedName(defined));
             document.defined_names.push(id);
         }
+        auto_open_targets
+    }
 
-        // Sheets
-        let sheets = workbook_info.sheets;
+    fn load_sheets(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+        workbook_path: &str,
+        workbook_rels: &Relationships,
+        sheets: Vec<SheetInfo>,
+    ) -> Result<(), ParseError> {
         for sheet in sheets {
             let rel = match workbook_rels.get(&sheet.rel_id) {
                 Some(rel) => rel,
@@ -187,11 +281,18 @@ impl XlsxParser {
                 self.parse_worksheet(zip, &sheet_xml, &sheet, &sheet_path, &sheet_rels, kind)?;
             document.content.push(sheet_id);
         }
+        Ok(())
+    }
 
-        self.finalize_auto_open_targets(&auto_open_targets);
-
-        // Pivot caches
-        for cache_ref in workbook_info.pivot_cache_refs {
+    fn load_pivot_caches(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+        workbook_path: &str,
+        workbook_rels: &Relationships,
+        pivot_cache_refs: Vec<workbook::PivotCacheRef>,
+    ) -> Result<(), ParseError> {
+        for cache_ref in pivot_cache_refs {
             let Some(rel) = workbook_rels.get(&cache_ref.rel_id) else {
                 continue;
             };
@@ -205,9 +306,14 @@ impl XlsxParser {
             self.store.insert(IRNode::PivotCache(cache));
             document.pivot_caches.push(cache_id);
         }
+        Ok(())
+    }
 
-        self.parse_external_links_and_connections(zip, workbook_path, workbook_rels)?;
-
+    fn load_sheet_metadata(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         if zip.contains("xl/metadata.xml") {
             let xml = zip.read_file_string("xl/metadata.xml")?;
             let mut metadata = parse_sheet_metadata(&xml, "xl/metadata.xml")?;
@@ -216,8 +322,14 @@ impl XlsxParser {
             self.store.insert(IRNode::SheetMetadata(metadata));
             document.sheet_metadata = Some(meta_id);
         }
+        Ok(())
+    }
 
-        // slicers
+    fn load_slicer_parts(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         let slicer_paths: Vec<String> = zip
             .file_names()
             .into_iter()
@@ -231,8 +343,14 @@ impl XlsxParser {
             self.store.insert(IRNode::SlicerPart(slicer));
             document.shared_parts.push(id);
         }
+        Ok(())
+    }
 
-        // timelines
+    fn load_timeline_parts(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         let timeline_paths: Vec<String> = zip
             .file_names()
             .into_iter()
@@ -246,8 +364,14 @@ impl XlsxParser {
             self.store.insert(IRNode::TimelinePart(timeline));
             document.shared_parts.push(id);
         }
+        Ok(())
+    }
 
-        // query tables
+    fn load_query_tables(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         let query_paths: Vec<String> = zip
             .file_names()
             .into_iter()
@@ -261,23 +385,7 @@ impl XlsxParser {
             self.store.insert(IRNode::QueryTablePart(query));
             document.shared_parts.push(id);
         }
-
-        document.shared_parts.extend(self.chart_nodes.drain(..));
-        document.security = std::mem::take(&mut self.security_info);
-        document.security.recalculate_threat_level();
-
-        let mut diagnostics = std::mem::replace(&mut self.diagnostics, Diagnostics::new());
-        if !diagnostics.entries.is_empty() {
-            diagnostics.span = Some(SourceSpan::new(workbook_path));
-            let diag_id = diagnostics.id;
-            self.store.insert(IRNode::Diagnostics(diagnostics));
-            document.diagnostics.push(diag_id);
-        }
-
-        let doc_id = document.id;
-        self.store.insert(IRNode::Document(document));
-
-        Ok(doc_id)
+        Ok(())
     }
 
     /// Returns the IR store.
