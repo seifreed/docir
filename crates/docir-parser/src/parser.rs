@@ -54,6 +54,21 @@ pub struct ParsedDocument {
     pub metrics: Option<ParseMetrics>,
 }
 
+struct DocxWordParts {
+    styles_id: Option<NodeId>,
+    styles_with_effects_id: Option<NodeId>,
+    numbering_id: Option<NodeId>,
+    comments: Vec<NodeId>,
+    footnotes: Vec<NodeId>,
+    endnotes: Vec<NodeId>,
+    settings_id: Option<NodeId>,
+    web_settings_id: Option<NodeId>,
+    font_table_id: Option<NodeId>,
+    comments_ext_id: Option<NodeId>,
+    comments_id_map_id: Option<NodeId>,
+    glossary_id: Option<NodeId>,
+}
+
 impl ParsedDocument {
     /// Gets the root document node.
     pub fn document(&self) -> Option<&Document> {
@@ -261,20 +276,7 @@ impl OoxmlParser {
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
-    ) -> (
-        Option<NodeId>,
-        Option<NodeId>,
-        Option<NodeId>,
-        Vec<NodeId>,
-        Vec<NodeId>,
-        Vec<NodeId>,
-        Option<NodeId>,
-        Option<NodeId>,
-        Option<NodeId>,
-        Option<NodeId>,
-        Option<NodeId>,
-        Option<NodeId>,
-    ) {
+    ) -> DocxWordParts {
         let styles_id = self.parse_docx_part_by_rel_with_span(
             zip,
             main_part_path,
@@ -394,7 +396,7 @@ impl OoxmlParser {
                 parser.parse_glossary_document(xml, doc_rels).ok()
             });
 
-        (
+        DocxWordParts {
             styles_id,
             styles_with_effects_id,
             numbering_id,
@@ -407,7 +409,7 @@ impl OoxmlParser {
             comments_ext_id,
             comments_id_map_id,
             glossary_id,
-        )
+        }
     }
 
     fn parse_docx_headers_footers<R: Read + Seek>(

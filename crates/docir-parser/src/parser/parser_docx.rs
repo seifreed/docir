@@ -19,38 +19,25 @@ impl OoxmlParser {
         let header_footer_map =
             self.parse_docx_headers_footers(zip, main_part_path, &doc_rels, &mut docx_parser)?;
 
-        let (
-            styles_id,
-            styles_with_effects_id,
-            numbering_id,
-            comments,
-            footnotes,
-            endnotes,
-            settings_id,
-            web_settings_id,
-            font_table_id,
-            comments_ext_id,
-            comments_id_map_id,
-            glossary_id,
-        ) = self.parse_docx_word_parts(zip, main_part_path, &doc_rels, &mut docx_parser);
+        let parts = self.parse_docx_word_parts(zip, main_part_path, &doc_rels, &mut docx_parser);
 
         let root_id =
             docx_parser.parse_document(&document_xml, &doc_rels, Some(&header_footer_map))?;
         let mut store = docx_parser.into_store();
 
         if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-            doc.styles = styles_id;
-            doc.styles_with_effects = styles_with_effects_id;
-            doc.numbering = numbering_id;
-            doc.comments = comments;
-            doc.footnotes = footnotes;
-            doc.endnotes = endnotes;
-            doc.settings = settings_id;
-            doc.web_settings = web_settings_id;
-            doc.font_table = font_table_id;
-            doc.comments_extended = comments_ext_id;
-            doc.comment_id_map = comments_id_map_id;
-            if let Some(glossary_id) = glossary_id {
+            doc.styles = parts.styles_id;
+            doc.styles_with_effects = parts.styles_with_effects_id;
+            doc.numbering = parts.numbering_id;
+            doc.comments = parts.comments;
+            doc.footnotes = parts.footnotes;
+            doc.endnotes = parts.endnotes;
+            doc.settings = parts.settings_id;
+            doc.web_settings = parts.web_settings_id;
+            doc.font_table = parts.font_table_id;
+            doc.comments_extended = parts.comments_ext_id;
+            doc.comment_id_map = parts.comments_id_map_id;
+            if let Some(glossary_id) = parts.glossary_id {
                 doc.shared_parts.push(glossary_id);
             }
         }
