@@ -37,8 +37,12 @@ impl Default for ZipConfig {
 
 pub trait PackageReader {
     fn contains(&self, name: &str) -> bool;
+    fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError>;
     fn read_file_string(&mut self, name: &str) -> Result<String, ParseError>;
+    fn file_size(&mut self, name: &str) -> Result<u64, ParseError>;
     fn file_names(&self) -> Vec<String>;
+    fn list_prefix(&self, prefix: &str) -> Vec<String>;
+    fn list_suffix(&self, suffix: &str) -> Vec<String>;
 }
 
 /// A secure wrapper around a ZIP archive.
@@ -237,12 +241,34 @@ impl<R: Read + Seek> PackageReader for SecureZipReader<R> {
         SecureZipReader::contains(self, name)
     }
 
+    fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError> {
+        SecureZipReader::read_file(self, name)
+    }
+
     fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
         SecureZipReader::read_file_string(self, name)
     }
 
+    fn file_size(&mut self, name: &str) -> Result<u64, ParseError> {
+        SecureZipReader::file_size(self, name)
+    }
+
     fn file_names(&self) -> Vec<String> {
         SecureZipReader::file_names(self)
+            .map(|name| name.to_string())
+            .collect()
+    }
+
+    fn list_prefix(&self, prefix: &str) -> Vec<String> {
+        SecureZipReader::list_prefix(self, prefix)
+            .into_iter()
+            .map(|name| name.to_string())
+            .collect()
+    }
+
+    fn list_suffix(&self, suffix: &str) -> Vec<String> {
+        SecureZipReader::list_suffix(self, suffix)
+            .into_iter()
             .map(|name| name.to_string())
             .collect()
     }

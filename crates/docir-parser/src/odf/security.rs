@@ -1,13 +1,12 @@
 use crate::diagnostics::push_entry;
 use crate::security_utils::parse_dde_formula;
-use crate::zip_handler::SecureZipReader;
+use crate::zip_handler::PackageReader;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document, IRNode};
 use docir_core::security::{DdeField, ExternalRefType, ExternalReference, OleObject};
 use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use std::io::{Read, Seek};
 
 pub(crate) struct OdfFormulaScan {
     pub(crate) dde_fields: Vec<DdeField>,
@@ -88,7 +87,7 @@ pub(crate) fn scan_odf_objects(xml: &str) -> (Vec<OleObject>, Vec<ExternalRefere
 
 pub(crate) fn scan_embedded_objects(
     file_names: &[String],
-    zip: &mut SecureZipReader<impl Read + Seek>,
+    zip: &mut impl PackageReader,
 ) -> Vec<OleObject> {
     let mut oles = Vec::new();
     for path in file_names {
@@ -218,12 +217,12 @@ pub(crate) fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
     scan
 }
 
-pub(crate) fn scan_odf_security<R: Read + Seek>(
+pub(crate) fn scan_odf_security(
     content_xml: Option<&str>,
     styles_xml: Option<&str>,
     settings_xml: Option<&str>,
     file_names: &[String],
-    zip: &mut SecureZipReader<R>,
+    zip: &mut impl PackageReader,
     store: &mut IrStore,
     doc: &mut Document,
     diagnostics: &mut Diagnostics,

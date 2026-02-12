@@ -3,13 +3,12 @@ use super::vba::{parse_vba_project_text, vba_decompress};
 use super::{hex, ParseError, ParserConfig};
 use crate::ooxml::part_utils::get_rels_path;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
-use crate::zip_handler::SecureZipReader;
+use crate::zip_handler::PackageReader;
 use docir_core::ir::IRNode;
 use docir_core::security::{ExternalRefType, ExternalReference, MacroProject, OleObject};
 use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
 use std::collections::HashSet;
-use std::io::{Read, Seek};
 
 pub struct SecurityScanner<'a> {
     config: &'a ParserConfig,
@@ -20,9 +19,9 @@ impl<'a> SecurityScanner<'a> {
         Self { config }
     }
 
-    pub fn scan_zip<R: Read + Seek>(
+    pub fn scan_zip(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
     ) -> Result<(), ParseError> {
         self.scan_vba_projects(zip, store)?;
@@ -32,9 +31,9 @@ impl<'a> SecurityScanner<'a> {
         Ok(())
     }
 
-    fn scan_vba_projects<R: Read + Seek>(
+    fn scan_vba_projects(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
     ) -> Result<(), ParseError> {
         let mut builder = docir_core::ir::IrBuilder::new(store);
@@ -57,9 +56,9 @@ impl<'a> SecurityScanner<'a> {
         Ok(())
     }
 
-    fn scan_ole_objects<R: Read + Seek>(
+    fn scan_ole_objects(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
     ) -> Result<(), ParseError> {
         let mut builder = docir_core::ir::IrBuilder::new(store);
@@ -69,7 +68,6 @@ impl<'a> SecurityScanner<'a> {
             .chain(zip.list_prefix("xl/embeddings/"))
             .chain(zip.list_prefix("ppt/embeddings/"))
             .filter(|p| p.ends_with(".bin") || p.ends_with(".ole"))
-            .map(|s| s.to_string())
             .collect();
 
         for ole_path in ole_files {
@@ -79,9 +77,9 @@ impl<'a> SecurityScanner<'a> {
         Ok(())
     }
 
-    fn scan_activex_controls<R: Read + Seek>(
+    fn scan_activex_controls(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
     ) -> Result<(), ParseError> {
         let mut activex_bin_seen: HashSet<String> = HashSet::new();
@@ -91,7 +89,6 @@ impl<'a> SecurityScanner<'a> {
             .chain(zip.list_prefix("xl/activeX/"))
             .chain(zip.list_prefix("ppt/activeX/"))
             .filter(|p| p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in activex_paths {
             let xml = zip.read_file_string(&path)?;
@@ -124,15 +121,15 @@ impl<'a> SecurityScanner<'a> {
         Ok(())
     }
 
-    fn scan_word_external_relationships<R: Read + Seek>(
+    fn scan_word_external_relationships(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         store: &mut IrStore,
     ) -> Result<(), ParseError> {
         let rel_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("word/") && p.ends_with(".rels"))
-            .map(|s| s.to_string())
             .collect();
         for rel_path in rel_paths {
             let rels_xml = zip.read_file_string(&rel_path)?;
@@ -157,9 +154,9 @@ impl<'a> SecurityScanner<'a> {
         Ok(())
     }
 
-    fn detect_macro_project<R: Read + Seek>(
+    fn detect_macro_project(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         path: &str,
     ) -> Result<(MacroProject, Vec<docir_core::security::MacroModule>), ParseError> {
         let data = zip.read_file(path)?;
@@ -224,9 +221,9 @@ impl<'a> SecurityScanner<'a> {
         Ok((project, modules_out))
     }
 
-    fn detect_ole_object<R: Read + Seek>(
+    fn detect_ole_object(
         &self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         path: &str,
     ) -> Result<OleObject, ParseError> {
         let data = zip.read_file(path)?;

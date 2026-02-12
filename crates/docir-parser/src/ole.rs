@@ -183,6 +183,12 @@ impl PackageReader for CfbReader<'_> {
         self.cfb.has_stream(name)
     }
 
+    fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError> {
+        self.cfb
+            .read_stream(name)
+            .ok_or_else(|| ParseError::MissingPart(name.to_string()))
+    }
+
     fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
         let bytes = self
             .cfb
@@ -192,8 +198,30 @@ impl PackageReader for CfbReader<'_> {
             .map_err(|e| ParseError::Encoding(format!("Invalid UTF-8 in {}: {}", name, e)))
     }
 
+    fn file_size(&mut self, name: &str) -> Result<u64, ParseError> {
+        self.cfb
+            .stream_size(name)
+            .ok_or_else(|| ParseError::MissingPart(name.to_string()))
+    }
+
     fn file_names(&self) -> Vec<String> {
         self.cfb.list_streams()
+    }
+
+    fn list_prefix(&self, prefix: &str) -> Vec<String> {
+        self.cfb
+            .list_streams()
+            .into_iter()
+            .filter(|name| name.starts_with(prefix))
+            .collect()
+    }
+
+    fn list_suffix(&self, suffix: &str) -> Vec<String> {
+        self.cfb
+            .list_streams()
+            .into_iter()
+            .filter(|name| name.ends_with(suffix))
+            .collect()
     }
 }
 
