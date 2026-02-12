@@ -804,20 +804,27 @@ impl DocumentParser {
         mut reader: R,
     ) -> Result<ParsedDocument, ParseError> {
         enforce_input_size(&mut reader, self.config.max_input_size)?;
+        let detected = self.detect_format(&mut reader)?;
+        self.validate_detected(&detected, &mut reader)?;
+        let parsed = self.parse_detected(detected, reader)?;
+        self.normalize_parsed(parsed)
+    }
 
+    fn detect_format<R: Read + Seek>(
+        &self,
+        reader: &mut R,
+    ) -> Result<dispatch::DetectedFormat, ParseError> {
         let mut probe = [0u8; 16];
         let read = reader.read(&mut probe)?;
         reader.seek(SeekFrom::Start(0))?;
         let head = &probe[..read];
 
         if is_rtf_bytes(head) {
-            return dispatch::build_parser(dispatch::DetectedFormat::Rtf, self.config.clone())
-                .parse_reader(reader);
+            return Ok(dispatch::DetectedFormat::Rtf);
         }
 
         if is_ole_container(head) {
-            return dispatch::build_parser(dispatch::DetectedFormat::Hwp, self.config.clone())
-                .parse_reader(reader);
+            return Ok(dispatch::DetectedFormat::Hwp);
         }
 
         if !is_zip_container(head) {
@@ -826,7 +833,7 @@ impl DocumentParser {
             ));
         }
 
-        let mut inspector = SecureZipReader::new(&mut reader, self.config.zip_config.clone())?;
+        let mut inspector = SecureZipReader::new(&mut *reader, self.config.zip_config.clone())?;
         let is_ooxml = inspector.contains("[Content_Types].xml");
         let is_odf = inspector.contains("mimetype");
         let is_hwpx = if is_odf {
@@ -841,21 +848,38 @@ impl DocumentParser {
         reader.seek(SeekFrom::Start(0))?;
 
         if is_ooxml {
-            return dispatch::build_parser(dispatch::DetectedFormat::Ooxml, self.config.clone())
-                .parse_reader(reader);
+            return Ok(dispatch::DetectedFormat::Ooxml);
         }
         if is_hwpx {
-            return dispatch::build_parser(dispatch::DetectedFormat::Hwpx, self.config.clone())
-                .parse_reader(reader);
+            return Ok(dispatch::DetectedFormat::Hwpx);
         }
         if is_odf {
-            return dispatch::build_parser(dispatch::DetectedFormat::Odf, self.config.clone())
-                .parse_reader(reader);
+            return Ok(dispatch::DetectedFormat::Odf);
         }
 
         Err(ParseError::UnsupportedFormat(
             "Unknown package format (missing [Content_Types].xml and mimetype)".to_string(),
         ))
+    }
+
+    fn validate_detected<R: Read + Seek>(
+        &self,
+        _detected: &dispatch::DetectedFormat,
+        _reader: &mut R,
+    ) -> Result<(), ParseError> {
+        Ok(())
+    }
+
+    fn parse_detected<R: Read + Seek>(
+        &self,
+        detected: dispatch::DetectedFormat,
+        reader: R,
+    ) -> Result<ParsedDocument, ParseError> {
+        dispatch::build_parser(detected, self.config.clone()).parse_reader(reader)
+    }
+
+    fn normalize_parsed(&self, parsed: ParsedDocument) -> Result<ParsedDocument, ParseError> {
+        Ok(parsed)
     }
 
     /// Parses from a file and returns parsed document with raw bytes.
