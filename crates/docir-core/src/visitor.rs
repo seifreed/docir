@@ -5,6 +5,7 @@
 //! on nodes.
 
 use crate::error::CoreError;
+use crate::ir::DigitalSignature as IrDigitalSignature;
 use crate::ir::*;
 use crate::security::*;
 use crate::types::NodeId;
@@ -24,488 +25,111 @@ pub enum VisitControl {
     Stop,
 }
 
+macro_rules! for_each_ir_node {
+    ($m:ident, $sep:tt) => {
+        $m!(Document, Document, visit_document)$sep
+        $m!(Section, Section, visit_section)$sep
+        $m!(Paragraph, Paragraph, visit_paragraph)$sep
+        $m!(Run, Run, visit_run)$sep
+        $m!(Hyperlink, Hyperlink, visit_hyperlink)$sep
+        $m!(Table, Table, visit_table)$sep
+        $m!(TableRow, TableRow, visit_table_row)$sep
+        $m!(TableCell, TableCell, visit_table_cell)$sep
+        $m!(Slide, Slide, visit_slide)$sep
+        $m!(Shape, Shape, visit_shape)$sep
+        $m!(Worksheet, Worksheet, visit_worksheet)$sep
+        $m!(Cell, Cell, visit_cell)$sep
+        $m!(SharedStringTable, SharedStringTable, visit_shared_string_table)$sep
+        $m!(SpreadsheetStyles, SpreadsheetStyles, visit_spreadsheet_styles)$sep
+        $m!(DefinedName, DefinedName, visit_defined_name)$sep
+        $m!(ConditionalFormat, ConditionalFormat, visit_conditional_format)$sep
+        $m!(DataValidation, DataValidation, visit_data_validation)$sep
+        $m!(TableDefinition, TableDefinition, visit_table_definition)$sep
+        $m!(PivotTable, PivotTable, visit_pivot_table)$sep
+        $m!(PivotCache, PivotCache, visit_pivot_cache)$sep
+        $m!(PivotCacheRecords, PivotCacheRecords, visit_pivot_cache_records)$sep
+        $m!(CalcChain, CalcChain, visit_calc_chain)$sep
+        $m!(SheetComment, SheetComment, visit_sheet_comment)$sep
+        $m!(SheetMetadata, SheetMetadata, visit_sheet_metadata)$sep
+        $m!(WorkbookProperties, WorkbookProperties, visit_workbook_properties)$sep
+        $m!(MacroProject, MacroProject, visit_macro_project)$sep
+        $m!(MacroModule, MacroModule, visit_macro_module)$sep
+        $m!(OleObject, OleObject, visit_ole_object)$sep
+        $m!(ExternalReference, ExternalReference, visit_external_ref)$sep
+        $m!(ActiveXControl, ActiveXControl, visit_activex_control)$sep
+        $m!(Metadata, DocumentMetadata, visit_metadata)$sep
+        $m!(StyleSet, StyleSet, visit_style_set)$sep
+        $m!(NumberingSet, NumberingSet, visit_numbering_set)$sep
+        $m!(Comment, Comment, visit_comment)$sep
+        $m!(CommentRangeStart, CommentRangeStart, visit_comment_range_start)$sep
+        $m!(CommentRangeEnd, CommentRangeEnd, visit_comment_range_end)$sep
+        $m!(CommentReference, CommentReference, visit_comment_reference)$sep
+        $m!(Footnote, Footnote, visit_footnote)$sep
+        $m!(Endnote, Endnote, visit_endnote)$sep
+        $m!(Header, Header, visit_header)$sep
+        $m!(Footer, Footer, visit_footer)$sep
+        $m!(WordSettings, WordSettings, visit_word_settings)$sep
+        $m!(WebSettings, WebSettings, visit_web_settings)$sep
+        $m!(FontTable, FontTable, visit_font_table)$sep
+        $m!(ContentControl, ContentControl, visit_content_control)$sep
+        $m!(BookmarkStart, BookmarkStart, visit_bookmark_start)$sep
+        $m!(BookmarkEnd, BookmarkEnd, visit_bookmark_end)$sep
+        $m!(Field, Field, visit_field)$sep
+        $m!(Revision, Revision, visit_revision)$sep
+        $m!(CommentExtensionSet, CommentExtensionSet, visit_comment_extension_set)$sep
+        $m!(CommentIdMap, CommentIdMap, visit_comment_id_map)$sep
+        $m!(SlideMaster, SlideMaster, visit_slide_master)$sep
+        $m!(SlideLayout, SlideLayout, visit_slide_layout)$sep
+        $m!(NotesMaster, NotesMaster, visit_notes_master)$sep
+        $m!(HandoutMaster, HandoutMaster, visit_handout_master)$sep
+        $m!(NotesSlide, NotesSlide, visit_notes_slide)$sep
+        $m!(WorksheetDrawing, WorksheetDrawing, visit_worksheet_drawing)$sep
+        $m!(ChartData, ChartData, visit_chart_data)$sep
+        $m!(PresentationProperties, PresentationProperties, visit_presentation_properties)$sep
+        $m!(ViewProperties, ViewProperties, visit_view_properties)$sep
+        $m!(TableStyleSet, TableStyleSet, visit_table_style_set)$sep
+        $m!(PptxCommentAuthor, PptxCommentAuthor, visit_pptx_comment_author)$sep
+        $m!(PptxComment, PptxComment, visit_pptx_comment)$sep
+        $m!(PresentationTag, PresentationTag, visit_presentation_tag)$sep
+        $m!(PresentationInfo, PresentationInfo, visit_presentation_info)$sep
+        $m!(PeoplePart, PeoplePart, visit_people_part)$sep
+        $m!(SmartArtPart, SmartArtPart, visit_smartart_part)$sep
+        $m!(WebExtension, WebExtension, visit_web_extension)$sep
+        $m!(WebExtensionTaskpane, WebExtensionTaskpane, visit_web_extension_taskpane)$sep
+        $m!(GlossaryDocument, GlossaryDocument, visit_glossary_document)$sep
+        $m!(GlossaryEntry, GlossaryEntry, visit_glossary_entry)$sep
+        $m!(VmlDrawing, VmlDrawing, visit_vml_drawing)$sep
+        $m!(VmlShape, VmlShape, visit_vml_shape)$sep
+        $m!(DrawingPart, DrawingPart, visit_drawing_part)$sep
+        $m!(ExternalLinkPart, ExternalLinkPart, visit_external_link_part)$sep
+        $m!(ConnectionPart, ConnectionPart, visit_connection_part)$sep
+        $m!(SlicerPart, SlicerPart, visit_slicer_part)$sep
+        $m!(TimelinePart, TimelinePart, visit_timeline_part)$sep
+        $m!(QueryTablePart, QueryTablePart, visit_query_table_part)$sep
+        $m!(Diagnostics, Diagnostics, visit_diagnostics)$sep
+        $m!(Theme, Theme, visit_theme)$sep
+        $m!(MediaAsset, MediaAsset, visit_media_asset)$sep
+        $m!(CustomXmlPart, CustomXmlPart, visit_custom_xml_part)$sep
+        $m!(RelationshipGraph, RelationshipGraph, visit_relationship_graph)$sep
+        $m!(DigitalSignature, IrDigitalSignature, visit_digital_signature)$sep
+        $m!(ExtensionPart, ExtensionPart, visit_extension_part)$sep
+    };
+}
+
+macro_rules! define_visit_defaults {
+    ($variant:ident, $ty:ident, $method:ident) => {
+        fn $method(&mut self, _node: &$ty) -> VisitorResult<VisitControl> {
+            Ok(VisitControl::Continue)
+        }
+    };
+}
+
 /// Trait for immutable IR traversal.
 ///
 /// Implement this trait to perform read-only operations on the IR tree.
 /// Default implementations return `Continue` for all node types.
 pub trait IrVisitor {
-    /// Called when entering a Document node.
-    fn visit_document(&mut self, _doc: &Document) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Section node.
-    fn visit_section(&mut self, _section: &Section) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Paragraph node.
-    fn visit_paragraph(&mut self, _para: &Paragraph) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Run node.
-    fn visit_run(&mut self, _run: &Run) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Hyperlink node.
-    fn visit_hyperlink(&mut self, _link: &Hyperlink) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Table node.
-    fn visit_table(&mut self, _table: &Table) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a TableRow node.
-    fn visit_table_row(&mut self, _row: &TableRow) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a TableCell node.
-    fn visit_table_cell(&mut self, _cell: &TableCell) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Slide node.
-    fn visit_slide(&mut self, _slide: &Slide) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Shape node.
-    fn visit_shape(&mut self, _shape: &Shape) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Worksheet node.
-    fn visit_worksheet(&mut self, _sheet: &Worksheet) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Cell node.
-    fn visit_cell(&mut self, _cell: &Cell) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a SharedStringTable node.
-    fn visit_shared_string_table(
-        &mut self,
-        _table: &SharedStringTable,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a SpreadsheetStyles node.
-    fn visit_spreadsheet_styles(
-        &mut self,
-        _styles: &SpreadsheetStyles,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a DefinedName node.
-    fn visit_defined_name(&mut self, _name: &DefinedName) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a ConditionalFormat node.
-    fn visit_conditional_format(
-        &mut self,
-        _format: &ConditionalFormat,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a DataValidation node.
-    fn visit_data_validation(
-        &mut self,
-        _validation: &DataValidation,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a TableDefinition node.
-    fn visit_table_definition(&mut self, _table: &TableDefinition) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a PivotTable node.
-    fn visit_pivot_table(&mut self, _pivot: &PivotTable) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a PivotCache node.
-    fn visit_pivot_cache(&mut self, _cache: &PivotCache) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a PivotCacheRecords node.
-    fn visit_pivot_cache_records(
-        &mut self,
-        _records: &PivotCacheRecords,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a CalcChain node.
-    fn visit_calc_chain(&mut self, _chain: &CalcChain) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a SheetComment node.
-    fn visit_sheet_comment(&mut self, _comment: &SheetComment) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a SheetMetadata node.
-    fn visit_sheet_metadata(&mut self, _meta: &SheetMetadata) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a WorkbookProperties node.
-    fn visit_workbook_properties(
-        &mut self,
-        _props: &WorkbookProperties,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a MacroProject node.
-    fn visit_macro_project(&mut self, _project: &MacroProject) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a MacroModule node.
-    fn visit_macro_module(&mut self, _module: &MacroModule) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering an OleObject node.
-    fn visit_ole_object(&mut self, _ole: &OleObject) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering an ExternalReference node.
-    fn visit_external_ref(&mut self, _ext_ref: &ExternalReference) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering an ActiveXControl node.
-    fn visit_activex_control(&mut self, _control: &ActiveXControl) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Metadata node.
-    fn visit_metadata(&mut self, _meta: &DocumentMetadata) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a StyleSet node.
-    fn visit_style_set(&mut self, _styles: &StyleSet) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a NumberingSet node.
-    fn visit_numbering_set(&mut self, _num: &NumberingSet) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Comment node.
-    fn visit_comment(&mut self, _comment: &Comment) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a CommentRangeStart node.
-    fn visit_comment_range_start(
-        &mut self,
-        _range: &CommentRangeStart,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a CommentRangeEnd node.
-    fn visit_comment_range_end(&mut self, _range: &CommentRangeEnd) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a CommentReference node.
-    fn visit_comment_reference(
-        &mut self,
-        _reference: &CommentReference,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Footnote node.
-    fn visit_footnote(&mut self, _note: &Footnote) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering an Endnote node.
-    fn visit_endnote(&mut self, _note: &Endnote) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Header node.
-    fn visit_header(&mut self, _header: &Header) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Footer node.
-    fn visit_footer(&mut self, _footer: &Footer) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a WordSettings node.
-    fn visit_word_settings(&mut self, _settings: &WordSettings) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a WebSettings node.
-    fn visit_web_settings(&mut self, _settings: &WebSettings) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a FontTable node.
-    fn visit_font_table(&mut self, _table: &FontTable) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a ContentControl node.
-    fn visit_content_control(&mut self, _control: &ContentControl) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a BookmarkStart node.
-    fn visit_bookmark_start(&mut self, _bookmark: &BookmarkStart) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a BookmarkEnd node.
-    fn visit_bookmark_end(&mut self, _bookmark: &BookmarkEnd) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Field node.
-    fn visit_field(&mut self, _field: &Field) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Revision node.
-    fn visit_revision(&mut self, _revision: &Revision) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a CommentExtensionSet node.
-    fn visit_comment_extension_set(
-        &mut self,
-        _set: &CommentExtensionSet,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a CommentIdMap node.
-    fn visit_comment_id_map(&mut self, _map: &CommentIdMap) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a SlideMaster node.
-    fn visit_slide_master(&mut self, _master: &SlideMaster) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a SlideLayout node.
-    fn visit_slide_layout(&mut self, _layout: &SlideLayout) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a NotesMaster node.
-    fn visit_notes_master(&mut self, _master: &NotesMaster) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a HandoutMaster node.
-    fn visit_handout_master(&mut self, _master: &HandoutMaster) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a NotesSlide node.
-    fn visit_notes_slide(&mut self, _slide: &NotesSlide) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a WorksheetDrawing node.
-    fn visit_worksheet_drawing(
-        &mut self,
-        _drawing: &WorksheetDrawing,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a ChartData node.
-    fn visit_chart_data(&mut self, _chart: &ChartData) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a PresentationProperties node.
-    fn visit_presentation_properties(
-        &mut self,
-        _props: &PresentationProperties,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a ViewProperties node.
-    fn visit_view_properties(&mut self, _props: &ViewProperties) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a TableStyleSet node.
-    fn visit_table_style_set(&mut self, _styles: &TableStyleSet) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a PptxCommentAuthor node.
-    fn visit_pptx_comment_author(
-        &mut self,
-        _author: &PptxCommentAuthor,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a PptxComment node.
-    fn visit_pptx_comment(&mut self, _comment: &PptxComment) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a PresentationTag node.
-    fn visit_presentation_tag(&mut self, _tag: &PresentationTag) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a PresentationInfo node.
-    fn visit_presentation_info(&mut self, _info: &PresentationInfo) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a PeoplePart node.
-    fn visit_people_part(&mut self, _part: &PeoplePart) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a SmartArtPart node.
-    fn visit_smartart_part(&mut self, _part: &SmartArtPart) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a WebExtension node.
-    fn visit_web_extension(&mut self, _ext: &WebExtension) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a WebExtensionTaskpane node.
-    fn visit_web_extension_taskpane(
-        &mut self,
-        _pane: &WebExtensionTaskpane,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a GlossaryDocument node.
-    fn visit_glossary_document(&mut self, _doc: &GlossaryDocument) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a GlossaryEntry node.
-    fn visit_glossary_entry(&mut self, _entry: &GlossaryEntry) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a VmlDrawing node.
-    fn visit_vml_drawing(&mut self, _drawing: &VmlDrawing) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a VmlShape node.
-    fn visit_vml_shape(&mut self, _shape: &VmlShape) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a DrawingPart node.
-    fn visit_drawing_part(&mut self, _part: &DrawingPart) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering an ExternalLinkPart node.
-    fn visit_external_link_part(
-        &mut self,
-        _part: &ExternalLinkPart,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a ConnectionPart node.
-    fn visit_connection_part(&mut self, _part: &ConnectionPart) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a SlicerPart node.
-    fn visit_slicer_part(&mut self, _part: &SlicerPart) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a TimelinePart node.
-    fn visit_timeline_part(&mut self, _part: &TimelinePart) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a QueryTablePart node.
-    fn visit_query_table_part(&mut self, _part: &QueryTablePart) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Diagnostics node.
-    fn visit_diagnostics(&mut self, _diag: &Diagnostics) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a Theme node.
-    fn visit_theme(&mut self, _theme: &Theme) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a MediaAsset node.
-    fn visit_media_asset(&mut self, _media: &MediaAsset) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a CustomXmlPart node.
-    fn visit_custom_xml_part(&mut self, _part: &CustomXmlPart) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a RelationshipGraph node.
-    fn visit_relationship_graph(
-        &mut self,
-        _graph: &RelationshipGraph,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering a DigitalSignature node.
-    fn visit_digital_signature(
-        &mut self,
-        _sig: &crate::ir::DigitalSignature,
-    ) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
-
-    /// Called when entering an ExtensionPart node.
-    fn visit_extension_part(&mut self, _part: &ExtensionPart) -> VisitorResult<VisitControl> {
-        Ok(VisitControl::Continue)
-    }
+    for_each_ir_node!(define_visit_defaults, ;);
 }
 
 /// Storage for IR nodes indexed by NodeId.
