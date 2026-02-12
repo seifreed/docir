@@ -1,6 +1,6 @@
 use super::*;
 use crate::ooxml::part_utils::read_relationships;
-use crate::xml_utils::reader_from_str;
+use crate::xml_utils::{reader_from_str, xml_error};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DataValidation, SheetPageMargins};
 
@@ -127,10 +127,7 @@ impl XlsxParser {
                 },
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: sheet_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(sheet_path, e));
                 }
                 _ => {}
             }

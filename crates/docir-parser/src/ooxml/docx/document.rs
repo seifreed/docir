@@ -3,7 +3,7 @@
 use super::field::parse_field_instruction;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
-use crate::xml_utils::{attr_value, reader_from_str};
+use crate::xml_utils::{attr_value, reader_from_str, xml_error};
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
     FontEntry, FontTable, Footer, GlossaryDocument, GlossaryEntry, Header, Hyperlink,
@@ -101,10 +101,7 @@ impl DocxParser {
                 },
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: "word/document.xml".to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error("word/document.xml", e));
                 }
                 _ => {}
             }
@@ -141,10 +138,7 @@ impl DocxParser {
                 },
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: "word/glossary/document.xml".to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error("word/glossary/document.xml", e));
                 }
                 _ => {}
             }
