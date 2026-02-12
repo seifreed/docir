@@ -26,6 +26,7 @@ mod drawing;
 mod metadata;
 mod parser;
 mod relationships;
+mod shared_strings;
 mod styles;
 mod tables;
 mod workbook;
@@ -34,12 +35,12 @@ mod worksheet;
 mod xlm;
 
 pub use parser::*;
+pub(crate) use shared_strings::parse_shared_strings_table;
 
 use parser::{
     extract_formula_function, map_cell_error, parse_calc_chain, parse_column,
     parse_conditional_formatting, parse_formula, parse_formula_args_text, parse_formula_empty,
-    parse_inline_string, parse_merge_cell, parse_shared_strings_table, parse_sheet_comments,
-    parse_threaded_comments,
+    parse_inline_string, parse_merge_cell, parse_sheet_comments, parse_threaded_comments,
 };
 use workbook::{auto_open_target_from_defined_name, SheetInfo};
 
