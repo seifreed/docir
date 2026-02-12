@@ -84,7 +84,7 @@ fn test_rule_engine_basic() {
     let report = engine.run(&parsed.store, parsed.root_id);
 
     assert!(report.findings.iter().any(|f| f.rule_id == "SEC-001"));
-    assert!(report.findings.iter().any(|f| f.rule_id == "SEC-003"));
+    assert!(report.findings.iter().any(|f| f.rule_id == "SEC-010"));
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn test_external_reference_rule() {
     let engine = RuleEngine::with_default_rules();
     let report = engine.run(&parsed.store, parsed.root_id);
 
-    assert!(report.findings.iter().any(|f| f.rule_id == "SEC-003"));
+    assert!(report.findings.iter().any(|f| f.rule_id == "SEC-010"));
 }
 
 #[test]
