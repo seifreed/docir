@@ -971,17 +971,10 @@ impl OoxmlParser {
 
             if let Some(src) = data {
                 let source = String::from_utf8_lossy(&src).to_string();
-                let (procedures, suspicious) = analyze_vba_source(&source);
-                for proc_name in &procedures {
-                    if docir_security::AUTO_EXEC_PROCEDURES
-                        .iter()
-                        .any(|p| p.eq_ignore_ascii_case(proc_name))
-                    {
-                        auto_exec.push(proc_name.clone());
-                    }
-                }
-                module.procedures = procedures;
-                module.suspicious_calls = suspicious;
+                let analysis = docir_security::analyze_vba_source(&source);
+                auto_exec.extend(analysis.auto_exec_procedures.clone());
+                module.procedures = analysis.procedures;
+                module.suspicious_calls = analysis.suspicious_calls;
 
                 if self.config.extract_macro_source {
                     module.source_code = Some(source);
@@ -1291,51 +1284,6 @@ fn parse_vba_project_text(
     }
 
     (project_name, modules, references, protected)
-}
-
-fn analyze_vba_source(source: &str) -> (Vec<String>, Vec<docir_core::security::SuspiciousCall>) {
-    let mut procedures = Vec::new();
-    let mut suspicious = Vec::new();
-
-    for (idx, line) in source.lines().enumerate() {
-        let raw = line.trim();
-        if raw.is_empty() {
-            continue;
-        }
-
-        let lower = raw.to_ascii_lowercase();
-        let mut tokens: Vec<&str> = raw.split_whitespace().collect();
-        if tokens.len() >= 2 {
-            if tokens[0].eq_ignore_ascii_case("private")
-                || tokens[0].eq_ignore_ascii_case("public")
-                || tokens[0].eq_ignore_ascii_case("friend")
-                || tokens[0].eq_ignore_ascii_case("static")
-            {
-                tokens.remove(0);
-            }
-        }
-        if tokens.len() >= 2 {
-            let keyword = tokens[0].to_ascii_lowercase();
-            if keyword == "sub" || keyword == "function" {
-                let name = tokens[1].split('(').next().unwrap_or("").to_string();
-                if !name.is_empty() {
-                    procedures.push(name);
-                }
-            }
-        }
-
-        for &(call, category) in docir_security::SUSPICIOUS_VBA_CALLS {
-            if lower.contains(&call.to_ascii_lowercase()) {
-                suspicious.push(docir_core::security::SuspiciousCall {
-                    name: call.to_string(),
-                    category,
-                    line: Some((idx + 1) as u32),
-                });
-            }
-        }
-    }
-
-    (procedures, suspicious)
 }
 
 fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {

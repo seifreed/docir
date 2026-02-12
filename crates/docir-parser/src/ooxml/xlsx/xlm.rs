@@ -2,7 +2,7 @@
 
 use super::{SheetInfo, XlsxParser};
 use docir_core::security::{XlmFunction, XlmMacro, XlmMacroCell};
-use docir_security::DANGEROUS_XLM_FUNCTIONS;
+use docir_security::is_dangerous_xlm_function;
 
 impl XlsxParser {
     pub(super) fn begin_macro_sheet(&mut self, sheet: &SheetInfo) {
@@ -70,15 +70,13 @@ impl XlsxParser {
         }
 
         if let Some(func) = super::extract_formula_function(upper_text) {
-            for &danger in DANGEROUS_XLM_FUNCTIONS {
-                if func == danger {
-                    let args = super::parse_formula_args_text(formula_text);
-                    xlm.dangerous_functions.push(XlmFunction {
-                        name: func.to_string(),
-                        arguments: args,
-                        cell_ref: cell_ref.to_string(),
-                    });
-                }
+            if is_dangerous_xlm_function(&func) {
+                let args = super::parse_formula_args_text(formula_text);
+                xlm.dangerous_functions.push(XlmFunction {
+                    name: func.to_string(),
+                    arguments: args,
+                    cell_ref: cell_ref.to_string(),
+                });
             }
         }
 
