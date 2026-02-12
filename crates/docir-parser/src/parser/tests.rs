@@ -1,4 +1,5 @@
 use super::*;
+use docir_core::ir::{DocumentMetadata, PropertyValue};
 use docir_core::types::NodeType;
 use docir_core::IrSummary;
 use std::fs::File;

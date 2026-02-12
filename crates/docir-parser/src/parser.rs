@@ -8,7 +8,6 @@ use crate::odf::OdfParser;
 use crate::ole::{is_ole_container, Cfb};
 use crate::ooxml::content_types::ContentTypes;
 use crate::ooxml::docx::DocxParser;
-use crate::ooxml::part_registry;
 use crate::ooxml::part_utils::{get_rels_path, read_relationships_optional};
 use crate::ooxml::pptx::PptxParser;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
@@ -19,9 +18,8 @@ use crate::xml_utils::local_name;
 use crate::zip_handler::{SecureZipReader, ZipConfig};
 use docir_core::ir::column_to_letter;
 use docir_core::ir::{
-    Cell, CellError, CellValue, CustomProperty, DiagnosticEntry, DiagnosticSeverity, Diagnostics,
-    Document, DocumentMetadata, ExtensionPart, ExtensionPartKind, IRNode, IrNode as IrNodeTrait,
-    MediaAsset, PropertyValue, SheetKind, SheetState, Worksheet,
+    Cell, CellError, CellValue, DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document,
+    ExtensionPart, ExtensionPartKind, IRNode, MediaAsset, SheetKind, SheetState, Worksheet,
 };
 use docir_core::normalize::normalize_store;
 use docir_core::security::{
@@ -33,6 +31,8 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
+mod coverage;
+mod metadata;
 mod parser_docx;
 mod parser_pptx;
 mod parser_xlsx;
@@ -619,7 +619,7 @@ impl OoxmlParser {
         store: &mut IrStore,
         root_id: NodeId,
     ) -> Result<(), ParseError> {
-        let mut seen_paths = collect_seen_paths(store);
+        let mut seen_paths = coverage::collect_seen_paths(store);
         seen_paths.insert("[Content_Types].xml".to_string());
         if let Some(IRNode::Document(doc)) = store.get(root_id) {
             if doc.metadata.is_some() {
@@ -683,7 +683,7 @@ impl OoxmlParser {
             Some(IRNode::Document(doc)) => doc.format,
             _ => DocumentFormat::WordProcessing,
         };
-        let coverage_entries = build_coverage_diagnostics(
+        let coverage_entries = coverage::build_coverage_diagnostics(
             format,
             content_types,
             zip.file_names().map(|s| s.to_string()).collect(),
@@ -710,208 +710,6 @@ impl OoxmlParser {
         }
 
         Ok(())
-    }
-
-    /// Parse document metadata.
-    fn parse_metadata<R: Read + Seek>(
-        &self,
-        zip: &mut SecureZipReader<R>,
-    ) -> Result<Option<NodeId>, ParseError> {
-        if zip.contains("docProps/core.xml") {
-            let metadata = self.build_metadata(zip);
-            Ok(metadata.map(|m| m.id))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Build metadata from core.xml and app.xml.
-    fn build_metadata<R: Read + Seek>(
-        &self,
-        zip: &mut SecureZipReader<R>,
-    ) -> Option<DocumentMetadata> {
-        let mut metadata = DocumentMetadata::new();
-
-        // Parse core.xml (Dublin Core properties)
-        if let Ok(core_xml) = zip.read_file_string("docProps/core.xml") {
-            self.parse_core_properties(&core_xml, &mut metadata);
-        }
-
-        // Parse app.xml (application properties)
-        if let Ok(app_xml) = zip.read_file_string("docProps/app.xml") {
-            self.parse_app_properties(&app_xml, &mut metadata);
-        }
-
-        // Parse custom.xml (custom properties)
-        if let Ok(custom_xml) = zip.read_file_string("docProps/custom.xml") {
-            self.parse_custom_properties(&custom_xml, &mut metadata);
-        }
-
-        Some(metadata)
-    }
-
-    /// Parse core.xml properties.
-    fn parse_core_properties(&self, xml: &str, metadata: &mut DocumentMetadata) {
-        use quick_xml::events::Event;
-        use quick_xml::Reader;
-
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
-
-        let mut buf = Vec::new();
-        let mut current_element = String::new();
-
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => {
-                    current_element = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                }
-                Ok(Event::Text(e)) => {
-                    let text = e.unescape().unwrap_or_default().to_string();
-                    match current_element.as_str() {
-                        "dc:title" | "title" => metadata.title = Some(text),
-                        "dc:subject" | "subject" => metadata.subject = Some(text),
-                        "dc:creator" | "creator" => metadata.creator = Some(text),
-                        "cp:keywords" | "keywords" => metadata.keywords = Some(text),
-                        "dc:description" | "description" => metadata.description = Some(text),
-                        "cp:lastModifiedBy" | "lastModifiedBy" => {
-                            metadata.last_modified_by = Some(text)
-                        }
-                        "cp:revision" | "revision" => metadata.revision = Some(text),
-                        "dcterms:created" | "created" => metadata.created = Some(text),
-                        "dcterms:modified" | "modified" => metadata.modified = Some(text),
-                        "cp:category" | "category" => metadata.category = Some(text),
-                        "cp:contentStatus" | "contentStatus" => {
-                            metadata.content_status = Some(text)
-                        }
-                        _ => {}
-                    }
-                }
-                Ok(Event::End(_)) => {
-                    current_element.clear();
-                }
-                Ok(Event::Eof) => break,
-                _ => {}
-            }
-            buf.clear();
-        }
-    }
-
-    /// Parse app.xml properties.
-    fn parse_app_properties(&self, xml: &str, metadata: &mut DocumentMetadata) {
-        use quick_xml::events::Event;
-        use quick_xml::Reader;
-
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
-
-        let mut buf = Vec::new();
-        let mut current_element = String::new();
-
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => {
-                    current_element = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                }
-                Ok(Event::Text(e)) => {
-                    let text = e.unescape().unwrap_or_default().to_string();
-                    match current_element.as_str() {
-                        "Application" => metadata.application = Some(text),
-                        "AppVersion" => metadata.app_version = Some(text),
-                        "Company" => metadata.company = Some(text),
-                        "Manager" => metadata.manager = Some(text),
-                        _ => {}
-                    }
-                }
-                Ok(Event::End(_)) => {
-                    current_element.clear();
-                }
-                Ok(Event::Eof) => break,
-                _ => {}
-            }
-            buf.clear();
-        }
-    }
-
-    /// Parse custom properties from custom.xml.
-    fn parse_custom_properties(&self, xml: &str, metadata: &mut DocumentMetadata) {
-        use quick_xml::events::Event;
-        use quick_xml::Reader;
-
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
-
-        let mut buf = Vec::new();
-        let mut current_prop: Option<CustomProperty> = None;
-        let mut current_value_tag: Option<String> = None;
-
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    if name.ends_with("property") {
-                        let mut prop = CustomProperty {
-                            name: String::new(),
-                            value: PropertyValue::String(String::new()),
-                            format_id: None,
-                            property_id: None,
-                        };
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"name" => {
-                                    prop.name = String::from_utf8_lossy(&attr.value).to_string()
-                                }
-                                b"fmtid" => {
-                                    prop.format_id =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string())
-                                }
-                                b"pid" => {
-                                    prop.property_id =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                                }
-                                _ => {}
-                            }
-                        }
-                        current_prop = Some(prop);
-                    } else if name.starts_with("vt:") || name.contains(":") {
-                        current_value_tag = Some(name);
-                    }
-                }
-                Ok(Event::Text(e)) => {
-                    if let Some(tag) = &current_value_tag {
-                        if let Some(prop) = current_prop.as_mut() {
-                            let text = e.unescape().unwrap_or_default().to_string();
-                            prop.value = match tag.as_str() {
-                                "vt:lpwstr" | "vt:lpstr" | "vt:bstr" => PropertyValue::String(text),
-                                "vt:i2" | "vt:i4" | "vt:int" | "vt:integer" => {
-                                    PropertyValue::Integer(text.parse::<i64>().unwrap_or(0))
-                                }
-                                "vt:r4" | "vt:r8" | "vt:float" => {
-                                    PropertyValue::Float(text.parse::<f64>().unwrap_or(0.0))
-                                }
-                                "vt:bool" => PropertyValue::Boolean(text == "true" || text == "1"),
-                                "vt:filetime" => PropertyValue::DateTime(text),
-                                "vt:blob" => PropertyValue::Blob(text),
-                                _ => PropertyValue::String(text),
-                            };
-                        }
-                    }
-                }
-                Ok(Event::End(e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    if name.ends_with("property") {
-                        if let Some(prop) = current_prop.take() {
-                            metadata.custom_properties.push(prop);
-                        }
-                    } else if current_value_tag.as_deref() == Some(&name) {
-                        current_value_tag = None;
-                    }
-                }
-                Ok(Event::Eof) => break,
-                _ => {}
-            }
-            buf.clear();
-        }
     }
 
     /// Scan for security-relevant content.
@@ -1390,165 +1188,6 @@ fn resolve_media_asset(media_by_path: &HashMap<String, NodeId>, target: &str) ->
         }
     }
     None
-}
-
-fn collect_seen_paths(store: &IrStore) -> HashSet<String> {
-    let mut seen = HashSet::new();
-    for node in store.values() {
-        if let Some(span) = node.source_span() {
-            seen.insert(span.file_path.clone());
-        }
-        if let IRNode::MediaAsset(media) = node {
-            seen.insert(media.path.clone());
-        }
-        if let IRNode::CustomXmlPart(part) = node {
-            seen.insert(part.path.clone());
-        }
-        if let IRNode::ExtensionPart(part) = node {
-            seen.insert(part.path.clone());
-        }
-        if let IRNode::RelationshipGraph(graph) = node {
-            seen.insert(graph.source.clone());
-        }
-    }
-    seen
-}
-
-fn build_coverage_diagnostics(
-    format: DocumentFormat,
-    content_types: &ContentTypes,
-    all_paths: Vec<String>,
-    seen_paths: &HashSet<String>,
-) -> Vec<DiagnosticEntry> {
-    let all_paths: Vec<String> = all_paths
-        .into_iter()
-        .filter(|p| !p.ends_with('/') && !p.starts_with("[trash]/"))
-        .collect();
-    let registry = part_registry::registry_for(format);
-    let mut entries = Vec::new();
-
-    let mut matched_parts = 0usize;
-    let mut complete = 0usize;
-    let mut pending = 0usize;
-    let mut missing = 0usize;
-    let mut by_status: HashMap<&'static str, usize> = HashMap::new();
-
-    for spec in registry {
-        let mut matched = false;
-        for path in &all_paths {
-            let ct = content_types.get_content_type(path);
-            if spec.matches(path, ct) {
-                matched = true;
-                matched_parts += 1;
-                let status = if seen_paths.contains(path) {
-                    complete += 1;
-                    "complete"
-                } else {
-                    pending += 1;
-                    "pending"
-                };
-                *by_status.entry(status).or_insert(0) += 1;
-                let ct_str = ct.unwrap_or("unknown");
-                let message = format!(
-                    "{} part: {} (content-type={}, parser={})",
-                    status, path, ct_str, spec.expected_parser
-                );
-                entries.push(DiagnosticEntry {
-                    severity: if status == "complete" {
-                        DiagnosticSeverity::Info
-                    } else {
-                        DiagnosticSeverity::Warning
-                    },
-                    code: "COVERAGE_PART".to_string(),
-                    message: message.clone(),
-                    path: Some(path.clone()),
-                });
-                entries.push(DiagnosticEntry {
-                    severity: DiagnosticSeverity::Info,
-                    code: "COVERAGE_PART_ROW".to_string(),
-                    message,
-                    path: Some(path.clone()),
-                });
-            }
-        }
-        if !matched {
-            missing += 1;
-            entries.push(DiagnosticEntry {
-                severity: DiagnosticSeverity::Warning,
-                code: "COVERAGE_MISSING".to_string(),
-                message: format!(
-                    "missing part for pattern {} (expected parser={})",
-                    spec.pattern, spec.expected_parser
-                ),
-                path: Some(spec.pattern.to_string()),
-            });
-        }
-    }
-
-    let mut inventory: Vec<(String, String)> = Vec::new();
-    let mut unknown_ct_paths: Vec<String> = Vec::new();
-    let mut ct_histogram: HashMap<String, usize> = HashMap::new();
-    for path in &all_paths {
-        if let Some(ct) = content_types.get_content_type(path) {
-            inventory.push((path.clone(), ct.to_string()));
-            *ct_histogram.entry(ct.to_string()).or_insert(0) += 1;
-        } else {
-            unknown_ct_paths.push(path.clone());
-        }
-    }
-    inventory.sort_by(|a, b| a.0.cmp(&b.0));
-    for (path, ct) in inventory {
-        entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "CONTENT_TYPE_INVENTORY".to_string(),
-            message: format!("content-type: {} => {}", path, ct),
-            path: Some(path),
-        });
-    }
-    unknown_ct_paths.sort();
-    for path in &unknown_ct_paths {
-        entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Warning,
-            code: "CONTENT_TYPE_UNKNOWN".to_string(),
-            message: format!("no content-type entry for path {}", path),
-            path: Some(path.clone()),
-        });
-    }
-
-    entries.push(DiagnosticEntry {
-        severity: DiagnosticSeverity::Info,
-        code: "COVERAGE_SUMMARY".to_string(),
-        message: format!(
-            "coverage summary: matched={}, complete={}, pending={}, missing_patterns={}, unknown_content_types={}",
-            matched_parts, complete, pending, missing, unknown_ct_paths.len()
-        ),
-        path: None,
-    });
-    entries.push(DiagnosticEntry {
-        severity: DiagnosticSeverity::Info,
-        code: "COVERAGE_COUNTS".to_string(),
-        message: format!(
-            "counts: complete={}, pending={}, missing_patterns={}, unknown_content_types={}",
-            complete,
-            pending,
-            missing,
-            unknown_ct_paths.len()
-        ),
-        path: None,
-    });
-
-    let mut hist: Vec<(String, usize)> = ct_histogram.into_iter().collect();
-    hist.sort_by(|a, b| a.0.cmp(&b.0));
-    for (ct, count) in hist {
-        entries.push(DiagnosticEntry {
-            severity: DiagnosticSeverity::Info,
-            code: "CONTENT_TYPE_HISTOGRAM".to_string(),
-            message: format!("content-type-count: {} => {}", ct, count),
-            path: Some(ct),
-        });
-    }
-
-    entries
 }
 
 fn find_stream_case<'a>(streams: &'a [String], name: &str) -> Option<&'a str> {
