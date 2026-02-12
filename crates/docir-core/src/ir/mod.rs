@@ -14,6 +14,7 @@ mod external_links;
 mod glossary;
 mod media;
 mod metadata;
+pub(crate) mod node_list;
 mod notes;
 mod numbering;
 mod package;
@@ -59,6 +60,7 @@ pub use word_controls::*;
 pub use word_revisions::*;
 pub use word_settings::*;
 
+use crate::security::{ActiveXControl, ExternalReference, MacroModule, MacroProject, OleObject};
 use crate::types::{NodeId, NodeType, SourceSpan};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -110,11 +112,11 @@ pub enum IRNode {
     SheetComment(SheetComment),
     SheetMetadata(SheetMetadata),
     WorkbookProperties(WorkbookProperties),
-    MacroProject(crate::security::MacroProject),
-    MacroModule(crate::security::MacroModule),
-    OleObject(crate::security::OleObject),
-    ExternalReference(crate::security::ExternalReference),
-    ActiveXControl(crate::security::ActiveXControl),
+    MacroProject(MacroProject),
+    MacroModule(MacroModule),
+    OleObject(OleObject),
+    ExternalReference(ExternalReference),
+    ActiveXControl(ActiveXControl),
     Metadata(DocumentMetadata),
     StyleSet(StyleSet),
     NumberingSet(NumberingSet),

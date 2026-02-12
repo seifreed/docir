@@ -5,11 +5,14 @@
 //! on nodes.
 
 use crate::error::CoreError;
+use crate::ir::node_list::for_each_ir_node;
 use crate::ir::DigitalSignature as IrDigitalSignature;
 use crate::ir::*;
 use crate::security::*;
 use crate::types::NodeId;
 use std::collections::HashMap;
+
+type DigitalSignature = IrDigitalSignature;
 
 /// Result type for visitor operations.
 pub type VisitorResult<T> = Result<T, CoreError>;
@@ -23,97 +26,6 @@ pub enum VisitControl {
     SkipChildren,
     /// Stop traversal entirely.
     Stop,
-}
-
-macro_rules! for_each_ir_node {
-    ($m:ident, $sep:tt) => {
-        $m!(Document, Document, visit_document)$sep
-        $m!(Section, Section, visit_section)$sep
-        $m!(Paragraph, Paragraph, visit_paragraph)$sep
-        $m!(Run, Run, visit_run)$sep
-        $m!(Hyperlink, Hyperlink, visit_hyperlink)$sep
-        $m!(Table, Table, visit_table)$sep
-        $m!(TableRow, TableRow, visit_table_row)$sep
-        $m!(TableCell, TableCell, visit_table_cell)$sep
-        $m!(Slide, Slide, visit_slide)$sep
-        $m!(Shape, Shape, visit_shape)$sep
-        $m!(Worksheet, Worksheet, visit_worksheet)$sep
-        $m!(Cell, Cell, visit_cell)$sep
-        $m!(SharedStringTable, SharedStringTable, visit_shared_string_table)$sep
-        $m!(SpreadsheetStyles, SpreadsheetStyles, visit_spreadsheet_styles)$sep
-        $m!(DefinedName, DefinedName, visit_defined_name)$sep
-        $m!(ConditionalFormat, ConditionalFormat, visit_conditional_format)$sep
-        $m!(DataValidation, DataValidation, visit_data_validation)$sep
-        $m!(TableDefinition, TableDefinition, visit_table_definition)$sep
-        $m!(PivotTable, PivotTable, visit_pivot_table)$sep
-        $m!(PivotCache, PivotCache, visit_pivot_cache)$sep
-        $m!(PivotCacheRecords, PivotCacheRecords, visit_pivot_cache_records)$sep
-        $m!(CalcChain, CalcChain, visit_calc_chain)$sep
-        $m!(SheetComment, SheetComment, visit_sheet_comment)$sep
-        $m!(SheetMetadata, SheetMetadata, visit_sheet_metadata)$sep
-        $m!(WorkbookProperties, WorkbookProperties, visit_workbook_properties)$sep
-        $m!(MacroProject, MacroProject, visit_macro_project)$sep
-        $m!(MacroModule, MacroModule, visit_macro_module)$sep
-        $m!(OleObject, OleObject, visit_ole_object)$sep
-        $m!(ExternalReference, ExternalReference, visit_external_ref)$sep
-        $m!(ActiveXControl, ActiveXControl, visit_activex_control)$sep
-        $m!(Metadata, DocumentMetadata, visit_metadata)$sep
-        $m!(StyleSet, StyleSet, visit_style_set)$sep
-        $m!(NumberingSet, NumberingSet, visit_numbering_set)$sep
-        $m!(Comment, Comment, visit_comment)$sep
-        $m!(CommentRangeStart, CommentRangeStart, visit_comment_range_start)$sep
-        $m!(CommentRangeEnd, CommentRangeEnd, visit_comment_range_end)$sep
-        $m!(CommentReference, CommentReference, visit_comment_reference)$sep
-        $m!(Footnote, Footnote, visit_footnote)$sep
-        $m!(Endnote, Endnote, visit_endnote)$sep
-        $m!(Header, Header, visit_header)$sep
-        $m!(Footer, Footer, visit_footer)$sep
-        $m!(WordSettings, WordSettings, visit_word_settings)$sep
-        $m!(WebSettings, WebSettings, visit_web_settings)$sep
-        $m!(FontTable, FontTable, visit_font_table)$sep
-        $m!(ContentControl, ContentControl, visit_content_control)$sep
-        $m!(BookmarkStart, BookmarkStart, visit_bookmark_start)$sep
-        $m!(BookmarkEnd, BookmarkEnd, visit_bookmark_end)$sep
-        $m!(Field, Field, visit_field)$sep
-        $m!(Revision, Revision, visit_revision)$sep
-        $m!(CommentExtensionSet, CommentExtensionSet, visit_comment_extension_set)$sep
-        $m!(CommentIdMap, CommentIdMap, visit_comment_id_map)$sep
-        $m!(SlideMaster, SlideMaster, visit_slide_master)$sep
-        $m!(SlideLayout, SlideLayout, visit_slide_layout)$sep
-        $m!(NotesMaster, NotesMaster, visit_notes_master)$sep
-        $m!(HandoutMaster, HandoutMaster, visit_handout_master)$sep
-        $m!(NotesSlide, NotesSlide, visit_notes_slide)$sep
-        $m!(WorksheetDrawing, WorksheetDrawing, visit_worksheet_drawing)$sep
-        $m!(ChartData, ChartData, visit_chart_data)$sep
-        $m!(PresentationProperties, PresentationProperties, visit_presentation_properties)$sep
-        $m!(ViewProperties, ViewProperties, visit_view_properties)$sep
-        $m!(TableStyleSet, TableStyleSet, visit_table_style_set)$sep
-        $m!(PptxCommentAuthor, PptxCommentAuthor, visit_pptx_comment_author)$sep
-        $m!(PptxComment, PptxComment, visit_pptx_comment)$sep
-        $m!(PresentationTag, PresentationTag, visit_presentation_tag)$sep
-        $m!(PresentationInfo, PresentationInfo, visit_presentation_info)$sep
-        $m!(PeoplePart, PeoplePart, visit_people_part)$sep
-        $m!(SmartArtPart, SmartArtPart, visit_smartart_part)$sep
-        $m!(WebExtension, WebExtension, visit_web_extension)$sep
-        $m!(WebExtensionTaskpane, WebExtensionTaskpane, visit_web_extension_taskpane)$sep
-        $m!(GlossaryDocument, GlossaryDocument, visit_glossary_document)$sep
-        $m!(GlossaryEntry, GlossaryEntry, visit_glossary_entry)$sep
-        $m!(VmlDrawing, VmlDrawing, visit_vml_drawing)$sep
-        $m!(VmlShape, VmlShape, visit_vml_shape)$sep
-        $m!(DrawingPart, DrawingPart, visit_drawing_part)$sep
-        $m!(ExternalLinkPart, ExternalLinkPart, visit_external_link_part)$sep
-        $m!(ConnectionPart, ConnectionPart, visit_connection_part)$sep
-        $m!(SlicerPart, SlicerPart, visit_slicer_part)$sep
-        $m!(TimelinePart, TimelinePart, visit_timeline_part)$sep
-        $m!(QueryTablePart, QueryTablePart, visit_query_table_part)$sep
-        $m!(Diagnostics, Diagnostics, visit_diagnostics)$sep
-        $m!(Theme, Theme, visit_theme)$sep
-        $m!(MediaAsset, MediaAsset, visit_media_asset)$sep
-        $m!(CustomXmlPart, CustomXmlPart, visit_custom_xml_part)$sep
-        $m!(RelationshipGraph, RelationshipGraph, visit_relationship_graph)$sep
-        $m!(DigitalSignature, IrDigitalSignature, visit_digital_signature)$sep
-        $m!(ExtensionPart, ExtensionPart, visit_extension_part)$sep
-    };
 }
 
 macro_rules! define_visit_defaults {
