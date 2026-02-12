@@ -1,43 +1,90 @@
 //! Application-level workflows for docir.
 
 use anyhow::Result;
+use docir_core::types::NodeId;
+use docir_core::visitor::IrStore;
 use docir_diff::{DiffEngine, DiffResult};
 use docir_parser::parser::ParsedDocument;
-use docir_parser::DocumentParser;
 pub use docir_parser::ParserConfig;
+use docir_parser::{DocumentParser, ParseError};
 use docir_rules::{RuleEngine, RuleProfile, RuleReport};
 use docir_security::analyzer::AnalysisResult;
-use docir_security::SecurityAnalyzer;
+use docir_security::{populate_security_indicators, SecurityAnalyzer};
 use docir_serialization::json::to_json;
 use std::io::{Read, Seek};
 use std::path::Path;
 
-/// Application facade for docir workflows.
-pub struct DocirApp {
-    parser: DocumentParser,
+/// Parser port for application workflows.
+pub trait ParserPort {
+    fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError>;
+    fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError>;
+    fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError>;
 }
 
-impl DocirApp {
+impl ParserPort for DocumentParser {
+    fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
+        self.parse_file(path)
+    }
+
+    fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
+        self.parse_bytes(data)
+    }
+
+    fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
+        self.parse_reader(reader)
+    }
+}
+
+/// Security analysis port for application workflows.
+pub trait SecurityAnalyzerPort {
+    fn analyze(&mut self, store: &IrStore, root_id: NodeId) -> AnalysisResult;
+}
+
+impl SecurityAnalyzerPort for SecurityAnalyzer {
+    fn analyze(&mut self, store: &IrStore, root_id: NodeId) -> AnalysisResult {
+        self.analyze(store, root_id)
+    }
+}
+
+/// Application facade for docir workflows.
+pub struct DocirApp<P: ParserPort = DocumentParser> {
+    parser: P,
+}
+
+impl DocirApp<DocumentParser> {
     /// Creates a new app instance with the provided parser config.
     pub fn new(config: ParserConfig) -> Self {
         Self {
             parser: DocumentParser::with_config(config),
         }
     }
+}
+
+impl<P: ParserPort> DocirApp<P> {
+    /// Creates a new app instance with a custom parser implementation.
+    pub fn with_parser(parser: P) -> Self {
+        Self { parser }
+    }
 
     /// Parses a file from disk.
-    pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument> {
-        Ok(self.parser.parse_file(path)?)
+    pub fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> Result<ParsedDocument> {
+        let mut parsed = self.parser.parse_file(path)?;
+        populate_security_indicators(&mut parsed.store, parsed.root_id);
+        Ok(parsed)
     }
 
     /// Parses from bytes.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument> {
-        Ok(self.parser.parse_bytes(data)?)
+        let mut parsed = self.parser.parse_bytes(data)?;
+        populate_security_indicators(&mut parsed.store, parsed.root_id);
+        Ok(parsed)
     }
 
     /// Parses from a reader.
     pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument> {
-        Ok(self.parser.parse_reader(reader)?)
+        let mut parsed = self.parser.parse_reader(reader)?;
+        populate_security_indicators(&mut parsed.store, parsed.root_id);
+        Ok(parsed)
     }
 
     /// Serializes a parsed document to JSON.

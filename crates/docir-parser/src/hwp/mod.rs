@@ -323,8 +323,6 @@ impl HwpParser {
         store.insert(IRNode::Document(doc));
         normalize_store(&mut store, root_id);
 
-        docir_security::populate_security_indicators(&mut store, root_id);
-
         Ok(ParsedDocument {
             root_id,
             format: DocumentFormat::Hwp,
@@ -506,8 +504,6 @@ impl HwpxParser {
         let root_id = doc.id;
         store.insert(IRNode::Document(doc));
         normalize_store(&mut store, root_id);
-
-        docir_security::populate_security_indicators(&mut store, root_id);
 
         Ok(ParsedDocument {
             root_id,
@@ -2193,7 +2189,8 @@ mod tests {
 </hp:section>"#;
         let data = build_hwpx_zip_with_parts(xml, None, vec![("BinData/image1.png", b"img")]);
         let parser = HwpxParser::new();
-        let parsed = parser.parse_bytes(&data).expect("hwpx parse");
+        let mut parsed = parser.parse_bytes(&data).expect("hwpx parse");
+        docir_security::populate_security_indicators(&mut parsed.store, parsed.root_id);
         let doc = parsed.document().expect("doc");
         assert!(!doc.comments.is_empty());
 
@@ -2228,7 +2225,8 @@ mod tests {
 </hp:section>"#;
         let data = build_hwpx_zip_with_parts(section_xml, Some(styles_xml), Vec::new());
         let parser = HwpxParser::new();
-        let parsed = parser.parse_bytes(&data).expect("hwpx parse");
+        let mut parsed = parser.parse_bytes(&data).expect("hwpx parse");
+        docir_security::populate_security_indicators(&mut parsed.store, parsed.root_id);
         let doc = parsed.document().expect("doc");
         assert!(doc.styles.is_some());
 
@@ -2265,7 +2263,8 @@ mod tests {
             ],
         );
         let parser = HwpxParser::new();
-        let parsed = parser.parse_bytes(&data).expect("hwpx parse");
+        let mut parsed = parser.parse_bytes(&data).expect("hwpx parse");
+        docir_security::populate_security_indicators(&mut parsed.store, parsed.root_id);
         let doc = parsed.document().expect("doc");
         assert!(doc.security.macro_project.is_some());
         assert!(!doc.security.external_refs.is_empty());

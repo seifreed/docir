@@ -541,8 +541,6 @@ impl OdfParser {
         let doc_id = doc.id;
         store.insert(IRNode::Document(doc));
 
-        docir_security::populate_security_indicators(&mut store, doc_id);
-
         Ok(ParsedDocument {
             root_id: doc_id,
             format,
@@ -4163,7 +4161,8 @@ mod tests {
 "#;
         let zip_data = build_odf_zip(mimetype, content_xml, None);
         let parser = DocumentParser::new();
-        let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        let mut parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        docir_security::populate_security_indicators(&mut parsed.store, parsed.root_id);
         assert_eq!(parsed.format, DocumentFormat::OdfText);
         let doc = parsed.document().unwrap();
         assert!(!doc.content.is_empty());
@@ -4226,7 +4225,8 @@ mod tests {
 "#;
         let zip_data = build_odf_zip(mimetype, content_xml, None);
         let parser = DocumentParser::new();
-        let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        let mut parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        docir_security::populate_security_indicators(&mut parsed.store, parsed.root_id);
         let doc = parsed.document().unwrap();
 
         let mut cell_count = 0;
@@ -4390,7 +4390,8 @@ mod tests {
             ],
         );
         let parser = DocumentParser::new();
-        let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        let mut parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        docir_security::populate_security_indicators(&mut parsed.store, parsed.root_id);
         let doc = parsed.document().unwrap();
 
         assert!(doc.security.macro_project.is_some());
@@ -4544,7 +4545,8 @@ mod tests {
         let zip_data =
             build_odf_zip_custom(mimetype, content_xml, None, Some(manifest_xml), Vec::new());
         let parser = DocumentParser::new();
-        let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        let mut parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        docir_security::populate_security_indicators(&mut parsed.store, parsed.root_id);
         let doc = parsed.document().unwrap();
 
         assert!(!doc.security.dde_fields.is_empty());
@@ -4778,7 +4780,8 @@ mod tests {
 "#;
         let zip_data = build_odf_zip(mimetype, content_xml, None);
         let parser = DocumentParser::new();
-        let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        let mut parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        docir_security::populate_security_indicators(&mut parsed.store, parsed.root_id);
         let doc = parsed.document().unwrap();
 
         assert!(!doc.defined_names.is_empty());
@@ -4887,7 +4890,8 @@ mod tests {
             ],
         );
         let parser = DocumentParser::new();
-        let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        let mut parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+        docir_security::populate_security_indicators(&mut parsed.store, parsed.root_id);
         let doc = parsed.document().unwrap();
 
         assert!(doc.security.macro_project.is_some());

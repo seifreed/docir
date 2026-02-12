@@ -99,8 +99,6 @@ impl RtfParser {
         store.insert(IRNode::Document(doc));
         normalize_store(&mut store, root_id);
 
-        docir_security::populate_security_indicators(&mut store, root_id);
-
         Ok(ParsedDocument {
             root_id,
             format: DocumentFormat::Rtf,
