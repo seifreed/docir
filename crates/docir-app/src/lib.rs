@@ -19,7 +19,13 @@ use std::io::{Read, Seek};
 use std::path::Path;
 use thiserror::Error;
 
+mod summary;
 mod use_cases;
+
+pub use summary::{
+    summarize_document, DocumentSummary, MetadataSummary, NodeCount, ParseMetricsSummary,
+    SecuritySummary, TextStatsSummary, ThreatIndicatorSummary,
+};
 
 use use_cases::{
     AnalyzeSecurity, DefaultSecurityAnalyzerFactory, DiffDocuments, ParseDocument, RunRules,
