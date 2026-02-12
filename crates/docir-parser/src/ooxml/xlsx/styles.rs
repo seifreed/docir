@@ -1,7 +1,7 @@
 //! XLSX styles parsing.
 
 use crate::error::ParseError;
-use crate::ooxml::xml_utils::xml_error;
+use crate::xml_utils::xml_error;
 use crate::xml_utils::{attr_f64, attr_value, reader_from_str_with_options};
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,

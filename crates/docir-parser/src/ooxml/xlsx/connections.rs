@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::ooxml::xml_utils::xml_error;
+use crate::xml_utils::xml_error;
 use crate::xml_utils::{attr_bool, attr_u32, attr_value, local_name};
 use docir_core::ir::{
     ConnectionEntry, ConnectionPart, ExternalLinkPart, ExternalLinkSheet, QueryTablePart,

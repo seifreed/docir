@@ -1,9 +1,9 @@
 //! XLSX metadata parsing helpers.
 
 use crate::error::ParseError;
-use crate::ooxml::xml_utils::xml_error;
 use crate::xml_utils::local_name;
 use crate::xml_utils::reader_from_str;
+use crate::xml_utils::xml_error;
 use docir_core::ir::{SheetMetadata, SheetMetadataType};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;

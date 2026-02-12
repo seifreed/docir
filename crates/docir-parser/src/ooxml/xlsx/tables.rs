@@ -1,7 +1,7 @@
 //! XLSX table and pivot parsing.
 
 use crate::error::ParseError;
-use crate::ooxml::xml_utils::xml_error;
+use crate::xml_utils::xml_error;
 use docir_core::ir::{PivotCacheRecords, PivotTable, TableColumn, TableDefinition};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::events::Event;

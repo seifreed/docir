@@ -8,7 +8,6 @@ pub mod pptx;
 pub mod relationships;
 pub mod shared;
 pub mod xlsx;
-mod xml_utils;
 
 pub use content_types::ContentTypes;
 pub use relationships::{Relationship, Relationships};
