@@ -29,6 +29,7 @@ use std::thread;
 
 mod container;
 mod formula;
+mod io;
 mod limits;
 mod manifest;
 mod ods;
@@ -46,6 +47,7 @@ use self::security::{
 use self::security_helpers::{build_odf_macro_project, parse_odf_signatures};
 
 use container::{handle_content_xml, load_meta};
+use io::{collect_manifest_index, collect_shared_parts};
 use limits::{OdfAtomicLimits, OdfLimitCounter, OdfLimits};
 use manifest::{
     encrypted_manifest_entries, format_odf_encryption_metadata, is_manifest_entry_encrypted,
@@ -151,46 +153,8 @@ impl OdfParser {
                 );
             }
         }
-        let mut manifest_index: HashMap<String, Option<String>> = HashMap::new();
-        for entry in &manifest_entries {
-            let path = entry.path.clone();
-            let media_type = entry.media_type.clone();
-            manifest_index.insert(path.clone(), media_type.clone());
-            push_info(
-                &mut diagnostics,
-                "ODF_PART",
-                format!(
-                    "ODF part: {} (media-type: {})",
-                    path,
-                    media_type.clone().unwrap_or_else(|| "(none)".to_string())
-                ),
-                Some(&path),
-            );
-        }
-
-        let mut file_names: Vec<String> = zip.file_names().map(|name| name.to_string()).collect();
-        file_names.sort();
-        for path in &file_names {
-            if path == "mimetype" {
-                continue;
-            }
-            let media_type = manifest_index.get(path.as_str()).cloned().unwrap_or(None);
-            let size_bytes = zip.file_size(&path).unwrap_or(0);
-            let mut part =
-                ExtensionPart::new(path.to_string(), size_bytes, ExtensionPartKind::Unknown);
-            part.content_type = media_type.clone();
-            let part_id = part.id;
-            store.insert(IRNode::ExtensionPart(part));
-            doc.shared_parts.push(part_id);
-
-            if let Some(media) = media_type.as_deref() {
-                if let Some(asset) = build_media_asset(path, media, size_bytes) {
-                    let asset_id = asset.id;
-                    store.insert(IRNode::MediaAsset(asset));
-                    doc.shared_parts.push(asset_id);
-                }
-            }
-        }
+        let manifest_index = collect_manifest_index(&manifest_entries, &mut diagnostics);
+        let file_names = collect_shared_parts(&mut zip, &manifest_index, &mut store, &mut doc);
 
         if let Some(xml) = styles_xml.as_deref() {
             let masters = parse_master_pages(xml);
