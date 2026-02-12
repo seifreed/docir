@@ -1,4 +1,5 @@
 use super::*;
+use crate::ooxml::part_utils::insert_shared_part;
 
 impl XlsxParser {
     pub(super) fn load_workbook_properties(
@@ -59,8 +60,12 @@ impl XlsxParser {
             })?
         {
             let chain_id = chain.id;
-            self.store.insert(IRNode::CalcChain(chain));
-            document.shared_parts.push(chain_id);
+            insert_shared_part(
+                &mut self.store,
+                document,
+                IRNode::CalcChain(chain),
+                chain_id,
+            );
         }
         Ok(())
     }
@@ -77,8 +82,7 @@ impl XlsxParser {
             |people, path| people.span = Some(SourceSpan::new(path)),
         )? {
             let id = people.id;
-            self.store.insert(IRNode::PeoplePart(people));
-            document.shared_parts.push(id);
+            insert_shared_part(&mut self.store, document, IRNode::PeoplePart(people), id);
         }
         Ok(())
     }
@@ -202,8 +206,7 @@ impl XlsxParser {
                 })?
             {
                 let id = slicer.id;
-                self.store.insert(IRNode::SlicerPart(slicer));
-                document.shared_parts.push(id);
+                insert_shared_part(&mut self.store, document, IRNode::SlicerPart(slicer), id);
             }
         }
         Ok(())
@@ -226,8 +229,12 @@ impl XlsxParser {
                 })?
             {
                 let id = timeline.id;
-                self.store.insert(IRNode::TimelinePart(timeline));
-                document.shared_parts.push(id);
+                insert_shared_part(
+                    &mut self.store,
+                    document,
+                    IRNode::TimelinePart(timeline),
+                    id,
+                );
             }
         }
         Ok(())
@@ -250,8 +257,7 @@ impl XlsxParser {
                 })?
             {
                 let id = query.id;
-                self.store.insert(IRNode::QueryTablePart(query));
-                document.shared_parts.push(id);
+                insert_shared_part(&mut self.store, document, IRNode::QueryTablePart(query), id);
             }
         }
         Ok(())

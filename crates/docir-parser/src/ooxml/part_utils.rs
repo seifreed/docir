@@ -3,6 +3,9 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::zip_handler::PackageReader;
+use docir_core::ir::{Document, IRNode};
+use docir_core::types::NodeId;
+use docir_core::visitor::IrStore;
 
 /// Get the relationships file path for a given part.
 pub(crate) fn get_rels_path(part_path: &str) -> String {
@@ -70,4 +73,14 @@ where
     let mut part = parse(&xml, part_path)?;
     set_span(&mut part, part_path);
     Ok(Some(part))
+}
+
+pub(crate) fn insert_shared_part(
+    store: &mut IrStore,
+    document: &mut Document,
+    node: IRNode,
+    id: NodeId,
+) {
+    store.insert(node);
+    document.shared_parts.push(id);
 }

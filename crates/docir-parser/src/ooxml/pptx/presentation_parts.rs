@@ -1,4 +1,5 @@
 use super::*;
+use crate::ooxml::part_utils::insert_shared_part;
 
 impl PptxParser {
     pub(super) fn load_presentation_parts<R: Read + Seek>(
@@ -14,8 +15,12 @@ impl PptxParser {
             |props, path| props.span = Some(SourceSpan::new(path)),
         )? {
             let id = props.id;
-            self.store.insert(IRNode::PresentationProperties(props));
-            document.shared_parts.push(id);
+            insert_shared_part(
+                &mut self.store,
+                document,
+                IRNode::PresentationProperties(props),
+                id,
+            );
         }
 
         // View properties
@@ -26,8 +31,7 @@ impl PptxParser {
             |props, path| props.span = Some(SourceSpan::new(path)),
         )? {
             let id = props.id;
-            self.store.insert(IRNode::ViewProperties(props));
-            document.shared_parts.push(id);
+            insert_shared_part(&mut self.store, document, IRNode::ViewProperties(props), id);
         }
 
         // Table styles
@@ -38,8 +42,7 @@ impl PptxParser {
             |styles, path| styles.span = Some(SourceSpan::new(path)),
         )? {
             let id = styles.id;
-            self.store.insert(IRNode::TableStyleSet(styles));
-            document.shared_parts.push(id);
+            insert_shared_part(&mut self.store, document, IRNode::TableStyleSet(styles), id);
         }
 
         // Comment authors
@@ -51,8 +54,12 @@ impl PptxParser {
                 let mut author = author;
                 author.span = Some(SourceSpan::new("ppt/commentAuthors.xml"));
                 let id = author.id;
-                self.store.insert(IRNode::PptxCommentAuthor(author));
-                document.shared_parts.push(id);
+                insert_shared_part(
+                    &mut self.store,
+                    document,
+                    IRNode::PptxCommentAuthor(author),
+                    id,
+                );
             }
         }
 
@@ -67,8 +74,7 @@ impl PptxParser {
             let tags = parse_presentation_tags(&tag_xml, &tag_path)?;
             for tag in tags {
                 let id = tag.id;
-                self.store.insert(IRNode::PresentationTag(tag));
-                document.shared_parts.push(id);
+                insert_shared_part(&mut self.store, document, IRNode::PresentationTag(tag), id);
             }
         }
 
@@ -80,8 +86,7 @@ impl PptxParser {
             |people, path| people.span = Some(SourceSpan::new(path)),
         )? {
             let id = people.id;
-            self.store.insert(IRNode::PeoplePart(people));
-            document.shared_parts.push(id);
+            insert_shared_part(&mut self.store, document, IRNode::PeoplePart(people), id);
         }
 
         // SmartArt parts
@@ -94,8 +99,7 @@ impl PptxParser {
             let xml = zip.read_file_string(&path)?;
             let part = parse_smartart_part(&xml, &path)?;
             let id = part.id;
-            self.store.insert(IRNode::SmartArtPart(part));
-            document.shared_parts.push(id);
+            insert_shared_part(&mut self.store, document, IRNode::SmartArtPart(part), id);
         }
 
         Ok(())
