@@ -12,6 +12,7 @@ use docir_parser::{DocumentParser, ParseError};
 pub use docir_rules::RuleProfile;
 use docir_rules::{RuleEngine, RuleReport};
 use docir_security::analyzer::AnalysisResult;
+use docir_security::populate_security_indicators;
 use docir_security::SecurityAnalyzer;
 use docir_serialization::SerializationError;
 use std::io::{Read, Seek};
@@ -121,6 +122,19 @@ impl SecurityAnalyzerPort for SecurityAnalyzer {
     }
 }
 
+/// Security enrichment port for application workflows.
+pub trait SecurityEnricherPort {
+    fn enrich(&self, store: &mut IrStore, root_id: NodeId);
+}
+
+struct DefaultSecurityEnricher;
+
+impl SecurityEnricherPort for DefaultSecurityEnricher {
+    fn enrich(&self, store: &mut IrStore, root_id: NodeId) {
+        populate_security_indicators(store, root_id);
+    }
+}
+
 /// Rules engine port for application workflows.
 pub trait RulesEnginePort {
     fn run_with_profile(
@@ -162,6 +176,7 @@ impl SerializerPort for DefaultJsonSerializer {
 pub struct DocirApp<P: ParserPort = DocumentParser> {
     parser: P,
     security_analyzer_factory: Box<dyn Fn() -> Box<dyn SecurityAnalyzerPort>>,
+    security_enricher: Box<dyn SecurityEnricherPort>,
     rules_engine_factory: Box<dyn Fn() -> Box<dyn RulesEnginePort>>,
     serializer: Box<dyn SerializerPort>,
 }
@@ -208,9 +223,31 @@ impl<P: ParserPort> DocirApp<P> {
         F: Fn() -> Box<dyn SecurityAnalyzerPort> + 'static,
         R: Fn() -> Box<dyn RulesEnginePort> + 'static,
     {
+        Self::with_parser_and_ports_and_enricher(
+            parser,
+            security_analyzer_factory,
+            Box::new(DefaultSecurityEnricher),
+            rules_engine_factory,
+            serializer,
+        )
+    }
+
+    /// Creates a new app instance with custom ports and security enricher.
+    pub fn with_parser_and_ports_and_enricher<F, R>(
+        parser: P,
+        security_analyzer_factory: F,
+        security_enricher: Box<dyn SecurityEnricherPort>,
+        rules_engine_factory: R,
+        serializer: Box<dyn SerializerPort>,
+    ) -> Self
+    where
+        F: Fn() -> Box<dyn SecurityAnalyzerPort> + 'static,
+        R: Fn() -> Box<dyn RulesEnginePort> + 'static,
+    {
         Self {
             parser,
             security_analyzer_factory: Box::new(security_analyzer_factory),
+            security_enricher,
             rules_engine_factory: Box::new(rules_engine_factory),
             serializer,
         }
@@ -218,17 +255,17 @@ impl<P: ParserPort> DocirApp<P> {
 
     /// Parses a file from disk.
     pub fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> AppResult<ParsedDocument> {
-        ParseDocument::new(&self.parser).parse_file(path)
+        ParseDocument::new(&self.parser, self.security_enricher.as_ref()).parse_file(path)
     }
 
     /// Parses from bytes.
     pub fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
-        ParseDocument::new(&self.parser).parse_bytes(data)
+        ParseDocument::new(&self.parser, self.security_enricher.as_ref()).parse_bytes(data)
     }
 
     /// Parses from a reader.
     pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
-        ParseDocument::new(&self.parser).parse_reader(reader)
+        ParseDocument::new(&self.parser, self.security_enricher.as_ref()).parse_reader(reader)
     }
 
     /// Serializes a parsed document to JSON.

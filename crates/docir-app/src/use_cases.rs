@@ -1,38 +1,42 @@
-use crate::{AppResult, ParsedDocument, ParserPort, RulesEnginePort, SecurityAnalyzerPort};
+use crate::{
+    AppResult, ParsedDocument, ParserPort, RulesEnginePort, SecurityAnalyzerPort,
+    SecurityEnricherPort,
+};
 use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
 use docir_diff::{DiffEngine, DiffResult};
 use docir_rules::{RuleProfile, RuleReport};
 use docir_security::analyzer::AnalysisResult;
-use docir_security::{populate_security_indicators, SecurityAnalyzer};
+use docir_security::SecurityAnalyzer;
 use docir_serialization::json::to_json;
 use std::io::{Read, Seek};
 use std::path::Path;
 
 pub(crate) struct ParseDocument<'a, P: ParserPort> {
     parser: &'a P,
+    enricher: &'a dyn SecurityEnricherPort,
 }
 
 impl<'a, P: ParserPort> ParseDocument<'a, P> {
-    pub(crate) fn new(parser: &'a P) -> Self {
-        Self { parser }
+    pub(crate) fn new(parser: &'a P, enricher: &'a dyn SecurityEnricherPort) -> Self {
+        Self { parser, enricher }
     }
 
     pub(crate) fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> AppResult<ParsedDocument> {
         let mut parsed = self.parser.parse_file(path)?;
-        EnrichSecurity::run(&mut parsed);
+        EnrichSecurity::run(self.enricher, &mut parsed);
         Ok(parsed)
     }
 
     pub(crate) fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
         let mut parsed = self.parser.parse_bytes(data)?;
-        EnrichSecurity::run(&mut parsed);
+        EnrichSecurity::run(self.enricher, &mut parsed);
         Ok(parsed)
     }
 
     pub(crate) fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
         let mut parsed = self.parser.parse_reader(reader)?;
-        EnrichSecurity::run(&mut parsed);
+        EnrichSecurity::run(self.enricher, &mut parsed);
         Ok(parsed)
     }
 }
@@ -40,9 +44,9 @@ impl<'a, P: ParserPort> ParseDocument<'a, P> {
 pub(crate) struct EnrichSecurity;
 
 impl EnrichSecurity {
-    pub(crate) fn run(parsed: &mut ParsedDocument) {
+    pub(crate) fn run(enricher: &dyn SecurityEnricherPort, parsed: &mut ParsedDocument) {
         let root_id = parsed.root_id();
-        populate_security_indicators(parsed.store_mut(), root_id);
+        enricher.enrich(parsed.store_mut(), root_id);
     }
 }
 
