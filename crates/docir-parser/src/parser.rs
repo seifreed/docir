@@ -12,7 +12,7 @@ use crate::ooxml::part_utils::{get_rels_path, read_relationships_optional};
 use crate::ooxml::pptx::PptxParser;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
 use crate::ooxml::xlsx::XlsxParser;
-use crate::rtf::RtfParser;
+use crate::rtf::{is_rtf_bytes, RtfParser};
 use crate::security_utils::parse_dde_instruction;
 use crate::xml_utils::local_name;
 use crate::zip_handler::{SecureZipReader, ZipConfig};
@@ -1163,10 +1163,6 @@ impl DocumentParser {
 
 fn is_zip_container(data: &[u8]) -> bool {
     data.len() >= 4 && data[0] == b'P' && data[1] == b'K'
-}
-
-fn is_rtf_bytes(data: &[u8]) -> bool {
-    data.starts_with(b"{\\rtf")
 }
 
 fn parse_with<P, R>(parser: P, reader: R) -> Result<ParsedDocument, ParseError>

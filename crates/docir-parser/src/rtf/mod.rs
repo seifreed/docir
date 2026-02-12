@@ -353,7 +353,7 @@ impl<'a> RtfCursor<'a> {
     }
 }
 
-fn is_rtf_bytes(data: &[u8]) -> bool {
+pub(crate) fn is_rtf_bytes(data: &[u8]) -> bool {
     data.starts_with(b"{\\rtf") || data.starts_with(b"{\rtf")
 }
 

@@ -32,34 +32,11 @@ pub struct ParsedDocument {
 }
 
 /// Application-level parse metrics.
-#[derive(Debug, Clone)]
-pub struct ParseMetrics {
-    pub content_types_ms: u128,
-    pub relationships_ms: u128,
-    pub main_parse_ms: u128,
-    pub shared_parts_ms: u128,
-    pub security_scan_ms: u128,
-    pub extension_parts_ms: u128,
-    pub normalization_ms: u128,
-}
-
-impl From<&ParserParseMetrics> for ParseMetrics {
-    fn from(metrics: &ParserParseMetrics) -> Self {
-        Self {
-            content_types_ms: metrics.content_types_ms,
-            relationships_ms: metrics.relationships_ms,
-            main_parse_ms: metrics.main_parse_ms,
-            shared_parts_ms: metrics.shared_parts_ms,
-            security_scan_ms: metrics.security_scan_ms,
-            extension_parts_ms: metrics.extension_parts_ms,
-            normalization_ms: metrics.normalization_ms,
-        }
-    }
-}
+pub type ParseMetrics = ParserParseMetrics;
 
 impl ParsedDocument {
     pub(crate) fn new(inner: ParserParsedDocument) -> Self {
-        let metrics = inner.metrics.as_ref().map(ParseMetrics::from);
+        let metrics = inner.metrics.clone();
         Self { inner, metrics }
     }
 
