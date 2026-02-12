@@ -5,6 +5,23 @@ use std::fs::File;
 use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
+pub fn parse_from_file<P, T, F>(path: P, parse: F) -> Result<T, ParseError>
+where
+    P: AsRef<Path>,
+    F: FnOnce(BufReader<File>) -> Result<T, ParseError>,
+{
+    let reader = open_reader(path)?;
+    parse(reader)
+}
+
+pub fn parse_from_bytes<T, F>(data: &[u8], parse: F) -> Result<T, ParseError>
+where
+    F: FnOnce(Cursor<&[u8]>) -> Result<T, ParseError>,
+{
+    let reader = cursor_from_bytes(data);
+    parse(reader)
+}
+
 pub fn open_reader<P: AsRef<Path>>(path: P) -> Result<BufReader<File>, ParseError> {
     let file = File::open(path.as_ref())?;
     Ok(BufReader::new(file))

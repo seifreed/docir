@@ -1,7 +1,7 @@
 //! RTF parsing support.
 
 use crate::error::ParseError;
-use crate::input::{cursor_from_bytes, open_reader, read_all_with_limit};
+use crate::input::{parse_from_bytes, parse_from_file, read_all_with_limit};
 use crate::parser::{ParsedDocument, ParserConfig};
 use docir_core::ir::ParagraphBorders;
 use docir_core::ir::{
@@ -46,14 +46,12 @@ impl RtfParser {
 
     /// Parses a file from the filesystem.
     pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        let reader = open_reader(path)?;
-        self.parse_reader(reader)
+        parse_from_file(path, |reader| self.parse_reader(reader))
     }
 
     /// Parses from a byte slice.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        let reader = cursor_from_bytes(data);
-        self.parse_reader(reader)
+        parse_from_bytes(data, |reader| self.parse_reader(reader))
     }
 
     /// Parses from any reader.

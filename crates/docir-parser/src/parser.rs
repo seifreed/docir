@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::hwp::{is_hwpx_mimetype, HwpParser, HwpxParser};
-use crate::input::{cursor_from_bytes, enforce_input_size, open_reader, read_all_with_limit};
+use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file, read_all_with_limit};
 use crate::odf::OdfParser;
 use crate::ole::{is_ole_container, Cfb};
 use crate::ooxml::content_types::ContentTypes;
@@ -177,14 +177,12 @@ impl OoxmlParser {
 
     /// Parses a file from the filesystem.
     pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        let reader = open_reader(path)?;
-        self.parse_reader(reader)
+        parse_from_file(path, |reader| self.parse_reader(reader))
     }
 
     /// Parses from a byte slice.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        let reader = cursor_from_bytes(data);
-        self.parse_reader(reader)
+        parse_from_bytes(data, |reader| self.parse_reader(reader))
     }
 
     /// Parses from any reader.
@@ -1604,14 +1602,12 @@ impl DocumentParser {
 
     /// Parses a file from the filesystem.
     pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        let reader = open_reader(path)?;
-        self.parse_reader(reader)
+        parse_from_file(path, |reader| self.parse_reader(reader))
     }
 
     /// Parses from a byte slice.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        let reader = cursor_from_bytes(data);
-        self.parse_reader(reader)
+        parse_from_bytes(data, |reader| self.parse_reader(reader))
     }
 
     /// Parses from any reader.

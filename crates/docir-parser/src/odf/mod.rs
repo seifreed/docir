@@ -1,7 +1,7 @@
 //! ODF (OpenDocument) parsing support.
 
 use crate::error::ParseError;
-use crate::input::{cursor_from_bytes, enforce_input_size, open_reader};
+use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file};
 use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
 use crate::zip_handler::SecureZipReader;
@@ -82,14 +82,12 @@ impl OdfParser {
 
     /// Parses a file from the filesystem.
     pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        let reader = open_reader(path)?;
-        self.parse_reader(reader)
+        parse_from_file(path, |reader| self.parse_reader(reader))
     }
 
     /// Parses from a byte slice.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        let reader = cursor_from_bytes(data);
-        self.parse_reader(reader)
+        parse_from_bytes(data, |reader| self.parse_reader(reader))
     }
 
     /// Parses from any reader.
