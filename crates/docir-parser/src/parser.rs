@@ -929,7 +929,21 @@ impl OoxmlParser {
         root_id: NodeId,
         _content_types: &ContentTypes,
     ) -> Result<(), ParseError> {
-        // Check for VBA project
+        self.scan_vba_projects(zip, store, root_id)?;
+        self.scan_ole_objects(zip, store, root_id)?;
+        self.scan_activex_controls(zip, store, root_id)?;
+        self.scan_word_dde_fields(store, root_id);
+        self.scan_word_external_relationships(zip, store, root_id)?;
+
+        Ok(())
+    }
+
+    fn scan_vba_projects<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        root_id: NodeId,
+    ) -> Result<(), ParseError> {
         let vba_paths = [
             "word/vbaProject.bin",
             "xl/vbaProject.bin",
@@ -951,8 +965,15 @@ impl OoxmlParser {
                 }
             }
         }
+        Ok(())
+    }
 
-        // Check for OLE objects
+    fn scan_ole_objects<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        root_id: NodeId,
+    ) -> Result<(), ParseError> {
         let ole_files: Vec<String> = zip
             .list_prefix("word/embeddings/")
             .into_iter()
@@ -971,8 +992,15 @@ impl OoxmlParser {
                 doc.security.ole_objects.push(ole_id);
             }
         }
+        Ok(())
+    }
 
-        // ActiveX controls
+    fn scan_activex_controls<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        root_id: NodeId,
+    ) -> Result<(), ParseError> {
         let mut activex_bin_seen: HashSet<String> = HashSet::new();
         let activex_paths: Vec<String> = zip
             .list_prefix("word/activeX/")
@@ -1018,8 +1046,10 @@ impl OoxmlParser {
                 }
             }
         }
+        Ok(())
+    }
 
-        // Word field DDE instructions
+    fn scan_word_dde_fields(&self, store: &mut IrStore, root_id: NodeId) {
         let mut dde_fields = Vec::new();
         for node in store.values() {
             if let IRNode::Field(field) = node {
@@ -1033,8 +1063,14 @@ impl OoxmlParser {
         if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
             doc.security.dde_fields.extend(dde_fields);
         }
+    }
 
-        // Word external relationships
+    fn scan_word_external_relationships<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        root_id: NodeId,
+    ) -> Result<(), ParseError> {
         let rel_paths: Vec<String> = zip
             .file_names()
             .filter(|p| p.starts_with("word/") && p.ends_with(".rels"))
@@ -1064,7 +1100,6 @@ impl OoxmlParser {
                 }
             }
         }
-
         Ok(())
     }
 
