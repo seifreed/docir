@@ -1,8 +1,8 @@
 //! Shared CLI helpers.
 
-use anyhow::{anyhow, Result};
-use docir_app::DocirApp;
+use anyhow::{anyhow, Context, Result};
 use docir_app::ParserConfig;
+use docir_app::{DocirApp, ParsedDocument};
 use docir_core::types::{
     parse_document_format as parse_core_document_format, parse_node_type as parse_core_node_type,
     DocumentFormat, NodeType,
@@ -22,6 +22,23 @@ pub fn parse_doc_format(input: &str) -> Result<DocumentFormat> {
 
 pub fn build_app(config: &ParserConfig) -> DocirApp {
     DocirApp::new(config.clone())
+}
+
+pub fn parse_document(input: &PathBuf, parser_config: &ParserConfig) -> Result<ParsedDocument> {
+    let app = build_app(parser_config);
+    app.parse_file(input)
+        .with_context(|| format!("Failed to parse {}", input.display()))
+}
+
+pub fn build_app_and_parse(
+    input: &PathBuf,
+    parser_config: &ParserConfig,
+) -> Result<(DocirApp, ParsedDocument)> {
+    let app = build_app(parser_config);
+    let parsed = app
+        .parse_file(input)
+        .with_context(|| format!("Failed to parse {}", input.display()))?;
+    Ok((app, parsed))
 }
 
 pub fn write_json_output<T: Serialize>(

@@ -1,6 +1,6 @@
 //! Coverage command implementation.
 
-use crate::commands::util::build_app;
+use crate::commands::util::parse_document;
 use crate::{CoverageExportFormat, CoverageExportMode};
 use anyhow::{Context, Result};
 use docir_app::ParserConfig;
@@ -33,10 +33,7 @@ struct CoverageReport {
 }
 
 pub fn run(input: PathBuf, options: CoverageOptions, parser_config: &ParserConfig) -> Result<()> {
-    let app = build_app(parser_config);
-    let parsed = app
-        .parse_file(&input)
-        .with_context(|| format!("Failed to parse {}", input.display()))?;
+    let parsed = parse_document(&input, parser_config)?;
 
     let doc = parsed.document().context("Failed to get document root")?;
 

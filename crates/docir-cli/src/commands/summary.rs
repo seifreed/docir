@@ -4,14 +4,11 @@ use anyhow::{Context, Result};
 use docir_app::{summarize_document, ParserConfig};
 use std::path::PathBuf;
 
-use crate::commands::util::build_app;
+use crate::commands::util::parse_document;
 
 pub fn run(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
     // Parse the document
-    let app = build_app(parser_config);
-    let parsed = app
-        .parse_file(&input)
-        .with_context(|| format!("Failed to parse {}", input.display()))?;
+    let parsed = parse_document(&input, parser_config)?;
 
     let summary = summarize_document(&parsed).context("Failed to build document summary")?;
 
