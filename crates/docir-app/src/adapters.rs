@@ -2,8 +2,11 @@
 
 use crate::{AppResult, ParsedDocument, ParserPort, SecurityScannerPort};
 use docir_core::visitor::IrStore;
-use docir_parser::{scan_security_bytes, DocumentParser, ParserConfig};
-use std::io::{Read, Seek};
+use docir_parser::zip_handler::SecureZipReader;
+use docir_parser::{
+    DefaultSecurityScanner, DocumentParser, ParseError, ParserConfig, SecurityScanner,
+};
+use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 
 /// Parser adapter that bundles a configured parser with its config.
@@ -108,4 +111,21 @@ impl SecurityScannerPort for AppParser {
     fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> AppResult<()> {
         scan_security_bytes(&self.config, data, store).map_err(Into::into)
     }
+}
+
+fn scan_security_bytes(
+    config: &ParserConfig,
+    data: &[u8],
+    store: &mut IrStore,
+) -> Result<(), ParseError> {
+    if !is_zip_container(data) {
+        return Ok(());
+    }
+    let mut zip = SecureZipReader::new(Cursor::new(data), config.zip_config.clone())?;
+    let scanner = DefaultSecurityScanner;
+    scanner.scan_ooxml(config, &mut zip, store)
+}
+
+fn is_zip_container(data: &[u8]) -> bool {
+    data.len() >= 4 && data[0] == b'P' && data[1] == b'K'
 }
