@@ -103,7 +103,6 @@ pub trait ParserPort {
         &self,
         reader: R,
     ) -> AppResult<(ParsedDocument, Vec<u8>)>;
-    fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> AppResult<()>;
 }
 
 impl ParserPort for DocumentParser {
@@ -142,7 +141,14 @@ impl ParserPort for DocumentParser {
             .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
             .map_err(Into::into)
     }
+}
 
+/// Security scanning port for application workflows.
+pub trait SecurityScannerPort {
+    fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> AppResult<()>;
+}
+
+impl SecurityScannerPort for DocumentParser {
     fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> AppResult<()> {
         self.scan_security_bytes(data, store).map_err(Into::into)
     }
@@ -210,7 +216,7 @@ impl SerializerPort for DefaultJsonSerializer {
 }
 
 /// Application facade for docir workflows.
-pub struct DocirApp<P: ParserPort = DocumentParser> {
+pub struct DocirApp<P: ParserPort + SecurityScannerPort = DocumentParser> {
     parser: P,
     security_analyzer_factory: Box<dyn Fn() -> Box<dyn SecurityAnalyzerPort>>,
     security_enricher: Box<dyn SecurityEnricherPort>,
@@ -227,7 +233,7 @@ impl DocirApp<DocumentParser> {
     }
 }
 
-impl<P: ParserPort> DocirApp<P> {
+impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
     /// Creates a new app instance with a custom parser implementation.
     pub fn with_parser(parser: P) -> Self {
         Self::with_parser_and_ports(
@@ -294,17 +300,20 @@ impl<P: ParserPort> DocirApp<P> {
 
     /// Parses a file from disk.
     pub fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> AppResult<ParsedDocument> {
-        ParseDocument::new(&self.parser, self.security_enricher.as_ref()).parse_file(path)
+        ParseDocument::new(&self.parser, &self.parser, self.security_enricher.as_ref())
+            .parse_file(path)
     }
 
     /// Parses from bytes.
     pub fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
-        ParseDocument::new(&self.parser, self.security_enricher.as_ref()).parse_bytes(data)
+        ParseDocument::new(&self.parser, &self.parser, self.security_enricher.as_ref())
+            .parse_bytes(data)
     }
 
     /// Parses from a reader.
     pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
-        ParseDocument::new(&self.parser, self.security_enricher.as_ref()).parse_reader(reader)
+        ParseDocument::new(&self.parser, &self.parser, self.security_enricher.as_ref())
+            .parse_reader(reader)
     }
 
     /// Serializes a parsed document to JSON.

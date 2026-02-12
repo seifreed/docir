@@ -1,6 +1,6 @@
 use crate::{
     AppResult, ParsedDocument, ParserPort, RulesEnginePort, SecurityAnalyzerPort,
-    SecurityEnricherPort,
+    SecurityEnricherPort, SecurityScannerPort,
 };
 use docir_core::types::{DocumentFormat, NodeId};
 use docir_core::visitor::IrStore;
@@ -12,14 +12,23 @@ use docir_serialization::json::to_json;
 use std::io::{Read, Seek};
 use std::path::Path;
 
-pub(crate) struct ParseDocument<'a, P: ParserPort> {
+pub(crate) struct ParseDocument<'a, P: ParserPort, S: SecurityScannerPort> {
     parser: &'a P,
+    scanner: &'a S,
     enricher: &'a dyn SecurityEnricherPort,
 }
 
-impl<'a, P: ParserPort> ParseDocument<'a, P> {
-    pub(crate) fn new(parser: &'a P, enricher: &'a dyn SecurityEnricherPort) -> Self {
-        Self { parser, enricher }
+impl<'a, P: ParserPort, S: SecurityScannerPort> ParseDocument<'a, P, S> {
+    pub(crate) fn new(
+        parser: &'a P,
+        scanner: &'a S,
+        enricher: &'a dyn SecurityEnricherPort,
+    ) -> Self {
+        Self {
+            parser,
+            scanner,
+            enricher,
+        }
     }
 
     pub(crate) fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> AppResult<ParsedDocument> {
@@ -48,7 +57,7 @@ impl<'a, P: ParserPort> ParseDocument<'a, P> {
             DocumentFormat::WordProcessing
             | DocumentFormat::Spreadsheet
             | DocumentFormat::Presentation => {
-                self.parser.scan_security_bytes(data, parsed.store_mut())?;
+                self.scanner.scan_security_bytes(data, parsed.store_mut())?;
             }
             _ => {}
         }
