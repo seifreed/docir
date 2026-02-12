@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::format::FormatParser;
-use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file, read_all_with_limit};
+use crate::input::{enforce_input_size, read_all_with_limit};
 use crate::ole::Cfb;
 use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
@@ -31,7 +31,6 @@ use sha1::{Digest as Sha1Digest, Sha1};
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::io::{Read, Seek};
-use std::path::Path;
 
 pub mod part_registry;
 mod section;
@@ -67,13 +66,7 @@ impl HwpParser {
         Self { config }
     }
 
-    pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        parse_from_file(path, |reader| self.parse_reader(reader))
-    }
-
-    pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        parse_from_bytes(data, |reader| self.parse_reader(reader))
-    }
+    crate::impl_parse_entrypoints!();
 
     pub fn parse_reader<R: Read + Seek>(
         &self,
@@ -365,13 +358,7 @@ impl HwpxParser {
         Self { config }
     }
 
-    pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        parse_from_file(path, |reader| self.parse_reader(reader))
-    }
-
-    pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        parse_from_bytes(data, |reader| self.parse_reader(reader))
-    }
+    crate::impl_parse_entrypoints!();
 
     pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
         let mut reader = reader;

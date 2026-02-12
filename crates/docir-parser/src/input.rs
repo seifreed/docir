@@ -53,3 +53,24 @@ pub fn read_all_with_limit<R: Read + Seek>(
     reader.read_to_end(&mut data)?;
     Ok(data)
 }
+
+#[macro_export]
+macro_rules! impl_parse_entrypoints {
+    () => {
+        /// Parses a file from the filesystem.
+        pub fn parse_file<P: AsRef<std::path::Path>>(
+            &self,
+            path: P,
+        ) -> Result<crate::parser::ParsedDocument, crate::error::ParseError> {
+            crate::input::parse_from_file(path, |reader| self.parse_reader(reader))
+        }
+
+        /// Parses from a byte slice.
+        pub fn parse_bytes(
+            &self,
+            data: &[u8],
+        ) -> Result<crate::parser::ParsedDocument, crate::error::ParseError> {
+            crate::input::parse_from_bytes(data, |reader| self.parse_reader(reader))
+        }
+    };
+}

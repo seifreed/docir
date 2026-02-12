@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::format::FormatParser;
-use crate::input::{parse_from_bytes, parse_from_file, read_all_with_limit};
+use crate::input::read_all_with_limit;
 use crate::parser::{ParsedDocument, ParserConfig};
 use docir_core::ir::ParagraphBorders;
 use docir_core::ir::{
@@ -21,7 +21,6 @@ use docir_core::visitor::IrStore;
 use encoding_rs::Encoding;
 use std::collections::HashMap;
 use std::io::{Read, Seek};
-use std::path::Path;
 
 mod objects;
 
@@ -51,15 +50,7 @@ impl RtfParser {
         Self { config }
     }
 
-    /// Parses a file from the filesystem.
-    pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        parse_from_file(path, |reader| self.parse_reader(reader))
-    }
-
-    /// Parses from a byte slice.
-    pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        parse_from_bytes(data, |reader| self.parse_reader(reader))
-    }
+    crate::impl_parse_entrypoints!();
 
     /// Parses from any reader.
     pub fn parse_reader<R: Read + Seek>(

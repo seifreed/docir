@@ -3,7 +3,7 @@
 use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::hwp::{is_hwpx_mimetype, HwpParser, HwpxParser};
-use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file, read_all_with_limit};
+use crate::input::{enforce_input_size, read_all_with_limit};
 use crate::odf::OdfParser;
 use crate::ole::{is_ole_container, Cfb};
 use crate::ooxml::content_types::ContentTypes;
@@ -29,7 +29,6 @@ use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
 use std::collections::{HashMap, HashSet};
 use std::io::{Cursor, Read, Seek, SeekFrom};
-use std::path::Path;
 
 mod coverage;
 mod metadata;
@@ -229,15 +228,7 @@ impl OoxmlParser {
         Self { config }
     }
 
-    /// Parses a file from the filesystem.
-    pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        parse_from_file(path, |reader| self.parse_reader(reader))
-    }
-
-    /// Parses from a byte slice.
-    pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        parse_from_bytes(data, |reader| self.parse_reader(reader))
-    }
+    crate::impl_parse_entrypoints!();
 
     /// Parses from any reader.
     pub fn parse_reader<R: Read + Seek>(
@@ -1135,15 +1126,7 @@ impl DocumentParser {
         Self { config }
     }
 
-    /// Parses a file from the filesystem.
-    pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        parse_from_file(path, |reader| self.parse_reader(reader))
-    }
-
-    /// Parses from a byte slice.
-    pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        parse_from_bytes(data, |reader| self.parse_reader(reader))
-    }
+    crate::impl_parse_entrypoints!();
 
     /// Parses from any reader.
     pub fn parse_reader<R: Read + Seek>(

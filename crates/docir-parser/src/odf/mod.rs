@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::format::FormatParser;
-use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file};
+use crate::input::enforce_input_size;
 use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
 use crate::xml_utils::{attr_value, read_event};
@@ -24,7 +24,6 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use std::collections::HashMap;
 use std::io::{Read, Seek};
-use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 
@@ -90,15 +89,7 @@ impl OdfParser {
         Self { config }
     }
 
-    /// Parses a file from the filesystem.
-    pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        parse_from_file(path, |reader| self.parse_reader(reader))
-    }
-
-    /// Parses from a byte slice.
-    pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        parse_from_bytes(data, |reader| self.parse_reader(reader))
-    }
+    crate::impl_parse_entrypoints!();
 
     /// Parses from any reader.
     pub fn parse_reader<R: Read + Seek>(
