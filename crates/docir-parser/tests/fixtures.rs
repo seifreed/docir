@@ -21,6 +21,7 @@ fn parse_format(value: &str) -> DocumentFormat {
     match value.to_ascii_uppercase().as_str() {
         "DOCX" => DocumentFormat::WordProcessing,
         "XLSX" => DocumentFormat::Spreadsheet,
+        "XLSB" => DocumentFormat::Spreadsheet,
         "PPTX" => DocumentFormat::Presentation,
         "ODT" => DocumentFormat::OdfText,
         "ODS" => DocumentFormat::OdfSpreadsheet,
