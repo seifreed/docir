@@ -2,9 +2,8 @@
 
 use crate::error::ParseError;
 use crate::format::FormatParser;
-use crate::hwp::{is_hwpx_mimetype, HwpParser, HwpxParser};
+use crate::hwp::is_hwpx_mimetype;
 use crate::input::{enforce_input_size, read_all_with_limit};
-use crate::odf::OdfParser;
 use crate::ole::is_ole_container;
 use crate::ooxml::content_types::ContentTypes;
 use crate::ooxml::docx::DocxParser;
@@ -12,7 +11,7 @@ use crate::ooxml::part_utils::read_relationships_optional;
 use crate::ooxml::pptx::PptxParser;
 use crate::ooxml::relationships::{rel_type, Relationships};
 use crate::ooxml::xlsx::XlsxParser;
-use crate::rtf::{is_rtf_bytes, RtfParser};
+use crate::rtf::is_rtf_bytes;
 use crate::xml_utils::local_name;
 use crate::zip_handler::{SecureZipReader, ZipConfig};
 use docir_core::ir::column_to_letter;
@@ -28,6 +27,7 @@ use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
 mod coverage;
+mod dispatch;
 mod metadata;
 mod parser_docx;
 mod parser_pptx;
@@ -977,13 +977,13 @@ impl DocumentParser {
         let head = &probe[..read];
 
         if is_rtf_bytes(head) {
-            let parser = RtfParser::with_config(self.config.clone());
-            return parse_with(parser, reader);
+            return dispatch::build_parser(dispatch::DetectedFormat::Rtf, self.config.clone())
+                .parse_reader(reader);
         }
 
         if is_ole_container(head) {
-            let parser = HwpParser::with_config(self.config.clone());
-            return parse_with(parser, reader);
+            return dispatch::build_parser(dispatch::DetectedFormat::Hwp, self.config.clone())
+                .parse_reader(reader);
         }
 
         if !is_zip_container(head) {
@@ -1007,16 +1007,16 @@ impl DocumentParser {
         reader.seek(SeekFrom::Start(0))?;
 
         if is_ooxml {
-            let parser = OoxmlParser::with_config(self.config.clone());
-            return parse_with(parser, reader);
+            return dispatch::build_parser(dispatch::DetectedFormat::Ooxml, self.config.clone())
+                .parse_reader(reader);
         }
         if is_hwpx {
-            let parser = HwpxParser::with_config(self.config.clone());
-            return parse_with(parser, reader);
+            return dispatch::build_parser(dispatch::DetectedFormat::Hwpx, self.config.clone())
+                .parse_reader(reader);
         }
         if is_odf {
-            let parser = OdfParser::with_config(self.config.clone());
-            return parse_with(parser, reader);
+            return dispatch::build_parser(dispatch::DetectedFormat::Odf, self.config.clone())
+                .parse_reader(reader);
         }
 
         Err(ParseError::UnsupportedFormat(
@@ -1027,14 +1027,6 @@ impl DocumentParser {
 
 fn is_zip_container(data: &[u8]) -> bool {
     data.len() >= 4 && data[0] == b'P' && data[1] == b'K'
-}
-
-fn parse_with<P, R>(parser: P, reader: R) -> Result<ParsedDocument, ParseError>
-where
-    P: FormatParser,
-    R: Read + Seek,
-{
-    parser.parse_reader(reader)
 }
 
 fn parse_activex_xml(xml: &str, _path: &str) -> Option<docir_core::security::ActiveXControl> {
