@@ -12,6 +12,7 @@ pub mod odf;
 pub mod ole;
 pub mod ooxml;
 pub mod parser;
+mod registry_utils;
 pub mod rtf;
 mod security_utils;
 mod text_utils;

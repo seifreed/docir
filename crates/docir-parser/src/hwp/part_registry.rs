@@ -1,5 +1,6 @@
 //! HWP/HWPX part registry for coverage tracking.
 
+pub(crate) use crate::registry_utils::matches_pattern;
 use docir_core::types::DocumentFormat;
 
 #[derive(Debug, Clone)]
@@ -15,24 +16,6 @@ pub fn registry_for(format: DocumentFormat) -> Vec<PartSpec> {
         DocumentFormat::Hwpx => hwpx_registry(),
         _ => Vec::new(),
     }
-}
-
-pub fn matches_pattern(path: &str, pattern: &str) -> bool {
-    if !pattern.contains('*') {
-        return path == pattern;
-    }
-
-    let mut parts = pattern.splitn(2, '*');
-    let prefix = parts.next().unwrap_or("");
-    let suffix = parts.next().unwrap_or("");
-
-    if !prefix.is_empty() && !path.starts_with(prefix) {
-        return false;
-    }
-    if !suffix.is_empty() && !path.ends_with(suffix) {
-        return false;
-    }
-    true
 }
 
 fn hwp_registry() -> Vec<PartSpec> {
