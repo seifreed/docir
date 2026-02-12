@@ -57,6 +57,22 @@ pub(crate) fn read_xml_part(
     Ok(Some(zip.read_file_string(part_path)?))
 }
 
+pub(crate) fn read_xml_part_by_rel(
+    zip: &mut impl PackageReader,
+    main_part_path: &str,
+    rels: &Relationships,
+    rel_type: &str,
+) -> Result<Option<(String, String)>, ParseError> {
+    let Some(rel) = rels.get_first_by_type(rel_type) else {
+        return Ok(None);
+    };
+    let part_path = Relationships::resolve_target(main_part_path, &rel.target);
+    let Some(xml) = read_xml_part(zip, &part_path)? else {
+        return Ok(None);
+    };
+    Ok(Some((part_path, xml)))
+}
+
 pub(crate) fn parse_xml_part_with_span<T, F, S>(
     zip: &mut impl PackageReader,
     part_path: &str,

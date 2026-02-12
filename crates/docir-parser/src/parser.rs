@@ -7,7 +7,7 @@ use crate::input::{enforce_input_size, read_all_with_limit};
 use crate::ole::is_ole_container;
 use crate::ooxml::content_types::ContentTypes;
 use crate::ooxml::docx::DocxParser;
-use crate::ooxml::part_utils::read_relationships_optional;
+use crate::ooxml::part_utils::{read_relationships_optional, read_xml_part, read_xml_part_by_rel};
 use crate::ooxml::pptx::PptxParser;
 use crate::ooxml::relationships::{rel_type, Relationships};
 use crate::ooxml::xlsx::XlsxParser;
@@ -634,9 +634,8 @@ impl OoxmlParser {
         R: Read + Seek,
         F: FnMut(&str, &str) -> Option<NodeId>,
     {
-        let rel = doc_rels.get_first_by_type(rel_type)?;
-        let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-        let xml = zip.read_file_string(&part_path).ok()?;
+        let (part_path, xml) =
+            read_xml_part_by_rel(zip, main_part_path, doc_rels, rel_type).ok()??;
         parse(&part_path, &xml)
     }
 
@@ -655,9 +654,8 @@ impl OoxmlParser {
         F: FnOnce(&mut DocxParser, &str, &str) -> Option<NodeId>,
         S: FnOnce(&mut IrStore, NodeId, &str),
     {
-        let rel = doc_rels.get_first_by_type(rel_type)?;
-        let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-        let xml = zip.read_file_string(&part_path).ok()?;
+        let (part_path, xml) =
+            read_xml_part_by_rel(zip, main_part_path, doc_rels, rel_type).ok()??;
         let id = parse(parser, &part_path, &xml)?;
         set_span(parser.store_mut(), id, &part_path);
         Some(id)
@@ -673,10 +671,7 @@ impl OoxmlParser {
         R: Read + Seek,
         F: FnMut(&str, &str) -> Option<NodeId>,
     {
-        if !zip.contains(part_path) {
-            return None;
-        }
-        let xml = zip.read_file_string(part_path).ok()?;
+        let xml = read_xml_part(zip, part_path).ok()??;
         parse(part_path, &xml)
     }
 
@@ -693,10 +688,7 @@ impl OoxmlParser {
         F: FnOnce(&mut DocxParser, &str, &str) -> Option<NodeId>,
         S: FnOnce(&mut IrStore, NodeId, &str),
     {
-        if !zip.contains(part_path) {
-            return None;
-        }
-        let xml = zip.read_file_string(part_path).ok()?;
+        let xml = read_xml_part(zip, part_path).ok()??;
         let id = parse(parser, part_path, &xml)?;
         set_span(parser.store_mut(), id, part_path);
         Some(id)
