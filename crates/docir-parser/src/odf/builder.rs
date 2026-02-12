@@ -15,9 +15,7 @@ impl OdfParser {
             return Err(ParseError::MissingPart("content.xml".to_string()));
         }
 
-        let mut store = IrStore::new();
-        let mut doc = Document::new(format);
-        let mut diagnostics = Diagnostics::new();
+        let (mut store, mut doc, mut diagnostics) = Self::init_document_state(format);
 
         load_meta(&mut zip, &mut store, &mut doc)?;
         let content_state = handle_content_xml(
@@ -37,94 +35,24 @@ impl OdfParser {
         let (styles_xml, settings_xml, signatures_xml) =
             self.load_styles_settings_signatures(&mut zip, &mut store, &mut doc)?;
 
-        if fast_mode {
-            let size = content_size.unwrap_or(0);
-            push_info(
-                &mut diagnostics,
-                "ODF_FAST_MODE",
-                format!(
-                    "ODF fast mode enabled (content.xml: {} bytes, threshold: {} bytes, sample_rows: {}, sample_cols: {})",
-                    size,
-                    self.config.odf.fast_threshold_bytes,
-                    self.config.odf.fast_sample_rows,
-                    self.config.odf.fast_sample_cols
-                ),
-                Some("content.xml"),
-            );
-            if content_xml.is_none() {
-                push_warning(
-                    &mut diagnostics,
-                    "ODF_FAST_SKIP_SCAN",
-                    "Fast mode skipped content.xml security scans to reduce processing time"
-                        .to_string(),
-                    Some("content.xml"),
-                );
-            }
-        }
+        self.emit_fast_mode_diagnostics(
+            &mut diagnostics,
+            fast_mode,
+            content_size,
+            content_xml.is_none(),
+        );
         let manifest_index = collect_manifest_index(&manifest_entries, &mut diagnostics);
         let file_names = collect_shared_parts(&mut zip, &manifest_index, &mut store, &mut doc);
 
-        if let Some(xml) = styles_xml.as_deref() {
-            let masters = parse_master_pages(xml);
-            for name in masters {
-                push_info(
-                    &mut diagnostics,
-                    "ODF_MASTER_PAGE",
-                    format!("ODF master page detected: {}", name),
-                    Some("styles.xml"),
-                );
-            }
-            let layouts = parse_page_layouts(xml);
-            for name in layouts {
-                push_info(
-                    &mut diagnostics,
-                    "ODF_PAGE_LAYOUT",
-                    format!("ODF page layout detected: {}", name),
-                    Some("styles.xml"),
-                );
-            }
-            let (headers, footers) = parse_odf_headers_footers(xml, &mut store, &self.config)?;
-            for header_id in headers {
-                doc.shared_parts.push(header_id);
-            }
-            for footer_id in footers {
-                doc.shared_parts.push(footer_id);
-            }
-        }
-
-        if !fast_mode {
-            if let Some(xml) = content_xml.as_deref() {
-                if let Some(mut styles) = parse_styles(xml) {
-                    if let Some(doc_styles_id) = doc.styles {
-                        if let Some(IRNode::StyleSet(existing)) = store.get_mut(doc_styles_id) {
-                            merge_styles(existing, &mut styles);
-                        }
-                    } else {
-                        let style_id = styles.id;
-                        store.insert(IRNode::StyleSet(styles));
-                        doc.styles = Some(style_id);
-                    }
-                }
-                let masters = parse_master_pages(xml);
-                for name in masters {
-                    push_info(
-                        &mut diagnostics,
-                        "ODF_MASTER_PAGE",
-                        format!("ODF master page detected: {}", name),
-                        Some("content.xml"),
-                    );
-                }
-                let layouts = parse_page_layouts(xml);
-                for name in layouts {
-                    push_info(
-                        &mut diagnostics,
-                        "ODF_PAGE_LAYOUT",
-                        format!("ODF page layout detected: {}", name),
-                        Some("content.xml"),
-                    );
-                }
-            }
-        }
+        self.process_odf_styles_and_layouts(
+            &self.config,
+            styles_xml.as_deref(),
+            content_xml.as_deref(),
+            fast_mode,
+            &mut store,
+            &mut doc,
+            &mut diagnostics,
+        )?;
 
         if fast_mode && format == DocumentFormat::OdfSpreadsheet {
             if let Some(bytes) = content_bytes.as_deref() {
@@ -263,5 +191,122 @@ impl OdfParser {
             store,
             metrics: None,
         })
+    }
+
+    fn init_document_state(format: DocumentFormat) -> (IrStore, Document, Diagnostics) {
+        let store = IrStore::new();
+        let doc = Document::new(format);
+        let diagnostics = Diagnostics::new();
+        (store, doc, diagnostics)
+    }
+
+    fn emit_fast_mode_diagnostics(
+        &self,
+        diagnostics: &mut Diagnostics,
+        fast_mode: bool,
+        content_size: Option<u64>,
+        skipped_scans: bool,
+    ) {
+        if !fast_mode {
+            return;
+        }
+
+        let size = content_size.unwrap_or(0);
+        push_info(
+            diagnostics,
+            "ODF_FAST_MODE",
+            format!(
+                "ODF fast mode enabled (content.xml: {} bytes, threshold: {} bytes, sample_rows: {}, sample_cols: {})",
+                size,
+                self.config.odf.fast_threshold_bytes,
+                self.config.odf.fast_sample_rows,
+                self.config.odf.fast_sample_cols
+            ),
+            Some("content.xml"),
+        );
+        if skipped_scans {
+            push_warning(
+                diagnostics,
+                "ODF_FAST_SKIP_SCAN",
+                "Fast mode skipped content.xml security scans to reduce processing time"
+                    .to_string(),
+                Some("content.xml"),
+            );
+        }
+    }
+
+    fn process_odf_styles_and_layouts(
+        &self,
+        config: &ParserConfig,
+        styles_xml: Option<&str>,
+        content_xml: Option<&str>,
+        fast_mode: bool,
+        store: &mut IrStore,
+        doc: &mut Document,
+        diagnostics: &mut Diagnostics,
+    ) -> Result<(), ParseError> {
+        if let Some(xml) = styles_xml {
+            let masters = parse_master_pages(xml);
+            for name in masters {
+                push_info(
+                    diagnostics,
+                    "ODF_MASTER_PAGE",
+                    format!("ODF master page detected: {}", name),
+                    Some("styles.xml"),
+                );
+            }
+            let layouts = parse_page_layouts(xml);
+            for name in layouts {
+                push_info(
+                    diagnostics,
+                    "ODF_PAGE_LAYOUT",
+                    format!("ODF page layout detected: {}", name),
+                    Some("styles.xml"),
+                );
+            }
+            let (headers, footers) = parse_odf_headers_footers(xml, store, config)?;
+            for header_id in headers {
+                doc.shared_parts.push(header_id);
+            }
+            for footer_id in footers {
+                doc.shared_parts.push(footer_id);
+            }
+        }
+
+        if !fast_mode {
+            if let Some(xml) = content_xml {
+                if let Some(mut styles) = parse_styles(xml) {
+                    if let Some(doc_styles_id) = doc.styles {
+                        if let Some(IRNode::StyleSet(existing)) = store.get_mut(doc_styles_id) {
+                            merge_styles(existing, &mut styles);
+                        }
+                    } else {
+                        let style_id = styles.id;
+                        store.insert(IRNode::StyleSet(styles));
+                        doc.styles = Some(style_id);
+                    }
+                }
+                let masters = parse_master_pages(xml);
+                for name in masters {
+                    push_info(
+                        diagnostics,
+                        "ODF_MASTER_PAGE",
+                        format!("ODF master page detected: {}", name),
+                        Some("content.xml"),
+                    );
+                }
+                let layouts = parse_page_layouts(xml);
+                for name in layouts {
+                    push_info(
+                        diagnostics,
+                        "ODF_PAGE_LAYOUT",
+                        format!("ODF page layout detected: {}", name),
+                        Some("content.xml"),
+                    );
+                }
+            }
+        }
+
+        Ok(())
     }
 }
