@@ -1,8 +1,9 @@
 //! HWP/HWPX parsing (Hangul Word Processor).
 
 use crate::error::ParseError;
+use crate::input::{cursor_from_bytes, enforce_input_size, open_reader, read_all_with_limit};
 use crate::ole::Cfb;
-use crate::parser::{enforce_input_size, ParsedDocument, ParserConfig};
+use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
 use crate::zip_handler::SecureZipReader;
 use aes::Aes128;
@@ -27,8 +28,7 @@ use quick_xml::Reader;
 use sha1::{Digest as Sha1Digest, Sha1};
 use sha2::Sha256;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, Read, Seek};
+use std::io::{Read, Seek};
 use std::path::Path;
 
 pub mod part_registry;
@@ -57,13 +57,12 @@ impl HwpParser {
     }
 
     pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        let file = File::open(path.as_ref())?;
-        let reader = BufReader::new(file);
+        let reader = open_reader(path)?;
         self.parse_reader(reader)
     }
 
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        let reader = std::io::Cursor::new(data);
+        let reader = cursor_from_bytes(data);
         self.parse_reader(reader)
     }
 
@@ -71,9 +70,7 @@ impl HwpParser {
         &self,
         mut reader: R,
     ) -> Result<ParsedDocument, ParseError> {
-        enforce_input_size(&mut reader, self.config.max_input_size)?;
-        let mut data = Vec::new();
-        reader.read_to_end(&mut data)?;
+        let data = read_all_with_limit(reader, self.config.max_input_size)?;
 
         let cfb = Cfb::parse(data)?;
         let mut store = IrStore::new();
@@ -356,13 +353,12 @@ impl HwpxParser {
     }
 
     pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        let file = File::open(path.as_ref())?;
-        let reader = BufReader::new(file);
+        let reader = open_reader(path)?;
         self.parse_reader(reader)
     }
 
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        let reader = std::io::Cursor::new(data);
+        let reader = cursor_from_bytes(data);
         self.parse_reader(reader)
     }
 

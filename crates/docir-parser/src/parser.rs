@@ -2,6 +2,7 @@
 
 use crate::error::ParseError;
 use crate::hwp::{is_hwpx_mimetype, HwpParser, HwpxParser};
+use crate::input::{cursor_from_bytes, enforce_input_size, open_reader, read_all_with_limit};
 use crate::odf::OdfParser;
 use crate::ole::{is_ole_container, Cfb};
 use crate::ooxml::content_types::ContentTypes;
@@ -27,8 +28,7 @@ use docir_core::security::{
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
 mod parser_docx;
@@ -177,14 +177,13 @@ impl OoxmlParser {
 
     /// Parses a file from the filesystem.
     pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        let file = File::open(path.as_ref())?;
-        let reader = BufReader::new(file);
+        let reader = open_reader(path)?;
         self.parse_reader(reader)
     }
 
     /// Parses from a byte slice.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        let reader = std::io::Cursor::new(data);
+        let reader = cursor_from_bytes(data);
         self.parse_reader(reader)
     }
 
@@ -193,10 +192,8 @@ impl OoxmlParser {
         &self,
         mut reader: R,
     ) -> Result<ParsedDocument, ParseError> {
-        enforce_input_size(&mut reader, self.config.max_input_size)?;
-        let mut data = Vec::new();
         reader.seek(SeekFrom::Start(0))?;
-        reader.read_to_end(&mut data)?;
+        let data = read_all_with_limit(reader, self.config.max_input_size)?;
         let mut zip =
             SecureZipReader::new(Cursor::new(data.as_slice()), self.config.zip_config.clone())?;
         let mut metrics = if self.config.enable_metrics {
@@ -1607,14 +1604,13 @@ impl DocumentParser {
 
     /// Parses a file from the filesystem.
     pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        let file = File::open(path.as_ref())?;
-        let reader = BufReader::new(file);
+        let reader = open_reader(path)?;
         self.parse_reader(reader)
     }
 
     /// Parses from a byte slice.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        let reader = std::io::Cursor::new(data);
+        let reader = cursor_from_bytes(data);
         self.parse_reader(reader)
     }
 
@@ -1677,22 +1673,6 @@ impl DocumentParser {
             "Unknown package format (missing [Content_Types].xml and mimetype)".to_string(),
         ))
     }
-}
-
-pub(crate) fn enforce_input_size<R: Seek>(
-    reader: &mut R,
-    max_input_size: u64,
-) -> Result<(), ParseError> {
-    let current = reader.stream_position()?;
-    let end = reader.seek(SeekFrom::End(0))?;
-    reader.seek(SeekFrom::Start(current))?;
-    if end > max_input_size {
-        return Err(ParseError::ResourceLimit(format!(
-            "Input too large: {} bytes (max: {} bytes)",
-            end, max_input_size
-        )));
-    }
-    Ok(())
 }
 
 fn is_zip_container(data: &[u8]) -> bool {

@@ -1,7 +1,8 @@
 //! ODF (OpenDocument) parsing support.
 
 use crate::error::ParseError;
-use crate::parser::{enforce_input_size, ParsedDocument, ParserConfig};
+use crate::input::{cursor_from_bytes, enforce_input_size, open_reader};
+use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
 use crate::zip_handler::SecureZipReader;
 use aes::Aes128;
@@ -27,8 +28,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use sha1::Sha1;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, Read, Seek};
+use std::io::{Read, Seek};
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
@@ -79,14 +79,13 @@ impl OdfParser {
 
     /// Parses a file from the filesystem.
     pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        let file = File::open(path.as_ref())?;
-        let reader = BufReader::new(file);
+        let reader = open_reader(path)?;
         self.parse_reader(reader)
     }
 
     /// Parses from a byte slice.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        let reader = std::io::Cursor::new(data);
+        let reader = cursor_from_bytes(data);
         self.parse_reader(reader)
     }
 

@@ -1,7 +1,8 @@
 //! RTF parsing support.
 
 use crate::error::ParseError;
-use crate::parser::{enforce_input_size, ParsedDocument, ParserConfig};
+use crate::input::{cursor_from_bytes, open_reader, read_all_with_limit};
+use crate::parser::{ParsedDocument, ParserConfig};
 use docir_core::ir::ParagraphBorders;
 use docir_core::ir::{
     Border, BorderStyle, CellVerticalAlignment, Indentation, LineSpacingRule, MergeType, Spacing,
@@ -18,8 +19,7 @@ use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
 use encoding_rs::Encoding;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, Read, Seek};
+use std::io::{Read, Seek};
 use std::path::Path;
 
 mod objects;
@@ -46,14 +46,13 @@ impl RtfParser {
 
     /// Parses a file from the filesystem.
     pub fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        let file = File::open(path.as_ref())?;
-        let reader = BufReader::new(file);
+        let reader = open_reader(path)?;
         self.parse_reader(reader)
     }
 
     /// Parses from a byte slice.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        let reader = std::io::Cursor::new(data);
+        let reader = cursor_from_bytes(data);
         self.parse_reader(reader)
     }
 
@@ -62,9 +61,7 @@ impl RtfParser {
         &self,
         mut reader: R,
     ) -> Result<ParsedDocument, ParseError> {
-        enforce_input_size(&mut reader, self.config.max_input_size)?;
-        let mut data = Vec::new();
-        reader.read_to_end(&mut data)?;
+        let data = read_all_with_limit(reader, self.config.max_input_size)?;
         if !is_rtf_bytes(&data) {
             return Err(ParseError::UnsupportedFormat(
                 "Missing RTF header".to_string(),

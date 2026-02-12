@@ -6,6 +6,7 @@
 pub mod diagnostics;
 pub mod error;
 pub mod hwp;
+mod input;
 pub mod odf;
 pub mod ole;
 pub mod ooxml;
