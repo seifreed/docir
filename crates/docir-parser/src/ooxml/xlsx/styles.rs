@@ -44,46 +44,14 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"numFmts" => in_num_fmts = true,
                 b"numFmt" if in_num_fmts => {
-                    let mut id = None;
-                    let mut code = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"numFmtId" => {
-                                id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"formatCode" => {
-                                code = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            _ => {}
-                        }
-                    }
-                    if let (Some(id), Some(code)) = (id, code) {
-                        styles.number_formats.push(NumberFormat {
-                            id,
-                            format_code: code,
-                        });
+                    if let Some(fmt) = parse_number_format(&e) {
+                        styles.number_formats.push(fmt);
                     }
                 }
                 b"numFmt" if in_dxfs => {
-                    let mut id = None;
-                    let mut code = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"numFmtId" => {
-                                id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"formatCode" => {
-                                code = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            _ => {}
-                        }
-                    }
-                    if let (Some(id), Some(code)) = (id, code) {
+                    if let Some(fmt) = parse_number_format(&e) {
                         if let Some(dxf) = current_dxf.as_mut() {
-                            dxf.num_fmt = Some(NumberFormat {
-                                id,
-                                format_code: code,
-                            });
+                            dxf.num_fmt = Some(fmt);
                         }
                     }
                 }
@@ -172,19 +140,11 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
                     });
                 }
                 b"patternFill" => {
-                    if let Some(fill) = current_fill.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"patternType" {
-                                fill.pattern_type =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
-                    } else if let Some(fill) = current_dxf_fill.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"patternType" {
-                                fill.pattern_type =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
+                    if let Some(pattern_type) = parse_pattern_type(&e) {
+                        if let Some(fill) = current_fill.as_mut() {
+                            fill.pattern_type = Some(pattern_type.clone());
+                        } else if let Some(fill) = current_dxf_fill.as_mut() {
+                            fill.pattern_type = Some(pattern_type);
                         }
                     }
                 }
@@ -220,30 +180,12 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
                     });
                 }
                 b"left" | b"right" | b"top" | b"bottom" => {
+                    let side = parse_border_side(&e);
+                    let side_name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     if current_border.is_some() {
-                        let mut side = BorderSide {
-                            style: None,
-                            color: None,
-                        };
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"style" {
-                                side.style = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
-                        current_border_side =
-                            Some((String::from_utf8_lossy(e.name().as_ref()).to_string(), side));
+                        current_border_side = Some((side_name, side));
                     } else if current_dxf_border.is_some() {
-                        let mut side = BorderSide {
-                            style: None,
-                            color: None,
-                        };
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"style" {
-                                side.style = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
-                        current_dxf_border_side =
-                            Some((String::from_utf8_lossy(e.name().as_ref()).to_string(), side));
+                        current_dxf_border_side = Some((side_name, side));
                     }
                 }
                 b"cellXfs" => in_cell_xfs = true,
@@ -253,274 +195,22 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
                     current_dxf = Some(DxfStyle::new());
                 }
                 b"xf" if in_cell_xfs => {
-                    let mut xf = CellFormat {
-                        num_fmt_id: None,
-                        font_id: None,
-                        fill_id: None,
-                        border_id: None,
-                        xf_id: None,
-                        apply_number_format: false,
-                        apply_font: false,
-                        apply_fill: false,
-                        apply_border: false,
-                        apply_alignment: false,
-                        apply_protection: false,
-                        quote_prefix: false,
-                        pivot_button: false,
-                        alignment: None,
-                        protection: None,
-                    };
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"numFmtId" => {
-                                xf.num_fmt_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"fontId" => {
-                                xf.font_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"fillId" => {
-                                xf.fill_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"borderId" => {
-                                xf.border_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"xfId" => {
-                                xf.xf_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"applyNumberFormat" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_number_format = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"applyFont" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_font = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"applyFill" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_fill = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"applyBorder" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_border = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"applyAlignment" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_alignment = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"applyProtection" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_protection = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"quotePrefix" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.quote_prefix = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"pivotButton" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.pivot_button = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            _ => {}
-                        }
-                    }
-                    current_xf = Some(xf);
+                    current_xf = Some(parse_xf(&e));
                     current_xf_is_style = false;
                 }
                 b"xf" if in_cell_style_xfs => {
-                    let mut xf = CellFormat {
-                        num_fmt_id: None,
-                        font_id: None,
-                        fill_id: None,
-                        border_id: None,
-                        xf_id: None,
-                        apply_number_format: false,
-                        apply_font: false,
-                        apply_fill: false,
-                        apply_border: false,
-                        apply_alignment: false,
-                        apply_protection: false,
-                        quote_prefix: false,
-                        pivot_button: false,
-                        alignment: None,
-                        protection: None,
-                    };
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"numFmtId" => {
-                                xf.num_fmt_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"fontId" => {
-                                xf.font_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"fillId" => {
-                                xf.fill_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"borderId" => {
-                                xf.border_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"xfId" => {
-                                xf.xf_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"applyNumberFormat" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_number_format = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"applyFont" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_font = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"applyFill" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_fill = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"applyBorder" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_border = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"applyAlignment" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_alignment = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"applyProtection" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.apply_protection = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"quotePrefix" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.quote_prefix = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            b"pivotButton" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                xf.pivot_button = v == "1" || v.eq_ignore_ascii_case("true");
-                            }
-                            _ => {}
-                        }
-                    }
-                    current_xf = Some(xf);
+                    current_xf = Some(parse_xf(&e));
                     current_xf_is_style = true;
                 }
                 b"alignment" => {
                     if let Some(xf) = current_xf.as_mut() {
-                        let mut alignment = CellAlignment {
-                            horizontal: None,
-                            vertical: None,
-                            wrap_text: false,
-                            indent: None,
-                            text_rotation: None,
-                            shrink_to_fit: false,
-                            reading_order: None,
-                        };
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"horizontal" => {
-                                    alignment.horizontal =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                b"vertical" => {
-                                    alignment.vertical =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                b"wrapText" => {
-                                    let v = String::from_utf8_lossy(&attr.value);
-                                    alignment.wrap_text =
-                                        v == "1" || v.eq_ignore_ascii_case("true");
-                                }
-                                b"indent" => {
-                                    alignment.indent =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
-                                }
-                                b"textRotation" => {
-                                    alignment.text_rotation =
-                                        String::from_utf8_lossy(&attr.value).parse::<i32>().ok();
-                                }
-                                b"shrinkToFit" => {
-                                    let v = String::from_utf8_lossy(&attr.value);
-                                    alignment.shrink_to_fit =
-                                        v == "1" || v.eq_ignore_ascii_case("true");
-                                }
-                                b"readingOrder" => {
-                                    alignment.reading_order =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
-                                }
-                                _ => {}
-                            }
-                        }
-                        xf.alignment = Some(alignment);
+                        xf.alignment = Some(parse_alignment(&e));
                     } else if let Some(dxf) = current_dxf.as_mut() {
-                        let mut alignment = CellAlignment {
-                            horizontal: None,
-                            vertical: None,
-                            wrap_text: false,
-                            indent: None,
-                            text_rotation: None,
-                            shrink_to_fit: false,
-                            reading_order: None,
-                        };
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"horizontal" => {
-                                    alignment.horizontal =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                b"vertical" => {
-                                    alignment.vertical =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                b"wrapText" => {
-                                    let v = String::from_utf8_lossy(&attr.value);
-                                    alignment.wrap_text =
-                                        v == "1" || v.eq_ignore_ascii_case("true");
-                                }
-                                b"indent" => {
-                                    alignment.indent =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
-                                }
-                                b"textRotation" => {
-                                    alignment.text_rotation =
-                                        String::from_utf8_lossy(&attr.value).parse::<i32>().ok();
-                                }
-                                b"shrinkToFit" => {
-                                    let v = String::from_utf8_lossy(&attr.value);
-                                    alignment.shrink_to_fit =
-                                        v == "1" || v.eq_ignore_ascii_case("true");
-                                }
-                                b"readingOrder" => {
-                                    alignment.reading_order =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
-                                }
-                                _ => {}
-                            }
-                        }
-                        dxf.alignment = Some(alignment);
+                        dxf.alignment = Some(parse_alignment(&e));
                     }
                 }
                 b"protection" => {
-                    let mut protection = CellProtection {
-                        locked: None,
-                        hidden: None,
-                    };
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"locked" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                protection.locked =
-                                    Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                            }
-                            b"hidden" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                protection.hidden =
-                                    Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                            }
-                            _ => {}
-                        }
-                    }
+                    let protection = parse_protection(&e);
                     if let Some(xf) = current_xf.as_mut() {
                         xf.protection = Some(protection);
                     } else if let Some(dxf) = current_dxf.as_mut() {
@@ -528,55 +218,13 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
                     }
                 }
                 b"tableStyles" => {
-                    let mut info = TableStyleInfo {
-                        count: None,
-                        default_table_style: None,
-                        default_pivot_style: None,
-                        styles: Vec::new(),
-                    };
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"count" => {
-                                info.count =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"defaultTableStyle" => {
-                                info.default_table_style =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            b"defaultPivotStyle" => {
-                                info.default_pivot_style =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            _ => {}
-                        }
-                    }
-                    styles.table_styles = Some(info);
+                    styles.table_styles = Some(parse_table_style_info(&e));
                     in_table_styles = true;
                 }
                 b"tableStyle" if in_table_styles => {
                     if let Some(info) = styles.table_styles.as_mut() {
-                        let mut name = None;
-                        let mut pivot = None;
-                        let mut table = None;
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"name" => {
-                                    name = Some(String::from_utf8_lossy(&attr.value).to_string())
-                                }
-                                b"pivot" => {
-                                    let v = String::from_utf8_lossy(&attr.value);
-                                    pivot = Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                                }
-                                b"table" => {
-                                    let v = String::from_utf8_lossy(&attr.value);
-                                    table = Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                                }
-                                _ => {}
-                            }
-                        }
-                        if let Some(name) = name {
-                            info.styles.push(TableStyleDef { name, pivot, table });
+                        if let Some(style) = parse_table_style_def(&e) {
+                            info.styles.push(style);
                         }
                     }
                 }
@@ -680,6 +328,215 @@ fn assign_border_side(border: &mut BorderDef, name: &[u8], side: BorderSide) {
         b"bottom" => border.bottom = Some(side),
         _ => {}
     }
+}
+
+fn parse_number_format(element: &BytesStart) -> Option<NumberFormat> {
+    let mut id = None;
+    let mut code = None;
+    for attr in element.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"numFmtId" => id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
+            b"formatCode" => code = Some(String::from_utf8_lossy(&attr.value).to_string()),
+            _ => {}
+        }
+    }
+    match (id, code) {
+        (Some(id), Some(code)) => Some(NumberFormat {
+            id,
+            format_code: code,
+        }),
+        _ => None,
+    }
+}
+
+fn parse_pattern_type(element: &BytesStart) -> Option<String> {
+    for attr in element.attributes().flatten() {
+        if attr.key.as_ref() == b"patternType" {
+            return Some(String::from_utf8_lossy(&attr.value).to_string());
+        }
+    }
+    None
+}
+
+fn parse_border_side(element: &BytesStart) -> BorderSide {
+    let mut side = BorderSide {
+        style: None,
+        color: None,
+    };
+    for attr in element.attributes().flatten() {
+        if attr.key.as_ref() == b"style" {
+            side.style = Some(String::from_utf8_lossy(&attr.value).to_string());
+        }
+    }
+    side
+}
+
+fn parse_xf(element: &BytesStart) -> CellFormat {
+    let mut xf = CellFormat {
+        num_fmt_id: None,
+        font_id: None,
+        fill_id: None,
+        border_id: None,
+        xf_id: None,
+        apply_number_format: false,
+        apply_font: false,
+        apply_fill: false,
+        apply_border: false,
+        apply_alignment: false,
+        apply_protection: false,
+        quote_prefix: false,
+        pivot_button: false,
+        alignment: None,
+        protection: None,
+    };
+    for attr in element.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"numFmtId" => xf.num_fmt_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
+            b"fontId" => xf.font_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
+            b"fillId" => xf.fill_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
+            b"borderId" => xf.border_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
+            b"xfId" => xf.xf_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
+            b"applyNumberFormat" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                xf.apply_number_format = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"applyFont" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                xf.apply_font = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"applyFill" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                xf.apply_fill = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"applyBorder" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                xf.apply_border = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"applyAlignment" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                xf.apply_alignment = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"applyProtection" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                xf.apply_protection = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"quotePrefix" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                xf.quote_prefix = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"pivotButton" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                xf.pivot_button = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            _ => {}
+        }
+    }
+    xf
+}
+
+fn parse_alignment(element: &BytesStart) -> CellAlignment {
+    let mut alignment = CellAlignment {
+        horizontal: None,
+        vertical: None,
+        wrap_text: false,
+        indent: None,
+        text_rotation: None,
+        shrink_to_fit: false,
+        reading_order: None,
+    };
+    for attr in element.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"horizontal" => {
+                alignment.horizontal = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"vertical" => {
+                alignment.vertical = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"wrapText" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                alignment.wrap_text = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"indent" => {
+                alignment.indent = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
+            }
+            b"textRotation" => {
+                alignment.text_rotation = String::from_utf8_lossy(&attr.value).parse::<i32>().ok();
+            }
+            b"shrinkToFit" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                alignment.shrink_to_fit = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"readingOrder" => {
+                alignment.reading_order = String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+            }
+            _ => {}
+        }
+    }
+    alignment
+}
+
+fn parse_protection(element: &BytesStart) -> CellProtection {
+    let mut protection = CellProtection {
+        locked: None,
+        hidden: None,
+    };
+    for attr in element.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"locked" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                protection.locked = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+            }
+            b"hidden" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                protection.hidden = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+            }
+            _ => {}
+        }
+    }
+    protection
+}
+
+fn parse_table_style_info(element: &BytesStart) -> TableStyleInfo {
+    let mut info = TableStyleInfo {
+        count: None,
+        default_table_style: None,
+        default_pivot_style: None,
+        styles: Vec::new(),
+    };
+    for attr in element.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"count" => info.count = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
+            b"defaultTableStyle" => {
+                info.default_table_style = Some(String::from_utf8_lossy(&attr.value).to_string())
+            }
+            b"defaultPivotStyle" => {
+                info.default_pivot_style = Some(String::from_utf8_lossy(&attr.value).to_string())
+            }
+            _ => {}
+        }
+    }
+    info
+}
+
+fn parse_table_style_def(element: &BytesStart) -> Option<TableStyleDef> {
+    let mut name = None;
+    let mut pivot = None;
+    let mut table = None;
+    for attr in element.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"name" => name = Some(String::from_utf8_lossy(&attr.value).to_string()),
+            b"pivot" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                pivot = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+            }
+            b"table" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                table = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+            }
+            _ => {}
+        }
+    }
+    name.map(|name| TableStyleDef { name, pivot, table })
 }
 
 pub(crate) fn parse_color_attr(element: &BytesStart) -> Option<String> {
