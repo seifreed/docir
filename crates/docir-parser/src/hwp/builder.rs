@@ -1,4 +1,5 @@
 use super::*;
+use crate::parse_utils::{finalize_document, init_store_and_document};
 
 impl HwpParser {
     pub fn parse_reader<R: Read + Seek>(
@@ -8,8 +9,7 @@ impl HwpParser {
         let data = read_all_with_limit(reader, self.config.max_input_size)?;
 
         let cfb = Cfb::parse(data)?;
-        let mut store = IrStore::new();
-        let mut doc = Document::new(DocumentFormat::Hwp);
+        let (mut store, mut doc) = init_store_and_document(DocumentFormat::Hwp);
 
         let mut stream_names = cfb.list_streams();
         stream_names.sort();
@@ -193,15 +193,9 @@ impl HwpParser {
         attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);
 
         let root_id = doc.id;
-        store.insert(IRNode::Document(doc));
-        normalize_store(&mut store, root_id);
-
-        Ok(ParsedDocument {
-            root_id,
-            format: DocumentFormat::Hwp,
-            store,
-            metrics: None,
-        })
+        let mut parsed = finalize_document(DocumentFormat::Hwp, store, doc);
+        normalize_store(&mut parsed.store, root_id);
+        Ok(parsed)
     }
 
     fn build_header_context<'a>(
@@ -289,8 +283,7 @@ impl HwpxParser {
         enforce_input_size(&mut reader, self.config.max_input_size)?;
         let mut zip = SecureZipReader::new(reader, self.config.zip_config.clone())?;
 
-        let mut store = IrStore::new();
-        let mut doc = Document::new(DocumentFormat::Hwpx);
+        let (mut store, mut doc) = init_store_and_document(DocumentFormat::Hwpx);
 
         let mut file_names: Vec<String> = zip.file_names().map(|s| s.to_string()).collect();
         file_names.sort();
@@ -426,14 +419,8 @@ impl HwpxParser {
         attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);
 
         let root_id = doc.id;
-        store.insert(IRNode::Document(doc));
-        normalize_store(&mut store, root_id);
-
-        Ok(ParsedDocument {
-            root_id,
-            format: DocumentFormat::Hwpx,
-            store,
-            metrics: None,
-        })
+        let mut parsed = finalize_document(DocumentFormat::Hwpx, store, doc);
+        normalize_store(&mut parsed.store, root_id);
+        Ok(parsed)
     }
 }

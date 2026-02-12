@@ -13,6 +13,7 @@ mod input;
 pub mod odf;
 pub mod ole;
 pub mod ooxml;
+mod parse_utils;
 pub mod parser;
 mod registry_utils;
 pub mod rtf;

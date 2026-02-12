@@ -1,4 +1,5 @@
 use super::*;
+use crate::parse_utils::{finalize_document, init_document_state};
 
 impl OdfParser {
     /// Parses from any reader.
@@ -15,7 +16,7 @@ impl OdfParser {
             return Err(ParseError::MissingPart("content.xml".to_string()));
         }
 
-        let (mut store, mut doc, mut diagnostics) = Self::init_document_state(format);
+        let (mut store, mut doc, mut diagnostics) = init_document_state(format);
 
         load_meta(&mut zip, &mut store, &mut doc)?;
         let content_state = handle_content_xml(
@@ -178,22 +179,7 @@ impl OdfParser {
             }
         }
 
-        let doc_id = doc.id;
-        store.insert(IRNode::Document(doc));
-
-        Ok(ParsedDocument {
-            root_id: doc_id,
-            format,
-            store,
-            metrics: None,
-        })
-    }
-
-    fn init_document_state(format: DocumentFormat) -> (IrStore, Document, Diagnostics) {
-        let store = IrStore::new();
-        let doc = Document::new(format);
-        let diagnostics = Diagnostics::new();
-        (store, doc, diagnostics)
+        Ok(finalize_document(format, store, doc))
     }
 
     fn emit_fast_mode_diagnostics(

@@ -1,5 +1,6 @@
 use super::*;
 use crate::ooxml::part_utils::read_xml_part_and_rels;
+use crate::parse_utils::init_store_and_document;
 
 impl OoxmlParser {
     /// Parse an XLSX document.
@@ -64,8 +65,7 @@ impl OoxmlParser {
         let mut workbook = Xlsb::new(Cursor::new(data))
             .map_err(|e| ParseError::InvalidFormat(format!("XLSB parse error: {}", e)))?;
 
-        let mut store = IrStore::new();
-        let mut document = Document::new(DocumentFormat::Spreadsheet);
+        let (mut store, mut document) = init_store_and_document(DocumentFormat::Spreadsheet);
         document.span = Some(SourceSpan::new("xl/workbook.bin"));
 
         let mut sheet_index: u32 = 1;
