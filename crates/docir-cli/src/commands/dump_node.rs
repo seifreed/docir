@@ -37,7 +37,7 @@ pub fn run(
 
     // Find the node
     let node = parsed
-        .store
+        .store()
         .get(node_id)
         .ok_or_else(|| anyhow::anyhow!("Node not found: {}", node_id))?;
 

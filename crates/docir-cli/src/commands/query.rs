@@ -51,10 +51,10 @@ pub fn run(
     query.has_macros = has_macros;
 
     let matches = query
-        .execute(&parsed.store, parsed.root_id)
+        .execute(parsed.store(), parsed.root_id())
         .into_iter()
         .filter_map(|id| {
-            parsed.store.get(id).map(|node| QueryMatch {
+            parsed.store().get(id).map(|node| QueryMatch {
                 node_id: id.to_string(),
                 node_type: node.node_type(),
                 location: node.source_span().map(|s| s.file_path.clone()),

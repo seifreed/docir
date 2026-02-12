@@ -1,10 +1,13 @@
 //! Application-level workflows for docir.
 
 use anyhow::Result;
-use docir_core::types::NodeId;
+use docir_core::ir::Document;
+use docir_core::security::SecurityInfo;
+use docir_core::types::{DocumentFormat, NodeId};
 use docir_core::visitor::IrStore;
 use docir_diff::DiffResult;
-use docir_parser::parser::ParsedDocument;
+use docir_parser::parser::ParseMetrics as ParserParseMetrics;
+use docir_parser::parser::ParsedDocument as ParserParsedDocument;
 pub use docir_parser::ParserConfig;
 use docir_parser::{DocumentParser, ParseError};
 pub use docir_rules::RuleProfile;
@@ -20,6 +23,78 @@ use use_cases::{
     AnalyzeSecurity, DefaultSecurityAnalyzerFactory, DiffDocuments, ParseDocument, RunRules,
     SerializeDocument,
 };
+
+/// Application-level parsed document wrapper.
+#[derive(Debug)]
+pub struct ParsedDocument {
+    inner: ParserParsedDocument,
+    metrics: Option<ParseMetrics>,
+}
+
+/// Application-level parse metrics.
+#[derive(Debug, Clone)]
+pub struct ParseMetrics {
+    pub content_types_ms: u128,
+    pub relationships_ms: u128,
+    pub main_parse_ms: u128,
+    pub shared_parts_ms: u128,
+    pub security_scan_ms: u128,
+    pub extension_parts_ms: u128,
+    pub normalization_ms: u128,
+}
+
+impl From<&ParserParseMetrics> for ParseMetrics {
+    fn from(metrics: &ParserParseMetrics) -> Self {
+        Self {
+            content_types_ms: metrics.content_types_ms,
+            relationships_ms: metrics.relationships_ms,
+            main_parse_ms: metrics.main_parse_ms,
+            shared_parts_ms: metrics.shared_parts_ms,
+            security_scan_ms: metrics.security_scan_ms,
+            extension_parts_ms: metrics.extension_parts_ms,
+            normalization_ms: metrics.normalization_ms,
+        }
+    }
+}
+
+impl ParsedDocument {
+    pub(crate) fn new(inner: ParserParsedDocument) -> Self {
+        let metrics = inner.metrics.as_ref().map(ParseMetrics::from);
+        Self { inner, metrics }
+    }
+
+    pub fn root_id(&self) -> NodeId {
+        self.inner.root_id
+    }
+
+    pub fn format(&self) -> DocumentFormat {
+        self.inner.format
+    }
+
+    pub fn store(&self) -> &IrStore {
+        &self.inner.store
+    }
+
+    pub fn store_mut(&mut self) -> &mut IrStore {
+        &mut self.inner.store
+    }
+
+    pub fn document(&self) -> Option<&Document> {
+        self.inner.document()
+    }
+
+    pub fn security_info(&self) -> Option<&SecurityInfo> {
+        self.inner.security_info()
+    }
+
+    pub fn metrics(&self) -> Option<&ParseMetrics> {
+        self.metrics.as_ref()
+    }
+
+    pub(crate) fn into_inner(self) -> ParserParsedDocument {
+        self.inner
+    }
+}
 /// Parser port for application workflows.
 pub trait ParserPort {
     fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError>;
@@ -29,15 +104,15 @@ pub trait ParserPort {
 
 impl ParserPort for DocumentParser {
     fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        self.parse_file(path)
+        self.parse_file(path).map(ParsedDocument::new)
     }
 
     fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        self.parse_bytes(data)
+        self.parse_bytes(data).map(ParsedDocument::new)
     }
 
     fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
-        self.parse_reader(reader)
+        self.parse_reader(reader).map(ParsedDocument::new)
     }
 }
 
@@ -169,12 +244,12 @@ impl<P: ParserPort> DocirApp<P> {
 
     /// Runs security analysis for a parsed document.
     pub fn analyze_security(&self, parsed: &ParsedDocument) -> AnalysisResult {
-        AnalyzeSecurity::new(&self.security_analyzer_factory).run(&parsed.store, parsed.root_id)
+        AnalyzeSecurity::new(&self.security_analyzer_factory).run(parsed.store(), parsed.root_id())
     }
 
     /// Runs rules for a parsed document.
     pub fn run_rules(&self, parsed: &ParsedDocument, profile: &RuleProfile) -> RuleReport {
-        RunRules::new(&self.rules_engine_factory).run(&parsed.store, parsed.root_id, profile)
+        RunRules::new(&self.rules_engine_factory).run(parsed.store(), parsed.root_id(), profile)
     }
 
     /// Computes a diff between two parsed documents.

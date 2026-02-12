@@ -33,15 +33,15 @@ pub fn run(
 
     for id in node_ids {
         let node_id = parse_node_id(&id)?;
-        if let Some(node) = parsed.store.get(node_id) {
+        if let Some(node) = parsed.store().get(node_id) {
             nodes.push(node.clone());
         }
     }
 
     if let Some(t) = node_type {
         let node_type = parse_node_type(&t)?;
-        for id in parsed.store.iter_ids_by_type(node_type) {
-            if let Some(node) = parsed.store.get(id) {
+        for id in parsed.store().iter_ids_by_type(node_type) {
+            if let Some(node) = parsed.store().get(id) {
                 nodes.push(node.clone());
             }
         }

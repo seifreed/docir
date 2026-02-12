@@ -1139,7 +1139,7 @@ impl OoxmlParser {
                 let source = String::from_utf8_lossy(&src).to_string();
                 let (procedures, suspicious) = analyze_vba_source(&source);
                 for proc_name in &procedures {
-                    if docir_core::security::AUTO_EXEC_PROCEDURES
+                    if docir_security::AUTO_EXEC_PROCEDURES
                         .iter()
                         .any(|p| p.eq_ignore_ascii_case(proc_name))
                     {
@@ -1661,7 +1661,7 @@ fn analyze_vba_source(source: &str) -> (Vec<String>, Vec<docir_core::security::S
             }
         }
 
-        for &(call, category) in docir_core::security::SUSPICIOUS_VBA_CALLS {
+        for &(call, category) in docir_security::SUSPICIOUS_VBA_CALLS {
             if lower.contains(&call.to_ascii_lowercase()) {
                 suspicious.push(docir_core::security::SuspiciousCall {
                     name: call.to_string(),

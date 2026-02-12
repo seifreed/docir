@@ -26,7 +26,7 @@ fn parse_json(path: String, pretty: Option<bool>) -> PyResult<String> {
         JsonSerializer::new()
     };
     serializer
-        .serialize_to_string(&parsed.store, parsed.root_id)
+        .serialize_to_string(parsed.store(), parsed.root_id())
         .map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
@@ -81,10 +81,10 @@ fn query(
     q.has_macros = has_macros;
 
     let matches: Vec<_> = q
-        .execute(&parsed.store, parsed.root_id)
+        .execute(parsed.store(), parsed.root_id())
         .into_iter()
         .filter_map(|id| {
-            parsed.store.get(id).map(|node| {
+            parsed.store().get(id).map(|node| {
                 json!({
                     "node_id": id.to_string(),
                     "node_type": format!("{:?}", node.node_type()),
@@ -114,12 +114,12 @@ fn summary(path: String) -> PyResult<String> {
         .ok_or_else(|| PyValueError::new_err("Document root not found"))?;
 
     let mut counter = NodeCounter::new();
-    let mut walker = PreOrderWalker::new(&parsed.store, parsed.root_id);
+    let mut walker = PreOrderWalker::new(parsed.store(), parsed.root_id());
     let _ = walker.walk(&mut counter);
 
     let mut lines = Vec::new();
     lines.push(format!("Format: {}", doc.format.display_name()));
-    lines.push(format!("Nodes: {}", parsed.store.len()));
+    lines.push(format!("Nodes: {}", parsed.store().len()));
 
     let mut counts: Vec<_> = counter.counts.iter().collect();
     counts.sort_by_key(|(_, v)| std::cmp::Reverse(*v));

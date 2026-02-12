@@ -1,11 +1,8 @@
 //! Security analyzer for IR documents.
 
 use crate::make_indicator;
-use docir_core::ir::{Document, IRNode};
-use docir_core::security::{
-    SecurityInfo, ThreatIndicator, ThreatIndicatorType, ThreatLevel, AUTO_EXEC_PROCEDURES,
-    DANGEROUS_XLM_FUNCTIONS, SUSPICIOUS_VBA_CALLS,
-};
+use docir_core::ir::IRNode;
+use docir_core::security::{SecurityInfo, ThreatIndicator, ThreatIndicatorType, ThreatLevel};
 use docir_core::visitor::{IrStore, IrVisitor, PreOrderWalker, VisitControl, VisitorResult};
 
 /// Security analyzer that examines an IR document for threats.

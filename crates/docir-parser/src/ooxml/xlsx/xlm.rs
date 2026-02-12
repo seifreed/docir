@@ -1,7 +1,8 @@
 //! XLM macro tracking helpers for XLSX parsing.
 
 use super::{SheetInfo, XlsxParser};
-use docir_core::security::{XlmFunction, XlmMacro, XlmMacroCell, DANGEROUS_XLM_FUNCTIONS};
+use docir_core::security::{XlmFunction, XlmMacro, XlmMacroCell};
+use docir_security::DANGEROUS_XLM_FUNCTIONS;
 
 impl XlsxParser {
     pub(super) fn begin_macro_sheet(&mut self, sheet: &SheetInfo) {

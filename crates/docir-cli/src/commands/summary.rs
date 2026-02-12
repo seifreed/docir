@@ -30,7 +30,7 @@ pub fn run(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
 
     // Metadata
     if let Some(meta_id) = doc.metadata {
-        if let Some(IRNode::Metadata(meta)) = parsed.store.get(meta_id) {
+        if let Some(IRNode::Metadata(meta)) = parsed.store().get(meta_id) {
             println!("Metadata:");
             if let Some(title) = &meta.title {
                 println!("  Title: {}", title);
@@ -50,7 +50,7 @@ pub fn run(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
 
     // Count nodes
     let mut counter = NodeCounter::new();
-    let mut walker = PreOrderWalker::new(&parsed.store, parsed.root_id);
+    let mut walker = PreOrderWalker::new(parsed.store(), parsed.root_id());
     let _ = walker.walk(&mut counter);
 
     println!("Structure:");
@@ -65,7 +65,7 @@ pub fn run(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
 
     // Text stats
     let mut text_collector = TextStats::new();
-    let mut walker = PreOrderWalker::new(&parsed.store, parsed.root_id);
+    let mut walker = PreOrderWalker::new(parsed.store(), parsed.root_id());
     let _ = walker.walk(&mut text_collector);
 
     println!("Text Statistics:");
@@ -73,7 +73,7 @@ pub fn run(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
     println!("  Words: ~{}", text_collector.word_count);
     println!();
 
-    if let Some(metrics) = parsed.metrics.as_ref() {
+    if let Some(metrics) = parsed.metrics() {
         println!("Parse Metrics (ms):");
         println!("  Content Types: {}", metrics.content_types_ms);
         println!("  Relationships: {}", metrics.relationships_ms);

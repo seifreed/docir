@@ -42,7 +42,7 @@ pub fn run(input: PathBuf, options: CoverageOptions, parser_config: &ParserConfi
 
     let mut entries: Vec<DiagnosticEntry> = Vec::new();
     for diag_id in &doc.diagnostics {
-        if let Some(IRNode::Diagnostics(diag)) = parsed.store.get(*diag_id) {
+        if let Some(IRNode::Diagnostics(diag)) = parsed.store().get(*diag_id) {
             entries.extend(diag.entries.clone());
         }
     }

@@ -1,9 +1,7 @@
 //! Security indicator detection utilities.
 
-use docir_core::security::{
-    SuspiciousCall, SuspiciousCallCategory, ThreatIndicator, ThreatIndicatorType, ThreatLevel,
-    SUSPICIOUS_VBA_CALLS,
-};
+use crate::policy::{AUTO_EXEC_PROCEDURES, DANGEROUS_XLM_FUNCTIONS, SUSPICIOUS_VBA_CALLS};
+use docir_core::security::{SuspiciousCall, ThreatIndicator, ThreatIndicatorType, ThreatLevel};
 use docir_core::types::NodeId;
 
 /// Builds a threat indicator with standardized fields.
@@ -96,8 +94,6 @@ pub fn is_suspicious_url(url: &str) -> bool {
 
 /// Checks if a procedure name is an auto-execute trigger.
 pub fn is_auto_exec_procedure(name: &str) -> bool {
-    use docir_core::security::AUTO_EXEC_PROCEDURES;
-
     let name_lower = name.to_lowercase();
     AUTO_EXEC_PROCEDURES
         .iter()
@@ -106,8 +102,6 @@ pub fn is_auto_exec_procedure(name: &str) -> bool {
 
 /// Checks if a formula contains dangerous XLM functions.
 pub fn contains_dangerous_xlm(formula: &str) -> Vec<String> {
-    use docir_core::security::DANGEROUS_XLM_FUNCTIONS;
-
     let formula_upper = formula.to_uppercase();
     DANGEROUS_XLM_FUNCTIONS
         .iter()
