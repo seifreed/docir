@@ -541,6 +541,29 @@ fn handle_control_word(
     if handle_run_style_controls(word, param, ctx) {
         return Ok(());
     }
+    if handle_group_controls(word, param, ctx)? {
+        return Ok(());
+    }
+    if handle_field_controls(word, ctx) {
+        return Ok(());
+    }
+    if handle_object_controls(word, param, ctx) {
+        return Ok(());
+    }
+    if handle_table_controls(word, param, ctx, store)? {
+        return Ok(());
+    }
+    if handle_encoding_controls(word, param, ctx) {
+        return Ok(());
+    }
+    Ok(())
+}
+
+fn handle_group_controls(
+    word: &str,
+    param: Option<i32>,
+    ctx: &mut RtfParseContext,
+) -> Result<bool, ParseError> {
     match word {
         "fonttbl" => {
             if let Some(group) = ctx.group_stack.last_mut() {
@@ -717,6 +740,13 @@ fn handle_control_word(
                 }
             }
         }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn handle_field_controls(word: &str, ctx: &mut RtfParseContext) -> bool {
+    match word {
         "field" => {
             if let Some(group) = ctx.group_stack.last_mut() {
                 group.kind = GroupKind::Field;
@@ -735,6 +765,13 @@ fn handle_control_word(
             }
             ctx.current_text.clear();
         }
+        _ => return false,
+    }
+    true
+}
+
+fn handle_object_controls(word: &str, param: Option<i32>, ctx: &mut RtfParseContext) -> bool {
+    match word {
         "pict" => {
             if let Some(group) = ctx.group_stack.last_mut() {
                 group.kind = GroupKind::Picture;
@@ -805,6 +842,18 @@ fn handle_control_word(
             ctx.current_text.clear();
             ctx.object_text_target = None;
         }
+        _ => return false,
+    }
+    true
+}
+
+fn handle_table_controls(
+    word: &str,
+    param: Option<i32>,
+    ctx: &mut RtfParseContext,
+    store: &mut IrStore,
+) -> Result<bool, ParseError> {
+    match word {
         "trowd" => {
             flush_text(ctx, store, None)?;
             ensure_section(ctx, store);
@@ -934,6 +983,13 @@ fn handle_control_word(
             finalize_cell(ctx, store);
             finalize_row(ctx, store);
         }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn handle_encoding_controls(word: &str, param: Option<i32>, ctx: &mut RtfParseContext) -> bool {
+    match word {
         "ansicpg" => {
             if let Some(cp) = param {
                 if let Some(enc) = encoding_for_codepage(cp as u32) {
@@ -941,9 +997,9 @@ fn handle_control_word(
                 }
             }
         }
-        _ => {}
+        _ => return false,
     }
-    Ok(())
+    true
 }
 
 fn handle_paragraph_controls(
