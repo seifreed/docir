@@ -1,7 +1,8 @@
 use crate::error::ParseError;
-use quick_xml::events::BytesStart;
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use std::fmt::Display;
+use std::io::BufRead;
 
 pub(crate) fn attr_value(e: &BytesStart<'_>, name: &[u8]) -> Option<String> {
     for attr in e.attributes().flatten() {
@@ -67,4 +68,15 @@ pub(crate) fn reader_from_str_with_options(
     cfg.trim_text(trim_text);
     cfg.expand_empty_elements = expand_empty_elements;
     reader
+}
+
+pub(crate) fn read_event<'a, R: BufRead>(
+    reader: &mut Reader<R>,
+    buf: &'a mut Vec<u8>,
+    file: &str,
+) -> Result<Event<'a>, ParseError> {
+    reader.read_event_into(buf).map_err(|err| ParseError::Xml {
+        file: file.to_string(),
+        message: err.to_string(),
+    })
 }

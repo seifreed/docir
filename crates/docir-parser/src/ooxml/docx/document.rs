@@ -3,7 +3,7 @@
 use super::field::parse_field_instruction;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, read_event};
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
     FontEntry, FontTable, Footer, GlossaryDocument, GlossaryEntry, Header, Hyperlink,
@@ -656,8 +656,8 @@ fn parse_body(
     let mut buf = Vec::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match read_event(reader, &mut buf, "word/document.xml")? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"w:p" => {
                     let para = parse_paragraph(parser, reader, rels, header_footer_map)?;
                     content.push(para.id);
@@ -673,7 +673,7 @@ fn parse_body(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if e.name().as_ref() == b"w:body"
                     || e.name().as_ref() == b"w:hdr"
                     || e.name().as_ref() == b"w:ftr"
@@ -681,13 +681,7 @@ fn parse_body(
                     break;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
@@ -711,8 +705,8 @@ fn parse_body_sections(
     let mut buf = Vec::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match read_event(reader, &mut buf, "word/document.xml")? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"w:p" => {
                     let para = parse_paragraph(parser, reader, rels, header_footer_map)?;
                     current.content.push(para.id);
@@ -767,18 +761,12 @@ fn parse_body_sections(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if e.name().as_ref() == b"w:body" {
                     break;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
@@ -810,8 +798,8 @@ fn parse_block_until(
     let mut buf = Vec::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match read_event(reader, &mut buf, "word/document.xml")? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"w:p" => {
                     let para_id = parse_paragraph_simple(parser, reader, rels)?;
                     content.push(para_id);
@@ -826,18 +814,12 @@ fn parse_block_until(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if e.name().as_ref() == end_tag {
                     break;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();

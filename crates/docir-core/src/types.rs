@@ -2,10 +2,35 @@
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Global counter for generating unique node IDs.
 static NODE_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+/// Parse errors for enum string conversions.
+#[derive(Debug, Clone)]
+pub struct ParseEnumError {
+    kind: &'static str,
+    input: String,
+}
+
+impl ParseEnumError {
+    fn new(kind: &'static str, input: &str) -> Self {
+        Self {
+            kind,
+            input: input.to_string(),
+        }
+    }
+}
+
+impl fmt::Display for ParseEnumError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Unknown {}: {}", self.kind, self.input)
+    }
+}
+
+impl std::error::Error for ParseEnumError {}
 
 /// Unique identifier for IR nodes.
 ///
@@ -151,6 +176,27 @@ impl DocumentFormat {
     }
 }
 
+impl FromStr for DocumentFormat {
+    type Err = ParseEnumError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let upper = input.trim().to_ascii_uppercase();
+        let fmt = match upper.as_str() {
+            "DOCX" | "WORD" | "WORDPROCESSING" => DocumentFormat::WordProcessing,
+            "XLSX" | "EXCEL" | "SPREADSHEET" => DocumentFormat::Spreadsheet,
+            "PPTX" | "PPT" | "POWERPOINT" | "PRESENTATION" => DocumentFormat::Presentation,
+            "ODT" | "ODF" | "ODFTEXT" => DocumentFormat::OdfText,
+            "ODS" | "ODFSPREADSHEET" => DocumentFormat::OdfSpreadsheet,
+            "ODP" | "ODFPRESENTATION" => DocumentFormat::OdfPresentation,
+            "HWP" => DocumentFormat::Hwp,
+            "HWPX" => DocumentFormat::Hwpx,
+            "RTF" => DocumentFormat::Rtf,
+            _ => return Err(ParseEnumError::new("document format", input)),
+        };
+        Ok(fmt)
+    }
+}
+
 /// Node type discriminant for the IR tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NodeType {
@@ -265,6 +311,34 @@ pub enum NodeType {
     TimelinePart,
     QueryTablePart,
     Diagnostics,
+}
+
+impl FromStr for NodeType {
+    type Err = ParseEnumError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let upper = input.trim().to_ascii_uppercase();
+        let ty = match upper.as_str() {
+            "DOCUMENT" => NodeType::Document,
+            "SECTION" => NodeType::Section,
+            "PARAGRAPH" => NodeType::Paragraph,
+            "RUN" => NodeType::Run,
+            "TABLE" => NodeType::Table,
+            "TABLEROW" | "TABLE_ROW" => NodeType::TableRow,
+            "TABLECELL" | "TABLE_CELL" => NodeType::TableCell,
+            "SLIDE" => NodeType::Slide,
+            "SHAPE" => NodeType::Shape,
+            "WORKSHEET" => NodeType::Worksheet,
+            "CELL" => NodeType::Cell,
+            "MACROPROJECT" | "MACRO_PROJECT" => NodeType::MacroProject,
+            "MACROMODULE" | "MACRO_MODULE" => NodeType::MacroModule,
+            "OLEOBJECT" | "OLE_OBJECT" => NodeType::OleObject,
+            "EXTERNALREFERENCE" | "EXTERNAL_REFERENCE" => NodeType::ExternalReference,
+            "ACTIVEXCONTROL" | "ACTIVEX_CONTROL" => NodeType::ActiveXControl,
+            _ => return Err(ParseEnumError::new("node type", input)),
+        };
+        Ok(ty)
+    }
 }
 
 impl fmt::Display for NodeType {

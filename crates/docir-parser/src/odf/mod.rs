@@ -4,7 +4,7 @@ use crate::error::ParseError;
 use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file};
 use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, read_event};
 use crate::zip_handler::SecureZipReader;
 use aes::Aes128;
 use aes::Aes256;
@@ -927,8 +927,8 @@ fn parse_draw_page(
     let mut notes_text: Option<String> = None;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match read_event(reader, &mut buf, "content.xml")? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"draw:frame" => {
                     if let Some(shape_id) = parse_draw_frame_presentation(reader, &e, store)? {
                         slide.shapes.push(shape_id);
@@ -949,7 +949,7 @@ fn parse_draw_page(
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
+            Event::Empty(e) => match e.name().as_ref() {
                 b"draw:frame" => {
                     if let Some(shape_id) = parse_draw_frame_presentation(reader, &e, store)? {
                         slide.shapes.push(shape_id);
@@ -967,18 +967,12 @@ fn parse_draw_page(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if e.name().as_ref() == b"draw:page" {
                     break;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
@@ -1450,8 +1444,8 @@ fn parse_notes(reader: &mut OdfReader<'_>) -> Result<Option<String>, ParseError>
     let mut buf = Vec::new();
     let mut text = String::new();
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+        match read_event(reader, &mut buf, "content.xml")? {
+            Event::Start(e) => {
                 if e.name().as_ref() == b"text:p" {
                     let para = parse_text_element(reader, b"text:p")?;
                     if !text.is_empty() {
@@ -1460,18 +1454,12 @@ fn parse_notes(reader: &mut OdfReader<'_>) -> Result<Option<String>, ParseError>
                     text.push_str(&para);
                 }
             }
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if e.name().as_ref() == b"presentation:notes" {
                     break;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();

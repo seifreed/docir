@@ -12,6 +12,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use serde_json::json;
 use std::path::Path;
+use std::str::FromStr;
 
 #[pyfunction]
 fn parse_json(path: String, pretty: Option<bool>) -> PyResult<String> {
@@ -148,48 +149,11 @@ fn summary(path: String) -> PyResult<String> {
 }
 
 fn parse_node_type(input: &str) -> PyResult<NodeType> {
-    let upper = input.trim().to_ascii_uppercase();
-    let ty = match upper.as_str() {
-        "DOCUMENT" => NodeType::Document,
-        "SECTION" => NodeType::Section,
-        "PARAGRAPH" => NodeType::Paragraph,
-        "RUN" => NodeType::Run,
-        "TABLE" => NodeType::Table,
-        "TABLEROW" | "TABLE_ROW" => NodeType::TableRow,
-        "TABLECELL" | "TABLE_CELL" => NodeType::TableCell,
-        "SLIDE" => NodeType::Slide,
-        "SHAPE" => NodeType::Shape,
-        "WORKSHEET" => NodeType::Worksheet,
-        "CELL" => NodeType::Cell,
-        "MACROPROJECT" | "MACRO_PROJECT" => NodeType::MacroProject,
-        "MACROMODULE" | "MACRO_MODULE" => NodeType::MacroModule,
-        "OLEOBJECT" | "OLE_OBJECT" => NodeType::OleObject,
-        "EXTERNALREFERENCE" | "EXTERNAL_REFERENCE" => NodeType::ExternalReference,
-        "ACTIVEXCONTROL" | "ACTIVEX_CONTROL" => NodeType::ActiveXControl,
-        _ => return Err(PyValueError::new_err(format!("Unknown node type: {input}"))),
-    };
-    Ok(ty)
+    NodeType::from_str(input).map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
 fn parse_doc_format(input: &str) -> PyResult<DocumentFormat> {
-    let upper = input.trim().to_ascii_uppercase();
-    let fmt = match upper.as_str() {
-        "DOCX" | "WORD" | "WORDPROCESSING" => DocumentFormat::WordProcessing,
-        "XLSX" | "EXCEL" | "SPREADSHEET" => DocumentFormat::Spreadsheet,
-        "PPTX" | "PPT" | "POWERPOINT" | "PRESENTATION" => DocumentFormat::Presentation,
-        "ODT" | "ODF" | "ODFTEXT" => DocumentFormat::OdfText,
-        "ODS" | "ODFSPREADSHEET" => DocumentFormat::OdfSpreadsheet,
-        "ODP" | "ODFPRESENTATION" => DocumentFormat::OdfPresentation,
-        "HWP" => DocumentFormat::Hwp,
-        "HWPX" => DocumentFormat::Hwpx,
-        "RTF" => DocumentFormat::Rtf,
-        _ => {
-            return Err(PyValueError::new_err(format!(
-                "Unknown document format: {input}"
-            )))
-        }
-    };
-    Ok(fmt)
+    DocumentFormat::from_str(input).map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
 #[pymodule]
