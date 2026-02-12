@@ -46,37 +46,13 @@ pub(super) fn parse_paragraph(
                     para.runs.push(field_id);
                 }
                 b"w:commentRangeStart" => {
-                    if let Some(cid) = attr_value(&e, b"w:id") {
-                        let mut node = CommentRangeStart::new(cid);
-                        node.span = Some(span_from_reader(reader, "word/document.xml"));
-                        let node_id = node.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::CommentRangeStart(node));
-                        para.runs.push(node_id);
-                    }
+                    insert_comment_range_start(parser, reader, &mut para, &e);
                 }
                 b"w:commentRangeEnd" => {
-                    if let Some(cid) = attr_value(&e, b"w:id") {
-                        let mut node = CommentRangeEnd::new(cid);
-                        node.span = Some(span_from_reader(reader, "word/document.xml"));
-                        let node_id = node.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::CommentRangeEnd(node));
-                        para.runs.push(node_id);
-                    }
+                    insert_comment_range_end(parser, reader, &mut para, &e);
                 }
                 b"w:commentReference" => {
-                    if let Some(cid) = attr_value(&e, b"w:id") {
-                        let mut node = CommentReference::new(cid);
-                        node.span = Some(span_from_reader(reader, "word/document.xml"));
-                        let node_id = node.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::CommentReference(node));
-                        para.runs.push(node_id);
-                    }
+                    insert_comment_reference(parser, reader, &mut para, &e);
                 }
                 b"w:ins" => {
                     let rev_id =
@@ -109,82 +85,28 @@ pub(super) fn parse_paragraph(
                     para.runs.push(rev_id);
                 }
                 b"w:bookmarkStart" => {
-                    if let Some(bm_id) = attr_value(&e, b"w:id") {
-                        let mut bm = docir_core::ir::BookmarkStart::new(bm_id);
-                        bm.name = attr_value(&e, b"w:name");
-                        bm.col_first = attr_value(&e, b"w:colFirst").and_then(|v| v.parse().ok());
-                        bm.col_last = attr_value(&e, b"w:colLast").and_then(|v| v.parse().ok());
-                        let bm_id = bm.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::BookmarkStart(bm));
-                        para.runs.push(bm_id);
-                    }
+                    insert_bookmark_start(parser, &mut para, &e);
                 }
                 b"w:bookmarkEnd" => {
-                    if let Some(bm_id) = attr_value(&e, b"w:id") {
-                        let bm = docir_core::ir::BookmarkEnd::new(bm_id);
-                        let bm_id = bm.id;
-                        parser.store.insert(docir_core::ir::IRNode::BookmarkEnd(bm));
-                        para.runs.push(bm_id);
-                    }
+                    insert_bookmark_end(parser, &mut para, &e);
                 }
                 _ => {}
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
                 b"w:commentRangeStart" => {
-                    if let Some(cid) = attr_value(&e, b"w:id") {
-                        let mut node = CommentRangeStart::new(cid);
-                        node.span = Some(span_from_reader(reader, "word/document.xml"));
-                        let node_id = node.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::CommentRangeStart(node));
-                        para.runs.push(node_id);
-                    }
+                    insert_comment_range_start(parser, reader, &mut para, &e);
                 }
                 b"w:commentRangeEnd" => {
-                    if let Some(cid) = attr_value(&e, b"w:id") {
-                        let mut node = CommentRangeEnd::new(cid);
-                        node.span = Some(span_from_reader(reader, "word/document.xml"));
-                        let node_id = node.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::CommentRangeEnd(node));
-                        para.runs.push(node_id);
-                    }
+                    insert_comment_range_end(parser, reader, &mut para, &e);
                 }
                 b"w:commentReference" => {
-                    if let Some(cid) = attr_value(&e, b"w:id") {
-                        let mut node = CommentReference::new(cid);
-                        node.span = Some(span_from_reader(reader, "word/document.xml"));
-                        let node_id = node.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::CommentReference(node));
-                        para.runs.push(node_id);
-                    }
+                    insert_comment_reference(parser, reader, &mut para, &e);
                 }
                 b"w:bookmarkStart" => {
-                    if let Some(bm_id) = attr_value(&e, b"w:id") {
-                        let mut bm = docir_core::ir::BookmarkStart::new(bm_id);
-                        bm.name = attr_value(&e, b"w:name");
-                        bm.col_first = attr_value(&e, b"w:colFirst").and_then(|v| v.parse().ok());
-                        bm.col_last = attr_value(&e, b"w:colLast").and_then(|v| v.parse().ok());
-                        let bm_id = bm.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::BookmarkStart(bm));
-                        para.runs.push(bm_id);
-                    }
+                    insert_bookmark_start(parser, &mut para, &e);
                 }
                 b"w:bookmarkEnd" => {
-                    if let Some(bm_id) = attr_value(&e, b"w:id") {
-                        let bm = docir_core::ir::BookmarkEnd::new(bm_id);
-                        let bm_id = bm.id;
-                        parser.store.insert(docir_core::ir::IRNode::BookmarkEnd(bm));
-                        para.runs.push(bm_id);
-                    }
+                    insert_bookmark_end(parser, &mut para, &e);
                 }
                 _ => {}
             },
@@ -261,6 +183,88 @@ fn update_field_from_run(run: &RunParse, run_id: NodeId, state: &mut FieldState)
         if run.has_instr && !state.instr_done {
             state.instr.push_str(&run.text);
         }
+    }
+}
+
+fn insert_comment_range_start(
+    parser: &mut DocxParser,
+    reader: &Reader<&[u8]>,
+    para: &mut Paragraph,
+    element: &quick_xml::events::BytesStart,
+) {
+    if let Some(cid) = attr_value(element, b"w:id") {
+        let mut node = CommentRangeStart::new(cid);
+        node.span = Some(span_from_reader(reader, "word/document.xml"));
+        let node_id = node.id;
+        parser
+            .store
+            .insert(docir_core::ir::IRNode::CommentRangeStart(node));
+        para.runs.push(node_id);
+    }
+}
+
+fn insert_comment_range_end(
+    parser: &mut DocxParser,
+    reader: &Reader<&[u8]>,
+    para: &mut Paragraph,
+    element: &quick_xml::events::BytesStart,
+) {
+    if let Some(cid) = attr_value(element, b"w:id") {
+        let mut node = CommentRangeEnd::new(cid);
+        node.span = Some(span_from_reader(reader, "word/document.xml"));
+        let node_id = node.id;
+        parser
+            .store
+            .insert(docir_core::ir::IRNode::CommentRangeEnd(node));
+        para.runs.push(node_id);
+    }
+}
+
+fn insert_comment_reference(
+    parser: &mut DocxParser,
+    reader: &Reader<&[u8]>,
+    para: &mut Paragraph,
+    element: &quick_xml::events::BytesStart,
+) {
+    if let Some(cid) = attr_value(element, b"w:id") {
+        let mut node = CommentReference::new(cid);
+        node.span = Some(span_from_reader(reader, "word/document.xml"));
+        let node_id = node.id;
+        parser
+            .store
+            .insert(docir_core::ir::IRNode::CommentReference(node));
+        para.runs.push(node_id);
+    }
+}
+
+fn insert_bookmark_start(
+    parser: &mut DocxParser,
+    para: &mut Paragraph,
+    element: &quick_xml::events::BytesStart,
+) {
+    if let Some(bm_id) = attr_value(element, b"w:id") {
+        let mut bm = docir_core::ir::BookmarkStart::new(bm_id);
+        bm.name = attr_value(element, b"w:name");
+        bm.col_first = attr_value(element, b"w:colFirst").and_then(|v| v.parse().ok());
+        bm.col_last = attr_value(element, b"w:colLast").and_then(|v| v.parse().ok());
+        let bm_id = bm.id;
+        parser
+            .store
+            .insert(docir_core::ir::IRNode::BookmarkStart(bm));
+        para.runs.push(bm_id);
+    }
+}
+
+fn insert_bookmark_end(
+    parser: &mut DocxParser,
+    para: &mut Paragraph,
+    element: &quick_xml::events::BytesStart,
+) {
+    if let Some(bm_id) = attr_value(element, b"w:id") {
+        let bm = docir_core::ir::BookmarkEnd::new(bm_id);
+        let bm_id = bm.id;
+        parser.store.insert(docir_core::ir::IRNode::BookmarkEnd(bm));
+        para.runs.push(bm_id);
     }
 }
 
