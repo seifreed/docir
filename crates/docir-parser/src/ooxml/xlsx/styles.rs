@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::ooxml::xml_utils::xml_error;
-use crate::xml_utils::{attr_value, reader_from_str_with_options};
+use crate::xml_utils::{attr_f64, attr_value, reader_from_str_with_options};
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,
     NumberFormat, SpreadsheetStyles, TableStyleDef, TableStyleInfo,
@@ -116,7 +116,7 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
                     }
                 }
                 b"sz" => {
-                    if let Some(size) = attr_value(&e, b"val").and_then(|v| v.parse::<f64>().ok()) {
+                    if let Some(size) = attr_f64(&e, b"val") {
                         apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
                             font.size = Some(size);
                         });

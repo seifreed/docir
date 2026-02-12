@@ -20,6 +20,10 @@ pub(crate) fn attr_bool(e: &BytesStart<'_>, name: &[u8]) -> Option<bool> {
     attr_value(e, name).map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
 }
 
+pub(crate) fn attr_f64(e: &BytesStart<'_>, name: &[u8]) -> Option<f64> {
+    attr_value(e, name).and_then(|v| v.parse::<f64>().ok())
+}
+
 pub(crate) fn attr_value_by_suffix(e: &BytesStart<'_>, suffixes: &[&[u8]]) -> Option<String> {
     for attr in e.attributes().flatten() {
         let key = attr.key.as_ref();
