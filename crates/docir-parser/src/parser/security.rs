@@ -8,6 +8,7 @@ use docir_core::ir::IRNode;
 use docir_core::security::{ExternalRefType, ExternalReference, MacroProject, OleObject};
 use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
+use docir_security::analyze_vba_source;
 use std::collections::HashSet;
 
 pub struct SecurityScanner<'a> {
@@ -194,7 +195,7 @@ impl<'a> SecurityScanner<'a> {
 
             if let Some(src) = data {
                 let source = String::from_utf8_lossy(&src).to_string();
-                let analysis = docir_core::security::analyze_vba_source(&source);
+                let analysis = analyze_vba_source(&source);
                 auto_exec.extend(analysis.auto_exec_procedures.clone());
                 module.procedures = analysis.procedures;
                 module.suspicious_calls = analysis.suspicious_calls;
