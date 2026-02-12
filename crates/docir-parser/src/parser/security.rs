@@ -5,10 +5,10 @@ use crate::ooxml::part_utils::get_rels_path;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::IRNode;
+use docir_core::security::analyze_vba_source;
 use docir_core::security::{ExternalRefType, ExternalReference, MacroProject, OleObject};
 use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
-use docir_security::analyze_vba_source;
 use std::collections::HashSet;
 
 pub struct SecurityScanner<'a> {

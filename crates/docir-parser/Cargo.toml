@@ -8,7 +8,6 @@ description = "OOXML parser for docir"
 
 [dependencies]
 docir-core = { workspace = true }
-docir-security = { workspace = true }
 zip = { workspace = true }
 quick-xml = { workspace = true }
 encoding_rs = { workspace = true }
@@ -26,3 +25,4 @@ cbc = { workspace = true }
 [dev-dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+docir-security = { workspace = true }
