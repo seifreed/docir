@@ -24,733 +24,631 @@ impl PartSpec {
     }
 }
 
-pub fn registry_for(format: DocumentFormat) -> Vec<PartSpec> {
-    let mut entries: Vec<PartSpec> = Vec::new();
+#[derive(Debug, Clone, Copy)]
+struct PartSpecEntry {
+    pattern: &'static str,
+    content_type: Option<&'static str>,
+    expected_parser: &'static str,
+}
 
+fn build_registry(format: DocumentFormat, entries: &[PartSpecEntry]) -> Vec<PartSpec> {
+    entries
+        .iter()
+        .map(|entry| PartSpec {
+            format,
+            pattern: entry.pattern,
+            content_type: entry.content_type,
+            expected_parser: entry.expected_parser,
+        })
+        .collect()
+}
+
+const WORD_PARTS: &[PartSpecEntry] = &[
+    PartSpecEntry {
+        pattern: "_rels/.rels",
+        content_type: Some(content_type::RELATIONSHIPS),
+        expected_parser: "Relationships::parse",
+    },
+    PartSpecEntry {
+        pattern: "word/_rels/*.rels",
+        content_type: Some(content_type::RELATIONSHIPS),
+        expected_parser: "Relationships::parse",
+    },
+    PartSpecEntry {
+        pattern: "docProps/core.xml",
+        content_type: Some(content_type::CORE_PROPERTIES),
+        expected_parser: "parse_metadata(core)",
+    },
+    PartSpecEntry {
+        pattern: "docProps/app.xml",
+        content_type: Some(content_type::EXTENDED_PROPERTIES),
+        expected_parser: "parse_metadata(app)",
+    },
+    PartSpecEntry {
+        pattern: "docProps/custom.xml",
+        content_type: Some(content_type::CUSTOM_PROPERTIES),
+        expected_parser: "parse_custom_properties",
+    },
+    PartSpecEntry {
+        pattern: "customXml/*.xml",
+        content_type: Some(content_type::CUSTOM_XML),
+        expected_parser: "parse_custom_xml_part",
+    },
+    PartSpecEntry {
+        pattern: "customXml/itemProps*.xml",
+        content_type: Some(content_type::CUSTOM_XML_PROPERTIES),
+        expected_parser: "parse_custom_xml_part",
+    },
+    PartSpecEntry {
+        pattern: "_xmlsignatures/*.xml",
+        content_type: Some(content_type::DIGITAL_SIGNATURE_XML),
+        expected_parser: "parse_shared_parts(signature)",
+    },
+    PartSpecEntry {
+        pattern: "_xmlsignatures/origin.sigs",
+        content_type: Some(content_type::DIGITAL_SIGNATURE_ORIGIN),
+        expected_parser: "parse_shared_parts(signature)",
+    },
+    PartSpecEntry {
+        pattern: "word/document.xml",
+        content_type: Some(content_type::WORD_DOCUMENT),
+        expected_parser: "DocxParser::parse_document",
+    },
+    PartSpecEntry {
+        pattern: "word/document.xml",
+        content_type: Some(content_type::WORD_DOCUMENT_MACRO),
+        expected_parser: "DocxParser::parse_document",
+    },
+    PartSpecEntry {
+        pattern: "word/glossary/document.xml",
+        content_type: Some(content_type::WORD_GLOSSARY),
+        expected_parser: "DocxParser::parse_glossary_document",
+    },
+    PartSpecEntry {
+        pattern: "word/styles.xml",
+        content_type: Some(content_type::WORD_STYLES),
+        expected_parser: "DocxParser::parse_styles",
+    },
+    PartSpecEntry {
+        pattern: "word/numbering.xml",
+        content_type: Some(content_type::WORD_NUMBERING),
+        expected_parser: "DocxParser::parse_numbering",
+    },
+    PartSpecEntry {
+        pattern: "word/comments.xml",
+        content_type: Some(content_type::WORD_COMMENTS),
+        expected_parser: "DocxParser::parse_comments",
+    },
+    PartSpecEntry {
+        pattern: "word/commentsExtended.xml",
+        content_type: Some(content_type::WORD_COMMENTS_EXTENDED),
+        expected_parser: "DocxParser::parse_comments_extended",
+    },
+    PartSpecEntry {
+        pattern: "word/commentsIds.xml",
+        content_type: Some(content_type::WORD_COMMENTS_IDS),
+        expected_parser: "DocxParser::parse_comments_ids",
+    },
+    PartSpecEntry {
+        pattern: "word/footnotes.xml",
+        content_type: Some(content_type::WORD_FOOTNOTES),
+        expected_parser: "DocxParser::parse_notes",
+    },
+    PartSpecEntry {
+        pattern: "word/endnotes.xml",
+        content_type: Some(content_type::WORD_ENDNOTES),
+        expected_parser: "DocxParser::parse_notes",
+    },
+    PartSpecEntry {
+        pattern: "word/header*.xml",
+        content_type: Some(content_type::WORD_HEADER),
+        expected_parser: "DocxParser::parse_header_footer",
+    },
+    PartSpecEntry {
+        pattern: "word/footer*.xml",
+        content_type: Some(content_type::WORD_FOOTER),
+        expected_parser: "DocxParser::parse_header_footer",
+    },
+    PartSpecEntry {
+        pattern: "word/settings.xml",
+        content_type: Some(content_type::WORD_SETTINGS),
+        expected_parser: "DocxParser::parse_settings",
+    },
+    PartSpecEntry {
+        pattern: "word/webSettings.xml",
+        content_type: Some(content_type::WORD_WEB_SETTINGS),
+        expected_parser: "DocxParser::parse_web_settings",
+    },
+    PartSpecEntry {
+        pattern: "word/fontTable.xml",
+        content_type: Some(content_type::WORD_FONT_TABLE),
+        expected_parser: "DocxParser::parse_font_table",
+    },
+    PartSpecEntry {
+        pattern: "word/people.xml",
+        content_type: Some(content_type::WORD_PEOPLE),
+        expected_parser: "parse_people_part",
+    },
+    PartSpecEntry {
+        pattern: "word/theme/theme*.xml",
+        content_type: Some(content_type::WORD_THEME),
+        expected_parser: "parse_theme",
+    },
+    PartSpecEntry {
+        pattern: "word/drawings/*.xml",
+        content_type: Some(content_type::WORD_DRAWING),
+        expected_parser: "parse_drawingml",
+    },
+    PartSpecEntry {
+        pattern: "word/charts/*.xml",
+        content_type: Some(content_type::WORD_CHART),
+        expected_parser: "parse_chart_data",
+    },
+    PartSpecEntry {
+        pattern: "word/diagrams/data*.xml",
+        content_type: Some(content_type::WORD_DIAGRAM_DATA),
+        expected_parser: "parse_smartart_data",
+    },
+    PartSpecEntry {
+        pattern: "word/diagrams/layout*.xml",
+        content_type: Some(content_type::WORD_DIAGRAM_LAYOUT),
+        expected_parser: "parse_smartart_layout",
+    },
+    PartSpecEntry {
+        pattern: "word/diagrams/colors*.xml",
+        content_type: Some(content_type::WORD_DIAGRAM_COLORS),
+        expected_parser: "parse_smartart_colors",
+    },
+    PartSpecEntry {
+        pattern: "word/diagrams/quickStyle*.xml",
+        content_type: Some(content_type::WORD_DIAGRAM_STYLE),
+        expected_parser: "parse_smartart_style",
+    },
+    PartSpecEntry {
+        pattern: "word/media/*",
+        content_type: None,
+        expected_parser: "parse_shared_parts(media)",
+    },
+    PartSpecEntry {
+        pattern: "word/embeddings/*.bin",
+        content_type: Some(content_type::OLE_OBJECT),
+        expected_parser: "parse_shared_parts(ole)",
+    },
+    PartSpecEntry {
+        pattern: "word/vmlDrawing*.vml",
+        content_type: Some(content_type::WORD_VML_DRAWING),
+        expected_parser: "parse_vml_drawing",
+    },
+    PartSpecEntry {
+        pattern: "word/comments*.xml.rels",
+        content_type: Some(content_type::RELATIONSHIPS),
+        expected_parser: "Relationships::parse",
+    },
+    PartSpecEntry {
+        pattern: "word/footnotes.xml.rels",
+        content_type: Some(content_type::RELATIONSHIPS),
+        expected_parser: "Relationships::parse",
+    },
+    PartSpecEntry {
+        pattern: "word/endnotes.xml.rels",
+        content_type: Some(content_type::RELATIONSHIPS),
+        expected_parser: "Relationships::parse",
+    },
+    PartSpecEntry {
+        pattern: "word/vbaProject.bin",
+        content_type: Some(content_type::VBA_PROJECT),
+        expected_parser: "scan_security_content(vba)",
+    },
+    PartSpecEntry {
+        pattern: "word/vbaData.xml",
+        content_type: Some(content_type::WORD_VBA_DATA),
+        expected_parser: "scan_security_content(vba)",
+    },
+    PartSpecEntry {
+        pattern: "word/activeX/*.xml",
+        content_type: Some(content_type::WORD_ACTIVEX_XML),
+        expected_parser: "scan_security_content(activex)",
+    },
+    PartSpecEntry {
+        pattern: "word/activeX/*.bin",
+        content_type: Some(content_type::WORD_ACTIVEX_BIN),
+        expected_parser: "scan_security_content(activex)",
+    },
+    PartSpecEntry {
+        pattern: "word/webExtensions/webExtension*.xml",
+        content_type: Some(content_type::WORD_WEB_EXTENSION),
+        expected_parser: "parse_web_extensions",
+    },
+    PartSpecEntry {
+        pattern: "word/webExtensions/taskpanes.xml",
+        content_type: Some(content_type::WORD_WEB_EXTENSION_TASKPANES),
+        expected_parser: "parse_web_extension_taskpanes",
+    },
+];
+
+const SPREADSHEET_PARTS: &[PartSpecEntry] = &[
+    PartSpecEntry {
+        pattern: "_rels/.rels",
+        content_type: Some(content_type::RELATIONSHIPS),
+        expected_parser: "Relationships::parse",
+    },
+    PartSpecEntry {
+        pattern: "xl/_rels/*.rels",
+        content_type: Some(content_type::RELATIONSHIPS),
+        expected_parser: "Relationships::parse",
+    },
+    PartSpecEntry {
+        pattern: "docProps/core.xml",
+        content_type: Some(content_type::CORE_PROPERTIES),
+        expected_parser: "parse_metadata(core)",
+    },
+    PartSpecEntry {
+        pattern: "docProps/app.xml",
+        content_type: Some(content_type::EXTENDED_PROPERTIES),
+        expected_parser: "parse_metadata(app)",
+    },
+    PartSpecEntry {
+        pattern: "docProps/custom.xml",
+        content_type: Some(content_type::CUSTOM_PROPERTIES),
+        expected_parser: "parse_custom_properties",
+    },
+    PartSpecEntry {
+        pattern: "customXml/*.xml",
+        content_type: Some(content_type::CUSTOM_XML),
+        expected_parser: "parse_custom_xml_part",
+    },
+    PartSpecEntry {
+        pattern: "customXml/itemProps*.xml",
+        content_type: Some(content_type::CUSTOM_XML_PROPERTIES),
+        expected_parser: "parse_custom_xml_part",
+    },
+    PartSpecEntry {
+        pattern: "_xmlsignatures/*.xml",
+        content_type: Some(content_type::DIGITAL_SIGNATURE_XML),
+        expected_parser: "parse_shared_parts(signature)",
+    },
+    PartSpecEntry {
+        pattern: "_xmlsignatures/origin.sigs",
+        content_type: Some(content_type::DIGITAL_SIGNATURE_ORIGIN),
+        expected_parser: "parse_shared_parts(signature)",
+    },
+    PartSpecEntry {
+        pattern: "xl/workbook.xml",
+        content_type: Some(content_type::EXCEL_WORKBOOK),
+        expected_parser: "XlsxParser::parse_workbook",
+    },
+    PartSpecEntry {
+        pattern: "xl/workbook.xml",
+        content_type: Some(content_type::EXCEL_WORKBOOK_MACRO),
+        expected_parser: "XlsxParser::parse_workbook",
+    },
+    PartSpecEntry {
+        pattern: "xl/workbook.bin",
+        content_type: Some(content_type::EXCEL_WORKBOOK_BIN),
+        expected_parser: "OoxmlParser::parse_xlsb",
+    },
+    PartSpecEntry {
+        pattern: "xl/worksheets/*.xml",
+        content_type: Some(content_type::EXCEL_WORKSHEET),
+        expected_parser: "XlsxParser::parse_worksheet",
+    },
+    PartSpecEntry {
+        pattern: "xl/chartsheets/*.xml",
+        content_type: Some(content_type::EXCEL_CHARTSHEET),
+        expected_parser: "XlsxParser::parse_chartsheet",
+    },
+    PartSpecEntry {
+        pattern: "xl/dialogsheets/*.xml",
+        content_type: Some(content_type::EXCEL_DIALOGSHEET),
+        expected_parser: "XlsxParser::parse_worksheet",
+    },
+    PartSpecEntry {
+        pattern: "xl/macrosheets/*.xml",
+        content_type: Some(content_type::EXCEL_MACROSHEET),
+        expected_parser: "XlsxParser::parse_worksheet",
+    },
+    PartSpecEntry {
+        pattern: "xl/sharedStrings.xml",
+        content_type: Some(content_type::EXCEL_SHARED_STRINGS),
+        expected_parser: "parse_shared_strings_table",
+    },
+    PartSpecEntry {
+        pattern: "xl/styles.xml",
+        content_type: Some(content_type::EXCEL_STYLES),
+        expected_parser: "parse_styles",
+    },
+    PartSpecEntry {
+        pattern: "xl/calcChain.xml",
+        content_type: Some(content_type::EXCEL_CALC_CHAIN),
+        expected_parser: "parse_calc_chain",
+    },
+    PartSpecEntry {
+        pattern: "xl/comments*.xml",
+        content_type: Some(content_type::EXCEL_COMMENTS),
+        expected_parser: "parse_sheet_comments",
+    },
+    PartSpecEntry {
+        pattern: "xl/threadedComments/*.xml",
+        content_type: Some(content_type::EXCEL_THREADED_COMMENTS),
+        expected_parser: "parse_threaded_comments",
+    },
+    PartSpecEntry {
+        pattern: "xl/drawings/*.xml",
+        content_type: Some(content_type::EXCEL_DRAWING),
+        expected_parser: "XlsxParser::parse_drawing",
+    },
+    PartSpecEntry {
+        pattern: "xl/charts/*.xml",
+        content_type: Some(content_type::EXCEL_CHART),
+        expected_parser: "XlsxParser::parse_chart",
+    },
+    PartSpecEntry {
+        pattern: "xl/pivotTables/*.xml",
+        content_type: Some(content_type::EXCEL_PIVOT_TABLE),
+        expected_parser: "parse_pivot_table_definition",
+    },
+    PartSpecEntry {
+        pattern: "xl/pivotCache/pivotCacheDefinition*.xml",
+        content_type: Some(content_type::EXCEL_PIVOT_CACHE_DEF),
+        expected_parser: "parse_pivot_cache",
+    },
+    PartSpecEntry {
+        pattern: "xl/pivotCache/pivotCacheRecords*.xml",
+        content_type: Some(content_type::EXCEL_PIVOT_CACHE_RECORDS),
+        expected_parser: "parse_pivot_cache_records",
+    },
+    PartSpecEntry {
+        pattern: "xl/tables/*.xml",
+        content_type: Some(content_type::EXCEL_TABLE),
+        expected_parser: "parse_table_definition",
+    },
+    PartSpecEntry {
+        pattern: "xl/queryTables/*.xml",
+        content_type: Some(content_type::EXCEL_QUERY_TABLE),
+        expected_parser: "parse_query_table",
+    },
+    PartSpecEntry {
+        pattern: "xl/connections.xml",
+        content_type: Some(content_type::EXCEL_CONNECTIONS),
+        expected_parser: "parse_connections_part",
+    },
+    PartSpecEntry {
+        pattern: "xl/externalLinks/*.xml",
+        content_type: Some(content_type::EXCEL_EXTERNAL_LINK),
+        expected_parser: "parse_external_links",
+    },
+    PartSpecEntry {
+        pattern: "xl/metadata.xml",
+        content_type: Some(content_type::EXCEL_SHEET_METADATA),
+        expected_parser: "parse_sheet_metadata",
+    },
+    PartSpecEntry {
+        pattern: "xl/embeddings/*.bin",
+        content_type: Some(content_type::OLE_OBJECT),
+        expected_parser: "parse_shared_parts(ole)",
+    },
+    PartSpecEntry {
+        pattern: "xl/persons/person.xml",
+        content_type: Some(content_type::EXCEL_PERSON),
+        expected_parser: "parse_person_part",
+    },
+    PartSpecEntry {
+        pattern: "xl/slicers/*.xml",
+        content_type: Some(content_type::EXCEL_SLICER),
+        expected_parser: "parse_slicers",
+    },
+    PartSpecEntry {
+        pattern: "xl/timelines/*.xml",
+        content_type: Some(content_type::EXCEL_TIMELINE),
+        expected_parser: "parse_timelines",
+    },
+    PartSpecEntry {
+        pattern: "xl/activeX/*.xml",
+        content_type: Some(content_type::EXCEL_ACTIVEX_XML),
+        expected_parser: "scan_security_content(activex)",
+    },
+    PartSpecEntry {
+        pattern: "xl/activeX/*.bin",
+        content_type: Some(content_type::EXCEL_ACTIVEX_BIN),
+        expected_parser: "scan_security_content(activex)",
+    },
+    PartSpecEntry {
+        pattern: "xl/vbaProject.bin",
+        content_type: Some(content_type::VBA_PROJECT),
+        expected_parser: "scan_security_content(vba)",
+    },
+];
+
+const PRESENTATION_PARTS: &[PartSpecEntry] = &[
+    PartSpecEntry {
+        pattern: "_rels/.rels",
+        content_type: Some(content_type::RELATIONSHIPS),
+        expected_parser: "Relationships::parse",
+    },
+    PartSpecEntry {
+        pattern: "ppt/_rels/*.rels",
+        content_type: Some(content_type::RELATIONSHIPS),
+        expected_parser: "Relationships::parse",
+    },
+    PartSpecEntry {
+        pattern: "docProps/core.xml",
+        content_type: Some(content_type::CORE_PROPERTIES),
+        expected_parser: "parse_metadata(core)",
+    },
+    PartSpecEntry {
+        pattern: "docProps/app.xml",
+        content_type: Some(content_type::EXTENDED_PROPERTIES),
+        expected_parser: "parse_metadata(app)",
+    },
+    PartSpecEntry {
+        pattern: "docProps/custom.xml",
+        content_type: Some(content_type::CUSTOM_PROPERTIES),
+        expected_parser: "parse_custom_properties",
+    },
+    PartSpecEntry {
+        pattern: "customXml/*.xml",
+        content_type: Some(content_type::CUSTOM_XML),
+        expected_parser: "parse_custom_xml_part",
+    },
+    PartSpecEntry {
+        pattern: "customXml/itemProps*.xml",
+        content_type: Some(content_type::CUSTOM_XML_PROPERTIES),
+        expected_parser: "parse_custom_xml_part",
+    },
+    PartSpecEntry {
+        pattern: "_xmlsignatures/*.xml",
+        content_type: Some(content_type::DIGITAL_SIGNATURE_XML),
+        expected_parser: "parse_shared_parts(signature)",
+    },
+    PartSpecEntry {
+        pattern: "_xmlsignatures/origin.sigs",
+        content_type: Some(content_type::DIGITAL_SIGNATURE_ORIGIN),
+        expected_parser: "parse_shared_parts(signature)",
+    },
+    PartSpecEntry {
+        pattern: "ppt/presentation.xml",
+        content_type: Some(content_type::PPTX_PRESENTATION),
+        expected_parser: "PptxParser::parse_presentation",
+    },
+    PartSpecEntry {
+        pattern: "ppt/presentation.xml",
+        content_type: Some(content_type::PPTX_PRESENTATION_MACRO),
+        expected_parser: "PptxParser::parse_presentation",
+    },
+    PartSpecEntry {
+        pattern: "ppt/presentation.xml",
+        content_type: Some(content_type::PPTX_PRESENTATION),
+        expected_parser: "parse_presentation_info",
+    },
+    PartSpecEntry {
+        pattern: "ppt/slides/*.xml",
+        content_type: Some(content_type::PPTX_SLIDE),
+        expected_parser: "PptxParser::parse_slide",
+    },
+    PartSpecEntry {
+        pattern: "ppt/presProps.xml",
+        content_type: Some(content_type::PPTX_PRES_PROPS),
+        expected_parser: "parse_presentation_properties",
+    },
+    PartSpecEntry {
+        pattern: "ppt/viewProps.xml",
+        content_type: Some(content_type::PPTX_VIEW_PROPS),
+        expected_parser: "parse_view_properties",
+    },
+    PartSpecEntry {
+        pattern: "ppt/tableStyles.xml",
+        content_type: Some(content_type::PPTX_TABLE_STYLES),
+        expected_parser: "parse_table_styles",
+    },
+    PartSpecEntry {
+        pattern: "ppt/slideMasters/*.xml",
+        content_type: Some(content_type::PPTX_SLIDE_MASTER),
+        expected_parser: "parse_slide_master",
+    },
+    PartSpecEntry {
+        pattern: "ppt/slideLayouts/*.xml",
+        content_type: Some(content_type::PPTX_SLIDE_LAYOUT),
+        expected_parser: "parse_slide_layout",
+    },
+    PartSpecEntry {
+        pattern: "ppt/notesMasters/*.xml",
+        content_type: Some(content_type::PPTX_NOTES_MASTER),
+        expected_parser: "parse_notes_master",
+    },
+    PartSpecEntry {
+        pattern: "ppt/handoutMasters/*.xml",
+        content_type: Some(content_type::PPTX_HANDOUT_MASTER),
+        expected_parser: "parse_handout_master",
+    },
+    PartSpecEntry {
+        pattern: "ppt/notesSlides/*.xml",
+        content_type: Some(content_type::PPTX_NOTES_SLIDE),
+        expected_parser: "parse_notes_slide",
+    },
+    PartSpecEntry {
+        pattern: "ppt/diagrams/data*.xml",
+        content_type: Some(content_type::PPTX_DIAGRAM_DATA),
+        expected_parser: "parse_smartart_data",
+    },
+    PartSpecEntry {
+        pattern: "ppt/diagrams/layout*.xml",
+        content_type: Some(content_type::PPTX_DIAGRAM_LAYOUT),
+        expected_parser: "parse_smartart_layout",
+    },
+    PartSpecEntry {
+        pattern: "ppt/diagrams/colors*.xml",
+        content_type: Some(content_type::PPTX_DIAGRAM_COLORS),
+        expected_parser: "parse_smartart_colors",
+    },
+    PartSpecEntry {
+        pattern: "ppt/diagrams/quickStyle*.xml",
+        content_type: Some(content_type::PPTX_DIAGRAM_STYLE),
+        expected_parser: "parse_smartart_style",
+    },
+    PartSpecEntry {
+        pattern: "ppt/charts/*.xml",
+        content_type: Some(content_type::PPTX_CHART),
+        expected_parser: "parse_chart_data",
+    },
+    PartSpecEntry {
+        pattern: "ppt/media/*",
+        content_type: None,
+        expected_parser: "parse_shared_parts(media)",
+    },
+    PartSpecEntry {
+        pattern: "ppt/embeddings/*.bin",
+        content_type: Some(content_type::OLE_OBJECT),
+        expected_parser: "parse_shared_parts(ole)",
+    },
+    PartSpecEntry {
+        pattern: "ppt/commentAuthors.xml",
+        content_type: Some(content_type::PPTX_COMMENT_AUTHORS),
+        expected_parser: "parse_comment_authors",
+    },
+    PartSpecEntry {
+        pattern: "ppt/comments/*.xml",
+        content_type: Some(content_type::PPTX_COMMENTS),
+        expected_parser: "parse_comments",
+    },
+    PartSpecEntry {
+        pattern: "ppt/tags/*.xml",
+        content_type: Some(content_type::PPTX_TAGS),
+        expected_parser: "parse_presentation_tags",
+    },
+    PartSpecEntry {
+        pattern: "ppt/people.xml",
+        content_type: Some(content_type::PPTX_PEOPLE),
+        expected_parser: "parse_people_part",
+    },
+    PartSpecEntry {
+        pattern: "ppt/activeX/*.xml",
+        content_type: Some(content_type::PPTX_ACTIVEX_XML),
+        expected_parser: "scan_security_content(activex)",
+    },
+    PartSpecEntry {
+        pattern: "ppt/activeX/*.bin",
+        content_type: Some(content_type::PPTX_ACTIVEX_BIN),
+        expected_parser: "scan_security_content(activex)",
+    },
+    PartSpecEntry {
+        pattern: "ppt/vbaProject.bin",
+        content_type: Some(content_type::VBA_PROJECT),
+        expected_parser: "scan_security_content(vba)",
+    },
+];
+
+pub fn registry_for(format: DocumentFormat) -> Vec<PartSpec> {
     match format {
-        DocumentFormat::WordProcessing => {
-            entries.extend([
-                PartSpec {
-                    format,
-                    pattern: "_rels/.rels",
-                    content_type: Some(content_type::RELATIONSHIPS),
-                    expected_parser: "Relationships::parse",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/_rels/*.rels",
-                    content_type: Some(content_type::RELATIONSHIPS),
-                    expected_parser: "Relationships::parse",
-                },
-                PartSpec {
-                    format,
-                    pattern: "docProps/core.xml",
-                    content_type: Some(content_type::CORE_PROPERTIES),
-                    expected_parser: "parse_metadata(core)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "docProps/app.xml",
-                    content_type: Some(content_type::EXTENDED_PROPERTIES),
-                    expected_parser: "parse_metadata(app)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "docProps/custom.xml",
-                    content_type: Some(content_type::CUSTOM_PROPERTIES),
-                    expected_parser: "parse_custom_properties",
-                },
-                PartSpec {
-                    format,
-                    pattern: "customXml/*.xml",
-                    content_type: Some(content_type::CUSTOM_XML),
-                    expected_parser: "parse_custom_xml_part",
-                },
-                PartSpec {
-                    format,
-                    pattern: "customXml/itemProps*.xml",
-                    content_type: Some(content_type::CUSTOM_XML_PROPERTIES),
-                    expected_parser: "parse_custom_xml_part",
-                },
-                PartSpec {
-                    format,
-                    pattern: "_xmlsignatures/*.xml",
-                    content_type: Some(content_type::DIGITAL_SIGNATURE_XML),
-                    expected_parser: "parse_shared_parts(signature)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "_xmlsignatures/origin.sigs",
-                    content_type: Some(content_type::DIGITAL_SIGNATURE_ORIGIN),
-                    expected_parser: "parse_shared_parts(signature)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/document.xml",
-                    content_type: Some(content_type::WORD_DOCUMENT),
-                    expected_parser: "DocxParser::parse_document",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/document.xml",
-                    content_type: Some(content_type::WORD_DOCUMENT_MACRO),
-                    expected_parser: "DocxParser::parse_document",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/glossary/document.xml",
-                    content_type: Some(content_type::WORD_GLOSSARY),
-                    expected_parser: "DocxParser::parse_glossary_document",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/styles.xml",
-                    content_type: Some(content_type::WORD_STYLES),
-                    expected_parser: "DocxParser::parse_styles",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/numbering.xml",
-                    content_type: Some(content_type::WORD_NUMBERING),
-                    expected_parser: "DocxParser::parse_numbering",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/comments.xml",
-                    content_type: Some(content_type::WORD_COMMENTS),
-                    expected_parser: "DocxParser::parse_comments",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/commentsExtended.xml",
-                    content_type: Some(content_type::WORD_COMMENTS_EXTENDED),
-                    expected_parser: "DocxParser::parse_comments_extended",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/commentsIds.xml",
-                    content_type: Some(content_type::WORD_COMMENTS_IDS),
-                    expected_parser: "DocxParser::parse_comments_ids",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/footnotes.xml",
-                    content_type: Some(content_type::WORD_FOOTNOTES),
-                    expected_parser: "DocxParser::parse_notes",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/endnotes.xml",
-                    content_type: Some(content_type::WORD_ENDNOTES),
-                    expected_parser: "DocxParser::parse_notes",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/header*.xml",
-                    content_type: Some(content_type::WORD_HEADER),
-                    expected_parser: "DocxParser::parse_header_footer",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/footer*.xml",
-                    content_type: Some(content_type::WORD_FOOTER),
-                    expected_parser: "DocxParser::parse_header_footer",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/settings.xml",
-                    content_type: Some(content_type::WORD_SETTINGS),
-                    expected_parser: "DocxParser::parse_settings",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/webSettings.xml",
-                    content_type: Some(content_type::WORD_WEB_SETTINGS),
-                    expected_parser: "DocxParser::parse_web_settings",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/fontTable.xml",
-                    content_type: Some(content_type::WORD_FONT_TABLE),
-                    expected_parser: "DocxParser::parse_font_table",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/people.xml",
-                    content_type: Some(content_type::WORD_PEOPLE),
-                    expected_parser: "parse_people_part",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/theme/theme*.xml",
-                    content_type: Some(content_type::WORD_THEME),
-                    expected_parser: "parse_theme",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/drawings/*.xml",
-                    content_type: Some(content_type::WORD_DRAWING),
-                    expected_parser: "parse_drawingml",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/charts/*.xml",
-                    content_type: Some(content_type::WORD_CHART),
-                    expected_parser: "parse_chart_data",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/diagrams/data*.xml",
-                    content_type: Some(content_type::WORD_DIAGRAM_DATA),
-                    expected_parser: "parse_smartart_data",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/diagrams/layout*.xml",
-                    content_type: Some(content_type::WORD_DIAGRAM_LAYOUT),
-                    expected_parser: "parse_smartart_layout",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/diagrams/colors*.xml",
-                    content_type: Some(content_type::WORD_DIAGRAM_COLORS),
-                    expected_parser: "parse_smartart_colors",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/diagrams/quickStyle*.xml",
-                    content_type: Some(content_type::WORD_DIAGRAM_STYLE),
-                    expected_parser: "parse_smartart_style",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/media/*",
-                    content_type: None,
-                    expected_parser: "parse_shared_parts(media)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/embeddings/*.bin",
-                    content_type: Some(content_type::OLE_OBJECT),
-                    expected_parser: "parse_shared_parts(ole)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/vmlDrawing*.vml",
-                    content_type: Some(content_type::WORD_VML_DRAWING),
-                    expected_parser: "parse_vml_drawing",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/comments*.xml.rels",
-                    content_type: Some(content_type::RELATIONSHIPS),
-                    expected_parser: "Relationships::parse",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/footnotes.xml.rels",
-                    content_type: Some(content_type::RELATIONSHIPS),
-                    expected_parser: "Relationships::parse",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/endnotes.xml.rels",
-                    content_type: Some(content_type::RELATIONSHIPS),
-                    expected_parser: "Relationships::parse",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/vbaProject.bin",
-                    content_type: Some(content_type::VBA_PROJECT),
-                    expected_parser: "scan_security_content(vba)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/vbaData.xml",
-                    content_type: Some(content_type::WORD_VBA_DATA),
-                    expected_parser: "scan_security_content(vba)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/activeX/*.xml",
-                    content_type: Some(content_type::WORD_ACTIVEX_XML),
-                    expected_parser: "scan_security_content(activex)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/activeX/*.bin",
-                    content_type: Some(content_type::WORD_ACTIVEX_BIN),
-                    expected_parser: "scan_security_content(activex)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/webExtensions/webExtension*.xml",
-                    content_type: Some(content_type::WORD_WEB_EXTENSION),
-                    expected_parser: "parse_web_extensions",
-                },
-                PartSpec {
-                    format,
-                    pattern: "word/webExtensions/taskpanes.xml",
-                    content_type: Some(content_type::WORD_WEB_EXTENSION_TASKPANES),
-                    expected_parser: "parse_web_extension_taskpanes",
-                },
-            ]);
-        }
-        DocumentFormat::Spreadsheet => {
-            entries.extend([
-                PartSpec {
-                    format,
-                    pattern: "_rels/.rels",
-                    content_type: Some(content_type::RELATIONSHIPS),
-                    expected_parser: "Relationships::parse",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/_rels/*.rels",
-                    content_type: Some(content_type::RELATIONSHIPS),
-                    expected_parser: "Relationships::parse",
-                },
-                PartSpec {
-                    format,
-                    pattern: "docProps/core.xml",
-                    content_type: Some(content_type::CORE_PROPERTIES),
-                    expected_parser: "parse_metadata(core)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "docProps/app.xml",
-                    content_type: Some(content_type::EXTENDED_PROPERTIES),
-                    expected_parser: "parse_metadata(app)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "docProps/custom.xml",
-                    content_type: Some(content_type::CUSTOM_PROPERTIES),
-                    expected_parser: "parse_custom_properties",
-                },
-                PartSpec {
-                    format,
-                    pattern: "customXml/*.xml",
-                    content_type: Some(content_type::CUSTOM_XML),
-                    expected_parser: "parse_custom_xml_part",
-                },
-                PartSpec {
-                    format,
-                    pattern: "customXml/itemProps*.xml",
-                    content_type: Some(content_type::CUSTOM_XML_PROPERTIES),
-                    expected_parser: "parse_custom_xml_part",
-                },
-                PartSpec {
-                    format,
-                    pattern: "_xmlsignatures/*.xml",
-                    content_type: Some(content_type::DIGITAL_SIGNATURE_XML),
-                    expected_parser: "parse_shared_parts(signature)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "_xmlsignatures/origin.sigs",
-                    content_type: Some(content_type::DIGITAL_SIGNATURE_ORIGIN),
-                    expected_parser: "parse_shared_parts(signature)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/workbook.xml",
-                    content_type: Some(content_type::EXCEL_WORKBOOK),
-                    expected_parser: "XlsxParser::parse_workbook",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/workbook.xml",
-                    content_type: Some(content_type::EXCEL_WORKBOOK_MACRO),
-                    expected_parser: "XlsxParser::parse_workbook",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/workbook.bin",
-                    content_type: Some(content_type::EXCEL_WORKBOOK_BIN),
-                    expected_parser: "OoxmlParser::parse_xlsb",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/worksheets/*.xml",
-                    content_type: Some(content_type::EXCEL_WORKSHEET),
-                    expected_parser: "XlsxParser::parse_worksheet",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/chartsheets/*.xml",
-                    content_type: Some(content_type::EXCEL_CHARTSHEET),
-                    expected_parser: "XlsxParser::parse_chartsheet",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/dialogsheets/*.xml",
-                    content_type: Some(content_type::EXCEL_DIALOGSHEET),
-                    expected_parser: "XlsxParser::parse_worksheet",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/macrosheets/*.xml",
-                    content_type: Some(content_type::EXCEL_MACROSHEET),
-                    expected_parser: "XlsxParser::parse_worksheet",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/sharedStrings.xml",
-                    content_type: Some(content_type::EXCEL_SHARED_STRINGS),
-                    expected_parser: "parse_shared_strings_table",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/styles.xml",
-                    content_type: Some(content_type::EXCEL_STYLES),
-                    expected_parser: "parse_styles",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/calcChain.xml",
-                    content_type: Some(content_type::EXCEL_CALC_CHAIN),
-                    expected_parser: "parse_calc_chain",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/comments*.xml",
-                    content_type: Some(content_type::EXCEL_COMMENTS),
-                    expected_parser: "parse_sheet_comments",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/threadedComments/*.xml",
-                    content_type: Some(content_type::EXCEL_THREADED_COMMENTS),
-                    expected_parser: "parse_threaded_comments",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/drawings/*.xml",
-                    content_type: Some(content_type::EXCEL_DRAWING),
-                    expected_parser: "XlsxParser::parse_drawing",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/charts/*.xml",
-                    content_type: Some(content_type::EXCEL_CHART),
-                    expected_parser: "XlsxParser::parse_chart",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/pivotTables/*.xml",
-                    content_type: Some(content_type::EXCEL_PIVOT_TABLE),
-                    expected_parser: "parse_pivot_table_definition",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/pivotCache/pivotCacheDefinition*.xml",
-                    content_type: Some(content_type::EXCEL_PIVOT_CACHE_DEF),
-                    expected_parser: "parse_pivot_cache",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/pivotCache/pivotCacheRecords*.xml",
-                    content_type: Some(content_type::EXCEL_PIVOT_CACHE_RECORDS),
-                    expected_parser: "parse_pivot_cache_records",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/tables/*.xml",
-                    content_type: Some(content_type::EXCEL_TABLE),
-                    expected_parser: "parse_table_definition",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/queryTables/*.xml",
-                    content_type: Some(content_type::EXCEL_QUERY_TABLE),
-                    expected_parser: "parse_query_table",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/connections.xml",
-                    content_type: Some(content_type::EXCEL_CONNECTIONS),
-                    expected_parser: "parse_connections_part",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/externalLinks/*.xml",
-                    content_type: Some(content_type::EXCEL_EXTERNAL_LINK),
-                    expected_parser: "parse_external_links",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/metadata.xml",
-                    content_type: Some(content_type::EXCEL_SHEET_METADATA),
-                    expected_parser: "parse_sheet_metadata",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/embeddings/*.bin",
-                    content_type: Some(content_type::OLE_OBJECT),
-                    expected_parser: "parse_shared_parts(ole)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/persons/person.xml",
-                    content_type: Some(content_type::EXCEL_PERSON),
-                    expected_parser: "parse_person_part",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/slicers/*.xml",
-                    content_type: Some(content_type::EXCEL_SLICER),
-                    expected_parser: "parse_slicers",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/timelines/*.xml",
-                    content_type: Some(content_type::EXCEL_TIMELINE),
-                    expected_parser: "parse_timelines",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/activeX/*.xml",
-                    content_type: Some(content_type::EXCEL_ACTIVEX_XML),
-                    expected_parser: "scan_security_content(activex)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/activeX/*.bin",
-                    content_type: Some(content_type::EXCEL_ACTIVEX_BIN),
-                    expected_parser: "scan_security_content(activex)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "xl/vbaProject.bin",
-                    content_type: Some(content_type::VBA_PROJECT),
-                    expected_parser: "scan_security_content(vba)",
-                },
-            ]);
-        }
-        DocumentFormat::Presentation => {
-            entries.extend([
-                PartSpec {
-                    format,
-                    pattern: "_rels/.rels",
-                    content_type: Some(content_type::RELATIONSHIPS),
-                    expected_parser: "Relationships::parse",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/_rels/*.rels",
-                    content_type: Some(content_type::RELATIONSHIPS),
-                    expected_parser: "Relationships::parse",
-                },
-                PartSpec {
-                    format,
-                    pattern: "docProps/core.xml",
-                    content_type: Some(content_type::CORE_PROPERTIES),
-                    expected_parser: "parse_metadata(core)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "docProps/app.xml",
-                    content_type: Some(content_type::EXTENDED_PROPERTIES),
-                    expected_parser: "parse_metadata(app)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "docProps/custom.xml",
-                    content_type: Some(content_type::CUSTOM_PROPERTIES),
-                    expected_parser: "parse_custom_properties",
-                },
-                PartSpec {
-                    format,
-                    pattern: "customXml/*.xml",
-                    content_type: Some(content_type::CUSTOM_XML),
-                    expected_parser: "parse_custom_xml_part",
-                },
-                PartSpec {
-                    format,
-                    pattern: "customXml/itemProps*.xml",
-                    content_type: Some(content_type::CUSTOM_XML_PROPERTIES),
-                    expected_parser: "parse_custom_xml_part",
-                },
-                PartSpec {
-                    format,
-                    pattern: "_xmlsignatures/*.xml",
-                    content_type: Some(content_type::DIGITAL_SIGNATURE_XML),
-                    expected_parser: "parse_shared_parts(signature)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "_xmlsignatures/origin.sigs",
-                    content_type: Some(content_type::DIGITAL_SIGNATURE_ORIGIN),
-                    expected_parser: "parse_shared_parts(signature)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/presentation.xml",
-                    content_type: Some(content_type::PPTX_PRESENTATION),
-                    expected_parser: "PptxParser::parse_presentation",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/presentation.xml",
-                    content_type: Some(content_type::PPTX_PRESENTATION_MACRO),
-                    expected_parser: "PptxParser::parse_presentation",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/presentation.xml",
-                    content_type: Some(content_type::PPTX_PRESENTATION),
-                    expected_parser: "parse_presentation_info",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/slides/*.xml",
-                    content_type: Some(content_type::PPTX_SLIDE),
-                    expected_parser: "PptxParser::parse_slide",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/presProps.xml",
-                    content_type: Some(content_type::PPTX_PRES_PROPS),
-                    expected_parser: "parse_presentation_properties",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/viewProps.xml",
-                    content_type: Some(content_type::PPTX_VIEW_PROPS),
-                    expected_parser: "parse_view_properties",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/tableStyles.xml",
-                    content_type: Some(content_type::PPTX_TABLE_STYLES),
-                    expected_parser: "parse_table_styles",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/slideMasters/*.xml",
-                    content_type: Some(content_type::PPTX_SLIDE_MASTER),
-                    expected_parser: "parse_slide_master",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/slideLayouts/*.xml",
-                    content_type: Some(content_type::PPTX_SLIDE_LAYOUT),
-                    expected_parser: "parse_slide_layout",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/notesMasters/*.xml",
-                    content_type: Some(content_type::PPTX_NOTES_MASTER),
-                    expected_parser: "parse_notes_master",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/handoutMasters/*.xml",
-                    content_type: Some(content_type::PPTX_HANDOUT_MASTER),
-                    expected_parser: "parse_handout_master",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/notesSlides/*.xml",
-                    content_type: Some(content_type::PPTX_NOTES_SLIDE),
-                    expected_parser: "parse_notes_slide",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/diagrams/data*.xml",
-                    content_type: Some(content_type::PPTX_DIAGRAM_DATA),
-                    expected_parser: "parse_smartart_data",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/diagrams/layout*.xml",
-                    content_type: Some(content_type::PPTX_DIAGRAM_LAYOUT),
-                    expected_parser: "parse_smartart_layout",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/diagrams/colors*.xml",
-                    content_type: Some(content_type::PPTX_DIAGRAM_COLORS),
-                    expected_parser: "parse_smartart_colors",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/diagrams/quickStyle*.xml",
-                    content_type: Some(content_type::PPTX_DIAGRAM_STYLE),
-                    expected_parser: "parse_smartart_style",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/charts/*.xml",
-                    content_type: Some(content_type::PPTX_CHART),
-                    expected_parser: "parse_chart_data",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/media/*",
-                    content_type: None,
-                    expected_parser: "parse_shared_parts(media)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/embeddings/*.bin",
-                    content_type: Some(content_type::OLE_OBJECT),
-                    expected_parser: "parse_shared_parts(ole)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/commentAuthors.xml",
-                    content_type: Some(content_type::PPTX_COMMENT_AUTHORS),
-                    expected_parser: "parse_comment_authors",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/comments/*.xml",
-                    content_type: Some(content_type::PPTX_COMMENTS),
-                    expected_parser: "parse_comments",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/tags/*.xml",
-                    content_type: Some(content_type::PPTX_TAGS),
-                    expected_parser: "parse_presentation_tags",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/people.xml",
-                    content_type: Some(content_type::PPTX_PEOPLE),
-                    expected_parser: "parse_people_part",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/activeX/*.xml",
-                    content_type: Some(content_type::PPTX_ACTIVEX_XML),
-                    expected_parser: "scan_security_content(activex)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/activeX/*.bin",
-                    content_type: Some(content_type::PPTX_ACTIVEX_BIN),
-                    expected_parser: "scan_security_content(activex)",
-                },
-                PartSpec {
-                    format,
-                    pattern: "ppt/vbaProject.bin",
-                    content_type: Some(content_type::VBA_PROJECT),
-                    expected_parser: "scan_security_content(vba)",
-                },
-            ]);
-        }
+        DocumentFormat::WordProcessing => build_registry(format, WORD_PARTS),
+        DocumentFormat::Spreadsheet => build_registry(format, SPREADSHEET_PARTS),
+        DocumentFormat::Presentation => build_registry(format, PRESENTATION_PARTS),
         DocumentFormat::OdfText
         | DocumentFormat::OdfSpreadsheet
         | DocumentFormat::OdfPresentation
         | DocumentFormat::Hwp
         | DocumentFormat::Hwpx
-        | DocumentFormat::Rtf => {}
+        | DocumentFormat::Rtf => Vec::new(),
     }
-
-    entries
 }
 
 fn matches_pattern(path: &str, pattern: &str) -> bool {
