@@ -1,5 +1,6 @@
 use super::*;
 use crate::zip_handler::PackageReader;
+use docir_core::ir::{DataValidation, SheetPageMargins};
 
 impl XlsxParser {
     pub(super) fn parse_worksheet(
@@ -467,4 +468,225 @@ impl XlsxParser {
 
         Ok(cache)
     }
+}
+
+fn parse_page_margins(start: &BytesStart) -> Option<SheetPageMargins> {
+    let mut margins = SheetPageMargins {
+        left: None,
+        right: None,
+        top: None,
+        bottom: None,
+        header: None,
+        footer: None,
+    };
+    let mut found = false;
+    for attr in start.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"left" => {
+                margins.left = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                found = true;
+            }
+            b"right" => {
+                margins.right = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                found = true;
+            }
+            b"top" => {
+                margins.top = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                found = true;
+            }
+            b"bottom" => {
+                margins.bottom = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                found = true;
+            }
+            b"header" => {
+                margins.header = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                found = true;
+            }
+            b"footer" => {
+                margins.footer = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                found = true;
+            }
+            _ => {}
+        }
+    }
+    if found {
+        Some(margins)
+    } else {
+        None
+    }
+}
+
+fn parse_conditional_formatting_empty(start: &BytesStart, sheet_path: &str) -> ConditionalFormat {
+    let mut ranges: Vec<String> = Vec::new();
+    for attr in start.attributes().flatten() {
+        if attr.key.as_ref() == b"sqref" {
+            let val = String::from_utf8_lossy(&attr.value).to_string();
+            ranges = val.split_whitespace().map(|s| s.to_string()).collect();
+        }
+    }
+    ConditionalFormat {
+        id: NodeId::new(),
+        ranges,
+        rules: Vec::new(),
+        span: Some(SourceSpan::new(sheet_path)),
+    }
+}
+
+fn parse_data_validations(
+    reader: &mut Reader<&[u8]>,
+    sheet_path: &str,
+) -> Result<Vec<DataValidation>, ParseError> {
+    let mut validations: Vec<DataValidation> = Vec::new();
+    let mut buf = Vec::new();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"dataValidation" => {
+                let val = parse_data_validation(reader, &e, sheet_path)?;
+                validations.push(val);
+            }
+            Ok(Event::Empty(e)) if e.name().as_ref() == b"dataValidation" => {
+                let val = parse_data_validation_empty(&e, sheet_path);
+                validations.push(val);
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"dataValidations" => break,
+            Ok(Event::Eof) => break,
+            Err(e) => {
+                return Err(ParseError::Xml {
+                    file: sheet_path.to_string(),
+                    message: e.to_string(),
+                });
+            }
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    Ok(validations)
+}
+
+fn parse_data_validation(
+    reader: &mut Reader<&[u8]>,
+    start: &BytesStart,
+    sheet_path: &str,
+) -> Result<DataValidation, ParseError> {
+    let mut validation = parse_data_validation_empty(start, sheet_path);
+
+    let mut in_formula1 = false;
+    let mut in_formula2 = false;
+    let mut formula1 = String::new();
+    let mut formula2 = String::new();
+
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"formula1" => {
+                    in_formula1 = true;
+                    formula1.clear();
+                }
+                b"formula2" => {
+                    in_formula2 = true;
+                    formula2.clear();
+                }
+                _ => {}
+            },
+            Ok(Event::Text(e)) => {
+                let text = e.unescape().unwrap_or_default().to_string();
+                if in_formula1 {
+                    formula1.push_str(&text);
+                } else if in_formula2 {
+                    formula2.push_str(&text);
+                }
+            }
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                b"formula1" => {
+                    in_formula1 = false;
+                    if !formula1.is_empty() {
+                        validation.formula1 = Some(formula1.clone());
+                    }
+                }
+                b"formula2" => {
+                    in_formula2 = false;
+                    if !formula2.is_empty() {
+                        validation.formula2 = Some(formula2.clone());
+                    }
+                }
+                b"dataValidation" => break,
+                _ => {}
+            },
+            Ok(Event::Eof) => break,
+            Err(e) => {
+                return Err(ParseError::Xml {
+                    file: sheet_path.to_string(),
+                    message: e.to_string(),
+                });
+            }
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    Ok(validation)
+}
+
+fn parse_data_validation_empty(start: &BytesStart, sheet_path: &str) -> DataValidation {
+    let mut validation = DataValidation {
+        id: NodeId::new(),
+        validation_type: None,
+        operator: None,
+        allow_blank: false,
+        show_input_message: false,
+        show_error_message: false,
+        error_title: None,
+        error: None,
+        prompt_title: None,
+        prompt: None,
+        ranges: Vec::new(),
+        formula1: None,
+        formula2: None,
+        span: Some(SourceSpan::new(sheet_path)),
+    };
+
+    for attr in start.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"type" => {
+                validation.validation_type = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"operator" => {
+                validation.operator = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"allowBlank" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                validation.allow_blank = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"showInputMessage" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                validation.show_input_message = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"showErrorMessage" => {
+                let v = String::from_utf8_lossy(&attr.value);
+                validation.show_error_message = v == "1" || v.eq_ignore_ascii_case("true");
+            }
+            b"errorTitle" => {
+                validation.error_title = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"error" => {
+                validation.error = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"promptTitle" => {
+                validation.prompt_title = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"prompt" => {
+                validation.prompt = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"sqref" => {
+                let val = String::from_utf8_lossy(&attr.value).to_string();
+                validation.ranges = val.split_whitespace().map(|s| s.to_string()).collect();
+            }
+            _ => {}
+        }
+    }
+
+    validation
 }
