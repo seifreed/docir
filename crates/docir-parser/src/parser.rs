@@ -809,16 +809,18 @@ impl OoxmlParser {
         store: &mut IrStore,
         _content_types: &ContentTypes,
     ) -> Result<(), ParseError> {
-        self.scan_vba_projects(zip, store)?;
-        self.scan_ole_objects(zip, store)?;
-        self.scan_activex_controls(zip, store)?;
-        self.scan_word_external_relationships(zip, store)?;
+        let scanner = security::SecurityScanner::new(&self.config);
+        self.scan_vba_projects(&scanner, zip, store)?;
+        self.scan_ole_objects(&scanner, zip, store)?;
+        scanner.scan_activex_controls(zip, store)?;
+        scanner.scan_word_external_relationships(zip, store)?;
 
         Ok(())
     }
 
     fn scan_vba_projects<R: Read + Seek>(
         &self,
+        scanner: &security::SecurityScanner<'_>,
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
     ) -> Result<(), ParseError> {
@@ -829,7 +831,7 @@ impl OoxmlParser {
         ];
         for vba_path in &vba_paths {
             if zip.contains(vba_path) {
-                let (mut macro_project, modules) = self.detect_macro_project(zip, vba_path)?;
+                let (mut macro_project, modules) = scanner.detect_macro_project(zip, vba_path)?;
                 for module in modules {
                     let id = module.id;
                     store.insert(IRNode::MacroModule(module));
@@ -843,6 +845,7 @@ impl OoxmlParser {
 
     fn scan_ole_objects<R: Read + Seek>(
         &self,
+        scanner: &security::SecurityScanner<'_>,
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
     ) -> Result<(), ParseError> {
@@ -856,7 +859,7 @@ impl OoxmlParser {
             .collect();
 
         for ole_path in ole_files {
-            let ole_object = self.detect_ole_object(zip, &ole_path)?;
+            let ole_object = scanner.detect_ole_object(zip, &ole_path)?;
             store.insert(IRNode::OleObject(ole_object));
         }
         Ok(())

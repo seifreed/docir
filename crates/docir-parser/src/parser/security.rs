@@ -1,6 +1,6 @@
 use super::utils::find_stream_case;
 use super::vba::{parse_vba_project_text, vba_decompress};
-use super::{hex, OoxmlParser, ParseError};
+use super::{hex, ParseError, ParserConfig};
 use crate::ooxml::part_utils::get_rels_path;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
 use crate::zip_handler::SecureZipReader;
@@ -11,7 +11,15 @@ use docir_core::visitor::IrStore;
 use std::collections::HashSet;
 use std::io::{Read, Seek};
 
-impl OoxmlParser {
+pub(super) struct SecurityScanner<'a> {
+    config: &'a ParserConfig,
+}
+
+impl<'a> SecurityScanner<'a> {
+    pub(super) fn new(config: &'a ParserConfig) -> Self {
+        Self { config }
+    }
+
     pub(super) fn scan_activex_controls<R: Read + Seek>(
         &self,
         zip: &mut SecureZipReader<R>,
