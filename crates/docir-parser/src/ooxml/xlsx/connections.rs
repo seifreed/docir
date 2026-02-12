@@ -2,6 +2,7 @@
 
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
+use crate::ooxml::xml_utils::xml_error;
 use docir_core::ir::{
     ConnectionEntry, ConnectionPart, ExternalLinkPart, ExternalLinkSheet, QueryTablePart,
     SlicerPart, TimelinePart,
@@ -216,10 +217,7 @@ pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<Connection
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -320,10 +318,7 @@ pub(crate) fn parse_external_link_part(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -361,10 +356,7 @@ pub(crate) fn parse_slicer_part(xml: &str, path: &str) -> Result<SlicerPart, Par
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -400,10 +392,7 @@ pub(crate) fn parse_timeline_part(xml: &str, path: &str) -> Result<TimelinePart,
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -464,10 +453,7 @@ pub(crate) fn parse_query_table_part(xml: &str, path: &str) -> Result<QueryTable
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }

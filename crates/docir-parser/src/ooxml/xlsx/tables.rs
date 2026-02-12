@@ -1,6 +1,7 @@
 //! XLSX table and pivot parsing.
 
 use crate::error::ParseError;
+use crate::ooxml::xml_utils::xml_error;
 use docir_core::ir::{PivotCacheRecords, PivotTable, TableColumn, TableDefinition};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::events::Event;
@@ -119,10 +120,7 @@ pub(crate) fn parse_table_definition(
             Ok(Event::End(e)) if e.name().as_ref() == b"table" => break,
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: table_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(table_path, e));
             }
             _ => {}
         }
@@ -185,10 +183,7 @@ pub(crate) fn parse_pivot_table_definition(
             Ok(Event::End(e)) if e.name().as_ref() == b"pivotTableDefinition" => break,
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: pivot_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(pivot_path, e));
             }
             _ => {}
         }
@@ -265,10 +260,7 @@ pub(crate) fn parse_pivot_cache_records(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: records_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(records_path, e));
             }
             _ => {}
         }

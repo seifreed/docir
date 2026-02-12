@@ -1,6 +1,7 @@
 //! XLSX metadata parsing helpers.
 
 use crate::error::ParseError;
+use crate::ooxml::xml_utils::xml_error;
 use docir_core::ir::{SheetMetadata, SheetMetadataType};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -65,10 +66,7 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }

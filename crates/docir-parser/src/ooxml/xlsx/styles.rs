@@ -1,6 +1,7 @@
 //! XLSX styles parsing.
 
 use crate::error::ParseError;
+use crate::ooxml::xml_utils::xml_error;
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,
     NumberFormat, SpreadsheetStyles, TableStyleDef, TableStyleInfo,
@@ -673,10 +674,7 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
             },
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: styles_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(styles_path, e));
             }
             _ => {}
         }
