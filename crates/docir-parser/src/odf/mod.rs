@@ -99,21 +99,7 @@ impl OdfParser {
         enforce_input_size(&mut reader, self.config.max_input_size)?;
         let mut zip = SecureZipReader::new(reader, self.config.zip_config.clone())?;
 
-        let mimetype = zip
-            .read_file_string("mimetype")
-            .map(|s| s.trim().to_string())
-            .map_err(|_| ParseError::UnsupportedFormat("Missing ODF mimetype".to_string()))?;
-
-        let format = detect_odf_format(&mimetype).ok_or_else(|| {
-            ParseError::UnsupportedFormat(format!("Unsupported ODF mimetype: {mimetype}"))
-        })?;
-
-        let manifest_entries = if zip.contains("META-INF/manifest.xml") {
-            let manifest_xml = zip.read_file_string("META-INF/manifest.xml")?;
-            parse_manifest(&manifest_xml)?
-        } else {
-            Vec::new()
-        };
+        let (format, manifest_entries) = self.load_mimetype_and_manifest(&mut zip)?;
 
         if !zip.contains("content.xml") {
             return Err(ParseError::MissingPart("content.xml".to_string()));
@@ -138,28 +124,8 @@ impl OdfParser {
         let fast_mode = content_state.fast_mode;
         let content_size = content_state.content_size;
 
-        let mut styles_xml: Option<String> = None;
-        if zip.contains("styles.xml") {
-            let xml = zip.read_file_string("styles.xml")?;
-            if let Some(styles) = parse_styles(&xml) {
-                let style_id = styles.id;
-                store.insert(IRNode::StyleSet(styles));
-                doc.styles = Some(style_id);
-            }
-            styles_xml = Some(xml);
-        }
-
-        let settings_xml = if zip.contains("settings.xml") {
-            Some(zip.read_file_string("settings.xml")?)
-        } else {
-            None
-        };
-
-        let signatures_xml = if zip.contains("META-INF/documentsignatures.xml") {
-            Some(zip.read_file_string("META-INF/documentsignatures.xml")?)
-        } else {
-            None
-        };
+        let (styles_xml, settings_xml, signatures_xml) =
+            self.load_styles_settings_signatures(&mut zip, &mut store, &mut doc)?;
 
         if fast_mode {
             let size = content_size.unwrap_or(0);
@@ -461,6 +427,61 @@ impl OdfParser {
             store,
             metrics: None,
         })
+    }
+
+    fn load_mimetype_and_manifest<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+    ) -> Result<(DocumentFormat, Vec<OdfManifestEntry>), ParseError> {
+        let mimetype = zip
+            .read_file_string("mimetype")
+            .map(|s| s.trim().to_string())
+            .map_err(|_| ParseError::UnsupportedFormat("Missing ODF mimetype".to_string()))?;
+
+        let format = detect_odf_format(&mimetype).ok_or_else(|| {
+            ParseError::UnsupportedFormat(format!("Unsupported ODF mimetype: {mimetype}"))
+        })?;
+
+        let manifest_entries = if zip.contains("META-INF/manifest.xml") {
+            let manifest_xml = zip.read_file_string("META-INF/manifest.xml")?;
+            parse_manifest(&manifest_xml)?
+        } else {
+            Vec::new()
+        };
+
+        Ok((format, manifest_entries))
+    }
+
+    fn load_styles_settings_signatures<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        doc: &mut Document,
+    ) -> Result<(Option<String>, Option<String>, Option<String>), ParseError> {
+        let mut styles_xml: Option<String> = None;
+        if zip.contains("styles.xml") {
+            let xml = zip.read_file_string("styles.xml")?;
+            if let Some(styles) = parse_styles(&xml) {
+                let style_id = styles.id;
+                store.insert(IRNode::StyleSet(styles));
+                doc.styles = Some(style_id);
+            }
+            styles_xml = Some(xml);
+        }
+
+        let settings_xml = if zip.contains("settings.xml") {
+            Some(zip.read_file_string("settings.xml")?)
+        } else {
+            None
+        };
+
+        let signatures_xml = if zip.contains("META-INF/documentsignatures.xml") {
+            Some(zip.read_file_string("META-INF/documentsignatures.xml")?)
+        } else {
+            None
+        };
+
+        Ok((styles_xml, settings_xml, signatures_xml))
     }
 }
 
