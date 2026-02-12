@@ -1,5 +1,6 @@
 //! Presentation (PPTX) IR nodes.
 
+use crate::ir::new_node_id;
 use crate::types::{NodeId, SourceSpan};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -62,7 +63,7 @@ impl Slide {
     /// Creates a new Slide with the given number.
     pub fn new(number: u32) -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             number,
             name: None,
             shapes: Vec::new(),
@@ -115,7 +116,7 @@ pub struct NotesSlide {
 impl NotesSlide {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             shapes: Vec::new(),
             text: None,
             span: None,
@@ -181,7 +182,7 @@ pub struct PresentationInfo {
 impl PresentationInfo {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             slide_size: None,
             notes_size: None,
             first_slide_num: None,
@@ -208,7 +209,7 @@ pub struct SlideSize {
 impl PresentationProperties {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             auto_compress_pictures: None,
             compat_mode: None,
             rtl: None,
@@ -243,7 +244,7 @@ pub struct ViewProperties {
 impl ViewProperties {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             last_view: None,
             zoom: None,
             show_comments: None,
@@ -270,7 +271,7 @@ pub struct TableStyleSet {
 impl TableStyleSet {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             default_style_id: None,
             styles: Vec::new(),
             span: None,
@@ -337,7 +338,7 @@ pub struct PeoplePart {
 impl PeoplePart {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             people: Vec::new(),
             span: None,
         }
@@ -398,7 +399,7 @@ pub struct SlideMaster {
 impl SlideMaster {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             name: None,
             preserve: None,
             show_master_sp: None,
@@ -441,7 +442,7 @@ pub struct SlideLayout {
 impl SlideLayout {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             name: None,
             layout_type: None,
             matching_name: None,
@@ -473,7 +474,7 @@ pub struct NotesMaster {
 impl NotesMaster {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             name: None,
             shapes: Vec::new(),
             span: None,
@@ -500,7 +501,7 @@ pub struct HandoutMaster {
 impl HandoutMaster {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             name: None,
             shapes: Vec::new(),
             span: None,
@@ -582,7 +583,7 @@ impl Shape {
     /// Creates a new Shape.
     pub fn new(shape_type: ShapeType) -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             name: None,
             alt_text: None,
             shape_type,

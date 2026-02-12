@@ -65,6 +65,10 @@ use crate::types::{NodeId, NodeType, SourceSpan};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+pub(crate) fn new_node_id() -> NodeId {
+    NodeId::new()
+}
+
 /// Trait implemented by all IR nodes.
 pub trait IrNode {
     /// Returns the unique ID of this node.

@@ -1,5 +1,6 @@
 //! Document root IR node.
 
+use crate::ir::new_node_id;
 use crate::security::SecurityInfo;
 use crate::types::{DocumentFormat, NodeId, SourceSpan};
 #[cfg(feature = "serde")]
@@ -108,7 +109,7 @@ impl Document {
     /// Creates a new Document with the given format.
     pub fn new(format: DocumentFormat) -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             format,
             metadata: None,
             styles: None,
@@ -228,7 +229,7 @@ impl Section {
     /// Creates a new empty Section.
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             name: None,
             headers: Vec::new(),
             footers: Vec::new(),

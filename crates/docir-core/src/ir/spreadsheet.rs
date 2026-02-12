@@ -1,5 +1,6 @@
 //! Spreadsheet (XLSX) IR nodes.
 
+use crate::ir::new_node_id;
 use crate::types::{NodeId, SourceSpan};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -80,7 +81,7 @@ impl Worksheet {
     /// Creates a new Worksheet.
     pub fn new(name: impl Into<String>, sheet_id: u32) -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             name: name.into(),
             sheet_id,
             relationship_id: None,
@@ -218,7 +219,7 @@ pub struct WorksheetDrawing {
 impl WorksheetDrawing {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             shapes: Vec::new(),
             span: None,
         }
@@ -278,7 +279,7 @@ pub struct SheetComment {
 impl SheetComment {
     pub fn new(cell_ref: impl Into<String>, text: impl Into<String>) -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             sheet_name: None,
             cell_ref: cell_ref.into(),
             author: None,
@@ -305,7 +306,7 @@ pub struct SheetMetadata {
 impl SheetMetadata {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             metadata_types: Vec::new(),
             cell_metadata_count: None,
             value_metadata_count: None,
@@ -351,7 +352,7 @@ pub struct CalcChain {
 impl CalcChain {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             entries: Vec::new(),
             span: None,
         }
@@ -376,7 +377,7 @@ impl Cell {
     /// Creates a new Cell.
     pub fn new(reference: impl Into<String>, column: u32, row: u32) -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             reference: reference.into(),
             column,
             row,
@@ -497,7 +498,7 @@ pub struct SharedStringTable {
 impl SharedStringTable {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             items: Vec::new(),
             span: None,
         }
@@ -533,7 +534,7 @@ pub struct SpreadsheetStyles {
 impl SpreadsheetStyles {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             number_formats: Vec::new(),
             fonts: Vec::new(),
             fills: Vec::new(),
@@ -795,7 +796,7 @@ pub struct PivotCache {
 impl PivotCache {
     pub fn new(cache_id: u32) -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             cache_id,
             cache_source: None,
             record_count: None,
@@ -820,7 +821,7 @@ pub struct PivotCacheRecords {
 impl PivotCacheRecords {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             cache_id: None,
             record_count: None,
             field_count: None,
@@ -856,7 +857,7 @@ pub struct WorkbookProperties {
 impl WorkbookProperties {
     pub fn new() -> Self {
         Self {
-            id: NodeId::new(),
+            id: new_node_id(),
             date1904: None,
             calc_mode: None,
             calc_full: None,
