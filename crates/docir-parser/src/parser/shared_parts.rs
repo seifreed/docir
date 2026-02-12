@@ -10,7 +10,6 @@ impl OoxmlParser {
         store: &mut IrStore,
         root_id: NodeId,
     ) -> Result<(), ParseError> {
-        use sha2::{Digest, Sha256};
         use std::collections::HashSet;
 
         let mut shared_ids: Vec<NodeId> = Vec::new();
@@ -20,7 +19,32 @@ impl OoxmlParser {
             _ => DocumentFormat::WordProcessing,
         };
 
-        // Relationship graphs
+        self.parse_relationship_graphs(zip, store, &mut shared_ids, &mut seen_parts)?;
+        self.parse_themes(zip, store, &mut shared_ids, &mut seen_parts)?;
+        self.parse_media_assets(zip, content_types, store, &mut shared_ids, &mut seen_parts)?;
+        self.parse_thumbnails(zip, content_types, store, &mut shared_ids, &mut seen_parts)?;
+        self.parse_chart_parts(zip, store, doc_format, &mut shared_ids, &mut seen_parts)?;
+        self.parse_smartart_parts(zip, store, doc_format, &mut shared_ids, &mut seen_parts)?;
+        self.parse_people_part(zip, store, doc_format, &mut shared_ids, &mut seen_parts)?;
+        self.parse_web_extensions(zip, store, doc_format, &mut shared_ids, &mut seen_parts)?;
+        self.parse_custom_xml_parts(zip, store, &mut shared_ids, &mut seen_parts)?;
+        self.parse_signatures(zip, store, &mut shared_ids, &mut seen_parts)?;
+        self.parse_extension_parts(zip, content_types, store, &mut shared_ids, &mut seen_parts)?;
+
+        if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
+            doc.shared_parts.extend(shared_ids);
+        }
+
+        Ok(())
+    }
+
+    fn parse_relationship_graphs<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
         let rel_paths: Vec<String> = zip
             .file_names()
             .filter(|p| p.ends_with(".rels"))
@@ -36,8 +60,16 @@ impl OoxmlParser {
             shared_ids.push(graph_id);
             seen_parts.insert(rel_path);
         }
+        Ok(())
+    }
 
-        // Themes
+    fn parse_themes<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
         let theme_paths: Vec<String> = zip
             .file_names()
             .filter(|p| p.contains("/theme/") && p.ends_with(".xml"))
@@ -54,37 +86,67 @@ impl OoxmlParser {
             shared_ids.push(theme_id);
             seen_parts.insert(path);
         }
+        Ok(())
+    }
 
-        // Media assets
+    fn parse_media_assets<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        content_types: &ContentTypes,
+        store: &mut IrStore,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
         let media_paths: Vec<String> = zip
             .file_names()
             .filter(|p| p.contains("/media/"))
             .map(|s| s.to_string())
             .collect();
-        for path in media_paths {
-            let data = zip.read_file(&path)?;
-            let media_type = ooxml_shared::classify_media_type(&path);
-            let mut media = MediaAsset::new(path.clone(), media_type, data.len() as u64);
-            media.content_type = content_types.get_content_type(&path).map(|s| s.to_string());
-            if self.config.compute_hashes {
-                let mut hasher = Sha256::new();
-                hasher.update(&data);
-                media.hash = Some(hex::encode(hasher.finalize()));
-            }
-            media.span = Some(SourceSpan::new(&path));
-            let media_id = media.id;
-            store.insert(IRNode::MediaAsset(media));
-            shared_ids.push(media_id);
-            seen_parts.insert(path);
-        }
+        self.parse_media_paths(
+            zip,
+            content_types,
+            store,
+            shared_ids,
+            seen_parts,
+            media_paths,
+        )
+    }
 
-        // Document thumbnails
+    fn parse_thumbnails<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        content_types: &ContentTypes,
+        store: &mut IrStore,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
         let thumbnail_paths: Vec<String> = zip
             .file_names()
             .filter(|p| p.starts_with("docProps/thumbnail."))
             .map(|s| s.to_string())
             .collect();
-        for path in thumbnail_paths {
+        self.parse_media_paths(
+            zip,
+            content_types,
+            store,
+            shared_ids,
+            seen_parts,
+            thumbnail_paths,
+        )
+    }
+
+    fn parse_media_paths<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        content_types: &ContentTypes,
+        store: &mut IrStore,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+        paths: Vec<String>,
+    ) -> Result<(), ParseError> {
+        use sha2::{Digest, Sha256};
+
+        for path in paths {
             let data = zip.read_file(&path)?;
             let media_type = ooxml_shared::classify_media_type(&path);
             let mut media = MediaAsset::new(path.clone(), media_type, data.len() as u64);
@@ -100,106 +162,127 @@ impl OoxmlParser {
             shared_ids.push(media_id);
             seen_parts.insert(path);
         }
+        Ok(())
+    }
 
-        // Word chart parts
-        if doc_format == DocumentFormat::WordProcessing {
-            let chart_paths: Vec<String> = zip
-                .file_names()
-                .filter(|p| p.starts_with("word/charts/") && p.ends_with(".xml"))
-                .map(|s| s.to_string())
-                .collect();
-            for path in chart_paths {
-                let xml = zip.read_file_string(&path)?;
-                let chart_id = parse_chart_data(&xml, &path, store)?;
-                shared_ids.push(chart_id);
-                seen_parts.insert(path);
-            }
+    fn parse_chart_parts<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        doc_format: DocumentFormat,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
+        let chart_prefix = match doc_format {
+            DocumentFormat::WordProcessing => "word/charts/",
+            DocumentFormat::Spreadsheet => "xl/charts/",
+            DocumentFormat::Presentation => "ppt/charts/",
+            _ => return Ok(()),
+        };
+        let chart_paths: Vec<String> = zip
+            .file_names()
+            .filter(|p| p.starts_with(chart_prefix) && p.ends_with(".xml"))
+            .map(|s| s.to_string())
+            .collect();
+        for path in chart_paths {
+            let xml = zip.read_file_string(&path)?;
+            let chart_id = parse_chart_data(&xml, &path, store)?;
+            shared_ids.push(chart_id);
+            seen_parts.insert(path);
         }
+        Ok(())
+    }
 
-        // Spreadsheet chart parts
-        if doc_format == DocumentFormat::Spreadsheet {
-            let chart_paths: Vec<String> = zip
-                .file_names()
-                .filter(|p| p.starts_with("xl/charts/") && p.ends_with(".xml"))
-                .map(|s| s.to_string())
-                .collect();
-            for path in chart_paths {
-                let xml = zip.read_file_string(&path)?;
-                let chart_id = parse_chart_data(&xml, &path, store)?;
-                shared_ids.push(chart_id);
-                seen_parts.insert(path);
-            }
+    fn parse_smartart_parts<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        doc_format: DocumentFormat,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
+        if doc_format != DocumentFormat::WordProcessing {
+            return Ok(());
         }
-
-        // Presentation chart parts
-        if doc_format == DocumentFormat::Presentation {
-            let chart_paths: Vec<String> = zip
-                .file_names()
-                .filter(|p| p.starts_with("ppt/charts/") && p.ends_with(".xml"))
-                .map(|s| s.to_string())
-                .collect();
-            for path in chart_paths {
-                let xml = zip.read_file_string(&path)?;
-                let chart_id = parse_chart_data(&xml, &path, store)?;
-                shared_ids.push(chart_id);
-                seen_parts.insert(path);
-            }
-        }
-
-        // Word SmartArt parts
-        if doc_format == DocumentFormat::WordProcessing {
-            let diagram_paths: Vec<String> = zip
-                .file_names()
-                .filter(|p| p.starts_with("word/diagrams/") && p.ends_with(".xml"))
-                .map(|s| s.to_string())
-                .collect();
-            for path in diagram_paths {
-                let xml = zip.read_file_string(&path)?;
-                let part = parse_smartart_part(&xml, &path)?;
-                let id = part.id;
-                store.insert(IRNode::SmartArtPart(part));
-                shared_ids.push(id);
-                seen_parts.insert(path);
-            }
-        }
-
-        // Word people part (coauthoring)
-        if doc_format == DocumentFormat::WordProcessing && zip.contains("word/people.xml") {
-            let xml = zip.read_file_string("word/people.xml")?;
-            let people = ooxml_shared::parse_people_part(&xml, "word/people.xml")?;
-            let id = people.id;
-            store.insert(IRNode::PeoplePart(people));
+        let diagram_paths: Vec<String> = zip
+            .file_names()
+            .filter(|p| p.starts_with("word/diagrams/") && p.ends_with(".xml"))
+            .map(|s| s.to_string())
+            .collect();
+        for path in diagram_paths {
+            let xml = zip.read_file_string(&path)?;
+            let part = parse_smartart_part(&xml, &path)?;
+            let id = part.id;
+            store.insert(IRNode::SmartArtPart(part));
             shared_ids.push(id);
-            seen_parts.insert("word/people.xml".to_string());
+            seen_parts.insert(path);
         }
+        Ok(())
+    }
 
-        // Word web extensions
-        if doc_format == DocumentFormat::WordProcessing {
-            let ext_paths: Vec<String> = zip
-                .file_names()
-                .filter(|p| p.starts_with("word/webExtensions/") && p.ends_with(".xml"))
-                .map(|s| s.to_string())
-                .collect();
-            for path in ext_paths {
-                let xml = zip.read_file_string(&path)?;
-                if path.ends_with("/taskpanes.xml") {
-                    let panes = ooxml_shared::parse_web_extension_taskpanes(&xml, &path)?;
-                    for pane in panes {
-                        let id = pane.id;
-                        store.insert(IRNode::WebExtensionTaskpane(pane));
-                        shared_ids.push(id);
-                    }
-                } else {
-                    let ext = ooxml_shared::parse_web_extension(&xml, &path)?;
-                    let id = ext.id;
-                    store.insert(IRNode::WebExtension(ext));
+    fn parse_people_part<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        doc_format: DocumentFormat,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
+        if doc_format != DocumentFormat::WordProcessing || !zip.contains("word/people.xml") {
+            return Ok(());
+        }
+        let xml = zip.read_file_string("word/people.xml")?;
+        let people = ooxml_shared::parse_people_part(&xml, "word/people.xml")?;
+        let id = people.id;
+        store.insert(IRNode::PeoplePart(people));
+        shared_ids.push(id);
+        seen_parts.insert("word/people.xml".to_string());
+        Ok(())
+    }
+
+    fn parse_web_extensions<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        doc_format: DocumentFormat,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
+        if doc_format != DocumentFormat::WordProcessing {
+            return Ok(());
+        }
+        let ext_paths: Vec<String> = zip
+            .file_names()
+            .filter(|p| p.starts_with("word/webExtensions/") && p.ends_with(".xml"))
+            .map(|s| s.to_string())
+            .collect();
+        for path in ext_paths {
+            let xml = zip.read_file_string(&path)?;
+            if path.ends_with("/taskpanes.xml") {
+                let panes = ooxml_shared::parse_web_extension_taskpanes(&xml, &path)?;
+                for pane in panes {
+                    let id = pane.id;
+                    store.insert(IRNode::WebExtensionTaskpane(pane));
                     shared_ids.push(id);
                 }
-                seen_parts.insert(path);
+            } else {
+                let ext = ooxml_shared::parse_web_extension(&xml, &path)?;
+                let id = ext.id;
+                store.insert(IRNode::WebExtension(ext));
+                shared_ids.push(id);
             }
+            seen_parts.insert(path);
         }
+        Ok(())
+    }
 
-        // Custom XML parts
+    fn parse_custom_xml_parts<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
         let custom_xml_paths: Vec<String> = zip
             .file_names()
             .filter(|p| p.starts_with("customXml/") && p.ends_with(".xml"))
@@ -214,8 +297,16 @@ impl OoxmlParser {
             shared_ids.push(id);
             seen_parts.insert(path);
         }
+        Ok(())
+    }
 
-        // Digital signatures
+    fn parse_signatures<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        store: &mut IrStore,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
         let sig_paths: Vec<String> = zip
             .file_names()
             .filter(|p| p.starts_with("_xmlsignatures/") && p.ends_with(".xml"))
@@ -230,8 +321,17 @@ impl OoxmlParser {
             shared_ids.push(id);
             seen_parts.insert(path);
         }
+        Ok(())
+    }
 
-        // Extension parts
+    fn parse_extension_parts<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        content_types: &ContentTypes,
+        store: &mut IrStore,
+        shared_ids: &mut Vec<NodeId>,
+        seen_parts: &mut std::collections::HashSet<String>,
+    ) -> Result<(), ParseError> {
         let extension_paths: Vec<String> = zip
             .file_names()
             .filter(|p| content_types.is_extension_part(p))
@@ -250,11 +350,6 @@ impl OoxmlParser {
             shared_ids.push(part_id);
             seen_parts.insert(path);
         }
-
-        if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-            doc.shared_parts.extend(shared_ids);
-        }
-
         Ok(())
     }
 }
