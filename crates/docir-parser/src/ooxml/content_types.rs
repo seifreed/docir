@@ -137,6 +137,13 @@ impl ContentTypes {
         }
         None
     }
+
+    /// Returns true if the part is treated as a legacy/extension part.
+    pub fn is_extension_part(&self, part_name: &str) -> bool {
+        self.get_content_type(part_name)
+            .map(|ct| ct.contains("extension") && !ct.contains("webextension"))
+            .unwrap_or(false)
+    }
 }
 
 /// Known OOXML content types.

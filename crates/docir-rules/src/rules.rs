@@ -70,6 +70,58 @@ fn add_finding(
     });
 }
 
+macro_rules! define_doc_burst_rule {
+    (
+        $name:ident,
+        $id:expr,
+        $title:expr,
+        $desc:expr,
+        $severity:expr,
+        $threshold_field:ident,
+        $count_fn:expr,
+        $label:expr
+    ) => {
+        struct $name;
+
+        impl Rule for $name {
+            fn id(&self) -> &'static str {
+                $id
+            }
+
+            fn name(&self) -> &'static str {
+                $title
+            }
+
+            fn description(&self) -> &'static str {
+                $desc
+            }
+
+            fn category(&self) -> RuleCategory {
+                RuleCategory::Security
+            }
+
+            fn default_severity(&self) -> Severity {
+                $severity
+            }
+
+            fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
+                let Some(doc) = ctx.document else {
+                    return;
+                };
+                let Some(threshold) = ctx.thresholds.$threshold_field else {
+                    return;
+                };
+                let count = ($count_fn)(doc);
+                if count > threshold {
+                    let message =
+                        format!("{label}: {count} (threshold {threshold})", label = $label);
+                    add_finding(findings, self, message, None, ctx);
+                }
+            }
+        }
+    };
+}
+
 /// Rule: Macro project present.
 struct MacroProjectRule;
 
@@ -291,44 +343,16 @@ impl Rule for OleObjectRule {
     }
 }
 
-/// Rule: Excessive OLE objects.
-struct OleObjectBurstRule;
-
-impl Rule for OleObjectBurstRule {
-    fn id(&self) -> &'static str {
-        "SEC-006"
-    }
-
-    fn name(&self) -> &'static str {
-        "Excessive OLE objects"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects an unusual number of embedded OLE objects"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::Medium
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(doc) = ctx.document else {
-            return;
-        };
-        let Some(threshold) = ctx.thresholds.max_ole_objects else {
-            return;
-        };
-        let count = doc.security.ole_objects.len();
-        if count > threshold {
-            let message = format!("OLE objects: {count} (threshold {threshold})");
-            add_finding(findings, self, message, None, ctx);
-        }
-    }
-}
+define_doc_burst_rule!(
+    OleObjectBurstRule,
+    "SEC-006",
+    "Excessive OLE objects",
+    "Detects an unusual number of embedded OLE objects",
+    Severity::Medium,
+    max_ole_objects,
+    |doc: &docir_core::ir::Document| doc.security.ole_objects.len(),
+    "OLE objects"
+);
 
 /// Rule: ActiveX control present.
 struct ActiveXControlRule;
@@ -387,44 +411,16 @@ impl Rule for ActiveXControlRule {
     }
 }
 
-/// Rule: Excessive ActiveX controls.
-struct ActiveXControlBurstRule;
-
-impl Rule for ActiveXControlBurstRule {
-    fn id(&self) -> &'static str {
-        "SEC-008"
-    }
-
-    fn name(&self) -> &'static str {
-        "Excessive ActiveX controls"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects an unusual number of embedded ActiveX controls"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::Medium
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(doc) = ctx.document else {
-            return;
-        };
-        let Some(threshold) = ctx.thresholds.max_activex_controls else {
-            return;
-        };
-        let count = doc.security.activex_controls.len();
-        if count > threshold {
-            let message = format!("ActiveX controls: {count} (threshold {threshold})");
-            add_finding(findings, self, message, None, ctx);
-        }
-    }
-}
+define_doc_burst_rule!(
+    ActiveXControlBurstRule,
+    "SEC-008",
+    "Excessive ActiveX controls",
+    "Detects an unusual number of embedded ActiveX controls",
+    Severity::Medium,
+    max_activex_controls,
+    |doc: &docir_core::ir::Document| doc.security.activex_controls.len(),
+    "ActiveX controls"
+);
 
 /// Rule: DDE field present.
 struct DdeFieldRule;
