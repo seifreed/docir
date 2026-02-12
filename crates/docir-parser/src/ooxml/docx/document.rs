@@ -3,7 +3,7 @@
 use super::field::parse_field_instruction;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
-use crate::xml_utils::{attr_value, reader_from_str, xml_error};
+use crate::xml_utils::{attr_value, read_event, reader_from_str, xml_error};
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
     Footer, GlossaryDocument, GlossaryEntry, Header, Hyperlink, LineNumberRestart, LineSpacingRule,
@@ -86,9 +86,10 @@ impl DocxParser {
         let mut buf = Vec::new();
 
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"w:body" => {
+            let event = read_event(&mut reader, &mut buf, "word/document.xml")?;
+            match event {
+                Event::Start(e) => {
+                    if e.name().as_ref() == b"w:body" {
                         let sections =
                             parse_body_sections(self, &mut reader, rels, header_footer_map)?;
                         for section in sections {
@@ -97,12 +98,8 @@ impl DocxParser {
                             doc.content.push(section_id);
                         }
                     }
-                    _ => {}
-                },
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(xml_error("word/document.xml", e));
                 }
+                Event::Eof => break,
                 _ => {}
             }
             buf.clear();
@@ -125,21 +122,18 @@ impl DocxParser {
         let mut buf = Vec::new();
 
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"w:docPart" => {
+            let event = read_event(&mut reader, &mut buf, "word/glossary/document.xml")?;
+            match event {
+                Event::Start(e) => {
+                    if e.name().as_ref() == b"w:docPart" {
                         let entry = parse_doc_part(self, &mut reader, rels)?;
                         let entry_id = entry.id;
                         self.store
                             .insert(docir_core::ir::IRNode::GlossaryEntry(entry));
                         glossary.entries.push(entry_id);
                     }
-                    _ => {}
-                },
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(xml_error("word/glossary/document.xml", e));
                 }
+                Event::Eof => break,
                 _ => {}
             }
             buf.clear();
@@ -245,8 +239,9 @@ fn parse_doc_part(
     let mut buf = Vec::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        let event = read_event(reader, &mut buf, "word/glossary/document.xml")?;
+        match event {
+            Event::Start(e) => match e.name().as_ref() {
                 b"w:docPartPr" => {
                     let (name, gallery) = parse_doc_part_pr(reader)?;
                     entry.name = name;
@@ -258,18 +253,12 @@ fn parse_doc_part(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if e.name().as_ref() == b"w:docPart" {
                     break;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/glossary/document.xml".to_string(),
-                    message: e.to_string(),
-                });
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
@@ -286,8 +275,9 @@ fn parse_doc_part_pr(
     let mut buf = Vec::new();
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+        let event = read_event(reader, &mut buf, "word/glossary/document.xml")?;
+        match event {
+            Event::Start(e) | Event::Empty(e) => match e.name().as_ref() {
                 b"w:name" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
                         name = Some(val);
@@ -300,18 +290,12 @@ fn parse_doc_part_pr(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if e.name().as_ref() == b"w:docPartPr" {
                     break;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/glossary/document.xml".to_string(),
-                    message: e.to_string(),
-                });
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
