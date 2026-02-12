@@ -1,6 +1,6 @@
 //! XLSX workbook and worksheet parsing.
 
-use crate::diagnostics::push_warning;
+use crate::diagnostics::{attach_diagnostics_if_any, push_warning};
 use crate::error::ParseError;
 use crate::ooxml::part_utils::parse_xml_part_with_span;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
@@ -133,9 +133,7 @@ impl XlsxParser {
         let mut diagnostics = std::mem::replace(&mut self.diagnostics, Diagnostics::new());
         if !diagnostics.entries.is_empty() {
             diagnostics.span = Some(SourceSpan::new(workbook_path));
-            let diag_id = diagnostics.id;
-            self.store.insert(IRNode::Diagnostics(diagnostics));
-            document.diagnostics.push(diag_id);
+            attach_diagnostics_if_any(&mut self.store, &mut document, diagnostics);
         }
 
         let doc_id = document.id;

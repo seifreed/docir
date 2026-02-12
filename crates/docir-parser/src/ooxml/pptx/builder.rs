@@ -1,4 +1,5 @@
 use super::*;
+use crate::diagnostics::attach_diagnostics_if_any;
 
 impl PptxParser {
     /// Parses the presentation and slides.
@@ -162,9 +163,7 @@ impl PptxParser {
         let mut diagnostics = std::mem::replace(&mut self.diagnostics, Diagnostics::new());
         if !diagnostics.entries.is_empty() {
             diagnostics.span = Some(SourceSpan::new(presentation_path));
-            let diag_id = diagnostics.id;
-            self.store.insert(IRNode::Diagnostics(diagnostics));
-            document.diagnostics.push(diag_id);
+            attach_diagnostics_if_any(&mut self.store, &mut document, diagnostics);
         }
 
         let doc_id = document.id;

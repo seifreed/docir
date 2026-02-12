@@ -1,6 +1,6 @@
 //! HWP/HWPX parsing (Hangul Word Processor).
 
-use crate::diagnostics::{push_info, push_warning};
+use crate::diagnostics::{attach_diagnostics_if_any, push_info, push_warning};
 use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::input::{enforce_input_size, read_all_with_limit};
@@ -593,11 +593,7 @@ fn scan_hwpx_security<R: Read + Seek>(
             None,
         );
     }
-    if !diagnostics.entries.is_empty() {
-        let diag_id = diagnostics.id;
-        store.insert(IRNode::Diagnostics(diagnostics));
-        doc.add_diagnostic(diag_id);
-    }
+    attach_diagnostics_if_any(store, doc, diagnostics);
 }
 
 fn scan_hwpx_external_refs(xml: &str, source: &str) -> Vec<ExternalReference> {

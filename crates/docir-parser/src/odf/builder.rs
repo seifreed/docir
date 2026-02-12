@@ -149,11 +149,7 @@ impl OdfParser {
             }
         }
 
-        if !diagnostics.entries.is_empty() {
-            let diag_id = diagnostics.id;
-            store.insert(IRNode::Diagnostics(diagnostics));
-            doc.add_diagnostic(diag_id);
-        }
+        attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);
 
         if let Some(xml) = content_xml.as_deref() {
             for filter in scan_odf_filters(xml) {

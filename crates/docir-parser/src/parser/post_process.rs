@@ -1,4 +1,5 @@
 use super::*;
+use crate::diagnostics::attach_diagnostics_if_any_to_store;
 
 impl OoxmlParser {
     pub(super) fn post_process_ooxml<R: Read + Seek>(
@@ -117,11 +118,7 @@ impl OoxmlParser {
         }
 
         if !diagnostics.entries.is_empty() {
-            let diag_id = diagnostics.id;
-            store.insert(IRNode::Diagnostics(diagnostics));
-            if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-                doc.add_diagnostic(diag_id);
-            }
+            attach_diagnostics_if_any_to_store(store, root_id, diagnostics);
         }
 
         Ok(())

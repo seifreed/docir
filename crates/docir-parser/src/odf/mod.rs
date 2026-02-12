@@ -1,6 +1,6 @@
 //! ODF (OpenDocument) parsing support.
 
-use crate::diagnostics::{push_entry, push_info, push_warning};
+use crate::diagnostics::{attach_diagnostics_if_any, push_entry, push_info, push_warning};
 use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::input::enforce_input_size;

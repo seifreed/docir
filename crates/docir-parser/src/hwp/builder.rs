@@ -190,11 +190,7 @@ impl HwpParser {
         doc.shared_parts = shared_parts;
         doc.content = sections;
 
-        if !diagnostics.entries.is_empty() {
-            let diag_id = diagnostics.id;
-            store.insert(IRNode::Diagnostics(diagnostics));
-            doc.add_diagnostic(diag_id);
-        }
+        attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);
 
         let root_id = doc.id;
         store.insert(IRNode::Document(doc));
@@ -427,11 +423,7 @@ impl HwpxParser {
         scan_hwpx_security(&file_names, &mut zip, &mut store, &mut doc);
 
         let diagnostics = build_hwp_diagnostics(DocumentFormat::Hwpx, &file_names);
-        if !diagnostics.entries.is_empty() {
-            let diag_id = diagnostics.id;
-            store.insert(IRNode::Diagnostics(diagnostics));
-            doc.add_diagnostic(diag_id);
-        }
+        attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);
 
         let root_id = doc.id;
         store.insert(IRNode::Document(doc));
