@@ -1,6 +1,7 @@
 use super::XlsxParser;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
+use crate::xml_utils::xml_error;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{IRNode, Shape, ShapeType, WorksheetDrawing};
 use docir_core::security::{ExternalRefType, ExternalReference};
@@ -132,10 +133,7 @@ impl XlsxParser {
                 },
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: drawing_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(drawing_path, e));
                 }
                 _ => {}
             }

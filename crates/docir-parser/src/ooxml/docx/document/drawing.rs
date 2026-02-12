@@ -1,7 +1,7 @@
 use super::{normalize_docx_target, span_from_reader, DocxParser};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, xml_error};
 use docir_core::ir::{
     Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeTransform, ShapeType, TextAlignment,
 };
@@ -101,10 +101,7 @@ pub(super) fn parse_drawing(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -169,10 +166,7 @@ fn parse_drawing_text_body(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: doc_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(doc_path, e));
             }
             _ => {}
         }
@@ -222,10 +216,7 @@ fn parse_drawing_text_paragraph(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: doc_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(doc_path, e));
             }
             _ => {}
         }
@@ -284,10 +275,7 @@ fn parse_drawing_text_run(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: doc_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(doc_path, e));
             }
             _ => {}
         }
