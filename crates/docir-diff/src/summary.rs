@@ -7,8 +7,51 @@ use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
 use sha2::Digest;
 
+mod presentation;
+mod spreadsheet;
+
 pub(crate) fn summarize(node: &IRNode, store: &IrStore) -> String {
     match node {
+        IRNode::Worksheet(_)
+        | IRNode::Cell(_)
+        | IRNode::SharedStringTable(_)
+        | IRNode::ConnectionPart(_)
+        | IRNode::SpreadsheetStyles(_)
+        | IRNode::DefinedName(_)
+        | IRNode::ConditionalFormat(_)
+        | IRNode::DataValidation(_)
+        | IRNode::TableDefinition(_)
+        | IRNode::PivotTable(_)
+        | IRNode::PivotCache(_)
+        | IRNode::PivotCacheRecords(_)
+        | IRNode::WorkbookProperties(_)
+        | IRNode::CalcChain(_)
+        | IRNode::SheetComment(_)
+        | IRNode::SheetMetadata(_)
+        | IRNode::WorksheetDrawing(_)
+        | IRNode::ChartData(_)
+        | IRNode::ExternalLinkPart(_)
+        | IRNode::SlicerPart(_)
+        | IRNode::TimelinePart(_)
+        | IRNode::QueryTablePart(_) => {
+            spreadsheet::summarize(node, store).expect("spreadsheet summary missing for node")
+        }
+        IRNode::Slide(_)
+        | IRNode::Shape(_)
+        | IRNode::SlideMaster(_)
+        | IRNode::SlideLayout(_)
+        | IRNode::NotesMaster(_)
+        | IRNode::HandoutMaster(_)
+        | IRNode::NotesSlide(_)
+        | IRNode::PresentationProperties(_)
+        | IRNode::ViewProperties(_)
+        | IRNode::TableStyleSet(_)
+        | IRNode::PptxCommentAuthor(_)
+        | IRNode::PptxComment(_)
+        | IRNode::PresentationTag(_)
+        | IRNode::PresentationInfo(_) => {
+            presentation::summarize(node, store).expect("presentation summary missing for node")
+        }
         IRNode::Document(doc) => summarize_document(doc),
         IRNode::Section(section) => summarize_section(section),
         IRNode::Paragraph(para) => summarize_paragraph(para, store),
@@ -26,70 +69,6 @@ pub(crate) fn summarize(node: &IRNode, store: &IrStore) -> String {
             cell.content.len(),
             cell.properties.grid_span.unwrap_or(1)
         ),
-        IRNode::Worksheet(ws) => summarize_worksheet(ws),
-        IRNode::Cell(cell) => summarize_cell(cell),
-        IRNode::SharedStringTable(table) => format!("items={}", table.items.len()),
-        IRNode::ConnectionPart(part) => format!("connections={}", part.entries.len()),
-        IRNode::SpreadsheetStyles(styles) => {
-            format!(
-                "numfmts={} fonts={} fills={} borders={} xfs={} style_xfs={} dxfs={} table_styles={}",
-                styles.number_formats.len(),
-                styles.fonts.len(),
-                styles.fills.len(),
-                styles.borders.len(),
-                styles.cell_xfs.len(),
-                styles.cell_style_xfs.len(),
-                styles.dxfs.len(),
-                styles.table_styles
-                    .as_ref()
-                    .and_then(|t| t.default_table_style.as_ref())
-                    .map_or("-", |v| v.as_str())
-            )
-        }
-        IRNode::DefinedName(name) => format!(
-            "name={} scope={}",
-            name.name,
-            name.local_sheet_id
-                .map_or("global".to_string(), |id| format!("sheet:{id}"))
-        ),
-        IRNode::ConditionalFormat(fmt) => {
-            format!("ranges={} rules={}", fmt.ranges.len(), fmt.rules.len())
-        }
-        IRNode::DataValidation(val) => format!(
-            "ranges={} type={}",
-            val.ranges.len(),
-            opt_str(&val.validation_type)
-        ),
-        IRNode::TableDefinition(table) => {
-            format!(
-                "name={} cols={} ref={}",
-                opt_str(&table.display_name),
-                table.columns.len(),
-                opt_str(&table.ref_range)
-            )
-        }
-        IRNode::PivotTable(pivot) => format!(
-            "name={} cache_id={}",
-            opt_str(&pivot.name),
-            opt_u32(pivot.cache_id)
-        ),
-        IRNode::PivotCache(cache) => format!(
-            "cache_id={} source={}",
-            cache.cache_id,
-            opt_str(&cache.cache_source)
-        ),
-        IRNode::PivotCacheRecords(records) => format!(
-            "records={} fields={}",
-            records.record_count.unwrap_or(0),
-            records.field_count.unwrap_or(0)
-        ),
-        IRNode::WorkbookProperties(props) => format!(
-            "calc_mode={} protected={}",
-            opt_str(&props.calc_mode),
-            props.workbook_protected
-        ),
-        IRNode::Slide(slide) => summarize_slide(slide),
-        IRNode::Shape(shape) => summarize_shape(shape),
         IRNode::MacroProject(project) => summarize_macro_project(project),
         IRNode::MacroModule(module) => summarize_macro_module(module),
         IRNode::OleObject(ole) => summarize_ole(ole),
@@ -181,81 +160,6 @@ pub(crate) fn summarize(node: &IRNode, store: &IrStore) -> String {
         IRNode::CommentRangeStart(start) => format!("comment_id={}", start.comment_id),
         IRNode::CommentRangeEnd(end) => format!("comment_id={}", end.comment_id),
         IRNode::CommentReference(reference) => format!("comment_id={}", reference.comment_id),
-        IRNode::SlideMaster(master) => format!(
-            "shapes={} layouts={}",
-            master.shapes.len(),
-            master.layouts.len()
-        ),
-        IRNode::SlideLayout(layout) => format!("shapes={}", layout.shapes.len()),
-        IRNode::NotesMaster(master) => format!("shapes={}", master.shapes.len()),
-        IRNode::HandoutMaster(master) => format!("shapes={}", master.shapes.len()),
-        IRNode::NotesSlide(slide) => format!(
-            "shapes={} text={}",
-            slide.shapes.len(),
-            opt_str(&slide.text)
-        ),
-        IRNode::WorksheetDrawing(d) => format!("shapes={}", d.shapes.len()),
-        IRNode::ChartData(c) => format!(
-            "type={} series={} series_data={}",
-            opt_str(&c.chart_type),
-            c.series.len(),
-            c.series_data.len()
-        ),
-        IRNode::CalcChain(chain) => format!("entries={}", chain.entries.len()),
-        IRNode::SheetComment(comment) => format!(
-            "cell_ref={} author={} text={}",
-            comment.cell_ref,
-            opt_str(&comment.author),
-            abbreviate(&comment.text, 80)
-        ),
-        IRNode::SheetMetadata(meta) => format!(
-            "types={} cell_count={} value_count={}",
-            meta.metadata_types.len(),
-            opt_u32(meta.cell_metadata_count),
-            opt_u32(meta.value_metadata_count)
-        ),
-        IRNode::PresentationProperties(props) => format!(
-            "auto_compress={} compat={} rtl={}",
-            opt_bool(props.auto_compress_pictures),
-            opt_str(&props.compat_mode),
-            opt_bool(props.rtl)
-        ),
-        IRNode::ViewProperties(props) => format!(
-            "last_view={} zoom={}",
-            opt_str(&props.last_view),
-            opt_u32(props.zoom)
-        ),
-        IRNode::TableStyleSet(styles) => format!(
-            "default={} styles={}",
-            opt_str(&styles.default_style_id),
-            styles.styles.len()
-        ),
-        IRNode::PptxCommentAuthor(author) => format!(
-            "author_id={} name={}",
-            author.author_id,
-            opt_str(&author.name)
-        ),
-        IRNode::PptxComment(comment) => format!(
-            "author_id={} text={}",
-            comment
-                .author_id
-                .map(|v| v.to_string())
-                .unwrap_or_else(|| "-".to_string()),
-            abbreviate(&comment.text, 80)
-        ),
-        IRNode::PresentationTag(tag) => format!("name={} value={}", tag.name, opt_str(&tag.value)),
-        IRNode::PresentationInfo(info) => format!(
-            "slide_size={} notes_size={} show_type={}",
-            info.slide_size
-                .as_ref()
-                .map(|s| format!("{}x{}", s.cx, s.cy))
-                .unwrap_or_else(|| "-".to_string()),
-            info.notes_size
-                .as_ref()
-                .map(|s| format!("{}x{}", s.cx, s.cy))
-                .unwrap_or_else(|| "-".to_string()),
-            opt_str(&info.show_type)
-        ),
         IRNode::PeoplePart(people) => format!("people={}", people.people.len()),
         IRNode::SmartArtPart(part) => format!("kind={} path={}", part.kind, part.path),
         IRNode::WebExtension(ext) => format!(
@@ -288,29 +192,6 @@ pub(crate) fn summarize(node: &IRNode, store: &IrStore) -> String {
             opt_str(&shape.image_target)
         ),
         IRNode::DrawingPart(part) => format!("path={} shapes={}", part.path, part.shapes.len()),
-        IRNode::ExternalLinkPart(part) => format!(
-            "type={} target={} sheets={}",
-            opt_str(&part.link_type),
-            opt_str(&part.target),
-            part.sheets.len()
-        ),
-        IRNode::SlicerPart(part) => format!(
-            "name={} caption={} cache_id={}",
-            opt_str(&part.name),
-            opt_str(&part.caption),
-            opt_str(&part.cache_id)
-        ),
-        IRNode::TimelinePart(part) => format!(
-            "name={} cache_id={}",
-            opt_str(&part.name),
-            opt_str(&part.cache_id)
-        ),
-        IRNode::QueryTablePart(part) => format!(
-            "name={} connection_id={} url={}",
-            opt_str(&part.name),
-            opt_str(&part.connection_id),
-            opt_str(&part.url)
-        ),
         IRNode::Diagnostics(diag) => format!("entries={}", diag.entries.len()),
     }
 }
