@@ -311,7 +311,7 @@ impl HwpParser {
         if !diagnostics.entries.is_empty() {
             let diag_id = diagnostics.id;
             store.insert(IRNode::Diagnostics(diagnostics));
-            doc.diagnostics.push(diag_id);
+            doc.add_diagnostic(diag_id);
         }
 
         let root_id = doc.id;
@@ -493,7 +493,7 @@ impl HwpxParser {
         if !diagnostics.entries.is_empty() {
             let diag_id = diagnostics.id;
             store.insert(IRNode::Diagnostics(diagnostics));
-            doc.diagnostics.push(diag_id);
+            doc.add_diagnostic(diag_id);
         }
 
         let root_id = doc.id;
@@ -1011,7 +1011,7 @@ fn scan_hwpx_security<R: Read + Seek>(
     if !diagnostics.entries.is_empty() {
         let diag_id = diagnostics.id;
         store.insert(IRNode::Diagnostics(diagnostics));
-        doc.diagnostics.push(diag_id);
+        doc.add_diagnostic(diag_id);
     }
 }
 

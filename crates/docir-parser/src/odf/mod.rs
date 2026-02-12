@@ -344,7 +344,7 @@ impl OdfParser {
         if !diagnostics.entries.is_empty() {
             let diag_id = diagnostics.id;
             store.insert(IRNode::Diagnostics(diagnostics));
-            doc.diagnostics.push(diag_id);
+            doc.add_diagnostic(diag_id);
         }
 
         if let Some(xml) = content_xml.as_deref() {
@@ -359,7 +359,7 @@ impl OdfParser {
                 );
                 let diag_id = diag.id;
                 store.insert(IRNode::Diagnostics(diag));
-                doc.diagnostics.push(diag_id);
+                doc.add_diagnostic(diag_id);
             }
         }
 

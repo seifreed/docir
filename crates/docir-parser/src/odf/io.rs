@@ -47,13 +47,13 @@ pub(super) fn collect_shared_parts<R: Read + Seek>(
         part.content_type = media_type.clone();
         let part_id = part.id;
         store.insert(IRNode::ExtensionPart(part));
-        doc.shared_parts.push(part_id);
+        doc.add_shared_part(part_id);
 
         if let Some(media) = media_type.as_deref() {
             if let Some(asset) = build_media_asset(path, media, size_bytes) {
                 let asset_id = asset.id;
                 store.insert(IRNode::MediaAsset(asset));
-                doc.shared_parts.push(asset_id);
+                doc.add_shared_part(asset_id);
             }
         }
     }

@@ -137,6 +137,20 @@ impl Document {
         }
     }
 
+    /// Registers a shared/package part ID on the document.
+    ///
+    /// Callers should ensure the ID refers to a node stored in the IR store.
+    pub fn add_shared_part(&mut self, id: NodeId) {
+        self.shared_parts.push(id);
+    }
+
+    /// Registers a diagnostics node ID on the document.
+    ///
+    /// Callers should ensure the ID refers to a diagnostics node stored in the IR store.
+    pub fn add_diagnostic(&mut self, id: NodeId) {
+        self.diagnostics.push(id);
+    }
+
     /// Returns all child node IDs.
     pub fn children(&self) -> Vec<NodeId> {
         let mut children = Vec::new();

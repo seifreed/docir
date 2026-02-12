@@ -3,6 +3,7 @@
 //! OOXML parser for docir. Handles secure parsing of DOCX, XLSX, and PPTX files
 //! into the docir IR representation.
 
+pub mod config;
 pub mod diagnostics;
 pub mod error;
 pub mod format;
@@ -19,8 +20,9 @@ mod text_utils;
 pub(crate) mod xml_utils;
 pub mod zip_handler;
 
+pub use config::ParserConfig;
 pub use error::ParseError;
 pub use hwp::{HwpParser, HwpxParser};
 pub use odf::OdfParser;
-pub use parser::{DocumentParser, OoxmlParser, ParserConfig};
+pub use parser::{DocumentParser, OoxmlParser};
 pub use rtf::RtfParser;

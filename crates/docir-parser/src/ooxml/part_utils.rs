@@ -122,5 +122,5 @@ pub(crate) fn insert_shared_part(
     id: NodeId,
 ) {
     store.insert(node);
-    document.shared_parts.push(id);
+    document.add_shared_part(id);
 }
