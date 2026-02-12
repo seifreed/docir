@@ -49,21 +49,31 @@ impl SecurityAnalyzerPort for SecurityAnalyzer {
 /// Application facade for docir workflows.
 pub struct DocirApp<P: ParserPort = DocumentParser> {
     parser: P,
+    security_analyzer_factory: Box<dyn Fn() -> Box<dyn SecurityAnalyzerPort>>,
 }
 
 impl DocirApp<DocumentParser> {
     /// Creates a new app instance with the provided parser config.
     pub fn new(config: ParserConfig) -> Self {
-        Self {
-            parser: DocumentParser::with_config(config),
-        }
+        Self::with_parser(DocumentParser::with_config(config))
     }
 }
 
 impl<P: ParserPort> DocirApp<P> {
     /// Creates a new app instance with a custom parser implementation.
     pub fn with_parser(parser: P) -> Self {
-        Self { parser }
+        Self::with_parser_and_security(parser, || Box::new(SecurityAnalyzer::new()))
+    }
+
+    /// Creates a new app instance with custom parser and security analyzer factory.
+    pub fn with_parser_and_security<F>(parser: P, security_analyzer_factory: F) -> Self
+    where
+        F: Fn() -> Box<dyn SecurityAnalyzerPort> + 'static,
+    {
+        Self {
+            parser,
+            security_analyzer_factory: Box::new(security_analyzer_factory),
+        }
     }
 
     /// Parses a file from disk.
@@ -94,7 +104,7 @@ impl<P: ParserPort> DocirApp<P> {
 
     /// Runs security analysis for a parsed document.
     pub fn analyze_security(&self, parsed: &ParsedDocument) -> AnalysisResult {
-        let mut analyzer = SecurityAnalyzer::new();
+        let mut analyzer = (self.security_analyzer_factory)();
         analyzer.analyze(&parsed.store, parsed.root_id)
     }
 
