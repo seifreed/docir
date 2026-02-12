@@ -468,10 +468,7 @@ fn apply_section_refs(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(crate::xml_utils::xml_error("word/document.xml", e));
             }
             _ => {}
         }

@@ -125,10 +125,7 @@ pub(super) fn parse_ods_table(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
+                return Err(crate::xml_utils::xml_error("content.xml", e));
             }
             _ => {}
         }
@@ -312,10 +309,7 @@ pub(super) fn parse_ods_table_fast(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
+                return Err(crate::xml_utils::xml_error("content.xml", e));
             }
             _ => {}
         }
@@ -428,10 +422,7 @@ pub(super) fn parse_ods_cell(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
+                return Err(crate::xml_utils::xml_error("content.xml", e));
             }
             _ => {}
         }
