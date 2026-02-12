@@ -1,6 +1,6 @@
 //! Built-in rules for docir IR analysis.
 
-use crate::{Finding, Rule, RuleCategory, RuleContext, Severity};
+use crate::{Finding, Rule, RuleCategory, RuleContext, RuleThresholds, Severity};
 use docir_core::ir::{IRNode, IrNode as IrNodeTrait};
 use docir_core::types::{NodeId, NodeType};
 use docir_core::visitor::IrStore;
@@ -13,13 +13,13 @@ pub(crate) fn default_rules() -> Vec<Box<dyn Rule>> {
         Box::new(SuspiciousVbaCallRule),
         Box::new(XlmMacroRule),
         Box::new(OleObjectRule),
-        Box::new(OleObjectBurstRule),
+        Box::new(BurstRule::new(&OLE_OBJECT_BURST_RULE)),
         Box::new(ActiveXControlRule),
-        Box::new(ActiveXControlBurstRule),
+        Box::new(BurstRule::new(&ACTIVEX_CONTROL_BURST_RULE)),
         Box::new(DdeFieldRule),
         Box::new(ExternalReferenceRule),
         Box::new(ExternalHyperlinkRule),
-        Box::new(ExternalLinkBurstRule),
+        Box::new(BurstRule::new(&EXTERNAL_LINK_BURST_RULE)),
         Box::new(HiddenWorksheetRule),
         Box::new(HiddenSlideRule),
         Box::new(SuspiciousFormulaRule),
@@ -70,56 +70,128 @@ fn add_finding(
     });
 }
 
-macro_rules! define_doc_burst_rule {
-    (
-        $name:ident,
-        $id:expr,
-        $title:expr,
-        $desc:expr,
-        $severity:expr,
-        $threshold_field:ident,
-        $count_fn:expr,
-        $label:expr
-    ) => {
-        struct $name;
+fn threshold_max_ole_objects(thresholds: &RuleThresholds) -> Option<usize> {
+    thresholds.max_ole_objects
+}
 
-        impl Rule for $name {
-            fn id(&self) -> &'static str {
-                $id
-            }
+fn threshold_max_activex_controls(thresholds: &RuleThresholds) -> Option<usize> {
+    thresholds.max_activex_controls
+}
 
-            fn name(&self) -> &'static str {
-                $title
-            }
+fn threshold_max_external_links(thresholds: &RuleThresholds) -> Option<usize> {
+    thresholds.max_external_links
+}
 
-            fn description(&self) -> &'static str {
-                $desc
-            }
+fn count_ole_objects(ctx: &RuleContext) -> usize {
+    ctx.document
+        .map(|doc| doc.security.ole_objects.len())
+        .unwrap_or(0)
+}
 
-            fn category(&self) -> RuleCategory {
-                RuleCategory::Security
-            }
+fn count_activex_controls(ctx: &RuleContext) -> usize {
+    ctx.document
+        .map(|doc| doc.security.activex_controls.len())
+        .unwrap_or(0)
+}
 
-            fn default_severity(&self) -> Severity {
-                $severity
-            }
-
-            fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-                let Some(doc) = ctx.document else {
-                    return;
-                };
-                let Some(threshold) = ctx.thresholds.$threshold_field else {
-                    return;
-                };
-                let count = ($count_fn)(doc);
-                if count > threshold {
-                    let message =
-                        format!("{label}: {count} (threshold {threshold})", label = $label);
-                    add_finding(findings, self, message, None, ctx);
-                }
+fn count_external_links(ctx: &RuleContext) -> usize {
+    let mut count = 0usize;
+    let mut visited = HashSet::new();
+    for node in iter_nodes(ctx.store, ctx.root, &mut visited) {
+        if let IRNode::Hyperlink(link) = node {
+            if link.is_external {
+                count += 1;
             }
         }
-    };
+    }
+    count
+}
+
+const OLE_OBJECT_BURST_RULE: BurstRuleSpec = BurstRuleSpec {
+    id: "SEC-006",
+    title: "Excessive OLE objects",
+    description: "Detects an unusual number of embedded OLE objects",
+    severity: Severity::Medium,
+    category: RuleCategory::Security,
+    threshold: threshold_max_ole_objects,
+    count: count_ole_objects,
+    label: "OLE objects",
+};
+
+const ACTIVEX_CONTROL_BURST_RULE: BurstRuleSpec = BurstRuleSpec {
+    id: "SEC-008",
+    title: "Excessive ActiveX controls",
+    description: "Detects an unusual number of embedded ActiveX controls",
+    severity: Severity::Medium,
+    category: RuleCategory::Security,
+    threshold: threshold_max_activex_controls,
+    count: count_activex_controls,
+    label: "ActiveX controls",
+};
+
+const EXTERNAL_LINK_BURST_RULE: BurstRuleSpec = BurstRuleSpec {
+    id: "SEC-012",
+    title: "Excessive external references",
+    description: "Detects an unusual number of external references",
+    severity: Severity::Medium,
+    category: RuleCategory::Security,
+    threshold: threshold_max_external_links,
+    count: count_external_links,
+    label: "External links",
+};
+
+struct BurstRuleSpec {
+    id: &'static str,
+    title: &'static str,
+    description: &'static str,
+    severity: Severity,
+    category: RuleCategory,
+    threshold: fn(&RuleThresholds) -> Option<usize>,
+    count: fn(&RuleContext) -> usize,
+    label: &'static str,
+}
+
+struct BurstRule {
+    spec: &'static BurstRuleSpec,
+}
+
+impl BurstRule {
+    fn new(spec: &'static BurstRuleSpec) -> Self {
+        Self { spec }
+    }
+}
+
+impl Rule for BurstRule {
+    fn id(&self) -> &'static str {
+        self.spec.id
+    }
+
+    fn name(&self) -> &'static str {
+        self.spec.title
+    }
+
+    fn description(&self) -> &'static str {
+        self.spec.description
+    }
+
+    fn category(&self) -> RuleCategory {
+        self.spec.category
+    }
+
+    fn default_severity(&self) -> Severity {
+        self.spec.severity
+    }
+
+    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
+        let Some(threshold) = (self.spec.threshold)(&ctx.thresholds) else {
+            return;
+        };
+        let count = (self.spec.count)(ctx);
+        if count > threshold {
+            let message = format!("{}: {count} (threshold {threshold})", self.spec.label);
+            add_finding(findings, self, message, None, ctx);
+        }
+    }
 }
 
 /// Rule: Macro project present.
@@ -343,17 +415,6 @@ impl Rule for OleObjectRule {
     }
 }
 
-define_doc_burst_rule!(
-    OleObjectBurstRule,
-    "SEC-006",
-    "Excessive OLE objects",
-    "Detects an unusual number of embedded OLE objects",
-    Severity::Medium,
-    max_ole_objects,
-    |doc: &docir_core::ir::Document| doc.security.ole_objects.len(),
-    "OLE objects"
-);
-
 /// Rule: ActiveX control present.
 struct ActiveXControlRule;
 
@@ -410,17 +471,6 @@ impl Rule for ActiveXControlRule {
         }
     }
 }
-
-define_doc_burst_rule!(
-    ActiveXControlBurstRule,
-    "SEC-008",
-    "Excessive ActiveX controls",
-    "Detects an unusual number of embedded ActiveX controls",
-    Severity::Medium,
-    max_activex_controls,
-    |doc: &docir_core::ir::Document| doc.security.activex_controls.len(),
-    "ActiveX controls"
-);
 
 /// Rule: DDE field present.
 struct DdeFieldRule;
@@ -557,50 +607,6 @@ impl Rule for ExternalHyperlinkRule {
                     );
                 }
             }
-        }
-    }
-}
-
-/// Rule: Excessive external references.
-struct ExternalLinkBurstRule;
-
-impl Rule for ExternalLinkBurstRule {
-    fn id(&self) -> &'static str {
-        "SEC-012"
-    }
-
-    fn name(&self) -> &'static str {
-        "Excessive external references"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects an unusual number of external references"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::Medium
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(threshold) = ctx.thresholds.max_external_links else {
-            return;
-        };
-        let mut count = 0usize;
-        let mut visited = HashSet::new();
-        for node in iter_nodes(ctx.store, ctx.root, &mut visited) {
-            if let IRNode::Hyperlink(link) = node {
-                if link.is_external {
-                    count += 1;
-                }
-            }
-        }
-        if count > threshold {
-            let message = format!("External links: {count} (threshold {threshold})");
-            add_finding(findings, self, message, None, ctx);
         }
     }
 }
