@@ -35,7 +35,7 @@ mod metadata;
 mod parser_docx;
 mod parser_pptx;
 mod parser_xlsx;
-mod security;
+pub(crate) mod security;
 mod shared_parts;
 mod utils;
 mod vba;
@@ -901,16 +901,6 @@ impl DocumentParser {
         let data = read_all_with_limit(reader, self.config.max_input_size)?;
         let parsed = self.parse_bytes(&data)?;
         Ok((parsed, data))
-    }
-
-    /// Scans OOXML security artifacts from raw bytes into an existing store.
-    pub fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> Result<(), ParseError> {
-        if !is_zip_container(data) {
-            return Ok(());
-        }
-        let mut zip = SecureZipReader::new(Cursor::new(data), self.config.zip_config.clone())?;
-        let scanner = security::SecurityScanner::new(&self.config);
-        scanner.scan_zip(&mut zip, store)
     }
 }
 
