@@ -3,14 +3,13 @@
 use crate::error::ParseError;
 use crate::ooxml::xml_utils::xml_error;
 use crate::xml_utils::local_name;
+use crate::xml_utils::reader_from_str;
 use docir_core::ir::{SheetMetadata, SheetMetadataType};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
-use quick_xml::Reader;
 
 pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadata, ParseError> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let mut reader = reader_from_str(xml);
     let mut buf = Vec::new();
     let mut metadata = SheetMetadata::new();
     metadata.span = Some(SourceSpan::new(path));

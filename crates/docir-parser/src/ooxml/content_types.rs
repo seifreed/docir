@@ -1,8 +1,8 @@
 //! [Content_Types].xml parser.
 
 use crate::error::ParseError;
+use crate::xml_utils::reader_from_str;
 use quick_xml::events::Event;
-use quick_xml::Reader;
 use std::collections::HashMap;
 
 /// Content types registry from [Content_Types].xml.
@@ -17,8 +17,7 @@ pub struct ContentTypes {
 impl ContentTypes {
     /// Parses [Content_Types].xml content.
     pub fn parse(xml: &str) -> Result<Self, ParseError> {
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
 
         let mut content_types = ContentTypes::default();
         let mut buf = Vec::new();

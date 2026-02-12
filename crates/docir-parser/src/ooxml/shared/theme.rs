@@ -1,16 +1,15 @@
 use crate::error::ParseError;
+use crate::xml_utils::reader_from_str;
 use crate::xml_utils::xml_error;
 use docir_core::ir::{Theme, ThemeColor, ThemeFontScheme};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
-use quick_xml::Reader;
 
 pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
     let mut theme = Theme::new();
     theme.span = Some(SourceSpan::new(path));
 
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let mut reader = reader_from_str(xml);
 
     let mut buf = Vec::new();
     let mut in_clr_scheme = false;

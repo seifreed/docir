@@ -1,13 +1,12 @@
 use crate::error::ParseError;
+use crate::xml_utils::reader_from_str;
 use crate::xml_utils::xml_error;
 use docir_core::ir::{PeoplePart, PersonEntry};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
-use quick_xml::Reader;
 
 pub fn parse_people_part(xml: &str, path: &str) -> Result<PeoplePart, ParseError> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let mut reader = reader_from_str(xml);
 
     let mut people = PeoplePart::new();
     people.span = Some(SourceSpan::new(path));

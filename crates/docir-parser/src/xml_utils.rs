@@ -1,5 +1,6 @@
 use crate::error::ParseError;
 use quick_xml::events::BytesStart;
+use quick_xml::Reader;
 use std::fmt::Display;
 
 pub(crate) fn attr_value(e: &BytesStart<'_>, name: &[u8]) -> Option<String> {
@@ -46,4 +47,20 @@ pub(crate) fn xml_error(file: &str, err: impl Display) -> ParseError {
         file: file.to_string(),
         message: err.to_string(),
     }
+}
+
+pub(crate) fn reader_from_str(xml: &str) -> Reader<&[u8]> {
+    reader_from_str_with_options(xml, true, false)
+}
+
+pub(crate) fn reader_from_str_with_options(
+    xml: &str,
+    trim_text: bool,
+    expand_empty_elements: bool,
+) -> Reader<&[u8]> {
+    let mut reader = Reader::from_str(xml);
+    let cfg = reader.config_mut();
+    cfg.trim_text(trim_text);
+    cfg.expand_empty_elements = expand_empty_elements;
+    reader
 }

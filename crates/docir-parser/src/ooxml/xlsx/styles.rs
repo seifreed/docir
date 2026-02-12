@@ -2,19 +2,16 @@
 
 use crate::error::ParseError;
 use crate::ooxml::xml_utils::xml_error;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, reader_from_str_with_options};
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,
     NumberFormat, SpreadsheetStyles, TableStyleDef, TableStyleInfo,
 };
 use docir_core::types::SourceSpan;
 use quick_xml::events::{BytesStart, Event};
-use quick_xml::Reader;
 
 pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetStyles, ParseError> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    reader.config_mut().expand_empty_elements = true;
+    let mut reader = reader_from_str_with_options(xml, true, true);
 
     let mut styles = SpreadsheetStyles::new();
     styles.span = Some(SourceSpan::new(styles_path));
