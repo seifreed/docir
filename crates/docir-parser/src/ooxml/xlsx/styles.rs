@@ -8,7 +8,56 @@ use docir_core::ir::{
     NumberFormat, SpreadsheetStyles, TableStyleDef, TableStyleInfo,
 };
 use docir_core::types::SourceSpan;
+use quick_xml::events::BytesEnd;
 use quick_xml::events::{BytesStart, Event};
+
+struct StylesParseState {
+    in_num_fmts: bool,
+    in_fonts: bool,
+    in_fills: bool,
+    in_borders: bool,
+    in_cell_xfs: bool,
+    in_cell_style_xfs: bool,
+    in_dxfs: bool,
+    in_table_styles: bool,
+    current_font: Option<FontDef>,
+    current_fill: Option<FillDef>,
+    current_border: Option<BorderDef>,
+    current_border_side: Option<(String, BorderSide)>,
+    current_xf: Option<CellFormat>,
+    current_xf_is_style: bool,
+    current_dxf: Option<DxfStyle>,
+    current_dxf_font: Option<FontDef>,
+    current_dxf_fill: Option<FillDef>,
+    current_dxf_border: Option<BorderDef>,
+    current_dxf_border_side: Option<(String, BorderSide)>,
+}
+
+impl StylesParseState {
+    fn new() -> Self {
+        Self {
+            in_num_fmts: false,
+            in_fonts: false,
+            in_fills: false,
+            in_borders: false,
+            in_cell_xfs: false,
+            in_cell_style_xfs: false,
+            in_dxfs: false,
+            in_table_styles: false,
+            current_font: None,
+            current_fill: None,
+            current_border: None,
+            current_border_side: None,
+            current_xf: None,
+            current_xf_is_style: false,
+            current_dxf: None,
+            current_dxf_font: None,
+            current_dxf_fill: None,
+            current_dxf_border: None,
+            current_dxf_border_side: None,
+        }
+    }
+}
 
 pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetStyles, ParseError> {
     let mut reader = reader_from_str_with_options(xml, true, true);
@@ -17,283 +66,12 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
     styles.span = Some(SourceSpan::new(styles_path));
 
     let mut buf = Vec::new();
-
-    let mut in_num_fmts = false;
-    let mut in_fonts = false;
-    let mut in_fills = false;
-    let mut in_borders = false;
-    let mut in_cell_xfs = false;
-    let mut in_cell_style_xfs = false;
-    let mut in_dxfs = false;
-    let mut in_table_styles = false;
-
-    let mut current_font: Option<FontDef> = None;
-    let mut current_fill: Option<FillDef> = None;
-    let mut current_border: Option<BorderDef> = None;
-    let mut current_border_side: Option<(String, BorderSide)> = None;
-    let mut current_xf: Option<CellFormat> = None;
-    let mut current_xf_is_style = false;
-    let mut current_dxf: Option<DxfStyle> = None;
-    let mut current_dxf_font: Option<FontDef> = None;
-    let mut current_dxf_fill: Option<FillDef> = None;
-    let mut current_dxf_border: Option<BorderDef> = None;
-    let mut current_dxf_border_side: Option<(String, BorderSide)> = None;
+    let mut state = StylesParseState::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"numFmts" => in_num_fmts = true,
-                b"numFmt" if in_num_fmts => {
-                    if let Some(fmt) = parse_number_format(&e) {
-                        styles.number_formats.push(fmt);
-                    }
-                }
-                b"numFmt" if in_dxfs => {
-                    if let Some(fmt) = parse_number_format(&e) {
-                        if let Some(dxf) = current_dxf.as_mut() {
-                            dxf.num_fmt = Some(fmt);
-                        }
-                    }
-                }
-                b"fonts" => in_fonts = true,
-                b"font" if in_fonts => {
-                    current_font = Some(FontDef {
-                        name: None,
-                        size: None,
-                        bold: false,
-                        italic: false,
-                        underline: false,
-                        color: None,
-                    });
-                }
-                b"font" if in_dxfs => {
-                    current_dxf_font = Some(FontDef {
-                        name: None,
-                        size: None,
-                        bold: false,
-                        italic: false,
-                        underline: false,
-                        color: None,
-                    });
-                }
-                b"name" => {
-                    if let Some(name) = attr_value(&e, b"val") {
-                        apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
-                            font.name = Some(name.clone());
-                        });
-                    }
-                }
-                b"sz" => {
-                    if let Some(size) = attr_f64(&e, b"val") {
-                        apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
-                            font.size = Some(size);
-                        });
-                    }
-                }
-                b"b" => {
-                    apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
-                        font.bold = true;
-                    });
-                }
-                b"i" => {
-                    apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
-                        font.italic = true;
-                    });
-                }
-                b"u" => {
-                    apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
-                        font.underline = true;
-                    });
-                }
-                b"color" => {
-                    if let Some(font) = current_font.as_mut() {
-                        font.color = parse_color_attr(&e);
-                    } else if let Some(font) = current_dxf_font.as_mut() {
-                        font.color = parse_color_attr(&e);
-                    } else if let Some((_, side)) = current_border_side.as_mut() {
-                        side.color = parse_color_attr(&e);
-                    } else if let Some((_, side)) = current_dxf_border_side.as_mut() {
-                        side.color = parse_color_attr(&e);
-                    } else if let Some(fill) = current_fill.as_mut() {
-                        if fill.fg_color.is_none() {
-                            fill.fg_color = parse_color_attr(&e);
-                        }
-                    } else if let Some(fill) = current_dxf_fill.as_mut() {
-                        if fill.fg_color.is_none() {
-                            fill.fg_color = parse_color_attr(&e);
-                        }
-                    }
-                }
-                b"fills" => in_fills = true,
-                b"fill" if in_fills => {
-                    current_fill = Some(FillDef {
-                        pattern_type: None,
-                        fg_color: None,
-                        bg_color: None,
-                    });
-                }
-                b"fill" if in_dxfs => {
-                    current_dxf_fill = Some(FillDef {
-                        pattern_type: None,
-                        fg_color: None,
-                        bg_color: None,
-                    });
-                }
-                b"patternFill" => {
-                    if let Some(pattern_type) = parse_pattern_type(&e) {
-                        if let Some(fill) = current_fill.as_mut() {
-                            fill.pattern_type = Some(pattern_type.clone());
-                        } else if let Some(fill) = current_dxf_fill.as_mut() {
-                            fill.pattern_type = Some(pattern_type);
-                        }
-                    }
-                }
-                b"fgColor" => {
-                    if let Some(fill) = current_fill.as_mut() {
-                        fill.fg_color = parse_color_attr(&e);
-                    } else if let Some(fill) = current_dxf_fill.as_mut() {
-                        fill.fg_color = parse_color_attr(&e);
-                    }
-                }
-                b"bgColor" => {
-                    if let Some(fill) = current_fill.as_mut() {
-                        fill.bg_color = parse_color_attr(&e);
-                    } else if let Some(fill) = current_dxf_fill.as_mut() {
-                        fill.bg_color = parse_color_attr(&e);
-                    }
-                }
-                b"borders" => in_borders = true,
-                b"border" if in_borders => {
-                    current_border = Some(BorderDef {
-                        left: None,
-                        right: None,
-                        top: None,
-                        bottom: None,
-                    });
-                }
-                b"border" if in_dxfs => {
-                    current_dxf_border = Some(BorderDef {
-                        left: None,
-                        right: None,
-                        top: None,
-                        bottom: None,
-                    });
-                }
-                b"left" | b"right" | b"top" | b"bottom" => {
-                    let side = parse_border_side(&e);
-                    let side_name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    if current_border.is_some() {
-                        current_border_side = Some((side_name, side));
-                    } else if current_dxf_border.is_some() {
-                        current_dxf_border_side = Some((side_name, side));
-                    }
-                }
-                b"cellXfs" => in_cell_xfs = true,
-                b"cellStyleXfs" => in_cell_style_xfs = true,
-                b"dxfs" => in_dxfs = true,
-                b"dxf" if in_dxfs => {
-                    current_dxf = Some(DxfStyle::new());
-                }
-                b"xf" if in_cell_xfs => {
-                    current_xf = Some(parse_xf(&e));
-                    current_xf_is_style = false;
-                }
-                b"xf" if in_cell_style_xfs => {
-                    current_xf = Some(parse_xf(&e));
-                    current_xf_is_style = true;
-                }
-                b"alignment" => {
-                    if let Some(xf) = current_xf.as_mut() {
-                        xf.alignment = Some(parse_alignment(&e));
-                    } else if let Some(dxf) = current_dxf.as_mut() {
-                        dxf.alignment = Some(parse_alignment(&e));
-                    }
-                }
-                b"protection" => {
-                    let protection = parse_protection(&e);
-                    if let Some(xf) = current_xf.as_mut() {
-                        xf.protection = Some(protection);
-                    } else if let Some(dxf) = current_dxf.as_mut() {
-                        dxf.protection = Some(protection);
-                    }
-                }
-                b"tableStyles" => {
-                    styles.table_styles = Some(parse_table_style_info(&e));
-                    in_table_styles = true;
-                }
-                b"tableStyle" if in_table_styles => {
-                    if let Some(info) = styles.table_styles.as_mut() {
-                        if let Some(style) = parse_table_style_def(&e) {
-                            info.styles.push(style);
-                        }
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::End(e)) => match e.name().as_ref() {
-                b"numFmts" => in_num_fmts = false,
-                b"fonts" => in_fonts = false,
-                b"fills" => in_fills = false,
-                b"borders" => in_borders = false,
-                b"cellXfs" => in_cell_xfs = false,
-                b"cellStyleXfs" => in_cell_style_xfs = false,
-                b"dxfs" => in_dxfs = false,
-                b"tableStyles" => in_table_styles = false,
-                b"font" => {
-                    if let Some(font) = current_font.take() {
-                        styles.fonts.push(font);
-                    } else if let Some(font) = current_dxf_font.take() {
-                        if let Some(dxf) = current_dxf.as_mut() {
-                            dxf.font = Some(font);
-                        }
-                    }
-                }
-                b"fill" => {
-                    if let Some(fill) = current_fill.take() {
-                        styles.fills.push(fill);
-                    } else if let Some(fill) = current_dxf_fill.take() {
-                        if let Some(dxf) = current_dxf.as_mut() {
-                            dxf.fill = Some(fill);
-                        }
-                    }
-                }
-                b"border" => {
-                    if let Some(border) = current_border.take() {
-                        styles.borders.push(border);
-                    } else if let Some(border) = current_dxf_border.take() {
-                        if let Some(dxf) = current_dxf.as_mut() {
-                            dxf.border = Some(border);
-                        }
-                    }
-                }
-                b"left" | b"right" | b"top" | b"bottom" => {
-                    if let (Some(border), Some((name, side))) =
-                        (current_border.as_mut(), current_border_side.take())
-                    {
-                        assign_border_side(border, name.as_bytes(), side);
-                    } else if let (Some(border), Some((name, side))) =
-                        (current_dxf_border.as_mut(), current_dxf_border_side.take())
-                    {
-                        assign_border_side(border, name.as_bytes(), side);
-                    }
-                }
-                b"xf" => {
-                    if let Some(xf) = current_xf.take() {
-                        if current_xf_is_style {
-                            styles.cell_style_xfs.push(xf);
-                        } else {
-                            styles.cell_xfs.push(xf);
-                        }
-                        current_xf_is_style = false;
-                    }
-                }
-                b"dxf" => {
-                    if let Some(dxf) = current_dxf.take() {
-                        styles.dxfs.push(dxf);
-                    }
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => handle_styles_start(&e, &mut state, &mut styles)?,
+            Ok(Event::End(e)) => handle_styles_end(&e, &mut state, &mut styles),
             Ok(Event::Eof) => break,
             Err(e) => {
                 return Err(xml_error(styles_path, e));
@@ -304,6 +82,296 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
     }
 
     Ok(styles)
+}
+
+fn handle_styles_start(
+    e: &BytesStart<'_>,
+    state: &mut StylesParseState,
+    styles: &mut SpreadsheetStyles,
+) -> Result<(), ParseError> {
+    match e.name().as_ref() {
+        b"numFmts" => state.in_num_fmts = true,
+        b"numFmt" if state.in_num_fmts => {
+            if let Some(fmt) = parse_number_format(e) {
+                styles.number_formats.push(fmt);
+            }
+        }
+        b"numFmt" if state.in_dxfs => {
+            if let Some(fmt) = parse_number_format(e) {
+                if let Some(dxf) = state.current_dxf.as_mut() {
+                    dxf.num_fmt = Some(fmt);
+                }
+            }
+        }
+        b"fonts" => state.in_fonts = true,
+        b"font" if state.in_fonts => {
+            state.current_font = Some(FontDef {
+                name: None,
+                size: None,
+                bold: false,
+                italic: false,
+                underline: false,
+                color: None,
+            });
+        }
+        b"font" if state.in_dxfs => {
+            state.current_dxf_font = Some(FontDef {
+                name: None,
+                size: None,
+                bold: false,
+                italic: false,
+                underline: false,
+                color: None,
+            });
+        }
+        b"name" => {
+            if let Some(name) = attr_value(e, b"val") {
+                apply_font_attr(
+                    &mut state.current_font,
+                    &mut state.current_dxf_font,
+                    |font| {
+                        font.name = Some(name.clone());
+                    },
+                );
+            }
+        }
+        b"sz" => {
+            if let Some(size) = attr_f64(e, b"val") {
+                apply_font_attr(
+                    &mut state.current_font,
+                    &mut state.current_dxf_font,
+                    |font| {
+                        font.size = Some(size);
+                    },
+                );
+            }
+        }
+        b"b" => {
+            apply_font_attr(
+                &mut state.current_font,
+                &mut state.current_dxf_font,
+                |font| {
+                    font.bold = true;
+                },
+            );
+        }
+        b"i" => {
+            apply_font_attr(
+                &mut state.current_font,
+                &mut state.current_dxf_font,
+                |font| {
+                    font.italic = true;
+                },
+            );
+        }
+        b"u" => {
+            apply_font_attr(
+                &mut state.current_font,
+                &mut state.current_dxf_font,
+                |font| {
+                    font.underline = true;
+                },
+            );
+        }
+        b"color" => {
+            if let Some(font) = state.current_font.as_mut() {
+                font.color = parse_color_attr(e);
+            } else if let Some(font) = state.current_dxf_font.as_mut() {
+                font.color = parse_color_attr(e);
+            } else if let Some((_, side)) = state.current_border_side.as_mut() {
+                side.color = parse_color_attr(e);
+            } else if let Some((_, side)) = state.current_dxf_border_side.as_mut() {
+                side.color = parse_color_attr(e);
+            } else if let Some(fill) = state.current_fill.as_mut() {
+                if fill.fg_color.is_none() {
+                    fill.fg_color = parse_color_attr(e);
+                }
+            } else if let Some(fill) = state.current_dxf_fill.as_mut() {
+                if fill.fg_color.is_none() {
+                    fill.fg_color = parse_color_attr(e);
+                }
+            }
+        }
+        b"fills" => state.in_fills = true,
+        b"fill" if state.in_fills => {
+            state.current_fill = Some(FillDef {
+                pattern_type: None,
+                fg_color: None,
+                bg_color: None,
+            });
+        }
+        b"fill" if state.in_dxfs => {
+            state.current_dxf_fill = Some(FillDef {
+                pattern_type: None,
+                fg_color: None,
+                bg_color: None,
+            });
+        }
+        b"patternFill" => {
+            if let Some(pattern_type) = parse_pattern_type(e) {
+                if let Some(fill) = state.current_fill.as_mut() {
+                    fill.pattern_type = Some(pattern_type.clone());
+                } else if let Some(fill) = state.current_dxf_fill.as_mut() {
+                    fill.pattern_type = Some(pattern_type);
+                }
+            }
+        }
+        b"fgColor" => {
+            if let Some(fill) = state.current_fill.as_mut() {
+                fill.fg_color = parse_color_attr(e);
+            } else if let Some(fill) = state.current_dxf_fill.as_mut() {
+                fill.fg_color = parse_color_attr(e);
+            }
+        }
+        b"bgColor" => {
+            if let Some(fill) = state.current_fill.as_mut() {
+                fill.bg_color = parse_color_attr(e);
+            } else if let Some(fill) = state.current_dxf_fill.as_mut() {
+                fill.bg_color = parse_color_attr(e);
+            }
+        }
+        b"borders" => state.in_borders = true,
+        b"border" if state.in_borders => {
+            state.current_border = Some(BorderDef {
+                left: None,
+                right: None,
+                top: None,
+                bottom: None,
+            });
+        }
+        b"border" if state.in_dxfs => {
+            state.current_dxf_border = Some(BorderDef {
+                left: None,
+                right: None,
+                top: None,
+                bottom: None,
+            });
+        }
+        b"left" | b"right" | b"top" | b"bottom" => {
+            let side = parse_border_side(e);
+            let side_name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+            if state.current_border.is_some() {
+                state.current_border_side = Some((side_name, side));
+            } else if state.current_dxf_border.is_some() {
+                state.current_dxf_border_side = Some((side_name, side));
+            }
+        }
+        b"cellXfs" => state.in_cell_xfs = true,
+        b"cellStyleXfs" => state.in_cell_style_xfs = true,
+        b"dxfs" => state.in_dxfs = true,
+        b"dxf" if state.in_dxfs => {
+            state.current_dxf = Some(DxfStyle::new());
+        }
+        b"xf" if state.in_cell_xfs => {
+            state.current_xf = Some(parse_xf(e));
+            state.current_xf_is_style = false;
+        }
+        b"xf" if state.in_cell_style_xfs => {
+            state.current_xf = Some(parse_xf(e));
+            state.current_xf_is_style = true;
+        }
+        b"alignment" => {
+            if let Some(xf) = state.current_xf.as_mut() {
+                xf.alignment = Some(parse_alignment(e));
+            } else if let Some(dxf) = state.current_dxf.as_mut() {
+                dxf.alignment = Some(parse_alignment(e));
+            }
+        }
+        b"protection" => {
+            let protection = parse_protection(e);
+            if let Some(xf) = state.current_xf.as_mut() {
+                xf.protection = Some(protection);
+            } else if let Some(dxf) = state.current_dxf.as_mut() {
+                dxf.protection = Some(protection);
+            }
+        }
+        b"tableStyles" => {
+            styles.table_styles = Some(parse_table_style_info(e));
+            state.in_table_styles = true;
+        }
+        b"tableStyle" if state.in_table_styles => {
+            if let Some(info) = styles.table_styles.as_mut() {
+                if let Some(style) = parse_table_style_def(e) {
+                    info.styles.push(style);
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_styles_end(
+    e: &BytesEnd<'_>,
+    state: &mut StylesParseState,
+    styles: &mut SpreadsheetStyles,
+) {
+    match e.name().as_ref() {
+        b"numFmts" => state.in_num_fmts = false,
+        b"fonts" => state.in_fonts = false,
+        b"fills" => state.in_fills = false,
+        b"borders" => state.in_borders = false,
+        b"cellXfs" => state.in_cell_xfs = false,
+        b"cellStyleXfs" => state.in_cell_style_xfs = false,
+        b"dxfs" => state.in_dxfs = false,
+        b"tableStyles" => state.in_table_styles = false,
+        b"font" => {
+            if let Some(font) = state.current_font.take() {
+                styles.fonts.push(font);
+            } else if let Some(font) = state.current_dxf_font.take() {
+                if let Some(dxf) = state.current_dxf.as_mut() {
+                    dxf.font = Some(font);
+                }
+            }
+        }
+        b"fill" => {
+            if let Some(fill) = state.current_fill.take() {
+                styles.fills.push(fill);
+            } else if let Some(fill) = state.current_dxf_fill.take() {
+                if let Some(dxf) = state.current_dxf.as_mut() {
+                    dxf.fill = Some(fill);
+                }
+            }
+        }
+        b"border" => {
+            if let Some(border) = state.current_border.take() {
+                styles.borders.push(border);
+            } else if let Some(border) = state.current_dxf_border.take() {
+                if let Some(dxf) = state.current_dxf.as_mut() {
+                    dxf.border = Some(border);
+                }
+            }
+        }
+        b"left" | b"right" | b"top" | b"bottom" => {
+            if let (Some(border), Some((name, side))) = (
+                state.current_border.as_mut(),
+                state.current_border_side.take(),
+            ) {
+                assign_border_side(border, name.as_bytes(), side);
+            } else if let (Some(border), Some((name, side))) = (
+                state.current_dxf_border.as_mut(),
+                state.current_dxf_border_side.take(),
+            ) {
+                assign_border_side(border, name.as_bytes(), side);
+            }
+        }
+        b"xf" => {
+            if let Some(xf) = state.current_xf.take() {
+                if state.current_xf_is_style {
+                    styles.cell_style_xfs.push(xf);
+                } else {
+                    styles.cell_xfs.push(xf);
+                }
+                state.current_xf_is_style = false;
+            }
+        }
+        b"dxf" => {
+            if let Some(dxf) = state.current_dxf.take() {
+                styles.dxfs.push(dxf);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn apply_font_attr<F>(
