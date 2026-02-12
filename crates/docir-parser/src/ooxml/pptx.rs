@@ -2,7 +2,7 @@
 
 use crate::diagnostics::push_warning;
 use crate::error::ParseError;
-use crate::ooxml::part_utils::read_relationships;
+use crate::ooxml::part_utils::{parse_xml_part_with_span, read_relationships};
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{
@@ -135,30 +135,36 @@ impl PptxParser {
         }
 
         // Presentation properties
-        if zip.contains("ppt/presProps.xml") {
-            let props_xml = zip.read_file_string("ppt/presProps.xml")?;
-            let mut props = parse_presentation_properties(&props_xml, "ppt/presProps.xml")?;
-            props.span = Some(SourceSpan::new("ppt/presProps.xml"));
+        if let Some(props) = parse_xml_part_with_span(
+            zip,
+            "ppt/presProps.xml",
+            parse_presentation_properties,
+            |props, path| props.span = Some(SourceSpan::new(path)),
+        )? {
             let id = props.id;
             self.store.insert(IRNode::PresentationProperties(props));
             document.shared_parts.push(id);
         }
 
         // View properties
-        if zip.contains("ppt/viewProps.xml") {
-            let view_xml = zip.read_file_string("ppt/viewProps.xml")?;
-            let mut props = parse_view_properties(&view_xml, "ppt/viewProps.xml")?;
-            props.span = Some(SourceSpan::new("ppt/viewProps.xml"));
+        if let Some(props) = parse_xml_part_with_span(
+            zip,
+            "ppt/viewProps.xml",
+            parse_view_properties,
+            |props, path| props.span = Some(SourceSpan::new(path)),
+        )? {
             let id = props.id;
             self.store.insert(IRNode::ViewProperties(props));
             document.shared_parts.push(id);
         }
 
         // Table styles
-        if zip.contains("ppt/tableStyles.xml") {
-            let styles_xml = zip.read_file_string("ppt/tableStyles.xml")?;
-            let mut styles = parse_table_styles(&styles_xml, "ppt/tableStyles.xml")?;
-            styles.span = Some(SourceSpan::new("ppt/tableStyles.xml"));
+        if let Some(styles) = parse_xml_part_with_span(
+            zip,
+            "ppt/tableStyles.xml",
+            parse_table_styles,
+            |styles, path| styles.span = Some(SourceSpan::new(path)),
+        )? {
             let id = styles.id;
             self.store.insert(IRNode::TableStyleSet(styles));
             document.shared_parts.push(id);
@@ -195,10 +201,12 @@ impl PptxParser {
         }
 
         // People part (coauthoring)
-        if zip.contains("ppt/people.xml") {
-            let xml = zip.read_file_string("ppt/people.xml")?;
-            let mut people = crate::ooxml::shared::parse_people_part(&xml, "ppt/people.xml")?;
-            people.span = Some(SourceSpan::new("ppt/people.xml"));
+        if let Some(people) = parse_xml_part_with_span(
+            zip,
+            "ppt/people.xml",
+            crate::ooxml::shared::parse_people_part,
+            |people, path| people.span = Some(SourceSpan::new(path)),
+        )? {
             let id = people.id;
             self.store.insert(IRNode::PeoplePart(people));
             document.shared_parts.push(id);

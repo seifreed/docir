@@ -43,3 +43,31 @@ pub(crate) fn read_relationships_optional(
     }
     Relationships::default()
 }
+
+pub(crate) fn read_xml_part(
+    zip: &mut impl PackageReader,
+    part_path: &str,
+) -> Result<Option<String>, ParseError> {
+    if !zip.contains(part_path) {
+        return Ok(None);
+    }
+    Ok(Some(zip.read_file_string(part_path)?))
+}
+
+pub(crate) fn parse_xml_part_with_span<T, F, S>(
+    zip: &mut impl PackageReader,
+    part_path: &str,
+    parse: F,
+    set_span: S,
+) -> Result<Option<T>, ParseError>
+where
+    F: FnOnce(&str, &str) -> Result<T, ParseError>,
+    S: FnOnce(&mut T, &str),
+{
+    let Some(xml) = read_xml_part(zip, part_path)? else {
+        return Ok(None);
+    };
+    let mut part = parse(&xml, part_path)?;
+    set_span(&mut part, part_path);
+    Ok(Some(part))
+}

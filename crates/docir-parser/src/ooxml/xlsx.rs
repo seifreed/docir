@@ -2,7 +2,7 @@
 
 use crate::diagnostics::push_warning;
 use crate::error::ParseError;
-use crate::ooxml::part_utils::read_relationships;
+use crate::ooxml::part_utils::{parse_xml_part_with_span, read_relationships};
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
 use crate::xml_utils::attr_value;
@@ -176,10 +176,11 @@ impl XlsxParser {
         document: &mut Document,
         zip: &mut impl PackageReader,
     ) -> Result<(), ParseError> {
-        if zip.contains("xl/styles.xml") {
-            let styles_xml = zip.read_file_string("xl/styles.xml")?;
-            let mut styles = parse_styles(&styles_xml, "xl/styles.xml")?;
-            styles.span = Some(SourceSpan::new("xl/styles.xml"));
+        if let Some(styles) =
+            parse_xml_part_with_span(zip, "xl/styles.xml", parse_styles, |styles, path| {
+                styles.span = Some(SourceSpan::new(path))
+            })?
+        {
             let styles_id = styles.id;
             self.store.insert(IRNode::SpreadsheetStyles(styles));
             document.spreadsheet_styles = Some(styles_id);
@@ -192,10 +193,11 @@ impl XlsxParser {
         document: &mut Document,
         zip: &mut impl PackageReader,
     ) -> Result<(), ParseError> {
-        if zip.contains("xl/calcChain.xml") {
-            let chain_xml = zip.read_file_string("xl/calcChain.xml")?;
-            let mut chain = parse_calc_chain(&chain_xml, "xl/calcChain.xml")?;
-            chain.span = Some(SourceSpan::new("xl/calcChain.xml"));
+        if let Some(chain) =
+            parse_xml_part_with_span(zip, "xl/calcChain.xml", parse_calc_chain, |chain, path| {
+                chain.span = Some(SourceSpan::new(path))
+            })?
+        {
             let chain_id = chain.id;
             self.store.insert(IRNode::CalcChain(chain));
             document.shared_parts.push(chain_id);
@@ -208,11 +210,12 @@ impl XlsxParser {
         document: &mut Document,
         zip: &mut impl PackageReader,
     ) -> Result<(), ParseError> {
-        if zip.contains("xl/persons/person.xml") {
-            let xml = zip.read_file_string("xl/persons/person.xml")?;
-            let mut people =
-                crate::ooxml::shared::parse_people_part(&xml, "xl/persons/person.xml")?;
-            people.span = Some(SourceSpan::new("xl/persons/person.xml"));
+        if let Some(people) = parse_xml_part_with_span(
+            zip,
+            "xl/persons/person.xml",
+            crate::ooxml::shared::parse_people_part,
+            |people, path| people.span = Some(SourceSpan::new(path)),
+        )? {
             let id = people.id;
             self.store.insert(IRNode::PeoplePart(people));
             document.shared_parts.push(id);
@@ -309,10 +312,12 @@ impl XlsxParser {
         document: &mut Document,
         zip: &mut impl PackageReader,
     ) -> Result<(), ParseError> {
-        if zip.contains("xl/metadata.xml") {
-            let xml = zip.read_file_string("xl/metadata.xml")?;
-            let mut metadata = parse_sheet_metadata(&xml, "xl/metadata.xml")?;
-            metadata.span = Some(SourceSpan::new("xl/metadata.xml"));
+        if let Some(metadata) = parse_xml_part_with_span(
+            zip,
+            "xl/metadata.xml",
+            parse_sheet_metadata,
+            |metadata, path| metadata.span = Some(SourceSpan::new(path)),
+        )? {
             let meta_id = metadata.id;
             self.store.insert(IRNode::SheetMetadata(metadata));
             document.sheet_metadata = Some(meta_id);
@@ -331,12 +336,15 @@ impl XlsxParser {
             .filter(|p| p.starts_with("xl/slicers/") && p.ends_with(".xml"))
             .collect();
         for path in slicer_paths {
-            let xml = zip.read_file_string(&path)?;
-            let mut slicer = parse_slicer_part(&xml, &path)?;
-            slicer.span = Some(SourceSpan::new(&path));
-            let id = slicer.id;
-            self.store.insert(IRNode::SlicerPart(slicer));
-            document.shared_parts.push(id);
+            if let Some(slicer) =
+                parse_xml_part_with_span(zip, &path, parse_slicer_part, |slicer, path| {
+                    slicer.span = Some(SourceSpan::new(path))
+                })?
+            {
+                let id = slicer.id;
+                self.store.insert(IRNode::SlicerPart(slicer));
+                document.shared_parts.push(id);
+            }
         }
         Ok(())
     }
@@ -352,12 +360,15 @@ impl XlsxParser {
             .filter(|p| p.starts_with("xl/timelines/") && p.ends_with(".xml"))
             .collect();
         for path in timeline_paths {
-            let xml = zip.read_file_string(&path)?;
-            let mut timeline = parse_timeline_part(&xml, &path)?;
-            timeline.span = Some(SourceSpan::new(&path));
-            let id = timeline.id;
-            self.store.insert(IRNode::TimelinePart(timeline));
-            document.shared_parts.push(id);
+            if let Some(timeline) =
+                parse_xml_part_with_span(zip, &path, parse_timeline_part, |timeline, path| {
+                    timeline.span = Some(SourceSpan::new(path))
+                })?
+            {
+                let id = timeline.id;
+                self.store.insert(IRNode::TimelinePart(timeline));
+                document.shared_parts.push(id);
+            }
         }
         Ok(())
     }
@@ -373,12 +384,15 @@ impl XlsxParser {
             .filter(|p| p.starts_with("xl/queryTables/") && p.ends_with(".xml"))
             .collect();
         for path in query_paths {
-            let xml = zip.read_file_string(&path)?;
-            let mut query = parse_query_table_part(&xml, &path)?;
-            query.span = Some(SourceSpan::new(&path));
-            let id = query.id;
-            self.store.insert(IRNode::QueryTablePart(query));
-            document.shared_parts.push(id);
+            if let Some(query) =
+                parse_xml_part_with_span(zip, &path, parse_query_table_part, |query, path| {
+                    query.span = Some(SourceSpan::new(path))
+                })?
+            {
+                let id = query.id;
+                self.store.insert(IRNode::QueryTablePart(query));
+                document.shared_parts.push(id);
+            }
         }
         Ok(())
     }
