@@ -1,5 +1,6 @@
 use super::*;
 use docir_parser::DocumentParser;
+use docir_security::populate_security_indicators;
 use std::io::{Cursor, Write};
 use zip::write::FileOptions;
 
@@ -77,7 +78,8 @@ fn test_rule_engine_basic() {
     );
 
     let parser = DocumentParser::new();
-    let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+    let mut parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+    populate_security_indicators(&mut parsed.store, parsed.root_id);
     let engine = RuleEngine::with_default_rules();
     let report = engine.run(&parsed.store, parsed.root_id);
 
@@ -107,7 +109,8 @@ fn test_external_reference_rule() {
 "#;
     let zip_data = build_odf_zip(content_xml, manifest_xml, &[]);
     let parser = DocumentParser::new();
-    let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+    let mut parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+    populate_security_indicators(&mut parsed.store, parsed.root_id);
 
     let engine = RuleEngine::with_default_rules();
     let report = engine.run(&parsed.store, parsed.root_id);
@@ -139,7 +142,8 @@ fn test_rule_profile_overrides() {
 "#;
     let zip_data = build_odf_zip(content_xml, manifest_xml, &[("Object 1", b"ole")]);
     let parser = DocumentParser::new();
-    let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+    let mut parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+    populate_security_indicators(&mut parsed.store, parsed.root_id);
 
     let engine = RuleEngine::with_default_rules();
     let mut profile = RuleProfile::default();

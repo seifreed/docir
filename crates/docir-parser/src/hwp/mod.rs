@@ -274,11 +274,9 @@ impl HwpParser {
         }
 
         if let Some(script_data) = cfb.read_stream("Scripts/DefaultJScript") {
-            if let Some(project_id) =
+            if let Some(_project_id) =
                 parse_default_jscript(&script_data, &mut store, "Scripts/DefaultJScript")
             {
-                doc.security.macro_project = Some(project_id);
-                doc.security.recalculate_threat_level();
             }
         }
 
@@ -294,9 +292,7 @@ impl HwpParser {
                 &mut diagnostics,
             );
             for ext in externals {
-                let id = ext.id;
                 store.insert(IRNode::ExternalReference(ext));
-                doc.security.external_refs.push(id);
             }
         }
 
@@ -307,9 +303,7 @@ impl HwpParser {
                     let mut ole = OleObject::new();
                     ole.name = Some(path.clone());
                     ole.size_bytes = cfb.stream_size(path).unwrap_or(0);
-                    let id = ole.id;
                     store.insert(IRNode::OleObject(ole));
-                    doc.security.ole_objects.push(id);
                 }
             }
         }
@@ -929,9 +923,7 @@ fn scan_hwpx_security<R: Read + Seek>(
                 let mut ole = OleObject::new();
                 ole.name = Some(path.clone());
                 ole.size_bytes = zip.file_size(path).unwrap_or(0);
-                let id = ole.id;
                 store.insert(IRNode::OleObject(ole));
-                doc.security.ole_objects.push(id);
             }
         }
 
@@ -988,16 +980,12 @@ fn scan_hwpx_security<R: Read + Seek>(
                 let mut ole = OleObject::new();
                 ole.name = Some(path.clone());
                 ole.size_bytes = xml.len() as u64;
-                let id = ole.id;
                 store.insert(IRNode::OleObject(ole));
-                doc.security.ole_objects.push(id);
             }
         }
     }
     for ext in external_refs {
-        let id = ext.id;
         store.insert(IRNode::ExternalReference(ext));
-        doc.security.external_refs.push(id);
     }
     if !macro_modules.is_empty() {
         let mut project = MacroProject::new();
@@ -1005,9 +993,7 @@ fn scan_hwpx_security<R: Read + Seek>(
         project.modules = macro_modules;
         project.has_auto_exec = has_autoexec;
         project.span = Some(SourceSpan::new("package"));
-        let project_id = project.id;
         store.insert(IRNode::MacroProject(project));
-        doc.security.macro_project = Some(project_id);
     }
     if encrypted_flag {
         diagnostics.entries.push(DiagnosticEntry {

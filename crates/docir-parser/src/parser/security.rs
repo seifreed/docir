@@ -3,11 +3,10 @@ use super::{
 };
 use crate::ooxml::part_utils::get_rels_path;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
-use crate::security_utils::parse_dde_instruction;
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::IRNode;
 use docir_core::security::{ExternalRefType, ExternalReference, MacroProject, OleObject};
-use docir_core::types::{NodeId, SourceSpan};
+use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
 use std::collections::HashSet;
 use std::io::{Read, Seek};
@@ -17,7 +16,6 @@ impl OoxmlParser {
         &self,
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
-        root_id: NodeId,
     ) -> Result<(), ParseError> {
         let mut activex_bin_seen: HashSet<String> = HashSet::new();
         let activex_paths: Vec<String> = zip
@@ -32,11 +30,7 @@ impl OoxmlParser {
             let xml = zip.read_file_string(&path)?;
             if let Some(mut control) = super::parse_activex_xml(&xml, &path) {
                 control.span = Some(SourceSpan::new(&path));
-                let id = control.id;
                 store.insert(IRNode::ActiveXControl(control));
-                if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-                    doc.security.activex_controls.push(id);
-                }
             }
 
             let rels_path = get_rels_path(&path);
@@ -53,11 +47,7 @@ impl OoxmlParser {
                             if activex_bin_seen.insert(bin_path.clone()) && zip.contains(&bin_path)
                             {
                                 let ole_object = self.detect_ole_object(zip, &bin_path)?;
-                                let ole_id = ole_object.id;
                                 store.insert(IRNode::OleObject(ole_object));
-                                if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-                                    doc.security.ole_objects.push(ole_id);
-                                }
                             }
                         }
                     }
@@ -67,27 +57,10 @@ impl OoxmlParser {
         Ok(())
     }
 
-    pub(super) fn scan_word_dde_fields(&self, store: &mut IrStore, root_id: NodeId) {
-        let mut dde_fields = Vec::new();
-        for node in store.values() {
-            if let IRNode::Field(field) = node {
-                if let Some(instr) = &field.instruction {
-                    if let Some(dde) = parse_dde_instruction(instr) {
-                        dde_fields.push(dde);
-                    }
-                }
-            }
-        }
-        if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-            doc.security.dde_fields.extend(dde_fields);
-        }
-    }
-
     pub(super) fn scan_word_external_relationships<R: Read + Seek>(
         &self,
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
-        root_id: NodeId,
     ) -> Result<(), ParseError> {
         let rel_paths: Vec<String> = zip
             .file_names()
@@ -110,11 +83,7 @@ impl OoxmlParser {
                     ext_ref.relationship_id = Some(rel.id.clone());
                     ext_ref.relationship_type = Some(rel.rel_type.clone());
                     ext_ref.span = Some(SourceSpan::new(&rel_path));
-                    let id = ext_ref.id;
                     store.insert(IRNode::ExternalReference(ext_ref));
-                    if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-                        doc.security.external_refs.push(id);
-                    }
                 }
             }
         }

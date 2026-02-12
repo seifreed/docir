@@ -1,7 +1,8 @@
 use crate::make_indicator;
-use docir_core::ir::{DefinedName, IRNode};
+use docir_core::ir::{DefinedName, Field, IRNode};
 use docir_core::security::{
-    ActiveXControl, MacroProject, OleObject, ThreatIndicator, ThreatIndicatorType, ThreatLevel,
+    ActiveXControl, DdeField, DdeFieldType, MacroProject, OleObject, ThreatIndicator,
+    ThreatIndicatorType, ThreatLevel,
 };
 use docir_core::types::{DocumentFormat, NodeId};
 use docir_core::visitor::IrStore;
@@ -12,6 +13,8 @@ pub fn populate_security_indicators(store: &mut IrStore, root_id: NodeId) {
         Some(IRNode::Document(doc)) => (doc.format, doc.security.clone()),
         _ => return,
     };
+
+    rebuild_security_info(store, &mut security);
 
     let mut indicators = security.threat_indicators.clone();
     apply_xlm_defined_name_targets(store, &mut security, &mut indicators);
@@ -29,9 +32,124 @@ pub fn populate_security_indicators(store: &mut IrStore, root_id: NodeId) {
     indicators.append(&mut generated);
 
     if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
+        doc.security.macro_project = security.macro_project;
+        doc.security.ole_objects = security.ole_objects.clone();
+        doc.security.external_refs = security.external_refs.clone();
+        doc.security.activex_controls = security.activex_controls.clone();
+        doc.security.dde_fields = security.dde_fields.clone();
         doc.security.threat_indicators = indicators;
         doc.security.recalculate_threat_level();
     }
+}
+
+fn rebuild_security_info(store: &IrStore, security: &mut docir_core::security::SecurityInfo) {
+    if security.macro_project.is_none() {
+        for (id, node) in store.iter() {
+            if matches!(node, IRNode::MacroProject(_)) {
+                security.macro_project = Some(*id);
+                break;
+            }
+        }
+    }
+
+    if security.ole_objects.is_empty() {
+        security.ole_objects = store
+            .iter()
+            .filter_map(|(id, node)| match node {
+                IRNode::OleObject(_) => Some(*id),
+                _ => None,
+            })
+            .collect();
+    }
+
+    if security.external_refs.is_empty() {
+        security.external_refs = store
+            .iter()
+            .filter_map(|(id, node)| match node {
+                IRNode::ExternalReference(_) => Some(*id),
+                _ => None,
+            })
+            .collect();
+    }
+
+    if security.activex_controls.is_empty() {
+        security.activex_controls = store
+            .iter()
+            .filter_map(|(id, node)| match node {
+                IRNode::ActiveXControl(_) => Some(*id),
+                _ => None,
+            })
+            .collect();
+    }
+
+    if security.dde_fields.is_empty() {
+        security.dde_fields = scan_dde_fields(store);
+    }
+}
+
+fn scan_dde_fields(store: &IrStore) -> Vec<DdeField> {
+    let mut out = Vec::new();
+    for node in store.values() {
+        let IRNode::Field(Field {
+            instruction: Some(instr),
+            span,
+            ..
+        }) = node
+        else {
+            continue;
+        };
+        if let Some(mut dde) = parse_dde_instruction(instr) {
+            dde.location = span.clone();
+            out.push(dde);
+        }
+    }
+    out
+}
+
+fn parse_dde_instruction(instruction: &str) -> Option<DdeField> {
+    let upper = instruction.to_ascii_uppercase();
+    if !upper.contains("DDE") {
+        return None;
+    }
+    let field_type = if upper.contains("DDEAUTO") {
+        DdeFieldType::DdeAuto
+    } else {
+        DdeFieldType::Dde
+    };
+
+    let parts = extract_quoted_parts(instruction);
+    let application = parts.get(0).cloned().unwrap_or_default();
+    let topic = parts.get(1).cloned().unwrap_or_default();
+    let item = parts.get(2).cloned().unwrap_or_default();
+
+    Some(DdeField {
+        field_type,
+        application,
+        topic: if topic.is_empty() { None } else { Some(topic) },
+        item: if item.is_empty() { None } else { Some(item) },
+        instruction: instruction.to_string(),
+        location: None,
+    })
+}
+
+fn extract_quoted_parts(input: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    for ch in input.chars() {
+        if ch == '"' {
+            in_quotes = !in_quotes;
+            if !in_quotes && !current.is_empty() {
+                parts.push(current.clone());
+                current.clear();
+            }
+            continue;
+        }
+        if in_quotes {
+            current.push(ch);
+        }
+    }
+    parts
 }
 
 fn build_ooxml_indicators(

@@ -86,12 +86,6 @@ impl RtfParser {
         for media in ctx.media_assets {
             doc.shared_parts.push(media);
         }
-        for ext in ctx.external_refs {
-            doc.security.external_refs.push(ext);
-        }
-        for ole in ctx.ole_objects {
-            doc.security.ole_objects.push(ole);
-        }
 
         let root_id = doc.id;
         store.insert(IRNode::Document(doc));

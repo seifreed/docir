@@ -289,7 +289,6 @@ impl OdfParser {
             }
         }
 
-        let mut security = doc.security.clone();
         let mut macro_project = build_odf_macro_project(
             &manifest_entries,
             &content_xml,
@@ -299,9 +298,7 @@ impl OdfParser {
             &mut store,
         );
         if let Some(project) = macro_project.take() {
-            let project_id = project.id;
             store.insert(IRNode::MacroProject(project));
-            security.macro_project = Some(project_id);
         }
 
         let mut formula_scan = OdfFormulaScan::default();
@@ -335,19 +332,14 @@ impl OdfParser {
         ole_objects.extend(scan_embedded_objects(&file_names, &mut zip));
 
         for ext in external_refs {
-            let id = ext.id;
             store.insert(IRNode::ExternalReference(ext));
-            security.external_refs.push(id);
         }
         for ole in ole_objects {
-            let id = ole.id;
             store.insert(IRNode::OleObject(ole));
-            security.ole_objects.push(id);
         }
-        security
+        doc.security
             .dde_fields
             .extend(formula_scan.dde_fields.drain(..));
-        doc.security = security;
 
         if let Some(sig_xml) = signatures_xml.as_deref() {
             let sigs = parse_odf_signatures(sig_xml);

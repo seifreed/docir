@@ -805,14 +805,12 @@ impl OoxmlParser {
         &self,
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
-        root_id: NodeId,
         _content_types: &ContentTypes,
     ) -> Result<(), ParseError> {
-        self.scan_vba_projects(zip, store, root_id)?;
-        self.scan_ole_objects(zip, store, root_id)?;
-        self.scan_activex_controls(zip, store, root_id)?;
-        self.scan_word_dde_fields(store, root_id);
-        self.scan_word_external_relationships(zip, store, root_id)?;
+        self.scan_vba_projects(zip, store)?;
+        self.scan_ole_objects(zip, store)?;
+        self.scan_activex_controls(zip, store)?;
+        self.scan_word_external_relationships(zip, store)?;
 
         Ok(())
     }
@@ -821,7 +819,6 @@ impl OoxmlParser {
         &self,
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
-        root_id: NodeId,
     ) -> Result<(), ParseError> {
         let vba_paths = [
             "word/vbaProject.bin",
@@ -836,12 +833,7 @@ impl OoxmlParser {
                     store.insert(IRNode::MacroModule(module));
                     macro_project.modules.push(id);
                 }
-                let macro_id = macro_project.id;
                 store.insert(IRNode::MacroProject(macro_project));
-
-                if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-                    doc.security.macro_project = Some(macro_id);
-                }
             }
         }
         Ok(())
@@ -851,7 +843,6 @@ impl OoxmlParser {
         &self,
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
-        root_id: NodeId,
     ) -> Result<(), ParseError> {
         let ole_files: Vec<String> = zip
             .list_prefix("word/embeddings/")
@@ -864,12 +855,7 @@ impl OoxmlParser {
 
         for ole_path in ole_files {
             let ole_object = self.detect_ole_object(zip, &ole_path)?;
-            let ole_id = ole_object.id;
             store.insert(IRNode::OleObject(ole_object));
-
-            if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-                doc.security.ole_objects.push(ole_id);
-            }
         }
         Ok(())
     }

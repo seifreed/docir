@@ -39,7 +39,7 @@ impl OoxmlParser {
         }
 
         let start = std::time::Instant::now();
-        self.scan_security_content(zip, &mut store, root_id, content_types)?;
+        self.scan_security_content(zip, &mut store, content_types)?;
         if let Some(m) = metrics.as_mut() {
             m.security_scan_ms = start.elapsed().as_millis();
         }

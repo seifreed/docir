@@ -301,7 +301,6 @@ impl PptxParser {
 
         document.shared_parts.extend(self.chart_nodes.drain(..));
         document.security = std::mem::take(&mut self.security_info);
-        document.security.recalculate_threat_level();
 
         let mut diagnostics = std::mem::replace(&mut self.diagnostics, Diagnostics::new());
         if !diagnostics.entries.is_empty() {
