@@ -17,69 +17,17 @@ impl HwpParser {
         let mut sections = Vec::new();
         let mut diagnostics = build_hwp_diagnostics(DocumentFormat::Hwp, &stream_names);
 
-        let header_data = cfb
-            .read_stream("FileHeader")
-            .ok_or_else(|| ParseError::MissingPart("FileHeader".to_string()))?;
-        let header = parse_file_header(&header_data)?;
-        push_info(
-            &mut diagnostics,
-            "HWP_HEADER",
-            format!(
-                "HWP header: version=0x{:08X} flags=0x{:08X}",
-                header.version, header.flags
-            ),
-            Some("FileHeader"),
-        );
-
-        let compressed = header.flags & 0x01 != 0;
-        let encrypted = header.flags & 0x02 != 0;
-        let force_parse = self.config.hwp.force_parse_encrypted;
-        let hwp_password = self.config.hwp.password.as_deref();
-        let try_raw_encrypted = encrypted && hwp_password.is_none();
-        let allow_parse = !encrypted || force_parse || hwp_password.is_some() || try_raw_encrypted;
-        if encrypted {
-            push_warning(
-                &mut diagnostics,
-                "HWP_ENCRYPTED",
-                "HWP file is encrypted; content parsing skipped".to_string(),
-                Some("FileHeader"),
-            );
-            if force_parse {
-                push_warning(
-                    &mut diagnostics,
-                    "HWP_FORCE_PARSE",
-                    "HWP force-parse enabled for encrypted file".to_string(),
-                    Some("FileHeader"),
-                );
-            }
-            if hwp_password.is_some() {
-                push_info(
-                    &mut diagnostics,
-                    "HWP_DECRYPT_ATTEMPT",
-                    "HWP decryption attempt enabled".to_string(),
-                    Some("FileHeader"),
-                );
-            }
-            if try_raw_encrypted {
-                push_warning(
-                    &mut diagnostics,
-                    "HWP_ENCRYPTED_PARTIAL",
-                    "HWP encrypted without password; attempting partial parse of readable streams"
-                        .to_string(),
-                    Some("FileHeader"),
-                );
-            }
-        }
+        let header_ctx = self.build_header_context(&cfb, &mut diagnostics)?;
 
         if self.config.hwp.dump_streams {
             dump_hwp_streams(
                 &cfb,
                 &stream_names,
-                compressed,
-                encrypted,
-                hwp_password,
-                force_parse,
-                try_raw_encrypted,
+                header_ctx.compressed,
+                header_ctx.encrypted,
+                header_ctx.hwp_password,
+                header_ctx.force_parse,
+                header_ctx.try_raw_encrypted,
                 &mut diagnostics,
             );
         }
@@ -106,10 +54,10 @@ impl HwpParser {
         if let Some(data) = docinfo_data {
             let data = match prepare_hwp_stream_data(
                 &data,
-                encrypted,
-                hwp_password,
-                force_parse,
-                try_raw_encrypted,
+                header_ctx.encrypted,
+                header_ctx.hwp_password,
+                header_ctx.force_parse,
+                header_ctx.try_raw_encrypted,
                 "DocInfo",
                 &mut diagnostics,
             ) {
@@ -124,7 +72,7 @@ impl HwpParser {
                     Vec::new()
                 }
             };
-            match maybe_decompress_stream(&data, compressed, "DocInfo") {
+            match maybe_decompress_stream(&data, header_ctx.compressed, "DocInfo") {
                 Ok(bytes) => {
                     docinfo_section_count = parse_docinfo_section_count(&bytes)?;
                 }
@@ -147,7 +95,7 @@ impl HwpParser {
             }
         }
 
-        if allow_parse {
+        if header_ctx.allow_parse {
             for path in &stream_names {
                 if path.starts_with("BodyText/Section") {
                     let data = cfb
@@ -155,17 +103,17 @@ impl HwpParser {
                         .ok_or_else(|| ParseError::MissingPart(path.to_string()))?;
                     let data = match prepare_hwp_stream_data(
                         &data,
-                        encrypted,
-                        hwp_password,
-                        force_parse,
-                        try_raw_encrypted,
+                        header_ctx.encrypted,
+                        header_ctx.hwp_password,
+                        header_ctx.force_parse,
+                        header_ctx.try_raw_encrypted,
                         path,
                         &mut diagnostics,
                     ) {
                         Some(bytes) => bytes,
                         None => continue,
                     };
-                    let data = match maybe_decompress_stream(&data, compressed, path) {
+                    let data = match maybe_decompress_stream(&data, header_ctx.compressed, path) {
                         Ok(bytes) => bytes,
                         Err(err) => {
                             push_warning(
@@ -211,15 +159,15 @@ impl HwpParser {
             }
         }
 
-        if allow_parse {
+        if header_ctx.allow_parse {
             let externals = scan_hwp_external_refs(
                 &cfb,
                 &stream_names,
-                compressed,
-                encrypted,
-                hwp_password,
-                force_parse,
-                try_raw_encrypted,
+                header_ctx.compressed,
+                header_ctx.encrypted,
+                header_ctx.hwp_password,
+                header_ctx.force_parse,
+                header_ctx.try_raw_encrypted,
                 &mut diagnostics,
             );
             for ext in externals {
@@ -259,6 +207,84 @@ impl HwpParser {
             metrics: None,
         })
     }
+
+    fn build_header_context<'a>(
+        &'a self,
+        cfb: &Cfb,
+        diagnostics: &mut Diagnostics,
+    ) -> Result<HwpHeaderContext<'a>, ParseError> {
+        let header_data = cfb
+            .read_stream("FileHeader")
+            .ok_or_else(|| ParseError::MissingPart("FileHeader".to_string()))?;
+        let header = parse_file_header(&header_data)?;
+        push_info(
+            diagnostics,
+            "HWP_HEADER",
+            format!(
+                "HWP header: version=0x{:08X} flags=0x{:08X}",
+                header.version, header.flags
+            ),
+            Some("FileHeader"),
+        );
+
+        let compressed = header.flags & 0x01 != 0;
+        let encrypted = header.flags & 0x02 != 0;
+        let force_parse = self.config.hwp.force_parse_encrypted;
+        let hwp_password = self.config.hwp.password.as_deref();
+        let try_raw_encrypted = encrypted && hwp_password.is_none();
+        let allow_parse = !encrypted || force_parse || hwp_password.is_some() || try_raw_encrypted;
+        if encrypted {
+            push_warning(
+                diagnostics,
+                "HWP_ENCRYPTED",
+                "HWP file is encrypted; content parsing skipped".to_string(),
+                Some("FileHeader"),
+            );
+            if force_parse {
+                push_warning(
+                    diagnostics,
+                    "HWP_FORCE_PARSE",
+                    "HWP force-parse enabled for encrypted file".to_string(),
+                    Some("FileHeader"),
+                );
+            }
+            if hwp_password.is_some() {
+                push_info(
+                    diagnostics,
+                    "HWP_DECRYPT_ATTEMPT",
+                    "HWP decryption attempt enabled".to_string(),
+                    Some("FileHeader"),
+                );
+            }
+            if try_raw_encrypted {
+                push_warning(
+                    diagnostics,
+                    "HWP_ENCRYPTED_PARTIAL",
+                    "HWP encrypted without password; attempting partial parse of readable streams"
+                        .to_string(),
+                    Some("FileHeader"),
+                );
+            }
+        }
+
+        Ok(HwpHeaderContext {
+            compressed,
+            encrypted,
+            force_parse,
+            hwp_password,
+            try_raw_encrypted,
+            allow_parse,
+        })
+    }
+}
+
+struct HwpHeaderContext<'a> {
+    compressed: bool,
+    encrypted: bool,
+    force_parse: bool,
+    hwp_password: Option<&'a str>,
+    try_raw_encrypted: bool,
+    allow_parse: bool,
 }
 
 impl HwpxParser {
