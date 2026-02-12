@@ -3,7 +3,7 @@
 use super::field::parse_field_instruction;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, reader_from_str};
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
     FontEntry, FontTable, Footer, GlossaryDocument, GlossaryEntry, Header, Hyperlink,
@@ -82,8 +82,7 @@ impl DocxParser {
     ) -> Result<NodeId, ParseError> {
         let mut doc = Document::new(DocumentFormat::WordProcessing);
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
 
         loop {
@@ -125,8 +124,7 @@ impl DocxParser {
         let mut glossary = GlossaryDocument::new();
         glossary.span = Some(SourceSpan::new("word/glossary/document.xml"));
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
 
         loop {
@@ -166,8 +164,7 @@ impl DocxParser {
         kind: HeaderFooterKind,
         rels: &Relationships,
     ) -> Result<NodeId, ParseError> {
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
 
         let end_tag = match kind {
             HeaderFooterKind::Header => b"w:hdr".as_ref(),
@@ -214,8 +211,7 @@ impl DocxParser {
 
     pub fn parse_font_table(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let mut table = FontTable::new();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut current: Option<FontEntry> = None;
 
@@ -634,8 +630,7 @@ mod tests {
         </w:sectPr>
         "#;
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
@@ -804,8 +799,7 @@ mod tests {
         "#;
         let rels = Relationships::parse(rels_xml).expect("rels");
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut parser = DocxParser::new();
 
         let mut buf = Vec::new();
@@ -874,8 +868,7 @@ mod tests {
         "#;
         let rels = Relationships::parse(rels_xml).expect("rels");
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut parser = DocxParser::new();
 
         let mut buf = Vec::new();
@@ -948,8 +941,7 @@ mod tests {
         "#;
         let rels = Relationships::parse(rels_xml).expect("rels");
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut parser = DocxParser::new();
 
         let mut buf = Vec::new();
@@ -997,8 +989,7 @@ mod tests {
 
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
 
         let mut para = None;
         let mut buf = Vec::new();
@@ -1090,8 +1081,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -1137,8 +1127,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -1185,8 +1174,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -1239,8 +1227,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -1287,8 +1274,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -1337,8 +1323,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -1411,8 +1396,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -1465,8 +1449,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -1548,8 +1531,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut table_id = None;
         loop {
@@ -1623,8 +1605,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -1673,8 +1654,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -1718,8 +1698,7 @@ mod tests {
         "#;
         let mut parser = DocxParser::new();
         let rels = Relationships::default();
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut para = None;
         loop {
@@ -2761,8 +2740,7 @@ fn parse_vml_pict(
 
 fn parse_settings_like(xml: &str) -> Result<WordSettings, ParseError> {
     let mut settings = WordSettings::new();
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let mut reader = reader_from_str(xml);
     let mut buf = Vec::new();
 
     loop {

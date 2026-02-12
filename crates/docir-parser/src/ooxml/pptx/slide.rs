@@ -1,4 +1,5 @@
 use super::*;
+use crate::xml_utils::reader_from_str;
 
 impl PptxParser {
     pub(super) fn parse_slide<R: Read + Seek>(
@@ -21,8 +22,7 @@ impl PptxParser {
             slide.master_id = Some(Relationships::resolve_target(slide_path, &rel.target));
         }
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
 
         let mut buf = Vec::new();
         loop {

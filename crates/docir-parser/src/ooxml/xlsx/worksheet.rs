@@ -1,5 +1,6 @@
 use super::*;
 use crate::ooxml::part_utils::read_relationships;
+use crate::xml_utils::reader_from_str;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DataValidation, SheetPageMargins};
 
@@ -34,8 +35,7 @@ impl XlsxParser {
         let mut conditional_formats: Vec<NodeId> = Vec::new();
         let mut data_validations: Vec<NodeId> = Vec::new();
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
 
         let mut buf = Vec::new();
         loop {
@@ -252,8 +252,7 @@ impl XlsxParser {
         sheet_path: &str,
         relationships: &Relationships,
     ) -> Result<Option<NodeId>, ParseError> {
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
 
         let mut chart_rel: Option<String> = None;
@@ -379,8 +378,7 @@ impl XlsxParser {
         cache_path: &str,
         cache_id: u32,
     ) -> Result<PivotCache, ParseError> {
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
 
         let mut cache = PivotCache::new(cache_id);
         cache.span = Some(SourceSpan::new(cache_path));

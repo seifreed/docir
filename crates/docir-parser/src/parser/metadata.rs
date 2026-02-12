@@ -1,4 +1,5 @@
 use super::{OoxmlParser, ParseError};
+use crate::xml_utils::reader_from_str;
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{CustomProperty, DocumentMetadata, PropertyValue};
 use docir_core::types::NodeId;
@@ -46,10 +47,8 @@ impl OoxmlParser {
     /// Parse core.xml properties.
     fn parse_core_properties(&self, xml: &str, metadata: &mut DocumentMetadata) {
         use quick_xml::events::Event;
-        use quick_xml::Reader;
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
 
         let mut buf = Vec::new();
         let mut current_element = String::new();
@@ -93,10 +92,8 @@ impl OoxmlParser {
     /// Parse app.xml properties.
     fn parse_app_properties(&self, xml: &str, metadata: &mut DocumentMetadata) {
         use quick_xml::events::Event;
-        use quick_xml::Reader;
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
 
         let mut buf = Vec::new();
         let mut current_element = String::new();
@@ -129,10 +126,8 @@ impl OoxmlParser {
     /// Parse custom properties from custom.xml.
     pub(super) fn parse_custom_properties(&self, xml: &str, metadata: &mut DocumentMetadata) {
         use quick_xml::events::Event;
-        use quick_xml::Reader;
 
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let mut reader = reader_from_str(xml);
 
         let mut buf = Vec::new();
         let mut current_prop: Option<CustomProperty> = None;
