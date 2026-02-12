@@ -6,6 +6,7 @@ use crate::ooxml::part_utils::{
     parse_xml_part_with_span, read_xml_part_and_rels, read_xml_part_and_rels_optional,
 };
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
+use crate::xml_utils::read_event;
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{
     Diagnostics, Document, GridColumn, IRNode, NotesSlide, Paragraph, PptxCommentAuthor,
@@ -85,8 +86,8 @@ impl PptxParser {
         let mut shapes = Vec::new();
 
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
+            match read_event(&mut reader, &mut buf, slide_path)? {
+                Event::Start(e) => match e.name().as_ref() {
                     b"p:sp" => {
                         let shape =
                             self.parse_shape_sp(&mut reader, &e, slide_path, relationships)?;
@@ -122,13 +123,7 @@ impl PptxParser {
                     }
                     _ => {}
                 },
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
-                }
+                Event::Eof => break,
                 _ => {}
             }
             buf.clear();

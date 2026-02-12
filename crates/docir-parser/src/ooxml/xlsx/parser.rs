@@ -5,7 +5,7 @@ use crate::error::ParseError;
 use crate::ooxml::part_utils::parse_xml_part_with_span;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, read_event};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     parse_cell_reference, CalcChain, CalcChainEntry, Cell, CellError, CellFormula,
@@ -348,8 +348,8 @@ pub(super) fn parse_sheet_comments(
 
     let mut out = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match read_event(&mut reader, &mut buf, path)? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"author" => in_author = true,
                 b"comment" => {
                     in_comment = true;
@@ -365,7 +365,7 @@ pub(super) fn parse_sheet_comments(
                 }
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
+            Event::Text(e) => {
                 let text = e.unescape().unwrap_or_default().to_string();
                 if in_author {
                     authors.push(text);
@@ -373,7 +373,7 @@ pub(super) fn parse_sheet_comments(
                     current_text.push_str(&text);
                 }
             }
-            Ok(Event::End(e)) => match e.name().as_ref() {
+            Event::End(e) => match e.name().as_ref() {
                 b"author" => in_author = false,
                 b"text" | b"t" => in_comment_text = false,
                 b"comment" => {
@@ -390,13 +390,7 @@ pub(super) fn parse_sheet_comments(
                 }
                 _ => {}
             },
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
@@ -422,8 +416,8 @@ pub(super) fn parse_threaded_comments(
 
     let mut out = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match read_event(&mut reader, &mut buf, path)? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"threadedComment" => {
                     in_comment = true;
                     current_ref = attr_value(&e, b"ref");
@@ -438,13 +432,13 @@ pub(super) fn parse_threaded_comments(
                 }
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
+            Event::Text(e) => {
                 if in_text {
                     let text = e.unescape().unwrap_or_default().to_string();
                     current_text.push_str(&text);
                 }
             }
-            Ok(Event::End(e)) => match e.name().as_ref() {
+            Event::End(e) => match e.name().as_ref() {
                 b"text" | b"t" => in_text = false,
                 b"threadedComment" => {
                     if let Some(cell_ref) = current_ref.take() {
@@ -458,13 +452,7 @@ pub(super) fn parse_threaded_comments(
                 }
                 _ => {}
             },
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();

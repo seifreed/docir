@@ -249,8 +249,8 @@ fn parse_draw_frame_presentation(
     let mut has_shape = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+        match read_event(reader, &mut buf, "content.xml")? {
+            Event::Start(e) => match e.name().as_ref() {
                 b"draw:text-box" => {
                     let paragraphs = parse_shape_text(reader, b"draw:text-box")?;
                     if !paragraphs.is_empty() {
@@ -290,7 +290,7 @@ fn parse_draw_frame_presentation(
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
+            Event::Empty(e) => match e.name().as_ref() {
                 b"draw:image" => {
                     if let Some(href) = attr_value(&e, b"xlink:href") {
                         media_target = Some(href);
@@ -324,18 +324,12 @@ fn parse_draw_frame_presentation(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if e.name().as_ref() == b"draw:frame" {
                     break;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
