@@ -2,6 +2,7 @@
 
 use crate::{AppResult, ParsedDocument, ParserConfig, ParserPort, SecurityScannerPort};
 use docir_core::visitor::IrStore;
+use docir_parser::parser::ParsedDocument as ParserParsedDocument;
 use docir_parser::zip_handler::SecureZipReader;
 use docir_parser::{DefaultSecurityScanner, DocumentParser, ParseError, SecurityScanner};
 use std::io::{Cursor, Read, Seek};
@@ -34,82 +35,57 @@ impl AppParser {
 
 impl ParserPort for DocumentParser {
     fn parse_file<P: AsRef<Path>>(&self, path: P) -> AppResult<ParsedDocument> {
-        self.parse_file(path)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
+        wrap_parsed(self.parse_file(path))
     }
 
     fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
-        self.parse_bytes(data)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
+        wrap_parsed(self.parse_bytes(data))
     }
 
     fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
-        self.parse_reader(reader)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
+        wrap_parsed(self.parse_reader(reader))
     }
 
     fn parse_file_with_bytes<P: AsRef<Path>>(
         &self,
         path: P,
     ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        self.parse_file_with_bytes(path)
-            .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
-            .map_err(Into::into)
+        wrap_parsed_with_bytes(self.parse_file_with_bytes(path))
     }
 
     fn parse_reader_with_bytes<R: Read + Seek>(
         &self,
         reader: R,
     ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        self.parse_reader_with_bytes(reader)
-            .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
-            .map_err(Into::into)
+        wrap_parsed_with_bytes(self.parse_reader_with_bytes(reader))
     }
 }
 
 impl ParserPort for AppParser {
     fn parse_file<P: AsRef<Path>>(&self, path: P) -> AppResult<ParsedDocument> {
-        self.parser
-            .parse_file(path)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
+        wrap_parsed(self.parser.parse_file(path))
     }
 
     fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
-        self.parser
-            .parse_bytes(data)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
+        wrap_parsed(self.parser.parse_bytes(data))
     }
 
     fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
-        self.parser
-            .parse_reader(reader)
-            .map(ParsedDocument::new)
-            .map_err(Into::into)
+        wrap_parsed(self.parser.parse_reader(reader))
     }
 
     fn parse_file_with_bytes<P: AsRef<Path>>(
         &self,
         path: P,
     ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        self.parser
-            .parse_file_with_bytes(path)
-            .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
-            .map_err(Into::into)
+        wrap_parsed_with_bytes(self.parser.parse_file_with_bytes(path))
     }
 
     fn parse_reader_with_bytes<R: Read + Seek>(
         &self,
         reader: R,
     ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        self.parser
-            .parse_reader_with_bytes(reader)
-            .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
-            .map_err(Into::into)
+        wrap_parsed_with_bytes(self.parser.parse_reader_with_bytes(reader))
     }
 }
 
@@ -134,4 +110,16 @@ fn scan_security_bytes(
 
 fn is_zip_container(data: &[u8]) -> bool {
     data.len() >= 4 && data[0] == b'P' && data[1] == b'K'
+}
+
+fn wrap_parsed(result: Result<ParserParsedDocument, ParseError>) -> AppResult<ParsedDocument> {
+    result.map(ParsedDocument::new).map_err(Into::into)
+}
+
+fn wrap_parsed_with_bytes(
+    result: Result<(ParserParsedDocument, Vec<u8>), ParseError>,
+) -> AppResult<(ParsedDocument, Vec<u8>)> {
+    result
+        .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
+        .map_err(Into::into)
 }
