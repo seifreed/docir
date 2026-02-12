@@ -1,6 +1,8 @@
 use docir_core::ir::{
-    Cell, CellFormula, CellValue, Document, Hyperlink, IRNode, Paragraph, Run, Section, Shape,
-    Slide, Worksheet,
+    BookmarkEnd, BookmarkStart, Cell, CellFormula, CellValue, Comment, ContentControl, Document,
+    DrawingPart, Endnote, Field, Footnote, GlossaryEntry, Hyperlink, IRNode, Paragraph, Revision,
+    Run, Section, Shape, Slide, Table, TableCell, TableRow, VmlDrawing, VmlShape, WebExtension,
+    WebExtensionTaskpane, Worksheet,
 };
 use docir_core::security::{ExternalReference, MacroModule, MacroProject, OleObject};
 use docir_core::types::NodeId;
@@ -57,18 +59,9 @@ pub(crate) fn summarize(node: &IRNode, store: &IrStore) -> String {
         IRNode::Paragraph(para) => summarize_paragraph(para, store),
         IRNode::Run(run) => summarize_run(run),
         IRNode::Hyperlink(link) => summarize_hyperlink(link, store),
-        IRNode::Table(table) => format!(
-            "rows={} cols={} style={}",
-            table.rows.len(),
-            table.grid.len(),
-            opt_str(&table.properties.style_id)
-        ),
-        IRNode::TableRow(row) => format!("cells={}", row.cells.len()),
-        IRNode::TableCell(cell) => format!(
-            "content_nodes={} span={}",
-            cell.content.len(),
-            cell.properties.grid_span.unwrap_or(1)
-        ),
+        IRNode::Table(table) => summarize_table(table),
+        IRNode::TableRow(row) => summarize_table_row(row),
+        IRNode::TableCell(cell) => summarize_table_cell(cell),
         IRNode::MacroProject(project) => summarize_macro_project(project),
         IRNode::MacroModule(module) => summarize_macro_module(module),
         IRNode::OleObject(ole) => summarize_ole(ole),
@@ -115,46 +108,19 @@ pub(crate) fn summarize(node: &IRNode, store: &IrStore) -> String {
             nums.abstract_nums.len(),
             nums.nums.len()
         ),
-        IRNode::Comment(comment) => format!(
-            "id={} author={} content_nodes={}",
-            comment.comment_id,
-            opt_str(&comment.author),
-            comment.content.len()
-        ),
-        IRNode::Footnote(note) => format!(
-            "id={} content_nodes={}",
-            note.footnote_id,
-            note.content.len()
-        ),
-        IRNode::Endnote(note) => format!(
-            "id={} content_nodes={}",
-            note.endnote_id,
-            note.content.len()
-        ),
-        IRNode::Header(header) => format!("content_nodes={}", header.content.len()),
-        IRNode::Footer(footer) => format!("content_nodes={}", footer.content.len()),
+        IRNode::Comment(comment) => summarize_comment(comment),
+        IRNode::Footnote(note) => summarize_footnote(note),
+        IRNode::Endnote(note) => summarize_endnote(note),
+        IRNode::Header(header) => summarize_header_footer(header.content.len()),
+        IRNode::Footer(footer) => summarize_header_footer(footer.content.len()),
         IRNode::WordSettings(settings) => format!("entries={}", settings.entries.len()),
         IRNode::WebSettings(settings) => format!("entries={}", settings.entries.len()),
         IRNode::FontTable(table) => format!("fonts={}", table.fonts.len()),
-        IRNode::ContentControl(control) => format!(
-            "content_nodes={} tag={}",
-            control.content.len(),
-            opt_str(&control.tag)
-        ),
-        IRNode::BookmarkStart(start) => {
-            format!("id={} name={}", start.bookmark_id, opt_str(&start.name))
-        }
-        IRNode::BookmarkEnd(end) => format!("id={}", end.bookmark_id),
-        IRNode::Field(field) => format!(
-            "runs={} instr={}",
-            field.runs.len(),
-            opt_str(&field.instruction)
-        ),
-        IRNode::Revision(rev) => format!(
-            "type={:?} content_nodes={}",
-            rev.change_type,
-            rev.content.len()
-        ),
+        IRNode::ContentControl(control) => summarize_content_control(control),
+        IRNode::BookmarkStart(start) => summarize_bookmark_start(start),
+        IRNode::BookmarkEnd(end) => summarize_bookmark_end(end),
+        IRNode::Field(field) => summarize_field(field),
+        IRNode::Revision(rev) => summarize_revision(rev),
         IRNode::CommentExtensionSet(set) => format!("entries={}", set.entries.len()),
         IRNode::CommentIdMap(map) => format!("mappings={}", map.mappings.len()),
         IRNode::CommentRangeStart(start) => format!("comment_id={}", start.comment_id),
@@ -162,38 +128,142 @@ pub(crate) fn summarize(node: &IRNode, store: &IrStore) -> String {
         IRNode::CommentReference(reference) => format!("comment_id={}", reference.comment_id),
         IRNode::PeoplePart(people) => format!("people={}", people.people.len()),
         IRNode::SmartArtPart(part) => format!("kind={} path={}", part.kind, part.path),
-        IRNode::WebExtension(ext) => format!(
-            "id={} store={} version={} properties={}",
-            opt_str(&ext.extension_id),
-            opt_str(&ext.store),
-            opt_str(&ext.version),
-            ext.properties.len()
-        ),
-        IRNode::WebExtensionTaskpane(pane) => format!(
-            "ref={} dock_state={} visible={}",
-            opt_str(&pane.web_extension_ref),
-            opt_str(&pane.dock_state),
-            opt_bool(pane.visibility)
-        ),
+        IRNode::WebExtension(ext) => summarize_web_extension(ext),
+        IRNode::WebExtensionTaskpane(pane) => summarize_web_extension_taskpane(pane),
         IRNode::GlossaryDocument(doc) => format!("entries={}", doc.entries.len()),
-        IRNode::GlossaryEntry(entry) => format!(
-            "name={} gallery={} content_nodes={}",
-            opt_str(&entry.name),
-            opt_str(&entry.gallery),
-            entry.content.len()
-        ),
-        IRNode::VmlDrawing(drawing) => {
-            format!("path={} shapes={}", drawing.path, drawing.shapes.len())
-        }
-        IRNode::VmlShape(shape) => format!(
-            "name={} rel_id={} image_target={}",
-            opt_str(&shape.name),
-            opt_str(&shape.rel_id),
-            opt_str(&shape.image_target)
-        ),
-        IRNode::DrawingPart(part) => format!("path={} shapes={}", part.path, part.shapes.len()),
+        IRNode::GlossaryEntry(entry) => summarize_glossary_entry(entry),
+        IRNode::VmlDrawing(drawing) => summarize_vml_drawing(drawing),
+        IRNode::VmlShape(shape) => summarize_vml_shape(shape),
+        IRNode::DrawingPart(part) => summarize_drawing_part(part),
         IRNode::Diagnostics(diag) => format!("entries={}", diag.entries.len()),
     }
+}
+
+fn summarize_table(table: &Table) -> String {
+    format!(
+        "rows={} cols={} style={}",
+        table.rows.len(),
+        table.grid.len(),
+        opt_str(&table.properties.style_id)
+    )
+}
+
+fn summarize_table_row(row: &TableRow) -> String {
+    format!("cells={}", row.cells.len())
+}
+
+fn summarize_table_cell(cell: &TableCell) -> String {
+    format!(
+        "content_nodes={} span={}",
+        cell.content.len(),
+        cell.properties.grid_span.unwrap_or(1)
+    )
+}
+
+fn summarize_comment(comment: &Comment) -> String {
+    format!(
+        "id={} author={} content_nodes={}",
+        comment.comment_id,
+        opt_str(&comment.author),
+        comment.content.len()
+    )
+}
+
+fn summarize_footnote(note: &Footnote) -> String {
+    format!(
+        "id={} content_nodes={}",
+        note.footnote_id,
+        note.content.len()
+    )
+}
+
+fn summarize_endnote(note: &Endnote) -> String {
+    format!(
+        "id={} content_nodes={}",
+        note.endnote_id,
+        note.content.len()
+    )
+}
+
+fn summarize_header_footer(content_len: usize) -> String {
+    format!("content_nodes={}", content_len)
+}
+
+fn summarize_content_control(control: &ContentControl) -> String {
+    format!(
+        "content_nodes={} tag={}",
+        control.content.len(),
+        opt_str(&control.tag)
+    )
+}
+
+fn summarize_bookmark_start(start: &BookmarkStart) -> String {
+    format!("id={} name={}", start.bookmark_id, opt_str(&start.name))
+}
+
+fn summarize_bookmark_end(end: &BookmarkEnd) -> String {
+    format!("id={}", end.bookmark_id)
+}
+
+fn summarize_field(field: &Field) -> String {
+    format!(
+        "runs={} instr={}",
+        field.runs.len(),
+        opt_str(&field.instruction)
+    )
+}
+
+fn summarize_revision(rev: &Revision) -> String {
+    format!(
+        "type={:?} content_nodes={}",
+        rev.change_type,
+        rev.content.len()
+    )
+}
+
+fn summarize_web_extension(ext: &WebExtension) -> String {
+    format!(
+        "id={} store={} version={} properties={}",
+        opt_str(&ext.extension_id),
+        opt_str(&ext.store),
+        opt_str(&ext.version),
+        ext.properties.len()
+    )
+}
+
+fn summarize_web_extension_taskpane(pane: &WebExtensionTaskpane) -> String {
+    format!(
+        "ref={} dock_state={} visible={}",
+        opt_str(&pane.web_extension_ref),
+        opt_str(&pane.dock_state),
+        opt_bool(pane.visibility)
+    )
+}
+
+fn summarize_glossary_entry(entry: &GlossaryEntry) -> String {
+    format!(
+        "name={} gallery={} content_nodes={}",
+        opt_str(&entry.name),
+        opt_str(&entry.gallery),
+        entry.content.len()
+    )
+}
+
+fn summarize_vml_drawing(drawing: &VmlDrawing) -> String {
+    format!("path={} shapes={}", drawing.path, drawing.shapes.len())
+}
+
+fn summarize_vml_shape(shape: &VmlShape) -> String {
+    format!(
+        "name={} rel_id={} image_target={}",
+        opt_str(&shape.name),
+        opt_str(&shape.rel_id),
+        opt_str(&shape.image_target)
+    )
+}
+
+fn summarize_drawing_part(part: &DrawingPart) -> String {
+    format!("path={} shapes={}", part.path, part.shapes.len())
 }
 
 pub(crate) fn content_signature(node: &IRNode, store: &IrStore) -> Option<String> {
