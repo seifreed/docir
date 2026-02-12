@@ -1,5 +1,4 @@
-use crate::{ParsedDocument, ParserPort, RulesEnginePort, SecurityAnalyzerPort};
-use anyhow::Result;
+use crate::{AppResult, ParsedDocument, ParserPort, RulesEnginePort, SecurityAnalyzerPort};
 use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
 use docir_diff::{DiffEngine, DiffResult};
@@ -19,19 +18,19 @@ impl<'a, P: ParserPort> ParseDocument<'a, P> {
         Self { parser }
     }
 
-    pub(crate) fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> Result<ParsedDocument> {
+    pub(crate) fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> AppResult<ParsedDocument> {
         let mut parsed = self.parser.parse_file(path)?;
         EnrichSecurity::run(&mut parsed);
         Ok(parsed)
     }
 
-    pub(crate) fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument> {
+    pub(crate) fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
         let mut parsed = self.parser.parse_bytes(data)?;
         EnrichSecurity::run(&mut parsed);
         Ok(parsed)
     }
 
-    pub(crate) fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument> {
+    pub(crate) fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
         let mut parsed = self.parser.parse_reader(reader)?;
         EnrichSecurity::run(&mut parsed);
         Ok(parsed)
@@ -50,7 +49,7 @@ impl EnrichSecurity {
 pub(crate) struct SerializeDocument;
 
 impl SerializeDocument {
-    pub(crate) fn to_json(parsed: &ParsedDocument, pretty: bool) -> Result<String> {
+    pub(crate) fn to_json(parsed: &ParsedDocument, pretty: bool) -> AppResult<String> {
         Ok(to_json(parsed.store(), parsed.root_id(), pretty)?)
     }
 }

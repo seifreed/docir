@@ -1,6 +1,5 @@
 //! Application-level workflows for docir.
 
-use anyhow::Result;
 use docir_core::ir::Document;
 use docir_core::security::SecurityInfo;
 use docir_core::types::{DocumentFormat, NodeId};
@@ -14,8 +13,10 @@ pub use docir_rules::RuleProfile;
 use docir_rules::{RuleEngine, RuleReport};
 use docir_security::analyzer::AnalysisResult;
 use docir_security::SecurityAnalyzer;
+use docir_serialization::SerializationError;
 use std::io::{Read, Seek};
 use std::path::Path;
+use thiserror::Error;
 
 mod use_cases;
 
@@ -23,6 +24,16 @@ use use_cases::{
     AnalyzeSecurity, DefaultSecurityAnalyzerFactory, DiffDocuments, ParseDocument, RunRules,
     SerializeDocument,
 };
+
+pub type AppResult<T> = Result<T, AppError>;
+
+#[derive(Debug, Error)]
+pub enum AppError {
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+    #[error(transparent)]
+    Serialization(#[from] SerializationError),
+}
 
 /// Application-level parsed document wrapper.
 #[derive(Debug)]
@@ -74,22 +85,28 @@ impl ParsedDocument {
 }
 /// Parser port for application workflows.
 pub trait ParserPort {
-    fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError>;
-    fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError>;
-    fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError>;
+    fn parse_file<P: AsRef<Path>>(&self, path: P) -> AppResult<ParsedDocument>;
+    fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument>;
+    fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument>;
 }
 
 impl ParserPort for DocumentParser {
-    fn parse_file<P: AsRef<Path>>(&self, path: P) -> Result<ParsedDocument, ParseError> {
-        self.parse_file(path).map(ParsedDocument::new)
+    fn parse_file<P: AsRef<Path>>(&self, path: P) -> AppResult<ParsedDocument> {
+        self.parse_file(path)
+            .map(ParsedDocument::new)
+            .map_err(Into::into)
     }
 
-    fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument, ParseError> {
-        self.parse_bytes(data).map(ParsedDocument::new)
+    fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
+        self.parse_bytes(data)
+            .map(ParsedDocument::new)
+            .map_err(Into::into)
     }
 
-    fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
-        self.parse_reader(reader).map(ParsedDocument::new)
+    fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
+        self.parse_reader(reader)
+            .map(ParsedDocument::new)
+            .map_err(Into::into)
     }
 }
 
@@ -130,13 +147,13 @@ impl RulesEnginePort for DefaultRulesEngine {
 
 /// Serialization port for application workflows.
 pub trait SerializerPort {
-    fn to_json(&self, parsed: &ParsedDocument, pretty: bool) -> Result<String>;
+    fn to_json(&self, parsed: &ParsedDocument, pretty: bool) -> AppResult<String>;
 }
 
 struct DefaultJsonSerializer;
 
 impl SerializerPort for DefaultJsonSerializer {
-    fn to_json(&self, parsed: &ParsedDocument, pretty: bool) -> Result<String> {
+    fn to_json(&self, parsed: &ParsedDocument, pretty: bool) -> AppResult<String> {
         SerializeDocument::to_json(parsed, pretty)
     }
 }
@@ -200,22 +217,22 @@ impl<P: ParserPort> DocirApp<P> {
     }
 
     /// Parses a file from disk.
-    pub fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> Result<ParsedDocument> {
+    pub fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> AppResult<ParsedDocument> {
         ParseDocument::new(&self.parser).parse_file(path)
     }
 
     /// Parses from bytes.
-    pub fn parse_bytes(&self, data: &[u8]) -> Result<ParsedDocument> {
+    pub fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
         ParseDocument::new(&self.parser).parse_bytes(data)
     }
 
     /// Parses from a reader.
-    pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument> {
+    pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
         ParseDocument::new(&self.parser).parse_reader(reader)
     }
 
     /// Serializes a parsed document to JSON.
-    pub fn serialize_json(&self, parsed: &ParsedDocument, pretty: bool) -> Result<String> {
+    pub fn serialize_json(&self, parsed: &ParsedDocument, pretty: bool) -> AppResult<String> {
         self.serializer.to_json(parsed, pretty)
     }
 

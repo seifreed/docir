@@ -374,13 +374,13 @@ dependencies = [
 name = "docir-app"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "docir-core",
  "docir-diff",
  "docir-parser",
  "docir-rules",
  "docir-security",
  "docir-serialization",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
