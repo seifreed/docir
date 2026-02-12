@@ -1,5 +1,5 @@
 use super::*;
-use crate::ooxml::part_utils::insert_shared_part;
+use crate::ooxml::part_utils::{insert_shared_part, read_xml_part_and_rels};
 
 impl XlsxParser {
     pub(super) fn load_workbook_properties(
@@ -127,9 +127,7 @@ impl XlsxParser {
             };
             let sheet_path = Relationships::resolve_target(workbook_path, &rel.target);
 
-            let sheet_xml = zip.read_file_string(&sheet_path)?;
-
-            let sheet_rels = read_relationships(zip, &sheet_path)?;
+            let (sheet_xml, sheet_rels) = read_xml_part_and_rels(zip, &sheet_path)?;
 
             self.process_external_relationships(&sheet_rels, &sheet_path);
 

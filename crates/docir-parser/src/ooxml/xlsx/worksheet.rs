@@ -1,5 +1,5 @@
 use super::*;
-use crate::ooxml::part_utils::read_relationships;
+use crate::ooxml::part_utils::{read_relationships, read_xml_part_and_rels};
 use crate::xml_utils::{reader_from_str, xml_error};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DataValidation, SheetPageMargins};
@@ -152,8 +152,7 @@ impl XlsxParser {
             if !zip.contains(&drawing_path) {
                 continue;
             }
-            let drawing_xml = zip.read_file_string(&drawing_path)?;
-            let drawing_rels = read_relationships(zip, &drawing_path)?;
+            let (drawing_xml, drawing_rels) = read_xml_part_and_rels(zip, &drawing_path)?;
             let drawing_id = self.parse_drawing(&drawing_xml, &drawing_path, &drawing_rels, zip)?;
             drawings.push(drawing_id);
         }

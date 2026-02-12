@@ -57,6 +57,30 @@ pub(crate) fn read_xml_part(
     Ok(Some(zip.read_file_string(part_path)?))
 }
 
+pub(crate) fn read_xml_part_and_rels(
+    zip: &mut impl PackageReader,
+    part_path: &str,
+) -> Result<(String, Relationships), ParseError> {
+    let xml = zip.read_file_string(part_path)?;
+    let rels = read_relationships(zip, part_path)?;
+    Ok((xml, rels))
+}
+
+pub(crate) fn read_xml_part_and_rels_optional(
+    zip: &mut impl PackageReader,
+    part_path: &str,
+) -> Result<Option<(String, Relationships)>, ParseError> {
+    if !zip.contains(part_path) {
+        return Ok(None);
+    }
+    let xml = match zip.read_file_string(part_path) {
+        Ok(xml) => xml,
+        Err(_) => return Ok(None),
+    };
+    let rels = read_relationships(zip, part_path)?;
+    Ok(Some((xml, rels)))
+}
+
 pub(crate) fn read_xml_part_by_rel(
     zip: &mut impl PackageReader,
     main_part_path: &str,

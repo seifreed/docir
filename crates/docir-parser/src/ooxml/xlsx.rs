@@ -2,7 +2,7 @@
 
 use crate::diagnostics::push_warning;
 use crate::error::ParseError;
-use crate::ooxml::part_utils::{parse_xml_part_with_span, read_relationships};
+use crate::ooxml::part_utils::parse_xml_part_with_span;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
 use crate::xml_utils::attr_value;

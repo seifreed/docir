@@ -2,7 +2,9 @@
 
 use crate::diagnostics::push_warning;
 use crate::error::ParseError;
-use crate::ooxml::part_utils::{parse_xml_part_with_span, read_relationships};
+use crate::ooxml::part_utils::{
+    parse_xml_part_with_span, read_xml_part_and_rels, read_xml_part_and_rels_optional,
+};
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{
@@ -100,9 +102,7 @@ impl PptxParser {
             };
             let slide_path = Relationships::resolve_target(presentation_path, &rel.target);
 
-            let slide_xml = zip.read_file_string(&slide_path)?;
-
-            let slide_rels = read_relationships(zip, &slide_path)?;
+            let (slide_xml, slide_rels) = read_xml_part_and_rels(zip, &slide_path)?;
 
             self.process_external_relationships(&slide_rels, &slide_path);
 
@@ -110,8 +110,9 @@ impl PptxParser {
             let notes_text = if let Some(rel) = slide_rels.get_first_by_type(rel_type::NOTES_SLIDE)
             {
                 let notes_path = Relationships::resolve_target(&slide_path, &rel.target);
-                if let Ok(notes_xml) = zip.read_file_string(&notes_path) {
-                    let notes_rels = read_relationships(zip, &notes_path)?;
+                if let Some((notes_xml, notes_rels)) =
+                    read_xml_part_and_rels_optional(zip, &notes_path)?
+                {
                     let (notes_node, notes_text) =
                         parse_notes_slide(&notes_xml, &notes_path, &notes_rels, self, zip)?;
                     let notes_id = notes_node.id;
@@ -145,8 +146,7 @@ impl PptxParser {
             if !zip.contains(&master_path) {
                 continue;
             }
-            let master_xml = zip.read_file_string(&master_path)?;
-            let master_rels = read_relationships(zip, &master_path)?;
+            let (master_xml, master_rels) = read_xml_part_and_rels(zip, &master_path)?;
 
             let master_name = extract_c_sld_name(&master_xml);
             let master_shapes =
