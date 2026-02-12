@@ -5,6 +5,7 @@
 
 pub mod diagnostics;
 pub mod error;
+pub mod format;
 pub mod hwp;
 mod input;
 pub mod odf;

@@ -8,7 +8,7 @@ use docir_parser::parser::ParsedDocument;
 pub use docir_parser::ParserConfig;
 use docir_parser::{DocumentParser, ParseError};
 pub use docir_rules::RuleProfile;
-use docir_rules::RuleReport;
+use docir_rules::{RuleEngine, RuleReport};
 use docir_security::analyzer::AnalysisResult;
 use docir_security::SecurityAnalyzer;
 use std::io::{Read, Seek};
@@ -52,10 +52,49 @@ impl SecurityAnalyzerPort for SecurityAnalyzer {
     }
 }
 
+/// Rules engine port for application workflows.
+pub trait RulesEnginePort {
+    fn run_with_profile(
+        &self,
+        store: &IrStore,
+        root_id: NodeId,
+        profile: &RuleProfile,
+    ) -> RuleReport;
+}
+
+struct DefaultRulesEngine;
+
+impl RulesEnginePort for DefaultRulesEngine {
+    fn run_with_profile(
+        &self,
+        store: &IrStore,
+        root_id: NodeId,
+        profile: &RuleProfile,
+    ) -> RuleReport {
+        let engine = RuleEngine::with_default_rules();
+        engine.run_with_profile(store, root_id, profile)
+    }
+}
+
+/// Serialization port for application workflows.
+pub trait SerializerPort {
+    fn to_json(&self, parsed: &ParsedDocument, pretty: bool) -> Result<String>;
+}
+
+struct DefaultJsonSerializer;
+
+impl SerializerPort for DefaultJsonSerializer {
+    fn to_json(&self, parsed: &ParsedDocument, pretty: bool) -> Result<String> {
+        SerializeDocument::to_json(parsed, pretty)
+    }
+}
+
 /// Application facade for docir workflows.
 pub struct DocirApp<P: ParserPort = DocumentParser> {
     parser: P,
     security_analyzer_factory: Box<dyn Fn() -> Box<dyn SecurityAnalyzerPort>>,
+    rules_engine_factory: Box<dyn Fn() -> Box<dyn RulesEnginePort>>,
+    serializer: Box<dyn SerializerPort>,
 }
 
 impl DocirApp<DocumentParser> {
@@ -68,7 +107,12 @@ impl DocirApp<DocumentParser> {
 impl<P: ParserPort> DocirApp<P> {
     /// Creates a new app instance with a custom parser implementation.
     pub fn with_parser(parser: P) -> Self {
-        Self::with_parser_and_security(parser, DefaultSecurityAnalyzerFactory::build)
+        Self::with_parser_and_ports(
+            parser,
+            DefaultSecurityAnalyzerFactory::build,
+            || Box::new(DefaultRulesEngine),
+            Box::new(DefaultJsonSerializer),
+        )
     }
 
     /// Creates a new app instance with custom parser and security analyzer factory.
@@ -76,9 +120,30 @@ impl<P: ParserPort> DocirApp<P> {
     where
         F: Fn() -> Box<dyn SecurityAnalyzerPort> + 'static,
     {
+        Self::with_parser_and_ports(
+            parser,
+            security_analyzer_factory,
+            || Box::new(DefaultRulesEngine),
+            Box::new(DefaultJsonSerializer),
+        )
+    }
+
+    /// Creates a new app instance with custom ports.
+    pub fn with_parser_and_ports<F, R>(
+        parser: P,
+        security_analyzer_factory: F,
+        rules_engine_factory: R,
+        serializer: Box<dyn SerializerPort>,
+    ) -> Self
+    where
+        F: Fn() -> Box<dyn SecurityAnalyzerPort> + 'static,
+        R: Fn() -> Box<dyn RulesEnginePort> + 'static,
+    {
         Self {
             parser,
             security_analyzer_factory: Box::new(security_analyzer_factory),
+            rules_engine_factory: Box::new(rules_engine_factory),
+            serializer,
         }
     }
 
@@ -99,7 +164,7 @@ impl<P: ParserPort> DocirApp<P> {
 
     /// Serializes a parsed document to JSON.
     pub fn serialize_json(&self, parsed: &ParsedDocument, pretty: bool) -> Result<String> {
-        SerializeDocument::to_json(parsed, pretty)
+        self.serializer.to_json(parsed, pretty)
     }
 
     /// Runs security analysis for a parsed document.
@@ -109,7 +174,7 @@ impl<P: ParserPort> DocirApp<P> {
 
     /// Runs rules for a parsed document.
     pub fn run_rules(&self, parsed: &ParsedDocument, profile: &RuleProfile) -> RuleReport {
-        RunRules::run_with_profile(&parsed.store, parsed.root_id, profile)
+        RunRules::new(&self.rules_engine_factory).run(&parsed.store, parsed.root_id, profile)
     }
 
     /// Computes a diff between two parsed documents.

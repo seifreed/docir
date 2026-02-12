@@ -1,10 +1,10 @@
-use crate::{ParserPort, SecurityAnalyzerPort};
+use crate::{ParserPort, RulesEnginePort, SecurityAnalyzerPort};
 use anyhow::Result;
 use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
 use docir_diff::{DiffEngine, DiffResult};
 use docir_parser::parser::ParsedDocument;
-use docir_rules::{RuleEngine, RuleProfile, RuleReport};
+use docir_rules::{RuleProfile, RuleReport};
 use docir_security::analyzer::AnalysisResult;
 use docir_security::{populate_security_indicators, SecurityAnalyzer};
 use docir_serialization::json::to_json;
@@ -68,15 +68,28 @@ where
     }
 }
 
-pub(crate) struct RunRules;
+pub(crate) struct RunRules<F>
+where
+    F: Fn() -> Box<dyn RulesEnginePort>,
+{
+    engine_factory: F,
+}
 
-impl RunRules {
-    pub(crate) fn run_with_profile(
+impl<F> RunRules<F>
+where
+    F: Fn() -> Box<dyn RulesEnginePort>,
+{
+    pub(crate) fn new(engine_factory: F) -> Self {
+        Self { engine_factory }
+    }
+
+    pub(crate) fn run(
+        &self,
         store: &IrStore,
         root_id: NodeId,
         profile: &RuleProfile,
     ) -> RuleReport {
-        let engine = RuleEngine::with_default_rules();
+        let engine = (self.engine_factory)();
         engine.run_with_profile(store, root_id, profile)
     }
 }

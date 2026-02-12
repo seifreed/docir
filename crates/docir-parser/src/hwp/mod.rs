@@ -1,6 +1,7 @@
 //! HWP/HWPX parsing (Hangul Word Processor).
 
 use crate::error::ParseError;
+use crate::format::FormatParser;
 use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file, read_all_with_limit};
 use crate::ole::Cfb;
 use crate::parser::{ParsedDocument, ParserConfig};
@@ -47,6 +48,12 @@ pub fn is_hwpx_mimetype(value: &str) -> bool {
 pub struct HwpParser {
     #[allow(dead_code)]
     config: ParserConfig,
+}
+
+impl FormatParser for HwpParser {
+    fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
+        self.parse_reader(reader)
+    }
 }
 
 impl HwpParser {
@@ -339,6 +346,12 @@ impl HwpParser {
 /// Parser for HWPX (ZIP + XML).
 pub struct HwpxParser {
     config: ParserConfig,
+}
+
+impl FormatParser for HwpxParser {
+    fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
+        self.parse_reader(reader)
+    }
 }
 
 impl HwpxParser {

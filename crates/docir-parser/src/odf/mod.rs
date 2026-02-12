@@ -1,6 +1,7 @@
 //! ODF (OpenDocument) parsing support.
 
 use crate::error::ParseError;
+use crate::format::FormatParser;
 use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file};
 use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
@@ -61,6 +62,12 @@ type OdfReader<'a> = Reader<std::io::Cursor<&'a [u8]>>;
 /// ODF parser (ODT/ODS/ODP).
 pub struct OdfParser {
     config: ParserConfig,
+}
+
+impl FormatParser for OdfParser {
+    fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
+        self.parse_reader(reader)
+    }
 }
 
 #[derive(Debug, Default)]

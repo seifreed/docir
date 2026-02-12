@@ -1,6 +1,7 @@
 //! Main OOXML parser orchestrator.
 
 use crate::error::ParseError;
+use crate::format::FormatParser;
 use crate::hwp::{is_hwpx_mimetype, HwpParser, HwpxParser};
 use crate::input::{enforce_input_size, parse_from_bytes, parse_from_file, read_all_with_limit};
 use crate::odf::OdfParser;
@@ -161,6 +162,12 @@ pub struct ParseMetrics {
 /// Main OOXML parser.
 pub struct OoxmlParser {
     config: ParserConfig,
+}
+
+impl FormatParser for OoxmlParser {
+    fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
+        self.parse_reader(reader)
+    }
 }
 
 impl OoxmlParser {
@@ -1335,12 +1342,12 @@ impl DocumentParser {
 
         if is_rtf_bytes(head) {
             let parser = RtfParser::with_config(self.config.clone());
-            return parser.parse_reader(reader);
+            return parse_with(parser, reader);
         }
 
         if is_ole_container(head) {
             let parser = HwpParser::with_config(self.config.clone());
-            return parser.parse_reader(reader);
+            return parse_with(parser, reader);
         }
 
         if !is_zip_container(head) {
@@ -1365,15 +1372,15 @@ impl DocumentParser {
 
         if is_ooxml {
             let parser = OoxmlParser::with_config(self.config.clone());
-            return parser.parse_reader(reader);
+            return parse_with(parser, reader);
         }
         if is_hwpx {
             let parser = HwpxParser::with_config(self.config.clone());
-            return parser.parse_reader(reader);
+            return parse_with(parser, reader);
         }
         if is_odf {
             let parser = OdfParser::with_config(self.config.clone());
-            return parser.parse_reader(reader);
+            return parse_with(parser, reader);
         }
 
         Err(ParseError::UnsupportedFormat(
@@ -1388,6 +1395,14 @@ fn is_zip_container(data: &[u8]) -> bool {
 
 fn is_rtf_bytes(data: &[u8]) -> bool {
     data.starts_with(b"{\\rtf")
+}
+
+fn parse_with<P, R>(parser: P, reader: R) -> Result<ParsedDocument, ParseError>
+where
+    P: FormatParser,
+    R: Read + Seek,
+{
+    parser.parse_reader(reader)
 }
 
 fn resolve_media_asset(media_by_path: &HashMap<String, NodeId>, target: &str) -> Option<NodeId> {

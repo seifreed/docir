@@ -1,6 +1,7 @@
 //! RTF parsing support.
 
 use crate::error::ParseError;
+use crate::format::FormatParser;
 use crate::input::{parse_from_bytes, parse_from_file, read_all_with_limit};
 use crate::parser::{ParsedDocument, ParserConfig};
 use docir_core::ir::ParagraphBorders;
@@ -29,6 +30,12 @@ use self::objects::{finalize_object, finalize_picture, ObjectContext, ObjectText
 /// Parser for RTF documents.
 pub struct RtfParser {
     config: ParserConfig,
+}
+
+impl FormatParser for RtfParser {
+    fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
+        self.parse_reader(reader)
+    }
 }
 
 impl RtfParser {
