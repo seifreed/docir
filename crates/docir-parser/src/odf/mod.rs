@@ -122,107 +122,20 @@ impl OdfParser {
         let mut doc = Document::new(format);
         let mut diagnostics = Diagnostics::new();
 
-        if zip.contains("meta.xml") {
-            let meta_xml = zip.read_file_string("meta.xml")?;
-            if let Some(meta) = parse_meta(&meta_xml) {
-                let meta_id = meta.id;
-                store.insert(IRNode::Metadata(meta));
-                doc.metadata = Some(meta_id);
-            }
-        }
-
-        let mut content_xml: Option<String> = None;
-        let mut content_bytes: Option<Vec<u8>> = None;
-        let mut fast_mode = false;
-        let mut content_size = None;
-        let content_entry = manifest_entries
-            .iter()
-            .find(|entry| entry.path == "content.xml");
-        let content_encrypted = content_entry
-            .map(is_manifest_entry_encrypted)
-            .unwrap_or(false);
-        if zip.contains("content.xml") {
-            let size = zip.file_size("content.xml")?;
-            content_size = Some(size);
-            if let Some(max_bytes) = self.config.odf_max_bytes {
-                if size > max_bytes {
-                    return Err(ParseError::ResourceLimit(format!(
-                        "ODF content.xml too large: {} bytes (max: {} bytes)",
-                        size, max_bytes
-                    )));
-                }
-            }
-            if format == DocumentFormat::OdfSpreadsheet
-                && (self.config.odf_force_fast || size >= self.config.odf_fast_threshold_bytes)
-            {
-                fast_mode = true;
-            }
-
-            let xml_bytes = if content_encrypted {
-                let password = self.config.odf_password.as_deref();
-                let encryption = content_entry.and_then(|entry| entry.encryption.as_ref());
-                if let (Some(password), Some(encryption)) = (password, encryption) {
-                    match decrypt_odf_part(zip.read_file("content.xml")?, encryption, password) {
-                        Ok(bytes) => {
-                            diagnostics.entries.push(DiagnosticEntry {
-                                severity: DiagnosticSeverity::Info,
-                                code: "ODF_DECRYPT_OK".to_string(),
-                                message: "ODF encrypted content.xml decrypted successfully"
-                                    .to_string(),
-                                path: Some("content.xml".to_string()),
-                            });
-                            bytes
-                        }
-                        Err(message) => {
-                            return Err(ParseError::InvalidFormat(format!(
-                                "ODF decryption failed: {}",
-                                message
-                            )));
-                        }
-                    }
-                } else {
-                    diagnostics.entries.push(DiagnosticEntry {
-                        severity: DiagnosticSeverity::Warning,
-                        code: "ODF_DECRYPT_SKIPPED".to_string(),
-                        message:
-                            "ODF content.xml is encrypted but no password or encryption data is available"
-                                .to_string(),
-                        path: Some("content.xml".to_string()),
-                    });
-                    Vec::new()
-                }
-            } else {
-                zip.read_file("content.xml")?
-            };
-            if xml_bytes.is_empty() {
-                content_bytes = Some(xml_bytes);
-            } else {
-                if !fast_mode {
-                    content_xml = Some(String::from_utf8_lossy(&xml_bytes).to_string());
-                }
-                let use_parallel = format == DocumentFormat::OdfSpreadsheet
-                    && self.config.odf_parallel_sheets
-                    && !fast_mode;
-                let content_result = if use_parallel {
-                    let limits = Arc::new(OdfAtomicLimits::new(&self.config, fast_mode));
-                    spreadsheet::parse_content_spreadsheet_parallel(
-                        &xml_bytes,
-                        &mut store,
-                        &limits,
-                        &self.config,
-                    )?
-                } else {
-                    let limits = OdfLimits::new(&self.config, fast_mode);
-                    parse_content(&xml_bytes, format, &mut store, &limits)?
-                };
-                doc.content.extend(content_result.content);
-                doc.comments.extend(content_result.comments);
-                doc.footnotes.extend(content_result.footnotes);
-                doc.endnotes.extend(content_result.endnotes);
-                doc.pivot_caches.extend(content_result.pivot_caches);
-                content_bytes = Some(xml_bytes);
-            }
-        }
+        load_meta(&mut zip, &mut store, &mut doc)?;
+        let content_state = handle_content_xml(
+            &self.config,
+            &mut zip,
+            format,
+            &manifest_entries,
+            &mut store,
+            &mut doc,
+            &mut diagnostics,
+        )?;
+        let content_xml = content_state.content_xml;
+        let content_bytes = content_state.content_bytes;
+        let fast_mode = content_state.fast_mode;
+        let content_size = content_state.content_size;
 
         let mut styles_xml: Option<String> = None;
         if zip.contains("styles.xml") {
@@ -548,6 +461,133 @@ impl OdfParser {
             metrics: None,
         })
     }
+}
+
+struct ContentState {
+    content_xml: Option<String>,
+    content_bytes: Option<Vec<u8>>,
+    fast_mode: bool,
+    content_size: Option<u64>,
+}
+
+fn load_meta<R: Read + Seek>(
+    zip: &mut SecureZipReader<R>,
+    store: &mut IrStore,
+    doc: &mut Document,
+) -> Result<(), ParseError> {
+    if zip.contains("meta.xml") {
+        let meta_xml = zip.read_file_string("meta.xml")?;
+        if let Some(meta) = parse_meta(&meta_xml) {
+            let meta_id = meta.id;
+            store.insert(IRNode::Metadata(meta));
+            doc.metadata = Some(meta_id);
+        }
+    }
+    Ok(())
+}
+
+fn handle_content_xml<R: Read + Seek>(
+    config: &ParserConfig,
+    zip: &mut SecureZipReader<R>,
+    format: DocumentFormat,
+    manifest_entries: &[OdfManifestEntry],
+    store: &mut IrStore,
+    doc: &mut Document,
+    diagnostics: &mut Diagnostics,
+) -> Result<ContentState, ParseError> {
+    let mut content_xml: Option<String> = None;
+    let mut content_bytes: Option<Vec<u8>> = None;
+    let mut fast_mode = false;
+    let mut content_size = None;
+    let content_entry = manifest_entries
+        .iter()
+        .find(|entry| entry.path == "content.xml");
+    let content_encrypted = content_entry
+        .map(is_manifest_entry_encrypted)
+        .unwrap_or(false);
+    if zip.contains("content.xml") {
+        let size = zip.file_size("content.xml")?;
+        content_size = Some(size);
+        if let Some(max_bytes) = config.odf_max_bytes {
+            if size > max_bytes {
+                return Err(ParseError::ResourceLimit(format!(
+                    "ODF content.xml too large: {} bytes (max: {} bytes)",
+                    size, max_bytes
+                )));
+            }
+        }
+        if format == DocumentFormat::OdfSpreadsheet
+            && (config.odf_force_fast || size >= config.odf_fast_threshold_bytes)
+        {
+            fast_mode = true;
+        }
+
+        let xml_bytes = if content_encrypted {
+            let password = config.odf_password.as_deref();
+            let encryption = content_entry.and_then(|entry| entry.encryption.as_ref());
+            if let (Some(password), Some(encryption)) = (password, encryption) {
+                match decrypt_odf_part(zip.read_file("content.xml")?, encryption, password) {
+                    Ok(bytes) => {
+                        diagnostics.entries.push(DiagnosticEntry {
+                            severity: DiagnosticSeverity::Info,
+                            code: "ODF_DECRYPT_OK".to_string(),
+                            message: "ODF encrypted content.xml decrypted successfully".to_string(),
+                            path: Some("content.xml".to_string()),
+                        });
+                        bytes
+                    }
+                    Err(message) => {
+                        return Err(ParseError::InvalidFormat(format!(
+                            "ODF decryption failed: {}",
+                            message
+                        )));
+                    }
+                }
+            } else {
+                diagnostics.entries.push(DiagnosticEntry {
+                    severity: DiagnosticSeverity::Warning,
+                    code: "ODF_DECRYPT_SKIPPED".to_string(),
+                    message:
+                        "ODF content.xml is encrypted but no password or encryption data is available"
+                            .to_string(),
+                    path: Some("content.xml".to_string()),
+                });
+                Vec::new()
+            }
+        } else {
+            zip.read_file("content.xml")?
+        };
+        if xml_bytes.is_empty() {
+            content_bytes = Some(xml_bytes);
+        } else {
+            if !fast_mode {
+                content_xml = Some(String::from_utf8_lossy(&xml_bytes).to_string());
+            }
+            let use_parallel = format == DocumentFormat::OdfSpreadsheet
+                && config.odf_parallel_sheets
+                && !fast_mode;
+            let content_result = if use_parallel {
+                let limits = Arc::new(OdfAtomicLimits::new(config, fast_mode));
+                spreadsheet::parse_content_spreadsheet_parallel(&xml_bytes, store, &limits, config)?
+            } else {
+                let limits = OdfLimits::new(config, fast_mode);
+                parse_content(&xml_bytes, format, store, &limits)?
+            };
+            doc.content.extend(content_result.content);
+            doc.comments.extend(content_result.comments);
+            doc.footnotes.extend(content_result.footnotes);
+            doc.endnotes.extend(content_result.endnotes);
+            doc.pivot_caches.extend(content_result.pivot_caches);
+            content_bytes = Some(xml_bytes);
+        }
+    }
+
+    Ok(ContentState {
+        content_xml,
+        content_bytes,
+        fast_mode,
+        content_size,
+    })
 }
 
 fn detect_odf_format(mimetype: &str) -> Option<DocumentFormat> {
