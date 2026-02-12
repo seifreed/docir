@@ -23,6 +23,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 mod comments;
+mod graphic_frame;
 mod presentation_parts;
 mod relationships;
 mod shapes;
