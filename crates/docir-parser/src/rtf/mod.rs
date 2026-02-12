@@ -528,161 +528,13 @@ fn handle_control_word(
     ctx: &mut RtfParseContext,
     store: &mut IrStore,
 ) -> Result<(), ParseError> {
+    if handle_paragraph_controls(word, param, ctx, store)? {
+        return Ok(());
+    }
+    if handle_run_style_controls(word, param, ctx) {
+        return Ok(());
+    }
     match word {
-        "par" => {
-            flush_text(ctx, store, None)?;
-            if ctx.current_group_kind() == GroupKind::Normal {
-                finalize_paragraph(ctx, store);
-            }
-        }
-        "pard" => {
-            flush_text(ctx, store, None)?;
-            finalize_paragraph(ctx, store);
-            ctx.pending_para_style = None;
-            ctx.pending_alignment = None;
-            ctx.pending_indent = Indentation::default();
-            ctx.pending_spacing = Spacing::default();
-            ctx.pending_line_rule = None;
-            ctx.pending_para_border_target = None;
-            ctx.pending_para_borders = ParagraphBorders::default();
-        }
-        "plain" => {
-            ctx.current_props = RtfStyleState::default();
-        }
-        "line" => {
-            append_text(ctx, "\n");
-        }
-        "tab" => {
-            append_text(ctx, "\t");
-        }
-        "ql" => {
-            ctx.pending_alignment = Some(TextAlignment::Left);
-            if let Some(para) = ctx.current_paragraph.as_mut() {
-                para.properties.alignment = ctx.pending_alignment;
-            }
-        }
-        "qr" => {
-            ctx.pending_alignment = Some(TextAlignment::Right);
-            if let Some(para) = ctx.current_paragraph.as_mut() {
-                para.properties.alignment = ctx.pending_alignment;
-            }
-        }
-        "qc" => {
-            ctx.pending_alignment = Some(TextAlignment::Center);
-            if let Some(para) = ctx.current_paragraph.as_mut() {
-                para.properties.alignment = ctx.pending_alignment;
-            }
-        }
-        "qj" => {
-            ctx.pending_alignment = Some(TextAlignment::Justify);
-            if let Some(para) = ctx.current_paragraph.as_mut() {
-                para.properties.alignment = ctx.pending_alignment;
-            }
-        }
-        "li" => {
-            if let Some(value) = param {
-                ctx.pending_indent.left = Some(value);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.indentation = Some(ctx.pending_indent.clone());
-                }
-            }
-        }
-        "ri" => {
-            if let Some(value) = param {
-                ctx.pending_indent.right = Some(value);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.indentation = Some(ctx.pending_indent.clone());
-                }
-            }
-        }
-        "fi" => {
-            if let Some(value) = param {
-                ctx.pending_indent.first_line = Some(value);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.indentation = Some(ctx.pending_indent.clone());
-                }
-            }
-        }
-        "sb" => {
-            if let Some(value) = param {
-                ctx.pending_spacing.before = Some(value.max(0) as u32);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.spacing = Some(ctx.pending_spacing.clone());
-                }
-            }
-        }
-        "sa" => {
-            if let Some(value) = param {
-                ctx.pending_spacing.after = Some(value.max(0) as u32);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.spacing = Some(ctx.pending_spacing.clone());
-                }
-            }
-        }
-        "sl" => {
-            if let Some(value) = param {
-                ctx.pending_spacing.line = Some(value.abs() as u32);
-                ctx.pending_spacing.line_rule = ctx.pending_line_rule;
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.spacing = Some(ctx.pending_spacing.clone());
-                }
-            }
-        }
-        "slmult" => {
-            if let Some(value) = param {
-                ctx.pending_line_rule = if value == 0 {
-                    Some(LineSpacingRule::Exact)
-                } else if value == 1 {
-                    Some(LineSpacingRule::AtLeast)
-                } else {
-                    Some(LineSpacingRule::Auto)
-                };
-            }
-        }
-        "b" => {
-            ctx.current_props.bold = Some(param.unwrap_or(1) != 0);
-        }
-        "i" => {
-            ctx.current_props.italic = Some(param.unwrap_or(1) != 0);
-        }
-        "ul" => {
-            ctx.current_props.underline = Some(param.unwrap_or(1) != 0);
-        }
-        "ulnone" => {
-            ctx.current_props.underline = Some(false);
-        }
-        "strike" => {
-            ctx.current_props.strike = Some(param.unwrap_or(1) != 0);
-        }
-        "fs" => {
-            if let Some(sz) = param {
-                ctx.current_props.font_size = Some(sz.max(0) as u32);
-            }
-        }
-        "f" => {
-            if let Some(idx) = param {
-                ctx.current_props.font_index = Some(idx.max(0) as u32);
-            }
-        }
-        "cf" => {
-            if let Some(idx) = param {
-                ctx.current_props.color_index = Some(idx.max(0) as usize);
-            }
-        }
-        "highlight" => {
-            if let Some(idx) = param {
-                ctx.current_props.highlight_index = Some(idx.max(0) as usize);
-            }
-        }
-        "super" => {
-            ctx.current_props.vertical = Some(docir_core::ir::VerticalTextAlignment::Superscript);
-        }
-        "sub" => {
-            ctx.current_props.vertical = Some(docir_core::ir::VerticalTextAlignment::Subscript);
-        }
-        "nosupersub" => {
-            ctx.current_props.vertical = Some(docir_core::ir::VerticalTextAlignment::Baseline);
-        }
         "fonttbl" => {
             if let Some(group) = ctx.group_stack.last_mut() {
                 group.kind = GroupKind::FontTable;
@@ -1085,6 +937,174 @@ fn handle_control_word(
         _ => {}
     }
     Ok(())
+}
+
+fn handle_paragraph_controls(
+    word: &str,
+    param: Option<i32>,
+    ctx: &mut RtfParseContext,
+    store: &mut IrStore,
+) -> Result<bool, ParseError> {
+    match word {
+        "par" => {
+            flush_text(ctx, store, None)?;
+            if ctx.current_group_kind() == GroupKind::Normal {
+                finalize_paragraph(ctx, store);
+            }
+        }
+        "pard" => {
+            flush_text(ctx, store, None)?;
+            finalize_paragraph(ctx, store);
+            ctx.pending_para_style = None;
+            ctx.pending_alignment = None;
+            ctx.pending_indent = Indentation::default();
+            ctx.pending_spacing = Spacing::default();
+            ctx.pending_line_rule = None;
+            ctx.pending_para_border_target = None;
+            ctx.pending_para_borders = ParagraphBorders::default();
+        }
+        "plain" => {
+            ctx.current_props = RtfStyleState::default();
+        }
+        "line" => {
+            append_text(ctx, "\n");
+        }
+        "tab" => {
+            append_text(ctx, "\t");
+        }
+        "ql" => {
+            apply_paragraph_alignment(ctx, TextAlignment::Left);
+        }
+        "qr" => {
+            apply_paragraph_alignment(ctx, TextAlignment::Right);
+        }
+        "qc" => {
+            apply_paragraph_alignment(ctx, TextAlignment::Center);
+        }
+        "qj" => {
+            apply_paragraph_alignment(ctx, TextAlignment::Justify);
+        }
+        "li" => {
+            if let Some(value) = param {
+                ctx.pending_indent.left = Some(value);
+                if let Some(para) = ctx.current_paragraph.as_mut() {
+                    para.properties.indentation = Some(ctx.pending_indent.clone());
+                }
+            }
+        }
+        "ri" => {
+            if let Some(value) = param {
+                ctx.pending_indent.right = Some(value);
+                if let Some(para) = ctx.current_paragraph.as_mut() {
+                    para.properties.indentation = Some(ctx.pending_indent.clone());
+                }
+            }
+        }
+        "fi" => {
+            if let Some(value) = param {
+                ctx.pending_indent.first_line = Some(value);
+                if let Some(para) = ctx.current_paragraph.as_mut() {
+                    para.properties.indentation = Some(ctx.pending_indent.clone());
+                }
+            }
+        }
+        "sb" => {
+            if let Some(value) = param {
+                ctx.pending_spacing.before = Some(value.max(0) as u32);
+                if let Some(para) = ctx.current_paragraph.as_mut() {
+                    para.properties.spacing = Some(ctx.pending_spacing.clone());
+                }
+            }
+        }
+        "sa" => {
+            if let Some(value) = param {
+                ctx.pending_spacing.after = Some(value.max(0) as u32);
+                if let Some(para) = ctx.current_paragraph.as_mut() {
+                    para.properties.spacing = Some(ctx.pending_spacing.clone());
+                }
+            }
+        }
+        "sl" => {
+            if let Some(value) = param {
+                ctx.pending_spacing.line = Some(value.abs() as u32);
+                ctx.pending_spacing.line_rule = ctx.pending_line_rule;
+                if let Some(para) = ctx.current_paragraph.as_mut() {
+                    para.properties.spacing = Some(ctx.pending_spacing.clone());
+                }
+            }
+        }
+        "slmult" => {
+            if let Some(value) = param {
+                ctx.pending_line_rule = if value == 0 {
+                    Some(LineSpacingRule::Exact)
+                } else if value == 1 {
+                    Some(LineSpacingRule::AtLeast)
+                } else {
+                    Some(LineSpacingRule::Auto)
+                };
+            }
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn apply_paragraph_alignment(ctx: &mut RtfParseContext, alignment: TextAlignment) {
+    ctx.pending_alignment = Some(alignment);
+    if let Some(para) = ctx.current_paragraph.as_mut() {
+        para.properties.alignment = ctx.pending_alignment;
+    }
+}
+
+fn handle_run_style_controls(word: &str, param: Option<i32>, ctx: &mut RtfParseContext) -> bool {
+    match word {
+        "b" => {
+            ctx.current_props.bold = Some(param.unwrap_or(1) != 0);
+        }
+        "i" => {
+            ctx.current_props.italic = Some(param.unwrap_or(1) != 0);
+        }
+        "ul" => {
+            ctx.current_props.underline = Some(param.unwrap_or(1) != 0);
+        }
+        "ulnone" => {
+            ctx.current_props.underline = Some(false);
+        }
+        "strike" => {
+            ctx.current_props.strike = Some(param.unwrap_or(1) != 0);
+        }
+        "fs" => {
+            if let Some(sz) = param {
+                ctx.current_props.font_size = Some(sz.max(0) as u32);
+            }
+        }
+        "f" => {
+            if let Some(idx) = param {
+                ctx.current_props.font_index = Some(idx.max(0) as u32);
+            }
+        }
+        "cf" => {
+            if let Some(idx) = param {
+                ctx.current_props.color_index = Some(idx.max(0) as usize);
+            }
+        }
+        "highlight" => {
+            if let Some(idx) = param {
+                ctx.current_props.highlight_index = Some(idx.max(0) as usize);
+            }
+        }
+        "super" => {
+            ctx.current_props.vertical = Some(docir_core::ir::VerticalTextAlignment::Superscript);
+        }
+        "sub" => {
+            ctx.current_props.vertical = Some(docir_core::ir::VerticalTextAlignment::Subscript);
+        }
+        "nosupersub" => {
+            ctx.current_props.vertical = Some(docir_core::ir::VerticalTextAlignment::Baseline);
+        }
+        _ => return false,
+    }
+    true
 }
 
 fn flush_text(
