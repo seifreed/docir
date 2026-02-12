@@ -824,6 +824,7 @@ impl OoxmlParser {
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
     ) -> Result<(), ParseError> {
+        let mut builder = docir_core::ir::IrBuilder::new(store);
         let vba_paths = [
             "word/vbaProject.bin",
             "xl/vbaProject.bin",
@@ -834,10 +835,10 @@ impl OoxmlParser {
                 let (mut macro_project, modules) = scanner.detect_macro_project(zip, vba_path)?;
                 for module in modules {
                     let id = module.id;
-                    store.insert(IRNode::MacroModule(module));
+                    builder.insert(IRNode::MacroModule(module));
                     macro_project.modules.push(id);
                 }
-                store.insert(IRNode::MacroProject(macro_project));
+                builder.insert(IRNode::MacroProject(macro_project));
             }
         }
         Ok(())
@@ -849,6 +850,7 @@ impl OoxmlParser {
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
     ) -> Result<(), ParseError> {
+        let mut builder = docir_core::ir::IrBuilder::new(store);
         let ole_files: Vec<String> = zip
             .list_prefix("word/embeddings/")
             .into_iter()
@@ -860,7 +862,7 @@ impl OoxmlParser {
 
         for ole_path in ole_files {
             let ole_object = scanner.detect_ole_object(zip, &ole_path)?;
-            store.insert(IRNode::OleObject(ole_object));
+            builder.insert(IRNode::OleObject(ole_object));
         }
         Ok(())
     }

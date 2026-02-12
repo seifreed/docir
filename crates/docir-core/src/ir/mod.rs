@@ -4,6 +4,7 @@
 //! structure of Office documents.
 
 mod addins;
+mod builder;
 mod charts;
 mod connections;
 mod custom_xml;
@@ -33,6 +34,7 @@ mod word_revisions;
 mod word_settings;
 
 pub use addins::*;
+pub use builder::*;
 pub use charts::*;
 pub use connections::*;
 pub use custom_xml::*;
