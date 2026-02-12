@@ -3,7 +3,8 @@
 use anyhow::Result;
 use docir_diff::{DiffEngine, DiffResult};
 use docir_parser::parser::ParsedDocument;
-use docir_parser::{DocumentParser, ParserConfig};
+use docir_parser::DocumentParser;
+pub use docir_parser::ParserConfig;
 use docir_rules::{RuleEngine, RuleProfile, RuleReport};
 use docir_security::analyzer::AnalysisResult;
 use docir_security::SecurityAnalyzer;

@@ -1,9 +1,10 @@
 use super::*;
+use crate::zip_handler::PackageReader;
 
 impl XlsxParser {
-    pub(super) fn parse_worksheet<R: Read + Seek>(
+    pub(super) fn parse_worksheet(
         &mut self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         xml: &str,
         sheet: &SheetInfo,
         sheet_path: &str,
@@ -248,9 +249,9 @@ impl XlsxParser {
         Ok(ws_id)
     }
 
-    fn parse_chartsheet<R: Read + Seek>(
+    fn parse_chartsheet(
         &mut self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         xml: &str,
         sheet_path: &str,
         relationships: &Relationships,
@@ -315,9 +316,9 @@ impl XlsxParser {
         Ok(Some(drawing_id))
     }
 
-    pub(super) fn parse_external_links_and_connections<R: Read + Seek>(
+    pub(super) fn parse_external_links_and_connections(
         &mut self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         workbook_path: &str,
         workbook_rels: &Relationships,
     ) -> Result<(), ParseError> {
@@ -381,9 +382,9 @@ impl XlsxParser {
         Ok(())
     }
 
-    pub(super) fn parse_pivot_cache<R: Read + Seek>(
+    pub(super) fn parse_pivot_cache(
         &mut self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         xml: &str,
         cache_path: &str,
         cache_id: u32,

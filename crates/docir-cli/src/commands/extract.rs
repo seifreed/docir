@@ -1,9 +1,9 @@
 //! Extract nodes from the IR by ID or type.
 
 use anyhow::{bail, Result};
+use docir_app::ParserConfig;
 use docir_core::ir::IRNode;
 use docir_core::types::NodeId;
-use docir_parser::ParserConfig;
 use serde::Serialize;
 use std::path::PathBuf;
 

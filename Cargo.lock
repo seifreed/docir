@@ -392,7 +392,6 @@ dependencies = [
  "docir-app",
  "docir-core",
  "docir-diff",
- "docir-parser",
  "docir-rules",
  "docir-security",
  "docir-serialization",

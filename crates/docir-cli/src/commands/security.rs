@@ -2,7 +2,7 @@
 
 use crate::commands::util::build_app;
 use anyhow::{Context, Result};
-use docir_parser::ParserConfig;
+use docir_app::ParserConfig;
 use std::path::PathBuf;
 
 pub fn run(input: PathBuf, json: bool, verbose: bool, parser_config: &ParserConfig) -> Result<()> {

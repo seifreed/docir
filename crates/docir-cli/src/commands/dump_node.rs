@@ -1,8 +1,8 @@
 //! Dump node command implementation.
 
 use anyhow::{bail, Context, Result};
+use docir_app::ParserConfig;
 use docir_core::NodeId;
-use docir_parser::ParserConfig;
 use std::path::PathBuf;
 
 use crate::commands::util::build_app;

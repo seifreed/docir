@@ -6,7 +6,7 @@ mod commands;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
-use docir_parser::ParserConfig;
+use docir_app::ParserConfig;
 use std::path::PathBuf;
 
 #[derive(Parser)]

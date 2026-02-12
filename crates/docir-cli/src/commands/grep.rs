@@ -1,7 +1,7 @@
 //! Grep-like semantic search (text contains).
 
 use anyhow::{bail, Result};
-use docir_parser::ParserConfig;
+use docir_app::ParserConfig;
 use std::path::PathBuf;
 
 pub fn run(

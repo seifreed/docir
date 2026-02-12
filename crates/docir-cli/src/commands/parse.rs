@@ -1,7 +1,7 @@
 //! Parse command implementation.
 
 use anyhow::{Context, Result};
-use docir_parser::ParserConfig;
+use docir_app::ParserConfig;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;

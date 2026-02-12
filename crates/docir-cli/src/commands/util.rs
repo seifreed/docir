@@ -2,8 +2,8 @@
 
 use anyhow::{bail, Result};
 use docir_app::DocirApp;
+use docir_app::ParserConfig;
 use docir_core::types::{DocumentFormat, NodeType};
-use docir_parser::ParserConfig;
 use serde::Serialize;
 use std::fs::File;
 use std::io::{self, Write};

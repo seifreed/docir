@@ -3,10 +3,10 @@
 use crate::commands::util::build_app;
 use crate::commands::util::{parse_doc_format, parse_node_type, write_json_output};
 use anyhow::Result;
+use docir_app::ParserConfig;
 use docir_core::ir::IrNode as IrNodeTrait;
 use docir_core::query::Query;
 use docir_core::types::NodeType;
-use docir_parser::ParserConfig;
 use serde::Serialize;
 use std::path::PathBuf;
 

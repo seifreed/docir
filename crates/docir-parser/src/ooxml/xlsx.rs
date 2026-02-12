@@ -4,7 +4,7 @@ use crate::diagnostics::push_warning;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
-use crate::zip_handler::SecureZipReader;
+use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     parse_cell_reference, CalcChain, CalcChainEntry, Cell, CellError, CellFormula, CellValue,
     ColumnDefinition, ConditionalFormat, ConditionalRule, DataValidation, Diagnostics, Document,
@@ -18,7 +18,6 @@ use docir_core::visitor::IrStore;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use std::collections::{HashMap, HashSet};
-use std::io::{Read, Seek};
 
 mod connections;
 mod metadata;
@@ -73,9 +72,9 @@ impl XlsxParser {
     }
 
     /// Parses the workbook and all worksheets.
-    pub fn parse_workbook<R: Read + Seek>(
+    pub fn parse_workbook(
         &mut self,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
         workbook_xml: &str,
         workbook_rels: &Relationships,
         workbook_path: &str,
@@ -220,8 +219,8 @@ impl XlsxParser {
         // slicers
         let slicer_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("xl/slicers/") && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in slicer_paths {
             let xml = zip.read_file_string(&path)?;
@@ -235,8 +234,8 @@ impl XlsxParser {
         // timelines
         let timeline_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("xl/timelines/") && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in timeline_paths {
             let xml = zip.read_file_string(&path)?;
@@ -250,8 +249,8 @@ impl XlsxParser {
         // query tables
         let query_paths: Vec<String> = zip
             .file_names()
+            .into_iter()
             .filter(|p| p.starts_with("xl/queryTables/") && p.ends_with(".xml"))
-            .map(|s| s.to_string())
             .collect();
         for path in query_paths {
             let xml = zip.read_file_string(&path)?;
@@ -285,12 +284,12 @@ impl XlsxParser {
         self.store
     }
 
-    fn parse_drawing<R: Read + Seek>(
+    fn parse_drawing(
         &mut self,
         xml: &str,
         drawing_path: &str,
         relationships: &Relationships,
-        zip: &mut SecureZipReader<R>,
+        zip: &mut impl PackageReader,
     ) -> Result<NodeId, ParseError> {
         let mut drawing = WorksheetDrawing::new();
         drawing.span = Some(SourceSpan::new(drawing_path));
@@ -2459,13 +2458,13 @@ mod tests {
         assert_eq!(query.url.as_deref(), Some("https://example.com/data"));
     }
 
-    fn build_empty_zip() -> SecureZipReader<std::io::Cursor<Vec<u8>>> {
+    fn build_empty_zip() -> crate::zip_handler::SecureZipReader<std::io::Cursor<Vec<u8>>> {
         build_zip_with_entries(Vec::new())
     }
 
     fn build_zip_with_entries(
         entries: Vec<(&str, &str)>,
-    ) -> SecureZipReader<std::io::Cursor<Vec<u8>>> {
+    ) -> crate::zip_handler::SecureZipReader<std::io::Cursor<Vec<u8>>> {
         let mut data = Vec::new();
         {
             let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut data));
@@ -2477,6 +2476,7 @@ mod tests {
             }
             writer.finish().expect("finish zip");
         }
-        SecureZipReader::new(std::io::Cursor::new(data), Default::default()).expect("zip")
+        crate::zip_handler::SecureZipReader::new(std::io::Cursor::new(data), Default::default())
+            .expect("zip")
     }
 }

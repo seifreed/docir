@@ -1,9 +1,9 @@
 //! Summary command implementation.
 
 use anyhow::{Context, Result};
+use docir_app::ParserConfig;
 use docir_core::ir::{IRNode, IrNode};
 use docir_core::visitor::{IrVisitor, NodeCounter, PreOrderWalker, VisitControl, VisitorResult};
-use docir_parser::ParserConfig;
 use std::path::PathBuf;
 
 use crate::commands::util::build_app;

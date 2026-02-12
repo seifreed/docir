@@ -1,7 +1,7 @@
 //! Select nodes from IR using query predicates.
 
 use anyhow::Result;
-use docir_parser::ParserConfig;
+use docir_app::ParserConfig;
 use std::path::PathBuf;
 
 pub fn run(

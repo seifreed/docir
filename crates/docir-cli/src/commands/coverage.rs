@@ -3,8 +3,8 @@
 use crate::commands::util::build_app;
 use crate::{CoverageExportFormat, CoverageExportMode};
 use anyhow::{Context, Result};
+use docir_app::ParserConfig;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, IRNode};
-use docir_parser::ParserConfig;
 use serde::Serialize;
 use std::path::PathBuf;
 

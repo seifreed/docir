@@ -35,6 +35,12 @@ impl Default for ZipConfig {
     }
 }
 
+pub trait PackageReader {
+    fn contains(&self, name: &str) -> bool;
+    fn read_file_string(&mut self, name: &str) -> Result<String, ParseError>;
+    fn file_names(&self) -> Vec<String>;
+}
+
 /// A secure wrapper around a ZIP archive.
 pub struct SecureZipReader<R: Read + Seek> {
     archive: ZipArchive<R>,
@@ -222,6 +228,22 @@ impl<R: Read + Seek> SecureZipReader<R> {
             .keys()
             .filter(|name| name.ends_with(suffix))
             .map(|s| s.as_str())
+            .collect()
+    }
+}
+
+impl<R: Read + Seek> PackageReader for SecureZipReader<R> {
+    fn contains(&self, name: &str) -> bool {
+        SecureZipReader::contains(self, name)
+    }
+
+    fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
+        SecureZipReader::read_file_string(self, name)
+    }
+
+    fn file_names(&self) -> Vec<String> {
+        SecureZipReader::file_names(self)
+            .map(|name| name.to_string())
             .collect()
     }
 }

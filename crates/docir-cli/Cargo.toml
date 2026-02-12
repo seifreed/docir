@@ -13,7 +13,6 @@ path = "src/main.rs"
 [dependencies]
 docir-core = { workspace = true }
 docir-app = { workspace = true }
-docir-parser = { workspace = true }
 docir-security = { workspace = true }
 docir-serialization = { workspace = true }
 docir-diff = { workspace = true }
