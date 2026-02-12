@@ -1,10 +1,12 @@
 //! Theme IR nodes.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Document theme.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Theme {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -33,7 +35,8 @@ impl Theme {
 }
 
 /// Theme color entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ThemeColor {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -41,7 +44,8 @@ pub struct ThemeColor {
 }
 
 /// Theme font scheme.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct ThemeFontScheme {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub major: Option<String>,

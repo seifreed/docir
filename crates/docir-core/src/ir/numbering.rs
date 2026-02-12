@@ -2,10 +2,12 @@
 
 use crate::ir::{StyleParagraphProperties, StyleRunProperties, TextAlignment};
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Numbering definitions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct NumberingSet {
     pub id: NodeId,
     pub abstract_nums: Vec<AbstractNum>,
@@ -26,21 +28,24 @@ impl NumberingSet {
 }
 
 /// Abstract numbering definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct AbstractNum {
     pub abstract_id: u32,
     pub levels: Vec<NumberingLevel>,
 }
 
 /// Numbering instance mapping.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct NumInstance {
     pub num_id: u32,
     pub abstract_id: u32,
 }
 
 /// Numbering level.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct NumberingLevel {
     pub level: u32,
     #[serde(skip_serializing_if = "Option::is_none")]

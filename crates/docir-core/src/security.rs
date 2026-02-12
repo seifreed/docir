@@ -5,10 +5,12 @@
 //! references, DDE fields, and more.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Aggregate security information for a document.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct SecurityInfo {
     /// VBA macro project (if present).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -110,7 +112,8 @@ impl SecurityInfo {
 }
 
 /// Threat level classification.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ThreatLevel {
     /// No security concerns detected.
     None,
@@ -143,7 +146,8 @@ impl std::fmt::Display for ThreatLevel {
 }
 
 /// A specific threat indicator.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ThreatIndicator {
     /// Type of threat.
     pub indicator_type: ThreatIndicatorType,
@@ -164,7 +168,8 @@ pub struct ThreatIndicator {
 }
 
 /// Types of threat indicators.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThreatIndicatorType {
     /// VBA macro with auto-execute.
     AutoExecMacro,
@@ -191,7 +196,8 @@ pub enum ThreatIndicatorType {
 }
 
 /// ActiveX control.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ActiveXControl {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -225,7 +231,8 @@ impl ActiveXControl {
 }
 
 /// VBA macro project.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct MacroProject {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -287,7 +294,8 @@ impl Default for MacroProject {
 }
 
 /// VBA module within a project.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct MacroModule {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -334,7 +342,8 @@ impl MacroModule {
 }
 
 /// VBA module types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MacroModuleType {
     /// Standard code module.
     Standard,
@@ -347,7 +356,8 @@ pub enum MacroModuleType {
 }
 
 /// A suspicious API call in VBA code.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SuspiciousCall {
     /// API/function name.
     pub name: String,
@@ -359,7 +369,8 @@ pub struct SuspiciousCall {
 }
 
 /// Categories of suspicious API calls.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SuspiciousCallCategory {
     /// Shell execution (Shell, WScript.Shell).
     ShellExecution,
@@ -380,7 +391,8 @@ pub enum SuspiciousCallCategory {
 }
 
 /// External library reference in VBA.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct MacroReference {
     /// Reference name.
     pub name: String,
@@ -399,7 +411,8 @@ pub struct MacroReference {
 }
 
 /// Digital signature information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct DigitalSignature {
     /// Is the signature valid?
     pub is_valid: bool,
@@ -418,7 +431,8 @@ pub struct DigitalSignature {
 }
 
 /// Embedded OLE object.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct OleObject {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -483,7 +497,8 @@ impl Default for OleObject {
 }
 
 /// External reference (template, link, remote resource).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ExternalReference {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -528,7 +543,8 @@ impl ExternalReference {
 }
 
 /// Types of external references.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExternalRefType {
     /// Attached document template.
     AttachedTemplate,
@@ -551,7 +567,8 @@ pub enum ExternalRefType {
 }
 
 /// DDE (Dynamic Data Exchange) field.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct DdeField {
     /// Field type (DDE or DDEAUTO).
     pub field_type: DdeFieldType,
@@ -576,7 +593,8 @@ pub struct DdeField {
 }
 
 /// DDE field types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DdeFieldType {
     /// Manual update.
     Dde,
@@ -585,7 +603,8 @@ pub enum DdeFieldType {
 }
 
 /// Excel 4.0 XLM macro.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct XlmMacro {
     /// Sheet name containing the macro.
     pub sheet_name: String,
@@ -604,7 +623,8 @@ pub struct XlmMacro {
 }
 
 /// A dangerous XLM function.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct XlmFunction {
     /// Function name (e.g., EXEC, CALL).
     pub name: String,
@@ -616,7 +636,8 @@ pub struct XlmFunction {
 }
 
 /// A cell containing XLM macro code.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct XlmMacroCell {
     /// Cell reference (e.g., A1).
     pub cell_ref: String,

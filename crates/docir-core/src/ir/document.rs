@@ -2,10 +2,12 @@
 
 use crate::security::SecurityInfo;
 use crate::types::{DocumentFormat, NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Root node of the IR tree representing an Office document.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Document {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -195,7 +197,8 @@ impl Document {
 }
 
 /// A logical section within a Word document.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Section {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -252,7 +255,8 @@ impl Default for Section {
 }
 
 /// Section layout properties.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct SectionProperties {
     /// Page width in twips (1/20 of a point).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -308,14 +312,16 @@ pub struct SectionProperties {
 }
 
 /// Page orientation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PageOrientation {
     Portrait,
     Landscape,
 }
 
 /// Page margins in twips.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct PageMargins {
     pub top: u32,
     pub bottom: u32,
@@ -330,7 +336,8 @@ pub struct PageMargins {
 }
 
 /// Section break type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SectionType {
     NextPage,
     Continuous,
@@ -339,7 +346,8 @@ pub enum SectionType {
 }
 
 /// Page numbering settings.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct PageNumbering {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start: Option<u32>,
@@ -348,7 +356,8 @@ pub struct PageNumbering {
 }
 
 /// Line numbering settings.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct LineNumbering {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start: Option<u32>,
@@ -361,7 +370,8 @@ pub struct LineNumbering {
 }
 
 /// Line numbering restart rules.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineNumberRestart {
     Continuous,
     NewPage,
@@ -369,7 +379,8 @@ pub enum LineNumberRestart {
 }
 
 /// Page borders.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct PageBorders {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top: Option<crate::ir::Border>,

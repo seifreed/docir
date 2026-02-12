@@ -1,10 +1,12 @@
 //! Styles IR nodes.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Collection of styles.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct StyleSet {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -37,7 +39,8 @@ impl StyleSet {
 }
 
 /// A style definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Style {
     /// Style id.
     pub style_id: String,
@@ -67,7 +70,8 @@ pub struct Style {
 }
 
 /// Style type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StyleType {
     Paragraph,
     Character,
@@ -83,7 +87,8 @@ impl Default for StyleType {
 }
 
 /// Run properties for styles.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct StyleRunProperties {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font_family: Option<String>,
@@ -110,7 +115,8 @@ pub struct StyleRunProperties {
 }
 
 /// Paragraph properties for styles.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct StyleParagraphProperties {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alignment: Option<crate::ir::TextAlignment>,

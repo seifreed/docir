@@ -1,10 +1,12 @@
 //! Package-level shared nodes (relationships, extensions).
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Relationship graph for a part.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct RelationshipGraph {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -29,7 +31,8 @@ impl RelationshipGraph {
 }
 
 /// A relationship entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct RelationshipEntry {
     pub id: String,
     pub rel_type: String,
@@ -38,14 +41,16 @@ pub struct RelationshipEntry {
 }
 
 /// Relationship target mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RelationshipTargetMode {
     Internal,
     External,
 }
 
 /// Extension part for unknown or legacy content.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ExtensionPart {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -77,7 +82,8 @@ impl ExtensionPart {
 }
 
 /// Extension part kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExtensionPartKind {
     Legacy,
     VendorSpecific,

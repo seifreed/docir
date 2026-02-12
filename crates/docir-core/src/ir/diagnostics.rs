@@ -1,10 +1,12 @@
 //! Diagnostics IR nodes.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Diagnostic severity levels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticSeverity {
     Info,
     Warning,
@@ -12,7 +14,8 @@ pub enum DiagnosticSeverity {
 }
 
 /// Diagnostic entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct DiagnosticEntry {
     pub severity: DiagnosticSeverity,
     pub code: String,
@@ -22,7 +25,8 @@ pub struct DiagnosticEntry {
 }
 
 /// Diagnostics container.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Diagnostics {
     pub id: NodeId,
     pub entries: Vec<DiagnosticEntry>,

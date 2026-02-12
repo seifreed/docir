@@ -1,10 +1,12 @@
 //! Spreadsheet connections part (xl/connections.xml).
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Connection part containing all workbook connections.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ConnectionPart {
     pub id: NodeId,
     pub entries: Vec<ConnectionEntry>,
@@ -22,7 +24,8 @@ impl ConnectionPart {
 }
 
 /// A single connection entry (from connections.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ConnectionEntry {
     pub connection_id: Option<u32>,
     pub name: Option<String>,

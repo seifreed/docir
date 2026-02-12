@@ -1,10 +1,12 @@
 //! Chart IR nodes (shared for XLSX/PPTX).
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Chart data extracted from chart parts.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ChartData {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,7 +35,8 @@ impl ChartData {
 }
 
 /// Chart series data (name + categories/values).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ChartSeries {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,

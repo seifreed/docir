@@ -1,10 +1,12 @@
 //! Paragraph and Run IR nodes.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// A paragraph containing runs of text.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Paragraph {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -57,7 +59,8 @@ impl Default for Paragraph {
 }
 
 /// Paragraph formatting properties.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct ParagraphProperties {
     /// Horizontal alignment.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,7 +104,8 @@ pub struct ParagraphProperties {
 }
 
 /// Text alignment options.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextAlignment {
     Left,
     Center,
@@ -111,7 +115,8 @@ pub enum TextAlignment {
 }
 
 /// Paragraph indentation.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct Indentation {
     /// Left indent in twips.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -128,7 +133,8 @@ pub struct Indentation {
 }
 
 /// Paragraph spacing.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct Spacing {
     /// Space before paragraph in twips.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -145,7 +151,8 @@ pub struct Spacing {
 }
 
 /// Line spacing rules.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineSpacingRule {
     Auto,
     Exact,
@@ -153,7 +160,8 @@ pub enum LineSpacingRule {
 }
 
 /// Numbering/list information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct NumberingInfo {
     /// Numbering definition ID.
     pub num_id: u32,
@@ -165,7 +173,8 @@ pub struct NumberingInfo {
 }
 
 /// Paragraph border definition.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct ParagraphBorders {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top: Option<crate::ir::Border>,
@@ -178,7 +187,8 @@ pub struct ParagraphBorders {
 }
 
 /// A run of text with uniform formatting.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Run {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -217,7 +227,8 @@ impl Run {
 }
 
 /// Run formatting properties.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct RunProperties {
     /// Character style ID (if any).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -268,7 +279,8 @@ pub struct RunProperties {
 }
 
 /// Underline styles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnderlineStyle {
     Single,
     Double,
@@ -280,7 +292,8 @@ pub enum UnderlineStyle {
 }
 
 /// Vertical text alignment.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerticalTextAlignment {
     Baseline,
     Superscript,
@@ -288,7 +301,8 @@ pub enum VerticalTextAlignment {
 }
 
 /// A hyperlink wrapping one or more runs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Hyperlink {
     /// Unique identifier for this node.
     pub id: NodeId,

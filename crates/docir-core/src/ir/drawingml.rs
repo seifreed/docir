@@ -1,10 +1,12 @@
 //! DrawingML parts (word/drawings/*.xml).
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// DrawingML part containing shapes/images.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct DrawingPart {
     pub id: NodeId,
     pub path: String,

@@ -1,10 +1,12 @@
 //! WordprocessingML settings, web settings, and font table.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Generic settings container for word/settings.xml.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct WordSettings {
     pub id: NodeId,
     pub entries: Vec<SettingEntry>,
@@ -23,7 +25,8 @@ impl WordSettings {
 }
 
 /// Settings entry (element name + optional value + attributes).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SettingEntry {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -32,14 +35,16 @@ pub struct SettingEntry {
 }
 
 /// Attribute for settings entries.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SettingAttribute {
     pub name: String,
     pub value: String,
 }
 
 /// Web settings (word/webSettings.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct WebSettings {
     pub id: NodeId,
     pub entries: Vec<SettingEntry>,
@@ -58,7 +63,8 @@ impl WebSettings {
 }
 
 /// Font table (word/fontTable.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct FontTable {
     pub id: NodeId,
     pub fonts: Vec<FontEntry>,
@@ -77,7 +83,8 @@ impl FontTable {
 }
 
 /// Font entry in fontTable.xml.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct FontEntry {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]

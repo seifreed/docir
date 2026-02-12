@@ -1,10 +1,12 @@
 //! Word revisions (track changes) and comment metadata parts.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// A tracked change (insert/delete).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Revision {
     pub id: NodeId,
     pub change_type: RevisionType,
@@ -34,7 +36,8 @@ impl Revision {
 }
 
 /// Revision type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RevisionType {
     Insert,
     Delete,
@@ -44,7 +47,8 @@ pub enum RevisionType {
 }
 
 /// Comments extended metadata set (commentsExtended.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CommentExtensionSet {
     pub id: NodeId,
     pub entries: Vec<CommentExtension>,
@@ -63,7 +67,8 @@ impl CommentExtensionSet {
 }
 
 /// A single comment extension entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CommentExtension {
     pub comment_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -75,7 +80,8 @@ pub struct CommentExtension {
 }
 
 /// Comment ID mapping (commentsIds.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CommentIdMap {
     pub id: NodeId,
     pub mappings: Vec<CommentIdMapEntry>,
@@ -94,7 +100,8 @@ impl CommentIdMap {
 }
 
 /// Mapping entry between comment IDs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CommentIdMapEntry {
     pub comment_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]

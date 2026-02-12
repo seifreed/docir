@@ -1,10 +1,12 @@
 //! Spreadsheet external links.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// External link part (xl/externalLinks/externalLink*.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ExternalLinkPart {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -29,7 +31,8 @@ impl ExternalLinkPart {
 }
 
 /// External link sheet info.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ExternalLinkSheet {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,

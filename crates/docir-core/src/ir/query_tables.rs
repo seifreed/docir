@@ -1,10 +1,12 @@
 //! Spreadsheet query tables.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Query table part (xl/queryTables/queryTable*.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct QueryTablePart {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]

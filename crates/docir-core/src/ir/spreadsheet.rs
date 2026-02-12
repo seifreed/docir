@@ -1,10 +1,12 @@
 //! Spreadsheet (XLSX) IR nodes.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// A worksheet within a spreadsheet.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Worksheet {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -114,7 +116,8 @@ impl Worksheet {
 }
 
 /// Sheet visibility state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SheetState {
     /// Normal visible sheet.
     Visible,
@@ -125,7 +128,8 @@ pub enum SheetState {
 }
 
 /// Sheet kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SheetKind {
     Worksheet,
     ChartSheet,
@@ -134,7 +138,8 @@ pub enum SheetKind {
 }
 
 /// Worksheet page margins.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SheetPageMargins {
     pub left: Option<f64>,
     pub right: Option<f64>,
@@ -157,7 +162,8 @@ impl Default for SheetState {
 }
 
 /// Merged cell range specification.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct MergedCellRange {
     /// Start column (0-based).
     pub start_col: u32,
@@ -183,7 +189,8 @@ impl MergedCellRange {
 }
 
 /// Column definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ColumnDefinition {
     /// Column index (0-based).
     pub index: u32,
@@ -199,7 +206,8 @@ pub struct ColumnDefinition {
 }
 
 /// Worksheet drawing container.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct WorksheetDrawing {
     pub id: NodeId,
     pub shapes: Vec<NodeId>,
@@ -222,7 +230,8 @@ impl WorksheetDrawing {
 }
 
 /// A cell within a worksheet.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Cell {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -253,7 +262,8 @@ pub struct Cell {
 }
 
 /// Spreadsheet comment (legacy or threaded).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SheetComment {
     pub id: NodeId,
     pub sheet_name: Option<String>,
@@ -279,7 +289,8 @@ impl SheetComment {
 }
 
 /// Spreadsheet metadata part (xl/metadata.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SheetMetadata {
     pub id: NodeId,
     pub metadata_types: Vec<SheetMetadataType>,
@@ -303,7 +314,8 @@ impl SheetMetadata {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SheetMetadataType {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -327,7 +339,8 @@ impl SheetMetadataType {
 }
 
 /// Calculation chain entries.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CalcChain {
     pub id: NodeId,
     pub entries: Vec<CalcChainEntry>,
@@ -345,7 +358,8 @@ impl CalcChain {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CalcChainEntry {
     pub cell_ref: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -380,7 +394,8 @@ impl Cell {
 }
 
 /// Cell value types.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub enum CellValue {
     /// Empty cell.
     Empty,
@@ -401,7 +416,8 @@ pub enum CellValue {
 }
 
 /// Cell error types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CellError {
     /// #NULL!
     Null,
@@ -422,7 +438,8 @@ pub enum CellError {
 }
 
 /// Cell formula information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CellFormula {
     /// Formula text (without leading =).
     pub text: String,
@@ -448,7 +465,8 @@ pub struct CellFormula {
 }
 
 /// Formula types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormulaType {
     /// Normal formula.
     Normal,
@@ -467,7 +485,8 @@ impl Default for FormulaType {
 }
 
 /// Shared strings table.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SharedStringTable {
     pub id: NodeId,
     pub items: Vec<SharedStringItem>,
@@ -486,7 +505,8 @@ impl SharedStringTable {
 }
 
 /// Shared string item (rich text allowed).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SharedStringItem {
     pub text: String,
     #[serde(default)]
@@ -494,7 +514,8 @@ pub struct SharedStringItem {
 }
 
 /// Spreadsheet styles (styles.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SpreadsheetStyles {
     pub id: NodeId,
     pub number_formats: Vec<NumberFormat>,
@@ -526,13 +547,15 @@ impl SpreadsheetStyles {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct NumberFormat {
     pub id: u32,
     pub format_code: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct FontDef {
     pub name: Option<String>,
     pub size: Option<f64>,
@@ -545,14 +568,16 @@ pub struct FontDef {
     pub color: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct FillDef {
     pub pattern_type: Option<String>,
     pub fg_color: Option<String>,
     pub bg_color: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct BorderDef {
     pub left: Option<BorderSide>,
     pub right: Option<BorderSide>,
@@ -560,13 +585,15 @@ pub struct BorderDef {
     pub bottom: Option<BorderSide>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct BorderSide {
     pub style: Option<String>,
     pub color: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CellFormat {
     pub num_fmt_id: Option<u32>,
     pub font_id: Option<u32>,
@@ -593,7 +620,8 @@ pub struct CellFormat {
     pub protection: Option<CellProtection>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CellAlignment {
     pub horizontal: Option<String>,
     pub vertical: Option<String>,
@@ -604,14 +632,16 @@ pub struct CellAlignment {
     pub reading_order: Option<u32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CellProtection {
     pub locked: Option<bool>,
     pub hidden: Option<bool>,
 }
 
 /// Differential format (dxf) style.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct DxfStyle {
     pub num_fmt: Option<NumberFormat>,
     pub font: Option<FontDef>,
@@ -635,7 +665,8 @@ impl DxfStyle {
 }
 
 /// Table styles info from styles.xml.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct TableStyleInfo {
     pub count: Option<u32>,
     pub default_table_style: Option<String>,
@@ -644,7 +675,8 @@ pub struct TableStyleInfo {
     pub styles: Vec<TableStyleDef>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct TableStyleDef {
     pub name: String,
     pub pivot: Option<bool>,
@@ -652,7 +684,8 @@ pub struct TableStyleDef {
 }
 
 /// Defined name (named range / formula).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct DefinedName {
     pub id: NodeId,
     pub name: String,
@@ -666,7 +699,8 @@ pub struct DefinedName {
 }
 
 /// Conditional formatting container.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ConditionalFormat {
     pub id: NodeId,
     pub ranges: Vec<String>,
@@ -675,7 +709,8 @@ pub struct ConditionalFormat {
     pub span: Option<SourceSpan>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ConditionalRule {
     pub rule_type: String,
     pub priority: Option<u32>,
@@ -684,7 +719,8 @@ pub struct ConditionalRule {
 }
 
 /// Data validation rule.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct DataValidation {
     pub id: NodeId,
     pub validation_type: Option<String>,
@@ -707,7 +743,8 @@ pub struct DataValidation {
 }
 
 /// Table definition (ListObject).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct TableDefinition {
     pub id: NodeId,
     pub name: Option<String>,
@@ -720,7 +757,8 @@ pub struct TableDefinition {
     pub span: Option<SourceSpan>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct TableColumn {
     pub id: u32,
     pub name: Option<String>,
@@ -729,7 +767,8 @@ pub struct TableColumn {
 }
 
 /// Pivot table definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct PivotTable {
     pub id: NodeId,
     pub name: Option<String>,
@@ -740,7 +779,8 @@ pub struct PivotTable {
 }
 
 /// Pivot cache definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct PivotCache {
     pub id: NodeId,
     pub cache_id: u32,
@@ -766,7 +806,8 @@ impl PivotCache {
 }
 
 /// Pivot cache records (pivotCacheRecords*.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct PivotCacheRecords {
     pub id: NodeId,
     pub cache_id: Option<u32>,
@@ -789,7 +830,8 @@ impl PivotCacheRecords {
 }
 
 /// Workbook-level properties.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct WorkbookProperties {
     pub id: NodeId,
     pub date1904: Option<bool>,

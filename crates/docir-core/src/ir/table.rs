@@ -1,10 +1,12 @@
 //! Table IR nodes.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// A table structure.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Table {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -58,14 +60,16 @@ impl Default for Table {
 }
 
 /// Grid column definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct GridColumn {
     /// Column width in twips.
     pub width: u32,
 }
 
 /// Table properties.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct TableProperties {
     /// Table width.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -89,7 +93,8 @@ pub struct TableProperties {
 }
 
 /// Table width specification.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct TableWidth {
     /// Width value.
     pub value: u32,
@@ -98,7 +103,8 @@ pub struct TableWidth {
 }
 
 /// Table width type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TableWidthType {
     /// Automatic width.
     Auto,
@@ -111,7 +117,8 @@ pub enum TableWidthType {
 }
 
 /// Table alignment.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TableAlignment {
     Left,
     Center,
@@ -119,7 +126,8 @@ pub enum TableAlignment {
 }
 
 /// Table borders.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct TableBorders {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top: Option<Border>,
@@ -136,7 +144,8 @@ pub struct TableBorders {
 }
 
 /// Border definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Border {
     /// Border style.
     pub style: BorderStyle,
@@ -149,7 +158,8 @@ pub struct Border {
 }
 
 /// Border styles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BorderStyle {
     None,
     Single,
@@ -164,7 +174,8 @@ pub enum BorderStyle {
 }
 
 /// Cell margins.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct CellMargins {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top: Option<u32>,
@@ -177,7 +188,8 @@ pub struct CellMargins {
 }
 
 /// A table row.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct TableRow {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -217,7 +229,8 @@ impl Default for TableRow {
 }
 
 /// Table row properties.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct TableRowProperties {
     /// Row height.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -233,7 +246,8 @@ pub struct TableRowProperties {
 }
 
 /// Row height specification.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct RowHeight {
     /// Height value in twips.
     pub value: u32,
@@ -242,7 +256,8 @@ pub struct RowHeight {
 }
 
 /// Row height rules.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowHeightRule {
     Auto,
     Exact,
@@ -250,7 +265,8 @@ pub enum RowHeightRule {
 }
 
 /// A table cell.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct TableCell {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -290,7 +306,8 @@ impl Default for TableCell {
 }
 
 /// Table cell properties.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct TableCellProperties {
     /// Cell width.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -318,7 +335,8 @@ pub struct TableCellProperties {
 }
 
 /// Merge type for table cells.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MergeType {
     /// Start of a merged region.
     Restart,
@@ -327,7 +345,8 @@ pub enum MergeType {
 }
 
 /// Vertical alignment in cells.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CellVerticalAlignment {
     Top,
     Center,

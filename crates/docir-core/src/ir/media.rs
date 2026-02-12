@@ -1,10 +1,12 @@
 //! Media asset nodes.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Media asset in the package.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct MediaAsset {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -40,7 +42,8 @@ impl MediaAsset {
 }
 
 /// Media type classification.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaType {
     Image,
     Audio,

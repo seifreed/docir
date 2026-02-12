@@ -1,5 +1,6 @@
 //! Core types used throughout the IR.
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
@@ -36,7 +37,8 @@ impl std::error::Error for ParseEnumError {}
 ///
 /// NodeIds are stable across serialization and can be used
 /// to reference nodes within the IR tree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NodeId(u64);
 
 impl NodeId {
@@ -71,7 +73,8 @@ impl fmt::Display for NodeId {
 /// Source location in the original OOXML file.
 ///
 /// Used for diagnostics and tracing parsed elements back to their origin.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceSpan {
     /// Path within the OOXML package (e.g., "word/document.xml").
     pub file_path: String,
@@ -122,7 +125,8 @@ impl SourceSpan {
 }
 
 /// Document format type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DocumentFormat {
     /// Word document (.docx, .docm)
     WordProcessing,
@@ -198,7 +202,8 @@ impl FromStr for DocumentFormat {
 }
 
 /// Node type discriminant for the IR tree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NodeType {
     // Document root
     Document,

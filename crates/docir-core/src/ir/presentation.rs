@@ -1,10 +1,12 @@
 //! Presentation (PPTX) IR nodes.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// A presentation slide.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Slide {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -88,7 +90,8 @@ impl Slide {
 }
 
 /// Slide transition settings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SlideTransition {
     pub transition_type: Option<String>,
     pub speed: Option<String>,
@@ -98,7 +101,8 @@ pub struct SlideTransition {
 }
 
 /// Notes slide (ppt/notesSlides/notesSlide*.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct NotesSlide {
     pub id: NodeId,
     pub shapes: Vec<NodeId>,
@@ -120,7 +124,8 @@ impl NotesSlide {
 }
 
 /// Slide animation entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SlideAnimation {
     pub animation_type: String,
     pub target: Option<String>,
@@ -132,7 +137,8 @@ pub struct SlideAnimation {
 }
 
 /// Presentation properties (presProps.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct PresentationProperties {
     pub id: NodeId,
     pub auto_compress_pictures: Option<bool>,
@@ -148,7 +154,8 @@ pub struct PresentationProperties {
 }
 
 /// Presentation info derived from presentation.xml.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct PresentationInfo {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -189,7 +196,8 @@ impl PresentationInfo {
 }
 
 /// Slide size definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SlideSize {
     pub cx: u64,
     pub cy: u64,
@@ -213,7 +221,8 @@ impl PresentationProperties {
 }
 
 /// View properties (viewProps.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ViewProperties {
     pub id: NodeId,
     pub last_view: Option<String>,
@@ -248,7 +257,8 @@ impl ViewProperties {
 }
 
 /// Table styles list (tableStyles.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct TableStyleSet {
     pub id: NodeId,
     pub default_style_id: Option<String>,
@@ -268,14 +278,16 @@ impl TableStyleSet {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct TableStyle {
     pub style_id: String,
     pub name: Option<String>,
 }
 
 /// PPTX comment author.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct PptxCommentAuthor {
     pub id: NodeId,
     pub author_id: u32,
@@ -286,7 +298,8 @@ pub struct PptxCommentAuthor {
 }
 
 /// PPTX comment.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct PptxComment {
     pub id: NodeId,
     pub author_id: Option<u32>,
@@ -301,7 +314,8 @@ pub struct PptxComment {
 }
 
 /// Presentation tag entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct PresentationTag {
     pub id: NodeId,
     pub name: String,
@@ -311,7 +325,8 @@ pub struct PresentationTag {
 }
 
 /// People part (coauthoring).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct PeoplePart {
     pub id: NodeId,
     pub people: Vec<PersonEntry>,
@@ -330,7 +345,8 @@ impl PeoplePart {
 }
 
 /// Person entry in people.xml.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct PersonEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub person_id: Option<String>,
@@ -343,7 +359,8 @@ pub struct PersonEntry {
 }
 
 /// SmartArt part.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SmartArtPart {
     pub id: NodeId,
     pub kind: String,
@@ -360,7 +377,8 @@ pub struct SmartArtPart {
 }
 
 /// Slide master part.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SlideMaster {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -399,7 +417,8 @@ impl SlideMaster {
 }
 
 /// Slide layout part.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SlideLayout {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -440,7 +459,8 @@ impl SlideLayout {
 }
 
 /// Notes master part.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct NotesMaster {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -466,7 +486,8 @@ impl NotesMaster {
 }
 
 /// Handout master part.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct HandoutMaster {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -492,7 +513,8 @@ impl HandoutMaster {
 }
 
 /// A shape on a slide.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Shape {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -581,7 +603,8 @@ impl Shape {
 }
 
 /// Shape types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShapeType {
     /// Rectangle shape.
     Rectangle,
@@ -618,7 +641,8 @@ pub enum ShapeType {
 }
 
 /// Shape position and size.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct ShapeTransform {
     /// X offset from slide origin in EMUs (914400 EMUs = 1 inch).
     pub x: i64,
@@ -640,14 +664,16 @@ pub struct ShapeTransform {
 }
 
 /// Text content within a shape.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ShapeText {
     /// Paragraphs of text.
     pub paragraphs: Vec<ShapeTextParagraph>,
 }
 
 /// A paragraph within shape text.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ShapeTextParagraph {
     /// Runs of text.
     pub runs: Vec<ShapeTextRun>,
@@ -657,7 +683,8 @@ pub struct ShapeTextParagraph {
 }
 
 /// A run of text within a shape paragraph.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ShapeTextRun {
     /// Text content.
     pub text: String,

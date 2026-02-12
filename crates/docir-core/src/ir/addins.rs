@@ -1,10 +1,12 @@
 //! Office add-ins (web extensions).
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Web extension definition (word/webExtensions/webExtension*.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct WebExtension {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -44,14 +46,16 @@ impl WebExtension {
 }
 
 /// Web extension property (name/value).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct WebExtensionProperty {
     pub name: String,
     pub value: String,
 }
 
 /// Web extension taskpane definition (word/webExtensions/taskpanes.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct WebExtensionTaskpane {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]

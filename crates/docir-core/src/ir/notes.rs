@@ -1,10 +1,12 @@
 //! Comments, footnotes, endnotes, headers, footers.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Comment node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Comment {
     pub id: NodeId,
     pub comment_id: String,
@@ -43,7 +45,8 @@ impl Comment {
 }
 
 /// Footnote node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Footnote {
     pub id: NodeId,
     pub footnote_id: String,
@@ -67,7 +70,8 @@ impl Footnote {
 }
 
 /// Endnote node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Endnote {
     pub id: NodeId,
     pub endnote_id: String,
@@ -91,7 +95,8 @@ impl Endnote {
 }
 
 /// Header node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Header {
     pub id: NodeId,
     pub content: Vec<NodeId>,
@@ -110,7 +115,8 @@ impl Header {
 }
 
 /// Footer node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Footer {
     pub id: NodeId,
     pub content: Vec<NodeId>,
@@ -129,7 +135,8 @@ impl Footer {
 }
 
 /// Comment range start marker.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CommentRangeStart {
     pub id: NodeId,
     pub comment_id: String,
@@ -148,7 +155,8 @@ impl CommentRangeStart {
 }
 
 /// Comment range end marker.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CommentRangeEnd {
     pub id: NodeId,
     pub comment_id: String,
@@ -167,7 +175,8 @@ impl CommentRangeEnd {
 }
 
 /// Comment reference marker (inline).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CommentReference {
     pub id: NodeId,
     pub comment_id: String,

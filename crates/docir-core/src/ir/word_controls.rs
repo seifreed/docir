@@ -1,10 +1,12 @@
 //! Word content controls, bookmarks, and fields.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Content control (SDT) node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ContentControl {
     pub id: NodeId,
     pub content: Vec<NodeId>,
@@ -44,7 +46,8 @@ impl ContentControl {
 }
 
 /// Bookmark start marker.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct BookmarkStart {
     pub id: NodeId,
     pub bookmark_id: String,
@@ -72,7 +75,8 @@ impl BookmarkStart {
 }
 
 /// Bookmark end marker.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct BookmarkEnd {
     pub id: NodeId,
     pub bookmark_id: String,
@@ -91,7 +95,8 @@ impl BookmarkEnd {
 }
 
 /// Field node (simple field or aggregated instructions).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Field {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -116,7 +121,8 @@ impl Field {
 }
 
 /// Parsed field instruction (subset).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct FieldInstruction {
     pub kind: FieldKind,
     #[serde(default)]
@@ -125,7 +131,8 @@ pub struct FieldInstruction {
     pub switches: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub enum FieldKind {
     Hyperlink,
     IncludeText,

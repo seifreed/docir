@@ -1,10 +1,12 @@
 //! Document metadata IR nodes.
 
 use crate::types::NodeId;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Document metadata (core properties).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Default)]
 pub struct DocumentMetadata {
     /// Unique identifier for this node.
     pub id: NodeId,
@@ -84,7 +86,8 @@ impl DocumentMetadata {
 }
 
 /// A custom document property.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CustomProperty {
     /// Property name.
     pub name: String,
@@ -102,7 +105,8 @@ pub struct CustomProperty {
 }
 
 /// Custom property value types.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub enum PropertyValue {
     /// String value.
     String(String),

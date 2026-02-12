@@ -22,7 +22,6 @@ use docir_core::ir::{
     SlideTransition, Style, StyleSet, StyleType, Table, TableCell, TableCellProperties, TableRow,
     Worksheet, WorksheetDrawing,
 };
-use docir_core::security::{MacroModule, MacroModuleType, MacroProject};
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
 use pbkdf2::pbkdf2_hmac;
@@ -35,12 +34,14 @@ use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 
+mod formula;
 mod limits;
 mod manifest;
 mod ods;
 mod paragraph;
 mod presentation;
 mod security;
+mod security_helpers;
 mod spreadsheet;
 mod text;
 
@@ -48,6 +49,7 @@ use self::security::{
     scan_embedded_objects, scan_external_links, scan_odf_advanced_features, scan_odf_filters,
     scan_odf_formula_security, scan_odf_objects, scan_odf_protection, OdfFormulaScan,
 };
+use self::security_helpers::{build_odf_macro_project, parse_odf_signatures};
 
 use limits::{OdfAtomicLimits, OdfLimitCounter, OdfLimits};
 use manifest::{
@@ -783,81 +785,6 @@ fn parse_content(
     }
 }
 
-fn build_odf_macro_project(
-    manifest_entries: &[OdfManifestEntry],
-    content_xml: &Option<String>,
-    styles_xml: &Option<String>,
-    settings_xml: &Option<String>,
-    file_names: &[String],
-    store: &mut IrStore,
-) -> Option<MacroProject> {
-    let mut module_paths = Vec::new();
-    for entry in manifest_entries {
-        if let Some(media) = entry.media_type.as_deref() {
-            if media.contains("script") || media.contains("basic") {
-                module_paths.push(entry.path.clone());
-            }
-        }
-    }
-    for name in file_names {
-        if name.starts_with("Scripts/") || name.starts_with("Basic/") || name.ends_with(".bas") {
-            module_paths.push(name.clone());
-        }
-    }
-
-    if let Some(xml) = content_xml.as_deref() {
-        module_paths.extend(scan_script_links(xml));
-    }
-    if let Some(xml) = styles_xml.as_deref() {
-        module_paths.extend(scan_script_links(xml));
-    }
-    if let Some(xml) = settings_xml.as_deref() {
-        module_paths.extend(scan_script_links(xml));
-    }
-
-    module_paths.sort();
-    module_paths.dedup();
-
-    if module_paths.is_empty() {
-        return None;
-    }
-
-    let mut project = MacroProject::new();
-    project.name = Some("ODF Scripts".to_string());
-
-    for path in module_paths {
-        let module = MacroModule::new(path.clone(), MacroModuleType::Standard);
-        let module_id = module.id;
-        store.insert(IRNode::MacroModule(module));
-        project.modules.push(module_id);
-    }
-
-    Some(project)
-}
-
-fn scan_script_links(xml: &str) -> Vec<String> {
-    let mut links = Vec::new();
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"script:script" {
-                    if let Some(href) = attr_value(&e, b"xlink:href") {
-                        links.push(href);
-                    }
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
-        }
-        buf.clear();
-    }
-    links
-}
-
 fn strip_odf_formula_prefix(formula: &str) -> &str {
     if let Some(stripped) = formula.strip_prefix("of:=") {
         stripped
@@ -866,55 +793,6 @@ fn strip_odf_formula_prefix(formula: &str) -> &str {
     } else {
         formula
     }
-}
-
-fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSignature> {
-    let mut sigs = Vec::new();
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
-    let mut current: Option<docir_core::ir::DigitalSignature> = None;
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"ds:Signature" => current = Some(docir_core::ir::DigitalSignature::new()),
-                b"ds:SignatureMethod" => {
-                    if let Some(sig) = current.as_mut() {
-                        sig.signature_method = attr_value(&e, b"Algorithm");
-                    }
-                }
-                b"ds:DigestMethod" => {
-                    if let Some(sig) = current.as_mut() {
-                        if let Some(alg) = attr_value(&e, b"Algorithm") {
-                            sig.digest_methods.push(alg);
-                        }
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Text(e)) => {
-                if let Some(sig) = current.as_mut() {
-                    let text = e.unescape().unwrap_or_default().to_string();
-                    if sig.signer.is_none() && text.contains("CN=") {
-                        sig.signer = Some(text);
-                    }
-                }
-            }
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"ds:Signature" {
-                    if let Some(sig) = current.take() {
-                        sigs.push(sig);
-                    }
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
-        }
-        buf.clear();
-    }
-    sigs
 }
 
 fn parse_draw_page(
@@ -1812,104 +1690,6 @@ fn parse_ods_row_sample(
     }
 
     Ok(OdsRow { cells })
-}
-
-fn eval_simple_formula(formula: &str) -> Option<f64> {
-    if formula.is_empty() {
-        return None;
-    }
-    if formula
-        .chars()
-        .any(|c| c.is_alphabetic() || c == '[' || c == ':' || c == ';')
-    {
-        return None;
-    }
-    let mut chars = formula.chars().peekable();
-    parse_expr(&mut chars)
-}
-
-fn parse_expr(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<f64> {
-    let mut value = parse_term(chars)?;
-    loop {
-        skip_ws(chars);
-        match chars.peek().copied() {
-            Some('+') => {
-                chars.next();
-                value += parse_term(chars)?;
-            }
-            Some('-') => {
-                chars.next();
-                value -= parse_term(chars)?;
-            }
-            _ => break,
-        }
-    }
-    Some(value)
-}
-
-fn parse_term(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<f64> {
-    let mut value = parse_factor(chars)?;
-    loop {
-        skip_ws(chars);
-        match chars.peek().copied() {
-            Some('*') => {
-                chars.next();
-                value *= parse_factor(chars)?;
-            }
-            Some('/') => {
-                chars.next();
-                let denom = parse_factor(chars)?;
-                if denom == 0.0 {
-                    return None;
-                }
-                value /= denom;
-            }
-            _ => break,
-        }
-    }
-    Some(value)
-}
-
-fn parse_factor(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<f64> {
-    skip_ws(chars);
-    if chars.peek() == Some(&'(') {
-        chars.next();
-        let value = parse_expr(chars)?;
-        skip_ws(chars);
-        if chars.peek() == Some(&')') {
-            chars.next();
-            return Some(value);
-        }
-        return None;
-    }
-    parse_number(chars)
-}
-
-fn parse_number(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<f64> {
-    skip_ws(chars);
-    let mut s = String::new();
-    while let Some(&c) = chars.peek() {
-        if c.is_ascii_digit() || c == '.' {
-            s.push(c);
-            chars.next();
-        } else if c == '-' && s.is_empty() {
-            s.push(c);
-            chars.next();
-        } else {
-            break;
-        }
-    }
-    if s.is_empty() {
-        None
-    } else {
-        s.parse::<f64>().ok()
-    }
-}
-
-fn skip_ws(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
-    while matches!(chars.peek(), Some(' ' | '\t' | '\n' | '\r')) {
-        chars.next();
-    }
 }
 
 #[derive(Debug, Clone)]

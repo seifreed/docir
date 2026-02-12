@@ -1,10 +1,12 @@
 //! Spreadsheet slicers and timelines.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Slicer part (xl/slicers/slicer*.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct SlicerPart {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,7 +35,8 @@ impl SlicerPart {
 }
 
 /// Timeline part (xl/timelines/timeline*.xml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct TimelinePart {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]

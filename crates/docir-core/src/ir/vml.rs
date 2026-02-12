@@ -1,10 +1,12 @@
 //! VML legacy drawings.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// VML drawing part (word/vmlDrawing*.vml).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct VmlDrawing {
     pub id: NodeId,
     pub path: String,
@@ -25,7 +27,8 @@ impl VmlDrawing {
 }
 
 /// VML shape (legacy).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct VmlShape {
     pub id: NodeId,
     #[serde(skip_serializing_if = "Option::is_none")]

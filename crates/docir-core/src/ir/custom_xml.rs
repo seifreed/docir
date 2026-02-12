@@ -1,10 +1,12 @@
 //! Custom XML parts.
 
 use crate::types::{NodeId, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Custom XML part.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CustomXmlPart {
     /// Unique identifier for this node.
     pub id: NodeId,

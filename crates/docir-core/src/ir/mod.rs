@@ -60,6 +60,7 @@ pub use word_revisions::*;
 pub use word_settings::*;
 
 use crate::types::{NodeId, NodeType, SourceSpan};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Trait implemented by all IR nodes.
@@ -80,7 +81,8 @@ pub trait IrNode {
 /// Enumeration of all possible IR nodes.
 ///
 /// This is the main type used for working with the IR tree.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 #[serde(tag = "type")]
 pub enum IRNode {
     Document(Document),
