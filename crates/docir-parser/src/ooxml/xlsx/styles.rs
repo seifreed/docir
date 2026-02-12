@@ -2,6 +2,7 @@
 
 use crate::error::ParseError;
 use crate::ooxml::xml_utils::xml_error;
+use crate::xml_utils::attr_value;
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,
     NumberFormat, SpreadsheetStyles, TableStyleDef, TableStyleInfo,
@@ -111,57 +112,33 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
                     });
                 }
                 b"name" => {
-                    if let Some(font) = current_font.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"val" {
-                                font.name = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
-                    } else if let Some(font) = current_dxf_font.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"val" {
-                                font.name = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
+                    if let Some(name) = attr_value(&e, b"val") {
+                        apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
+                            font.name = Some(name.clone());
+                        });
                     }
                 }
                 b"sz" => {
-                    if let Some(font) = current_font.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"val" {
-                                font.size =
-                                    String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
-                            }
-                        }
-                    } else if let Some(font) = current_dxf_font.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"val" {
-                                font.size =
-                                    String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
-                            }
-                        }
+                    if let Some(size) = attr_value(&e, b"val").and_then(|v| v.parse::<f64>().ok()) {
+                        apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
+                            font.size = Some(size);
+                        });
                     }
                 }
                 b"b" => {
-                    if let Some(font) = current_font.as_mut() {
+                    apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
                         font.bold = true;
-                    } else if let Some(font) = current_dxf_font.as_mut() {
-                        font.bold = true;
-                    }
+                    });
                 }
                 b"i" => {
-                    if let Some(font) = current_font.as_mut() {
+                    apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
                         font.italic = true;
-                    } else if let Some(font) = current_dxf_font.as_mut() {
-                        font.italic = true;
-                    }
+                    });
                 }
                 b"u" => {
-                    if let Some(font) = current_font.as_mut() {
+                    apply_font_attr(&mut current_font, &mut current_dxf_font, |font| {
                         font.underline = true;
-                    } else if let Some(font) = current_dxf_font.as_mut() {
-                        font.underline = true;
-                    }
+                    });
                 }
                 b"color" => {
                     if let Some(font) = current_font.as_mut() {
@@ -682,6 +659,20 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
     }
 
     Ok(styles)
+}
+
+fn apply_font_attr<F>(
+    current_font: &mut Option<FontDef>,
+    current_dxf_font: &mut Option<FontDef>,
+    mut apply: F,
+) where
+    F: FnMut(&mut FontDef),
+{
+    if let Some(font) = current_font.as_mut() {
+        apply(font);
+    } else if let Some(font) = current_dxf_font.as_mut() {
+        apply(font);
+    }
 }
 
 fn assign_border_side(border: &mut BorderDef, name: &[u8], side: BorderSide) {
