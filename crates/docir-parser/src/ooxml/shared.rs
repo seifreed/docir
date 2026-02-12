@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
-use crate::xml_utils::local_name;
+use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::{
     ChartData, ChartSeries, CustomXmlPart, DigitalSignature, DrawingPart, ExtensionPart,
     ExtensionPartKind, IRNode, MediaType, PeoplePart, PersonEntry, RelationshipEntry,
@@ -155,10 +155,7 @@ pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
             },
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -213,10 +210,7 @@ pub fn parse_people_part(xml: &str, path: &str) -> Result<PeoplePart, ParseError
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -391,10 +385,7 @@ pub fn parse_web_extension(xml: &str, path: &str) -> Result<WebExtension, ParseE
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -498,10 +489,7 @@ pub fn parse_web_extension_taskpanes(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -622,10 +610,7 @@ pub fn parse_vml_drawing(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -736,10 +721,7 @@ pub fn parse_drawingml_part(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -797,10 +779,7 @@ fn read_textbox_text(reader: &mut Reader<&[u8]>) -> Result<String, ParseError> {
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "vml_textbox".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("vml_textbox", e));
             }
             _ => {}
         }
@@ -837,10 +816,7 @@ pub fn parse_custom_xml_part(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -896,10 +872,7 @@ pub fn parse_signature(xml: &str, path: &str) -> Result<DigitalSignature, ParseE
             },
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }

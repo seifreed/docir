@@ -1,6 +1,7 @@
 //! ODF manifest parsing helpers.
 
 use crate::error::ParseError;
+use crate::xml_utils::xml_error;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use quick_xml::events::Event;
@@ -112,10 +113,7 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "META-INF/manifest.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("META-INF/manifest.xml", e));
             }
             _ => {}
         }

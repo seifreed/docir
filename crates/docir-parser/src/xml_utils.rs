@@ -1,4 +1,6 @@
+use crate::error::ParseError;
 use quick_xml::events::BytesStart;
+use std::fmt::Display;
 
 pub(crate) fn attr_value(e: &BytesStart<'_>, name: &[u8]) -> Option<String> {
     for attr in e.attributes().flatten() {
@@ -36,5 +38,12 @@ pub(crate) fn local_name(name: &[u8]) -> &[u8] {
     match name.iter().rposition(|b| *b == b':') {
         Some(pos) => &name[pos + 1..],
         None => name,
+    }
+}
+
+pub(crate) fn xml_error(file: &str, err: impl Display) -> ParseError {
+    ParseError::Xml {
+        file: file.to_string(),
+        message: err.to_string(),
     }
 }
