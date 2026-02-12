@@ -10,10 +10,9 @@ use crate::xml_utils::read_event;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     Diagnostics, Document, GridColumn, IRNode, NotesSlide, Paragraph, PptxCommentAuthor,
-    PresentationInfo, PresentationProperties, PresentationTag, Run, Shape, ShapeText,
-    ShapeTextParagraph, ShapeTextRun, ShapeTransform, ShapeType, Slide, SlideAnimation, SlideSize,
-    SlideTransition, SmartArtPart, Table, TableCell, TableRow, TableStyle, TableStyleSet,
-    TextAlignment, ViewProperties,
+    PresentationInfo, PresentationProperties, PresentationTag, Run, Shape, ShapeTransform,
+    ShapeType, Slide, SlideAnimation, SlideSize, SlideTransition, SmartArtPart, Table, TableCell,
+    TableRow, TableStyle, TableStyleSet, ViewProperties,
 };
 use docir_core::security::{ExternalRefType, ExternalReference, SecurityInfo};
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
@@ -29,10 +28,12 @@ mod presentation_parts;
 mod relationships;
 mod shapes;
 mod slide;
+mod text;
 
 use comments::{parse_comment_authors, parse_comments};
 use relationships::classify_relationship;
 use shapes::parse_shape_properties;
+use text::{parse_text_body, parse_text_body_table, shape_text_to_plain};
 
 /// PPTX parser for presentation.xml and slides.
 pub struct PptxParser {
@@ -742,66 +743,6 @@ fn parse_transform(
     Ok(())
 }
 
-fn parse_text_body(reader: &mut Reader<&[u8]>, slide_path: &str) -> Result<ShapeText, ParseError> {
-    parse_text_body_with_end(reader, slide_path, b"p:txBody")
-}
-
-fn parse_text_body_table(
-    reader: &mut Reader<&[u8]>,
-    slide_path: &str,
-) -> Result<ShapeText, ParseError> {
-    parse_text_body_with_end(reader, slide_path, b"a:txBody")
-}
-
-fn parse_text_body_with_end(
-    reader: &mut Reader<&[u8]>,
-    slide_path: &str,
-    end_tag: &[u8],
-) -> Result<ShapeText, ParseError> {
-    let mut paragraphs = Vec::new();
-    let mut buf = Vec::new();
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                if e.name().as_ref() == b"a:p" {
-                    let paragraph = parse_text_paragraph(reader, slide_path)?;
-                    paragraphs.push(paragraph);
-                }
-            }
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == end_tag {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: slide_path.to_string(),
-                    message: e.to_string(),
-                });
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(ShapeText { paragraphs })
-}
-
-fn shape_text_to_plain(text: &ShapeText) -> String {
-    let mut out = String::new();
-    for (p_idx, para) in text.paragraphs.iter().enumerate() {
-        if p_idx > 0 {
-            out.push('\n');
-        }
-        for run in &para.runs {
-            out.push_str(&run.text);
-        }
-    }
-    out
-}
-
 fn extract_c_sld_name(xml: &str) -> Option<String> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -1183,127 +1124,6 @@ fn parse_smartart_part(xml: &str, path: &str) -> Result<SmartArtPart, ParseError
     })
 }
 
-fn parse_text_paragraph(
-    reader: &mut Reader<&[u8]>,
-    slide_path: &str,
-) -> Result<ShapeTextParagraph, ParseError> {
-    let mut runs = Vec::new();
-    let mut alignment: Option<TextAlignment> = None;
-    let mut buf = Vec::new();
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"a:pPr" => {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"algn" {
-                            alignment = map_alignment(&String::from_utf8_lossy(&attr.value));
-                        }
-                    }
-                }
-                b"a:r" => {
-                    let run = parse_text_run(reader, slide_path)?;
-                    runs.push(run);
-                }
-                b"a:br" => {
-                    runs.push(ShapeTextRun {
-                        text: "\n".to_string(),
-                        bold: None,
-                        italic: None,
-                        font_size: None,
-                        font_family: None,
-                    });
-                }
-                _ => {}
-            },
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"a:p" {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: slide_path.to_string(),
-                    message: e.to_string(),
-                });
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(ShapeTextParagraph { runs, alignment })
-}
-
-fn parse_text_run(
-    reader: &mut Reader<&[u8]>,
-    slide_path: &str,
-) -> Result<ShapeTextRun, ParseError> {
-    let mut text = String::new();
-    let mut bold = None;
-    let mut italic = None;
-    let mut font_size = None;
-    let mut font_family = None;
-
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"a:t" => {
-                    let t = reader.read_text(e.name()).map_err(|e| ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    })?;
-                    text.push_str(&t);
-                }
-                b"a:rPr" => {
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"b" => bold = Some(attr.value.as_ref() == b"1"),
-                            b"i" => italic = Some(attr.value.as_ref() == b"1"),
-                            b"sz" => {
-                                font_size = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                b"a:latin" => {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"typeface" {
-                            font_family = Some(String::from_utf8_lossy(&attr.value).to_string());
-                        }
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"a:r" {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: slide_path.to_string(),
-                    message: e.to_string(),
-                });
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(ShapeTextRun {
-        text,
-        bold,
-        italic,
-        font_size,
-        font_family,
-    })
-}
-
 #[derive(Default)]
 struct SlideMasterMeta {
     preserve: Option<bool>,
@@ -1417,17 +1237,6 @@ fn map_shape_type(value: &str) -> ShapeType {
         "line" => ShapeType::Line,
         "arrow" => ShapeType::Arrow,
         _ => ShapeType::Custom,
-    }
-}
-
-fn map_alignment(value: &str) -> Option<TextAlignment> {
-    match value {
-        "l" => Some(TextAlignment::Left),
-        "ctr" => Some(TextAlignment::Center),
-        "r" => Some(TextAlignment::Right),
-        "just" => Some(TextAlignment::Justify),
-        "dist" => Some(TextAlignment::Distribute),
-        _ => None,
     }
 }
 
