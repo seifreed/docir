@@ -2,8 +2,7 @@
 
 use crate::commands::util::{build_app, write_json_output};
 use anyhow::Result;
-use docir_app::ParserConfig;
-use docir_rules::RuleProfile;
+use docir_app::{ParserConfig, RuleProfile};
 use std::fs::File;
 use std::path::PathBuf;
 
