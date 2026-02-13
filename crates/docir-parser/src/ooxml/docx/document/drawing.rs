@@ -1,6 +1,7 @@
-use super::{normalize_docx_target, span_from_reader, DocxParser};
+use super::{span_from_reader, DocxParser};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
+use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{attr_value, xml_error};
 use docir_core::ir::{
     Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeTransform, ShapeType, TextAlignment,

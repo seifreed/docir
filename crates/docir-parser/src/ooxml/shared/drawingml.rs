@@ -1,5 +1,6 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
+use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::{DrawingPart, Shape, ShapeType};
 use docir_core::types::SourceSpan;
@@ -122,20 +123,5 @@ fn resolve_drawingml_target(path: &str, target: &str) -> String {
         normalize_docx_target(target)
     } else {
         Relationships::resolve_target(path, target)
-    }
-}
-
-fn normalize_docx_target(target: &str) -> String {
-    let mut t = target;
-    while t.starts_with("../") {
-        t = &t[3..];
-    }
-    if t.starts_with("./") {
-        t = &t[2..];
-    }
-    if t.starts_with("word/") {
-        t.to_string()
-    } else {
-        format!("word/{}", t.trim_start_matches('/'))
     }
 }

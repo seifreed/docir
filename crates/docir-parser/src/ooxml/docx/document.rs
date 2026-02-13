@@ -3,6 +3,7 @@
 use super::field::parse_field_instruction;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
+use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{attr_value, read_event, reader_from_str};
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
@@ -1138,21 +1139,6 @@ fn parse_vml_length(value: &str) -> Option<f64> {
         _ => return None,
     };
     Some(emus)
-}
-
-pub(super) fn normalize_docx_target(target: &str) -> String {
-    let mut t = target;
-    while t.starts_with("../") {
-        t = &t[3..];
-    }
-    if t.starts_with("./") {
-        t = &t[2..];
-    }
-    if t.starts_with("word/") {
-        t.to_string()
-    } else {
-        format!("word/{}", t.trim_start_matches('/'))
-    }
 }
 
 fn parse_vml_pict(
