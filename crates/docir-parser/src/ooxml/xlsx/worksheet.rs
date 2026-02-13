@@ -65,85 +65,11 @@ impl XlsxParser {
         worksheet.conditional_formats = accum.conditional_formats;
         worksheet.data_validations = accum.data_validations;
 
-        // Drawings (images/charts)
-        let mut drawings: Vec<NodeId> = Vec::new();
-        for rel in relationships.get_by_type(rel_type::DRAWING) {
-            let drawing_path = Relationships::resolve_target(sheet_path, &rel.target);
-            if !zip.contains(&drawing_path) {
-                continue;
-            }
-            let (drawing_xml, drawing_rels) = read_xml_part_and_rels(zip, &drawing_path)?;
-            let drawing_id = self.parse_drawing(&drawing_xml, &drawing_path, &drawing_rels, zip)?;
-            drawings.push(drawing_id);
-        }
-
-        worksheet.drawings = drawings;
-
-        // Table definitions
-        let mut tables: Vec<NodeId> = Vec::new();
-        for rel in relationships.get_by_type(rel_type::TABLE) {
-            let table_path = Relationships::resolve_target(sheet_path, &rel.target);
-            if !zip.contains(&table_path) {
-                continue;
-            }
-            let table_xml = zip.read_file_string(&table_path)?;
-            let mut table = parse_table_definition(&table_xml, &table_path)?;
-            table.span = Some(SourceSpan::new(&table_path).with_relationship(rel.id.clone()));
-            let id = table.id;
-            self.store.insert(IRNode::TableDefinition(table));
-            tables.push(id);
-        }
-        worksheet.tables = tables;
-
-        // Pivot tables
-        let mut pivots: Vec<NodeId> = Vec::new();
-        for rel in relationships.get_by_type(rel_type::PIVOT_TABLE) {
-            let pivot_path = Relationships::resolve_target(sheet_path, &rel.target);
-            if !zip.contains(&pivot_path) {
-                continue;
-            }
-            let pivot_xml = zip.read_file_string(&pivot_path)?;
-            let mut pivot = parse_pivot_table_definition(&pivot_xml, &pivot_path)?;
-            pivot.span = Some(SourceSpan::new(&pivot_path).with_relationship(rel.id.clone()));
-            let id = pivot.id;
-            self.store.insert(IRNode::PivotTable(pivot));
-            pivots.push(id);
-        }
-        worksheet.pivot_tables = pivots;
-
-        // Comments (legacy + threaded)
-        let mut comments: Vec<NodeId> = Vec::new();
-        for rel in relationships.get_by_type(rel_type::COMMENTS) {
-            let comments_path = Relationships::resolve_target(sheet_path, &rel.target);
-            if !zip.contains(&comments_path) {
-                continue;
-            }
-            let comments_xml = zip.read_file_string(&comments_path)?;
-            let parsed = parse_sheet_comments(&comments_xml, &comments_path, Some(&sheet.name))?;
-            for mut comment in parsed {
-                comment.span =
-                    Some(SourceSpan::new(&comments_path).with_relationship(rel.id.clone()));
-                let id = comment.id;
-                self.store.insert(IRNode::SheetComment(comment));
-                comments.push(id);
-            }
-        }
-        for rel in relationships.get_by_type(rel_type::THREADED_COMMENTS) {
-            let comments_path = Relationships::resolve_target(sheet_path, &rel.target);
-            if !zip.contains(&comments_path) {
-                continue;
-            }
-            let comments_xml = zip.read_file_string(&comments_path)?;
-            let parsed = parse_threaded_comments(&comments_xml, &comments_path, Some(&sheet.name))?;
-            for mut comment in parsed {
-                comment.span =
-                    Some(SourceSpan::new(&comments_path).with_relationship(rel.id.clone()));
-                let id = comment.id;
-                self.store.insert(IRNode::SheetComment(comment));
-                comments.push(id);
-            }
-        }
-        worksheet.comments = comments;
+        worksheet.drawings = self.load_worksheet_drawings(zip, sheet_path, relationships)?;
+        worksheet.tables = self.load_worksheet_tables(zip, sheet_path, relationships)?;
+        worksheet.pivot_tables = self.load_worksheet_pivots(zip, sheet_path, relationships)?;
+        worksheet.comments =
+            self.load_worksheet_comments(zip, sheet_path, relationships, &sheet.name)?;
 
         if kind == SheetKind::ChartSheet {
             if let Some(drawing) = self.parse_chartsheet(zip, xml, sheet_path, relationships)? {
@@ -159,6 +85,114 @@ impl XlsxParser {
         let ws_id = worksheet.id;
         self.store.insert(IRNode::Worksheet(worksheet));
         Ok(ws_id)
+    }
+
+    fn load_worksheet_drawings(
+        &mut self,
+        zip: &mut impl PackageReader,
+        sheet_path: &str,
+        relationships: &Relationships,
+    ) -> Result<Vec<NodeId>, ParseError> {
+        let mut drawings = Vec::new();
+        for rel in relationships.get_by_type(rel_type::DRAWING) {
+            let drawing_path = Relationships::resolve_target(sheet_path, &rel.target);
+            if !zip.contains(&drawing_path) {
+                continue;
+            }
+            let (drawing_xml, drawing_rels) = read_xml_part_and_rels(zip, &drawing_path)?;
+            let drawing_id = self.parse_drawing(&drawing_xml, &drawing_path, &drawing_rels, zip)?;
+            drawings.push(drawing_id);
+        }
+        Ok(drawings)
+    }
+
+    fn load_worksheet_tables(
+        &mut self,
+        zip: &mut impl PackageReader,
+        sheet_path: &str,
+        relationships: &Relationships,
+    ) -> Result<Vec<NodeId>, ParseError> {
+        let mut tables = Vec::new();
+        for rel in relationships.get_by_type(rel_type::TABLE) {
+            let table_path = Relationships::resolve_target(sheet_path, &rel.target);
+            if !zip.contains(&table_path) {
+                continue;
+            }
+            let table_xml = zip.read_file_string(&table_path)?;
+            let mut table = parse_table_definition(&table_xml, &table_path)?;
+            table.span = Some(SourceSpan::new(&table_path).with_relationship(rel.id.clone()));
+            let id = table.id;
+            self.store.insert(IRNode::TableDefinition(table));
+            tables.push(id);
+        }
+        Ok(tables)
+    }
+
+    fn load_worksheet_pivots(
+        &mut self,
+        zip: &mut impl PackageReader,
+        sheet_path: &str,
+        relationships: &Relationships,
+    ) -> Result<Vec<NodeId>, ParseError> {
+        let mut pivots = Vec::new();
+        for rel in relationships.get_by_type(rel_type::PIVOT_TABLE) {
+            let pivot_path = Relationships::resolve_target(sheet_path, &rel.target);
+            if !zip.contains(&pivot_path) {
+                continue;
+            }
+            let pivot_xml = zip.read_file_string(&pivot_path)?;
+            let mut pivot = parse_pivot_table_definition(&pivot_xml, &pivot_path)?;
+            pivot.span = Some(SourceSpan::new(&pivot_path).with_relationship(rel.id.clone()));
+            let id = pivot.id;
+            self.store.insert(IRNode::PivotTable(pivot));
+            pivots.push(id);
+        }
+        Ok(pivots)
+    }
+
+    fn load_worksheet_comments(
+        &mut self,
+        zip: &mut impl PackageReader,
+        sheet_path: &str,
+        relationships: &Relationships,
+        sheet_name: &str,
+    ) -> Result<Vec<NodeId>, ParseError> {
+        let mut comments = Vec::new();
+        for rel in relationships.get_by_type(rel_type::COMMENTS) {
+            let comments_path = Relationships::resolve_target(sheet_path, &rel.target);
+            if !zip.contains(&comments_path) {
+                continue;
+            }
+            let comments_xml = zip.read_file_string(&comments_path)?;
+            let parsed = parse_sheet_comments(&comments_xml, &comments_path, Some(sheet_name))?;
+            self.insert_sheet_comments(parsed, &comments_path, &rel.id, &mut comments);
+        }
+        for rel in relationships.get_by_type(rel_type::THREADED_COMMENTS) {
+            let comments_path = Relationships::resolve_target(sheet_path, &rel.target);
+            if !zip.contains(&comments_path) {
+                continue;
+            }
+            let comments_xml = zip.read_file_string(&comments_path)?;
+            let parsed = parse_threaded_comments(&comments_xml, &comments_path, Some(sheet_name))?;
+            self.insert_sheet_comments(parsed, &comments_path, &rel.id, &mut comments);
+        }
+        Ok(comments)
+    }
+
+    fn insert_sheet_comments(
+        &mut self,
+        parsed: Vec<SheetComment>,
+        comments_path: &str,
+        rel_id: &str,
+        out: &mut Vec<NodeId>,
+    ) {
+        for mut comment in parsed {
+            comment.span =
+                Some(SourceSpan::new(comments_path).with_relationship(rel_id.to_string()));
+            let id = comment.id;
+            self.store.insert(IRNode::SheetComment(comment));
+            out.push(id);
+        }
     }
 
     fn parse_worksheet_xml(
@@ -208,48 +242,23 @@ impl XlsxParser {
         worksheet: &mut Worksheet,
         accum: &mut WorksheetParseAccum,
     ) -> Result<(), ParseError> {
+        if handle_worksheet_common_tag(e, sheet_path, relationships, worksheet, accum, self) {
+            return Ok(());
+        }
         match e.name().as_ref() {
-            b"dimension" => {
-                if let Some(val) = attr_value(e, b"ref") {
-                    worksheet.dimension = Some(val);
-                }
-            }
-            b"tabColor" => {
-                worksheet.tab_color = parse_color_attr(e);
-            }
-            b"pageMargins" => {
-                worksheet.page_margins = parse_page_margins(e);
-            }
             b"c" => {
                 let cell = self.parse_cell(reader, e, sheet_path)?;
-                let cell_id = cell.id;
-                self.store.insert(IRNode::Cell(cell));
-                accum.cells.push(cell_id);
+                self.insert_cell(cell, accum);
             }
             b"conditionalFormatting" => {
                 let fmt = parse_conditional_formatting(reader, e, sheet_path)?;
-                let id = fmt.id;
-                self.store.insert(IRNode::ConditionalFormat(fmt));
-                accum.conditional_formats.push(id);
+                self.insert_conditional_format(fmt, accum);
             }
             b"dataValidations" => {
                 let vals = parse_data_validations(reader, sheet_path)?;
                 for val in vals {
-                    let id = val.id;
-                    self.store.insert(IRNode::DataValidation(val));
-                    accum.data_validations.push(id);
+                    self.insert_data_validation(val, accum);
                 }
-            }
-            b"col" => {
-                parse_column(e, &mut accum.columns);
-            }
-            b"mergeCell" => {
-                if let Some(range) = parse_merge_cell(e) {
-                    accum.merged_cells.push(range);
-                }
-            }
-            b"hyperlink" => {
-                self.handle_hyperlink(e, relationships, sheet_path);
             }
             _ => {}
         }
@@ -264,47 +273,50 @@ impl XlsxParser {
         worksheet: &mut Worksheet,
         accum: &mut WorksheetParseAccum,
     ) -> Result<(), ParseError> {
+        if handle_worksheet_common_tag(e, sheet_path, relationships, worksheet, accum, self) {
+            return Ok(());
+        }
         match e.name().as_ref() {
-            b"dimension" => {
-                if let Some(val) = attr_value(e, b"ref") {
-                    worksheet.dimension = Some(val);
-                }
-            }
-            b"tabColor" => {
-                worksheet.tab_color = parse_color_attr(e);
-            }
-            b"pageMargins" => {
-                worksheet.page_margins = parse_page_margins(e);
-            }
             b"c" => {
                 let cell = self.parse_empty_cell(e, sheet_path)?;
-                let cell_id = cell.id;
-                self.store.insert(IRNode::Cell(cell));
-                accum.cells.push(cell_id);
+                self.insert_cell(cell, accum);
             }
             b"conditionalFormatting" => {
                 let fmt = parse_conditional_formatting_empty(e, sheet_path);
-                let id = fmt.id;
-                self.store.insert(IRNode::ConditionalFormat(fmt));
-                accum.conditional_formats.push(id);
+                self.insert_conditional_format(fmt, accum);
             }
             b"dataValidations" => {
                 // Empty container, nothing to add
             }
-            b"col" => {
-                parse_column(e, &mut accum.columns);
-            }
-            b"mergeCell" => {
-                if let Some(range) = parse_merge_cell(e) {
-                    accum.merged_cells.push(range);
-                }
-            }
-            b"hyperlink" => {
-                self.handle_hyperlink(e, relationships, sheet_path);
-            }
             _ => {}
         }
         Ok(())
+    }
+
+    fn insert_cell(&mut self, cell: Cell, accum: &mut WorksheetParseAccum) {
+        let cell_id = cell.id;
+        self.store.insert(IRNode::Cell(cell));
+        accum.cells.push(cell_id);
+    }
+
+    fn insert_conditional_format(
+        &mut self,
+        fmt: ConditionalFormat,
+        accum: &mut WorksheetParseAccum,
+    ) {
+        let id = fmt.id;
+        self.store.insert(IRNode::ConditionalFormat(fmt));
+        accum.conditional_formats.push(id);
+    }
+
+    fn insert_data_validation(
+        &mut self,
+        validation: DataValidation,
+        accum: &mut WorksheetParseAccum,
+    ) {
+        let id = validation.id;
+        self.store.insert(IRNode::DataValidation(validation));
+        accum.data_validations.push(id);
     }
 
     fn parse_chartsheet(
@@ -512,6 +524,47 @@ impl XlsxParser {
         }
 
         Ok(cache)
+    }
+}
+
+fn handle_worksheet_common_tag(
+    e: &BytesStart<'_>,
+    sheet_path: &str,
+    relationships: &Relationships,
+    worksheet: &mut Worksheet,
+    accum: &mut WorksheetParseAccum,
+    parser: &mut XlsxParser,
+) -> bool {
+    match e.name().as_ref() {
+        b"dimension" => {
+            if let Some(val) = attr_value(e, b"ref") {
+                worksheet.dimension = Some(val);
+            }
+            true
+        }
+        b"tabColor" => {
+            worksheet.tab_color = parse_color_attr(e);
+            true
+        }
+        b"pageMargins" => {
+            worksheet.page_margins = parse_page_margins(e);
+            true
+        }
+        b"col" => {
+            parse_column(e, &mut accum.columns);
+            true
+        }
+        b"mergeCell" => {
+            if let Some(range) = parse_merge_cell(e) {
+                accum.merged_cells.push(range);
+            }
+            true
+        }
+        b"hyperlink" => {
+            parser.handle_hyperlink(e, relationships, sheet_path);
+            true
+        }
+        _ => false,
     }
 }
 
