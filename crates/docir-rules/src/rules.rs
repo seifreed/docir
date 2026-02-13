@@ -4,27 +4,27 @@ use crate::{Finding, Rule, RuleCategory, RuleContext, RuleThresholds, Severity};
 use docir_core::ir::IRNode;
 use docir_core::types::NodeType;
 
+mod burst;
+mod structure;
 mod support;
 use support::{add_finding, is_suspicious_formula, visit_nodes};
 
 pub(crate) fn default_rules() -> Vec<Box<dyn Rule>> {
-    vec![
+    let mut rules: Vec<Box<dyn Rule>> = vec![
         Box::new(MacroProjectRule),
         Box::new(MacroAutoExecRule),
         Box::new(SuspiciousVbaCallRule),
         Box::new(XlmMacroRule),
         Box::new(OleObjectRule),
-        Box::new(BurstRule::new(&OLE_OBJECT_BURST_RULE)),
         Box::new(ActiveXControlRule),
-        Box::new(BurstRule::new(&ACTIVEX_CONTROL_BURST_RULE)),
         Box::new(DdeFieldRule),
         Box::new(ExternalReferenceRule),
         Box::new(ExternalHyperlinkRule),
-        Box::new(BurstRule::new(&EXTERNAL_LINK_BURST_RULE)),
-        Box::new(HiddenWorksheetRule),
-        Box::new(HiddenSlideRule),
         Box::new(SuspiciousFormulaRule),
-    ]
+    ];
+    rules.extend(burst::burst_rules());
+    rules.extend(structure::structure_rules());
+    rules
 }
 
 fn threshold_max_ole_objects(thresholds: &RuleThresholds) -> Option<usize> {
@@ -77,93 +77,6 @@ fn add_security_node_findings(
             .and_then(&message_for_node)
             .unwrap_or_else(|| fallback_message.to_string());
         add_finding(findings, rule, message, node, ctx);
-    }
-}
-
-const OLE_OBJECT_BURST_RULE: BurstRuleSpec = BurstRuleSpec {
-    id: "SEC-006",
-    title: "Excessive OLE objects",
-    description: "Detects an unusual number of embedded OLE objects",
-    severity: Severity::Medium,
-    category: RuleCategory::Security,
-    threshold: threshold_max_ole_objects,
-    count: count_ole_objects,
-    label: "OLE objects",
-};
-
-const ACTIVEX_CONTROL_BURST_RULE: BurstRuleSpec = BurstRuleSpec {
-    id: "SEC-008",
-    title: "Excessive ActiveX controls",
-    description: "Detects an unusual number of embedded ActiveX controls",
-    severity: Severity::Medium,
-    category: RuleCategory::Security,
-    threshold: threshold_max_activex_controls,
-    count: count_activex_controls,
-    label: "ActiveX controls",
-};
-
-const EXTERNAL_LINK_BURST_RULE: BurstRuleSpec = BurstRuleSpec {
-    id: "SEC-012",
-    title: "Excessive external references",
-    description: "Detects an unusual number of external references",
-    severity: Severity::Medium,
-    category: RuleCategory::Security,
-    threshold: threshold_max_external_links,
-    count: count_external_links,
-    label: "External links",
-};
-
-struct BurstRuleSpec {
-    id: &'static str,
-    title: &'static str,
-    description: &'static str,
-    severity: Severity,
-    category: RuleCategory,
-    threshold: fn(&RuleThresholds) -> Option<usize>,
-    count: fn(&RuleContext) -> usize,
-    label: &'static str,
-}
-
-struct BurstRule {
-    spec: &'static BurstRuleSpec,
-}
-
-impl BurstRule {
-    fn new(spec: &'static BurstRuleSpec) -> Self {
-        Self { spec }
-    }
-}
-
-impl Rule for BurstRule {
-    fn id(&self) -> &'static str {
-        self.spec.id
-    }
-
-    fn name(&self) -> &'static str {
-        self.spec.title
-    }
-
-    fn description(&self) -> &'static str {
-        self.spec.description
-    }
-
-    fn category(&self) -> RuleCategory {
-        self.spec.category
-    }
-
-    fn default_severity(&self) -> Severity {
-        self.spec.severity
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(threshold) = (self.spec.threshold)(&ctx.thresholds) else {
-            return;
-        };
-        let count = (self.spec.count)(ctx);
-        if count > threshold {
-            let message = format!("{}: {count} (threshold {threshold})", self.spec.label);
-            add_finding(findings, self, message, None, ctx);
-        }
     }
 }
 
@@ -555,88 +468,6 @@ impl Rule for ExternalHyperlinkRule {
                         findings,
                         self,
                         format!("External hyperlink: {}", link.target),
-                        Some(node),
-                        ctx,
-                    );
-                }
-            }
-        });
-    }
-}
-
-/// Rule: Hidden worksheets.
-struct HiddenWorksheetRule;
-
-impl Rule for HiddenWorksheetRule {
-    fn id(&self) -> &'static str {
-        "STR-001"
-    }
-
-    fn name(&self) -> &'static str {
-        "Hidden worksheets"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects hidden worksheets"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Structure
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::Medium
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        visit_nodes(ctx, |node| {
-            if let IRNode::Worksheet(sheet) = node {
-                if sheet.state != docir_core::ir::SheetState::Visible {
-                    add_finding(
-                        findings,
-                        self,
-                        format!("Hidden worksheet: {}", sheet.name),
-                        Some(node),
-                        ctx,
-                    );
-                }
-            }
-        });
-    }
-}
-
-/// Rule: Hidden slides.
-struct HiddenSlideRule;
-
-impl Rule for HiddenSlideRule {
-    fn id(&self) -> &'static str {
-        "STR-002"
-    }
-
-    fn name(&self) -> &'static str {
-        "Hidden slides"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects hidden slides"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Structure
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::Low
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        visit_nodes(ctx, |node| {
-            if let IRNode::Slide(slide) = node {
-                if slide.hidden {
-                    add_finding(
-                        findings,
-                        self,
-                        format!("Hidden slide: {}", slide.number),
                         Some(node),
                         ctx,
                     );
