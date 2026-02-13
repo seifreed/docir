@@ -171,6 +171,10 @@ impl DocirApp<AppParser> {
 }
 
 impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
+    fn parse_use_case(&self) -> ParseDocument<'_, P, P> {
+        ParseDocument::new(&self.parser, &self.parser, self.security_enricher.as_ref())
+    }
+
     /// Creates a new app instance with a custom parser implementation.
     pub fn with_parser(parser: P) -> Self {
         Self::with_parser_and_ports(
@@ -237,20 +241,17 @@ impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
 
     /// Parses a file from disk.
     pub fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> AppResult<ParsedDocument> {
-        ParseDocument::new(&self.parser, &self.parser, self.security_enricher.as_ref())
-            .parse_file(path)
+        self.parse_use_case().parse_file(path)
     }
 
     /// Parses from bytes.
     pub fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
-        ParseDocument::new(&self.parser, &self.parser, self.security_enricher.as_ref())
-            .parse_bytes(data)
+        self.parse_use_case().parse_bytes(data)
     }
 
     /// Parses from a reader.
     pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
-        ParseDocument::new(&self.parser, &self.parser, self.security_enricher.as_ref())
-            .parse_reader(reader)
+        self.parse_use_case().parse_reader(reader)
     }
 
     /// Serializes a parsed document to JSON.

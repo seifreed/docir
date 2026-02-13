@@ -20,12 +20,7 @@ impl OoxmlParser {
 
         self.finalize_ooxml_document(zip, content_types, &mut store, root_id, metrics)?;
 
-        Ok(ParsedDocument {
-            root_id,
-            format: DocumentFormat::Spreadsheet,
-            store,
-            metrics: None,
-        })
+        Ok(self.build_parsed_document(root_id, DocumentFormat::Spreadsheet, store))
     }
 
     /// Parse an XLSB document using calamine for binary sheets.
@@ -95,11 +90,6 @@ impl OoxmlParser {
 
         self.finalize_ooxml_document(zip, content_types, &mut store, doc_id, metrics)?;
 
-        Ok(ParsedDocument {
-            root_id: doc_id,
-            format: DocumentFormat::Spreadsheet,
-            store,
-            metrics: None,
-        })
+        Ok(self.build_parsed_document(doc_id, DocumentFormat::Spreadsheet, store))
     }
 }

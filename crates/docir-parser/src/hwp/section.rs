@@ -364,32 +364,10 @@ fn handle_hwpx_empty(
 ) -> Result<(), ParseError> {
     let name = e.name().as_ref().to_vec();
     let local = local_name(&name);
-    if matches!(
-        local,
-        b"commentRef" | b"comment-ref" | b"annotationRef" | b"noteRef" | b"note-ref"
-    ) {
-        if let Some(comment_id) = attr_any(e, &[b"id", b"ref", b"refId", b"ref-id"]) {
-            let mut node = CommentReference::new(comment_id);
-            node.span = Some(SourceSpan::new(source));
-            let node_id = node.id;
-            store.insert(IRNode::CommentReference(node));
-            push_node_to_hwpx_context(
-                node_id,
-                &mut state.current_para,
-                &mut state.note_stack,
-                source,
-            );
-        }
+    if push_hwpx_comment_reference(e, local, source, store, state) {
         return Ok(());
     }
-    if let Some(shape_id) = parse_hwpx_shape(e, local, source, media_lookup, store) {
-        push_node_to_hwpx_context(
-            shape_id,
-            &mut state.current_para,
-            &mut state.note_stack,
-            source,
-        );
-    }
+    let _ = push_hwpx_shape(e, local, source, store, media_lookup, state);
     Ok(())
 }
 

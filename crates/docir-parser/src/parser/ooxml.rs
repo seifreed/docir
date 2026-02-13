@@ -619,4 +619,18 @@ impl OoxmlParser {
     ) -> Option<String> {
         read_xml_part(zip, part_path).ok().flatten()
     }
+
+    pub(super) fn build_parsed_document(
+        &self,
+        root_id: NodeId,
+        format: DocumentFormat,
+        store: IrStore,
+    ) -> ParsedDocument {
+        ParsedDocument {
+            root_id,
+            format,
+            store,
+            metrics: None,
+        }
+    }
 }

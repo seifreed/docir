@@ -23,11 +23,6 @@ impl OoxmlParser {
 
         self.finalize_ooxml_document(zip, content_types, &mut store, root_id, metrics)?;
 
-        Ok(ParsedDocument {
-            root_id,
-            format: DocumentFormat::Presentation,
-            store,
-            metrics: None,
-        })
+        Ok(self.build_parsed_document(root_id, DocumentFormat::Presentation, store))
     }
 }
