@@ -226,11 +226,7 @@ impl PptxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => match e.name().as_ref() {
                     b"p:cNvPr" => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"name" {
-                                shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
+                        parse_non_visual_name(&e, &mut shape);
                     }
                     b"p:grpSpPr" => {
                         parse_group_properties(reader, &mut shape, slide_path)?;
@@ -239,11 +235,7 @@ impl PptxParser {
                 },
                 Ok(Event::Empty(e)) => match e.name().as_ref() {
                     b"p:cNvPr" => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"name" {
-                                shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
+                        parse_non_visual_name(&e, &mut shape);
                     }
                     b"p:grpSpPr" => {}
                     _ => {}
@@ -281,15 +273,7 @@ impl PptxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => match e.name().as_ref() {
                     b"a:gridCol" => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"w" {
-                                if let Ok(width) =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>()
-                                {
-                                    table.grid.push(GridColumn { width });
-                                }
-                            }
-                        }
+                        parse_grid_column(&e, &mut table);
                     }
                     b"a:tr" => {
                         let row = self.parse_pptx_table_row(reader, slide_path)?;
@@ -301,15 +285,7 @@ impl PptxParser {
                 },
                 Ok(Event::Empty(e)) => {
                     if e.name().as_ref() == b"a:gridCol" {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"w" {
-                                if let Ok(width) =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>()
-                                {
-                                    table.grid.push(GridColumn { width });
-                                }
-                            }
-                        }
+                        parse_grid_column(&e, &mut table);
                     }
                 }
                 Ok(Event::End(e)) => {
@@ -499,6 +475,24 @@ fn parse_shape_non_visual_props(start: &BytesStart<'_>, shape: &mut Shape) {
                 shape.alt_text = Some(String::from_utf8_lossy(&attr.value).to_string());
             }
             _ => {}
+        }
+    }
+}
+
+fn parse_non_visual_name(start: &BytesStart<'_>, shape: &mut Shape) {
+    for attr in start.attributes().flatten() {
+        if attr.key.as_ref() == b"name" {
+            shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
+        }
+    }
+}
+
+fn parse_grid_column(start: &BytesStart<'_>, table: &mut Table) {
+    for attr in start.attributes().flatten() {
+        if attr.key.as_ref() == b"w" {
+            if let Ok(width) = String::from_utf8_lossy(&attr.value).parse::<u32>() {
+                table.grid.push(GridColumn { width });
+            }
         }
     }
 }
