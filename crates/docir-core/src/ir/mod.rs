@@ -366,13 +366,27 @@ macro_rules! for_each_ir_span_variant {
     };
 }
 
+macro_rules! node_id_match {
+    ($value:expr; $($variant:ident),+ $(,)?) => {
+        match $value {
+            $(IRNode::$variant(n) => n.id,)+
+        }
+    };
+}
+
+macro_rules! node_type_match {
+    ($value:expr; $($variant:ident),+ $(,)?) => {
+        match $value {
+            $(IRNode::$variant(_) => NodeType::$variant,)+
+        }
+    };
+}
+
 impl IrNode for IRNode {
     fn node_id(&self) -> NodeId {
         macro_rules! node_id_arms {
             ($($variant:ident),+ $(,)?) => {
-                match self {
-                    $(IRNode::$variant(n) => n.id,)+
-                }
+                node_id_match!(self; $($variant),+)
             };
         }
         for_each_ir_node_variant!(node_id_arms)
@@ -381,9 +395,7 @@ impl IrNode for IRNode {
     fn node_type(&self) -> NodeType {
         macro_rules! node_type_arms {
             ($($variant:ident),+ $(,)?) => {
-                match self {
-                    $(IRNode::$variant(_) => NodeType::$variant,)+
-                }
+                node_type_match!(self; $($variant),+)
             };
         }
         for_each_ir_node_variant!(node_type_arms)
