@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
-use crate::commands::util::{build_app, write_text_output};
+use crate::commands::util::{build_app_and_parse, write_text_output};
 use crate::OutputFormat;
 
 pub fn run(
@@ -14,11 +14,7 @@ pub fn run(
     output: Option<PathBuf>,
     parser_config: &ParserConfig,
 ) -> Result<()> {
-    // Parse the document
-    let app = build_app(parser_config);
-    let parsed = app
-        .parse_file(&input)
-        .with_context(|| format!("Failed to parse {}", input.display()))?;
+    let (app, parsed) = build_app_and_parse(&input, parser_config)?;
 
     // Serialize based on format
     let output_data = match format {
