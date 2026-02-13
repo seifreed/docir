@@ -72,7 +72,7 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             has_macros,
             pretty,
             output,
-        } => run_query_like(
+        } => run_query(
             input,
             node_type,
             contains,
@@ -82,7 +82,6 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             pretty,
             output,
             parser_config,
-            false,
         ),
         Commands::Select {
             input,
@@ -93,7 +92,7 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             has_macros,
             pretty,
             output,
-        } => run_query_like(
+        } => run_select(
             input,
             node_type,
             contains,
@@ -103,7 +102,6 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             pretty,
             output,
             parser_config,
-            true,
         ),
         Commands::Grep {
             input,
@@ -160,7 +158,7 @@ fn run_coverage(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_query_like(
+fn run_query(
     input: std::path::PathBuf,
     node_type: Option<String>,
     contains: Option<String>,
@@ -170,31 +168,41 @@ fn run_query_like(
     pretty: bool,
     output: Option<std::path::PathBuf>,
     parser_config: &ParserConfig,
-    select_mode: bool,
 ) -> Result<()> {
-    if select_mode {
-        super::select::run(
-            input,
-            node_type,
-            contains,
-            format,
-            has_external_refs,
-            has_macros,
-            pretty,
-            output,
-            parser_config,
-        )
-    } else {
-        super::query::run(
-            input,
-            node_type,
-            contains,
-            format,
-            has_external_refs,
-            has_macros,
-            pretty,
-            output,
-            parser_config,
-        )
-    }
+    super::query::run(
+        input,
+        node_type,
+        contains,
+        format,
+        has_external_refs,
+        has_macros,
+        pretty,
+        output,
+        parser_config,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_select(
+    input: std::path::PathBuf,
+    node_type: Option<String>,
+    contains: Option<String>,
+    format: Option<String>,
+    has_external_refs: Option<bool>,
+    has_macros: Option<bool>,
+    pretty: bool,
+    output: Option<std::path::PathBuf>,
+    parser_config: &ParserConfig,
+) -> Result<()> {
+    super::select::run(
+        input,
+        node_type,
+        contains,
+        format,
+        has_external_refs,
+        has_macros,
+        pretty,
+        output,
+        parser_config,
+    )
 }
