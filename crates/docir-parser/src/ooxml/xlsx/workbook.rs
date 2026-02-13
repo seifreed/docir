@@ -41,56 +41,24 @@ pub(super) fn parse_workbook_info(xml: &str) -> Result<WorkbookInfo, ParseError>
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"sheet" => parse_sheet_info(&e, &mut sheets)?,
-                b"definedName" => {
-                    if let Some(def) = parse_defined_name(&mut reader, &e)? {
-                        defined_names.push(def);
-                    }
-                }
-                b"workbookPr" => {
-                    parse_workbook_pr(&e, &mut workbook_properties);
-                }
-                b"workbookView" => {
-                    parse_workbook_view(&e, &mut workbook_properties);
-                }
-                b"calcPr" => {
-                    parse_calc_pr(&e, &mut workbook_properties);
-                }
-                b"workbookProtection" => {
-                    let props = workbook_properties.get_or_insert_with(WorkbookProperties::new);
-                    props.workbook_protected = true;
-                }
-                b"pivotCache" => {
-                    parse_pivot_cache_ref(&e, &mut pivot_cache_refs);
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"sheet" => parse_sheet_info(&e, &mut sheets)?,
-                b"definedName" => {
-                    if let Some(def) = parse_defined_name_empty(&e) {
-                        defined_names.push(def);
-                    }
-                }
-                b"workbookPr" => {
-                    parse_workbook_pr(&e, &mut workbook_properties);
-                }
-                b"workbookView" => {
-                    parse_workbook_view(&e, &mut workbook_properties);
-                }
-                b"calcPr" => {
-                    parse_calc_pr(&e, &mut workbook_properties);
-                }
-                b"workbookProtection" => {
-                    let props = workbook_properties.get_or_insert_with(WorkbookProperties::new);
-                    props.workbook_protected = true;
-                }
-                b"pivotCache" => {
-                    parse_pivot_cache_ref(&e, &mut pivot_cache_refs);
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => handle_workbook_event(
+                &mut reader,
+                &e,
+                true,
+                &mut sheets,
+                &mut defined_names,
+                &mut pivot_cache_refs,
+                &mut workbook_properties,
+            )?,
+            Ok(Event::Empty(e)) => handle_workbook_event(
+                &mut reader,
+                &e,
+                false,
+                &mut sheets,
+                &mut defined_names,
+                &mut pivot_cache_refs,
+                &mut workbook_properties,
+            )?,
             Ok(Event::Eof) => break,
             Err(e) => {
                 return Err(ParseError::Xml {
@@ -109,6 +77,39 @@ pub(super) fn parse_workbook_info(xml: &str) -> Result<WorkbookInfo, ParseError>
         workbook_properties,
         pivot_cache_refs,
     })
+}
+
+fn handle_workbook_event(
+    reader: &mut Reader<&[u8]>,
+    e: &BytesStart<'_>,
+    is_start: bool,
+    sheets: &mut Vec<SheetInfo>,
+    defined_names: &mut Vec<DefinedName>,
+    pivot_cache_refs: &mut Vec<PivotCacheRef>,
+    workbook_properties: &mut Option<WorkbookProperties>,
+) -> Result<(), ParseError> {
+    match e.name().as_ref() {
+        b"sheet" => parse_sheet_info(e, sheets)?,
+        b"definedName" => {
+            if is_start {
+                if let Some(def) = parse_defined_name(reader, e)? {
+                    defined_names.push(def);
+                }
+            } else if let Some(def) = parse_defined_name_empty(e) {
+                defined_names.push(def);
+            }
+        }
+        b"workbookPr" => parse_workbook_pr(e, workbook_properties),
+        b"workbookView" => parse_workbook_view(e, workbook_properties),
+        b"calcPr" => parse_calc_pr(e, workbook_properties),
+        b"workbookProtection" => {
+            let props = workbook_properties.get_or_insert_with(WorkbookProperties::new);
+            props.workbook_protected = true;
+        }
+        b"pivotCache" => parse_pivot_cache_ref(e, pivot_cache_refs),
+        _ => {}
+    }
+    Ok(())
 }
 
 pub(super) fn auto_open_target_from_defined_name(name: &DefinedName) -> Option<Option<String>> {
