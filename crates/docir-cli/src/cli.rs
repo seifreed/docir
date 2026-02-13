@@ -368,68 +368,68 @@ pub(crate) enum OutputFormat {
 
 pub(crate) fn build_parser_config(cli: &Cli) -> ParserConfig {
     let mut config = ParserConfig::default();
-    if let Some(value) = cli.zip_max_total_size {
-        config.zip_config.max_total_size = value;
-    }
-    if let Some(value) = cli.zip_max_file_size {
-        config.zip_config.max_file_size = value;
-    }
-    if let Some(value) = cli.zip_max_file_count {
-        config.zip_config.max_file_count = value;
-    }
-    if let Some(value) = cli.zip_max_compression_ratio {
-        config.zip_config.max_compression_ratio = value;
-    }
-    if let Some(value) = cli.zip_max_path_depth {
-        config.zip_config.max_path_depth = value;
-    }
-    if let Some(value) = cli.max_input_size {
-        config.max_input_size = value;
-    }
-    if cli.odf_fast {
-        config.odf.force_fast = true;
-    }
-    if let Some(value) = cli.odf_fast_threshold_bytes {
-        config.odf.fast_threshold_bytes = value;
-    }
-    if let Some(value) = cli.odf_fast_sample_rows {
-        config.odf.fast_sample_rows = value;
-    }
-    if let Some(value) = cli.odf_fast_sample_cols {
-        config.odf.fast_sample_cols = value;
-    }
-    if let Some(value) = cli.odf_max_cells {
-        config.odf.max_cells = (value != 0).then_some(value);
-    }
-    if let Some(value) = cli.odf_max_rows {
-        config.odf.max_rows = (value != 0).then_some(value);
-    }
-    if let Some(value) = cli.odf_max_paragraphs {
-        config.odf.max_paragraphs = (value != 0).then_some(value);
-    }
-    if let Some(value) = cli.odf_max_bytes {
-        config.odf.max_bytes = (value != 0).then_some(value);
-    }
-    if cli.odf_parallel_sheets {
-        config.odf.parallel_sheets = true;
-    }
-    if let Some(value) = cli.odf_parallel_max_threads {
-        config.odf.parallel_max_threads = Some(value);
-    }
-    if let Some(password) = cli.odf_password.as_ref() {
-        config.odf.password = Some(password.clone());
-    }
-    if cli.hwp_force_parse_encrypted {
-        config.hwp.force_parse_encrypted = true;
-    }
-    if let Some(password) = cli.hwp_password.as_ref() {
-        config.hwp.password = Some(password.clone());
-    }
-    if cli.hwp_dump_streams {
-        config.hwp.dump_streams = true;
-    }
-    if cli.metrics {
-        config.enable_metrics = true;
-    }
+    copy_if_some(
+        cli.zip_max_total_size,
+        &mut config.zip_config.max_total_size,
+    );
+    copy_if_some(cli.zip_max_file_size, &mut config.zip_config.max_file_size);
+    copy_if_some(
+        cli.zip_max_file_count,
+        &mut config.zip_config.max_file_count,
+    );
+    copy_if_some(
+        cli.zip_max_compression_ratio,
+        &mut config.zip_config.max_compression_ratio,
+    );
+    copy_if_some(
+        cli.zip_max_path_depth,
+        &mut config.zip_config.max_path_depth,
+    );
+    copy_if_some(cli.max_input_size, &mut config.max_input_size);
+
+    set_if(cli.odf_fast, &mut config.odf.force_fast);
+    copy_if_some(
+        cli.odf_fast_threshold_bytes,
+        &mut config.odf.fast_threshold_bytes,
+    );
+    copy_if_some(cli.odf_fast_sample_rows, &mut config.odf.fast_sample_rows);
+    copy_if_some(cli.odf_fast_sample_cols, &mut config.odf.fast_sample_cols);
+    copy_if_some(cli.odf_max_cells.map(non_zero), &mut config.odf.max_cells);
+    copy_if_some(cli.odf_max_rows.map(non_zero), &mut config.odf.max_rows);
+    copy_if_some(
+        cli.odf_max_paragraphs.map(non_zero),
+        &mut config.odf.max_paragraphs,
+    );
+    copy_if_some(cli.odf_max_bytes.map(non_zero), &mut config.odf.max_bytes);
+    set_if(cli.odf_parallel_sheets, &mut config.odf.parallel_sheets);
+    copy_if_some(
+        cli.odf_parallel_max_threads.map(Some),
+        &mut config.odf.parallel_max_threads,
+    );
+    copy_if_some(cli.odf_password.clone().map(Some), &mut config.odf.password);
+
+    set_if(
+        cli.hwp_force_parse_encrypted,
+        &mut config.hwp.force_parse_encrypted,
+    );
+    copy_if_some(cli.hwp_password.clone().map(Some), &mut config.hwp.password);
+    set_if(cli.hwp_dump_streams, &mut config.hwp.dump_streams);
+    set_if(cli.metrics, &mut config.enable_metrics);
     config
+}
+
+fn copy_if_some<T>(value: Option<T>, target: &mut T) {
+    if let Some(value) = value {
+        *target = value;
+    }
+}
+
+fn set_if(flag: bool, target: &mut bool) {
+    if flag {
+        *target = true;
+    }
+}
+
+fn non_zero(value: u64) -> Option<u64> {
+    (value != 0).then_some(value)
 }
