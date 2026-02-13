@@ -238,16 +238,14 @@ fn render_csv(report: &CoverageReport) -> String {
 fn render_parts_csv(report: &CoverageReport) -> String {
     let mut out = String::new();
     out.push_str("status,path,content_type,parser\n");
-    for entry in &report.part_rows {
-        if let Some(row) = parse_part_row(&entry.message) {
-            out.push_str(&format!(
-                "{},{},{},{}\n",
-                escape_csv(&row.status),
-                escape_csv(&row.path),
-                escape_csv(&row.content_type),
-                escape_csv(&row.parser)
-            ));
-        }
+    for row in build_part_rows(report) {
+        out.push_str(&format!(
+            "{},{},{},{}\n",
+            escape_csv(&row.status),
+            escape_csv(&row.path),
+            escape_csv(&row.content_type),
+            escape_csv(&row.parser)
+        ));
     }
     out
 }

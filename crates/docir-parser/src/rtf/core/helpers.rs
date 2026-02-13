@@ -3,8 +3,8 @@ use docir_core::ir::{Indentation, LineSpacingRule, ParagraphBorders, Spacing, Te
 use docir_core::visitor::IrStore;
 use encoding_rs::Encoding;
 
-use super::{append_text, finalize_paragraph, flush_text};
 use super::state::RtfStyleState;
+use super::{append_text, finalize_paragraph, flush_text};
 use super::{GroupKind, RtfParseContext};
 
 pub(super) fn handle_encoding_controls(
