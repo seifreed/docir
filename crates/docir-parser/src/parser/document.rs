@@ -28,9 +28,7 @@ impl DocumentParser {
     ) -> Result<ParsedDocument, ParseError> {
         enforce_input_size(&mut reader, self.config.max_input_size)?;
         let detected = self.detect_format(&mut reader)?;
-        self.validate_detected(&detected, &mut reader)?;
-        let parsed = self.parse_detected(detected, reader)?;
-        self.normalize_parsed(parsed)
+        self.parse_detected(detected, reader)
     }
 
     fn detect_format<R: Read + Seek>(
@@ -85,24 +83,12 @@ impl DocumentParser {
         ))
     }
 
-    fn validate_detected<R: Read + Seek>(
-        &self,
-        _detected: &formats::DetectedFormat,
-        _reader: &mut R,
-    ) -> Result<(), ParseError> {
-        Ok(())
-    }
-
     fn parse_detected<R: Read + Seek>(
         &self,
         detected: formats::DetectedFormat,
         reader: R,
     ) -> Result<ParsedDocument, ParseError> {
         formats::build_parser(detected, self.config.clone()).parse_reader(reader)
-    }
-
-    fn normalize_parsed(&self, parsed: ParsedDocument) -> Result<ParsedDocument, ParseError> {
-        Ok(parsed)
     }
 
     /// Parses from a file and returns parsed document with raw bytes.
