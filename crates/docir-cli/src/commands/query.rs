@@ -9,6 +9,15 @@ use docir_core::types::NodeType;
 use serde::Serialize;
 use std::path::PathBuf;
 
+#[derive(Debug, Clone)]
+pub(crate) struct QueryFilters {
+    pub(crate) node_type: Option<String>,
+    pub(crate) contains: Option<String>,
+    pub(crate) format: Option<String>,
+    pub(crate) has_external_refs: Option<bool>,
+    pub(crate) has_macros: Option<bool>,
+}
+
 #[derive(Debug, Serialize)]
 struct QueryMatch {
     node_id: String,
@@ -32,21 +41,38 @@ pub fn run(
     output: Option<PathBuf>,
     parser_config: &ParserConfig,
 ) -> Result<()> {
+    let filters = QueryFilters {
+        node_type,
+        contains,
+        format,
+        has_external_refs,
+        has_macros,
+    };
+    run_with_filters(input, filters, pretty, output, parser_config)
+}
+
+pub(crate) fn run_with_filters(
+    input: PathBuf,
+    filters: QueryFilters,
+    pretty: bool,
+    output: Option<PathBuf>,
+    parser_config: &ParserConfig,
+) -> Result<()> {
     let parsed = parse_document(&input, parser_config)?;
 
     let mut query = Query::new();
 
-    if let Some(t) = node_type {
+    if let Some(t) = filters.node_type {
         query.node_types.push(parse_node_type(&t)?);
     }
-    if let Some(text) = contains {
+    if let Some(text) = filters.contains {
         query.text_contains = Some(text);
     }
-    if let Some(fmt) = format {
+    if let Some(fmt) = filters.format {
         query.format = Some(parse_doc_format(&fmt)?);
     }
-    query.has_external_refs = has_external_refs;
-    query.has_macros = has_macros;
+    query.has_external_refs = filters.has_external_refs;
+    query.has_macros = filters.has_macros;
 
     let matches = query
         .execute(parsed.store(), parsed.root_id())

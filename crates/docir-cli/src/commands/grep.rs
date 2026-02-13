@@ -4,6 +4,8 @@ use anyhow::{bail, Result};
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
+use crate::commands::query::{run_with_filters, QueryFilters};
+
 pub fn run(
     input: PathBuf,
     pattern: String,
@@ -16,13 +18,15 @@ pub fn run(
     if pattern.trim().is_empty() {
         bail!("Pattern must not be empty");
     }
-    crate::commands::query::run(
+    run_with_filters(
         input,
-        node_type,
-        Some(pattern),
-        format,
-        None,
-        None,
+        QueryFilters {
+            node_type,
+            contains: Some(pattern),
+            format,
+            has_external_refs: None,
+            has_macros: None,
+        },
         pretty,
         output,
         parser_config,

@@ -4,6 +4,8 @@ use anyhow::Result;
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
+use crate::commands::query::{run_with_filters, QueryFilters};
+
 pub fn run(
     input: PathBuf,
     node_type: Option<String>,
@@ -15,13 +17,15 @@ pub fn run(
     output: Option<PathBuf>,
     parser_config: &ParserConfig,
 ) -> Result<()> {
-    crate::commands::query::run(
+    run_with_filters(
         input,
-        node_type,
-        contains,
-        format,
-        has_external_refs,
-        has_macros,
+        QueryFilters {
+            node_type,
+            contains,
+            format,
+            has_external_refs,
+            has_macros,
+        },
         pretty,
         output,
         parser_config,
