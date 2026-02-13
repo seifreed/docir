@@ -5,7 +5,7 @@ use crate::error::ParseError;
 use crate::ooxml::part_utils::parse_xml_part_with_span;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, xml_error};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     parse_cell_reference, CalcChain, CalcChainEntry, Cell, CellError, CellFormula,
@@ -429,12 +429,7 @@ pub(super) fn parse_conditional_formatting(
                 _ => {}
             },
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: sheet_path.to_string(),
-                    message: e.to_string(),
-                });
-            }
+            Err(e) => return Err(xml_error(sheet_path, e)),
             _ => {}
         }
         buf.clear();
@@ -457,10 +452,7 @@ pub(super) fn parse_formula(
 
     let text = reader
         .read_text(start.name())
-        .map_err(|e| ParseError::Xml {
-            file: sheet_path.to_string(),
-            message: e.to_string(),
-        })?;
+        .map_err(|e| xml_error(sheet_path, e))?;
 
     Ok(CellFormula {
         text: text.to_string(),

@@ -402,12 +402,7 @@ impl XlsxParser {
                     }
                 }
                 Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: sheet_path.to_string(),
-                        message: e.to_string(),
-                    });
-                }
+                Err(e) => return Err(xml_error(sheet_path, e)),
                 _ => {}
             }
             buf.clear();
@@ -561,12 +556,7 @@ impl XlsxParser {
                 },
                 Ok(Event::End(e)) if e.name().as_ref() == b"pivotCacheDefinition" => break,
                 Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: cache_path.to_string(),
-                        message: e.to_string(),
-                    });
-                }
+                Err(e) => return Err(xml_error(cache_path, e)),
                 _ => {}
             }
             buf.clear();
