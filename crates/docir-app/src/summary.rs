@@ -10,6 +10,17 @@ pub struct MetadataSummary {
     pub application: Option<String>,
 }
 
+impl Default for MetadataSummary {
+    fn default() -> Self {
+        Self {
+            title: None,
+            author: None,
+            modified: None,
+            application: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct NodeCount {
     pub node_type: String,
@@ -65,30 +76,36 @@ pub struct DocumentSummary {
 pub fn summarize_document(parsed: &ParsedDocument) -> Option<DocumentSummary> {
     let doc = parsed.document()?;
 
-    let metadata = if let Some(meta_id) = doc.metadata {
-        match parsed.store().get(meta_id) {
-            Some(IRNode::Metadata(meta)) => MetadataSummary {
-                title: meta.title.clone(),
-                author: meta.creator.clone(),
-                modified: meta.modified.clone(),
-                application: meta.application.clone(),
-            },
-            _ => MetadataSummary {
-                title: None,
-                author: None,
-                modified: None,
-                application: None,
-            },
-        }
-    } else {
-        MetadataSummary {
-            title: None,
-            author: None,
-            modified: None,
-            application: None,
-        }
-    };
+    Some(DocumentSummary {
+        format: doc.format.display_name().to_string(),
+        metadata: build_metadata_summary(parsed, doc.metadata),
+        node_counts: build_node_counts(parsed),
+        text_stats: build_text_stats(parsed),
+        metrics: build_metrics_summary(parsed),
+        security: build_security_summary(doc),
+        threat_indicators: build_threat_indicators(doc),
+    })
+}
 
+fn build_metadata_summary(
+    parsed: &ParsedDocument,
+    metadata_id: Option<docir_core::types::NodeId>,
+) -> MetadataSummary {
+    let Some(meta_id) = metadata_id else {
+        return MetadataSummary::default();
+    };
+    match parsed.store().get(meta_id) {
+        Some(IRNode::Metadata(meta)) => MetadataSummary {
+            title: meta.title.clone(),
+            author: meta.creator.clone(),
+            modified: meta.modified.clone(),
+            application: meta.application.clone(),
+        },
+        _ => MetadataSummary::default(),
+    }
+}
+
+fn build_node_counts(parsed: &ParsedDocument) -> Vec<NodeCount> {
     let mut counter = NodeCounter::new();
     let mut walker = PreOrderWalker::new(parsed.store(), parsed.root_id());
     let _ = walker.walk(&mut counter);
@@ -101,16 +118,21 @@ pub fn summarize_document(parsed: &ParsedDocument) -> Option<DocumentSummary> {
         })
         .collect();
     counts.sort_by_key(|count| std::cmp::Reverse(count.count));
+    counts
+}
 
+fn build_text_stats(parsed: &ParsedDocument) -> TextStatsSummary {
     let mut text_collector = TextStats::new();
     let mut walker = PreOrderWalker::new(parsed.store(), parsed.root_id());
     let _ = walker.walk(&mut text_collector);
-    let text_stats = TextStatsSummary {
+    TextStatsSummary {
         char_count: text_collector.char_count,
         word_count: text_collector.word_count,
-    };
+    }
+}
 
-    let metrics = parsed.metrics().map(|m| ParseMetricsSummary {
+fn build_metrics_summary(parsed: &ParsedDocument) -> Option<ParseMetricsSummary> {
+    parsed.metrics().map(|m| ParseMetricsSummary {
         content_types_ms: m.content_types_ms,
         relationships_ms: m.relationships_ms,
         main_parse_ms: m.main_parse_ms,
@@ -118,9 +140,11 @@ pub fn summarize_document(parsed: &ParsedDocument) -> Option<DocumentSummary> {
         security_scan_ms: m.security_scan_ms,
         extension_parts_ms: m.extension_parts_ms,
         normalization_ms: m.normalization_ms,
-    });
+    })
+}
 
-    let security = SecuritySummary {
+fn build_security_summary(doc: &docir_core::ir::Document) -> SecuritySummary {
+    SecuritySummary {
         threat_level: doc.security.threat_level.to_string(),
         has_macro_project: doc.security.macro_project.is_some(),
         ole_objects: doc.security.ole_objects.len(),
@@ -128,10 +152,11 @@ pub fn summarize_document(parsed: &ParsedDocument) -> Option<DocumentSummary> {
         dde_fields: doc.security.dde_fields.len(),
         activex_controls: doc.security.activex_controls.len(),
         xlm_macros: doc.security.xlm_macros.len(),
-    };
+    }
+}
 
-    let threat_indicators = doc
-        .security
+fn build_threat_indicators(doc: &docir_core::ir::Document) -> Vec<ThreatIndicatorSummary> {
+    doc.security
         .threat_indicators
         .iter()
         .map(|indicator| ThreatIndicatorSummary {
@@ -139,17 +164,7 @@ pub fn summarize_document(parsed: &ParsedDocument) -> Option<DocumentSummary> {
             indicator_type: format!("{:?}", indicator.indicator_type),
             description: indicator.description.clone(),
         })
-        .collect();
-
-    Some(DocumentSummary {
-        format: doc.format.display_name().to_string(),
-        metadata,
-        node_counts: counts,
-        text_stats,
-        metrics,
-        security,
-        threat_indicators,
-    })
+        .collect()
 }
 
 struct TextStats {
