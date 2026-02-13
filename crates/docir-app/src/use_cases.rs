@@ -32,22 +32,26 @@ impl<'a, P: ParserPort, S: SecurityScannerPort> ParseDocument<'a, P, S> {
     }
 
     pub(crate) fn parse_file<Pth: AsRef<Path>>(&self, path: Pth) -> AppResult<ParsedDocument> {
-        let (mut parsed, data) = self.parser.parse_file_with_bytes(path)?;
-        self.scan_security_if_needed(&data, &mut parsed)?;
-        EnrichSecurity::run(self.enricher, &mut parsed);
-        Ok(parsed)
+        let (parsed, data) = self.parser.parse_file_with_bytes(path)?;
+        self.finalize_parsed(parsed, &data)
     }
 
     pub(crate) fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
-        let mut parsed = self.parser.parse_bytes(data)?;
-        self.scan_security_if_needed(data, &mut parsed)?;
-        EnrichSecurity::run(self.enricher, &mut parsed);
-        Ok(parsed)
+        let parsed = self.parser.parse_bytes(data)?;
+        self.finalize_parsed(parsed, data)
     }
 
     pub(crate) fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
-        let (mut parsed, data) = self.parser.parse_reader_with_bytes(reader)?;
-        self.scan_security_if_needed(&data, &mut parsed)?;
+        let (parsed, data) = self.parser.parse_reader_with_bytes(reader)?;
+        self.finalize_parsed(parsed, &data)
+    }
+
+    fn finalize_parsed(
+        &self,
+        mut parsed: ParsedDocument,
+        data: &[u8],
+    ) -> AppResult<ParsedDocument> {
+        self.scan_security_if_needed(data, &mut parsed)?;
         EnrichSecurity::run(self.enricher, &mut parsed);
         Ok(parsed)
     }
