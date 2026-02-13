@@ -58,10 +58,7 @@ pub(super) fn parse_content_spreadsheet(
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
                 b"table:table" if in_spreadsheet => {
-                    let name = attr_value(&e, b"table:name")
-                        .unwrap_or_else(|| format!("Sheet{}", sheet_id));
-                    let sheet = Worksheet::new(name, sheet_id);
-                    let node_id = sheet.id;
+                    let (sheet, node_id) = build_empty_sheet(&e, sheet_id);
                     sheet_index.insert(sheet.name.clone(), node_id);
                     store.insert(IRNode::Worksheet(sheet));
                     sheets.push(node_id);
@@ -92,10 +89,7 @@ pub(super) fn parse_content_spreadsheet(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
+                return Err(content_xml_error(e));
             }
             _ => {}
         }
@@ -192,10 +186,7 @@ pub(super) fn parse_content_spreadsheet_fast(
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
                 b"table:table" if in_spreadsheet => {
-                    let name = attr_value(&e, b"table:name")
-                        .unwrap_or_else(|| format!("Sheet{}", sheet_id));
-                    let sheet = Worksheet::new(name, sheet_id);
-                    let node_id = sheet.id;
+                    let (sheet, node_id) = build_empty_sheet(&e, sheet_id);
                     store.insert(IRNode::Worksheet(sheet));
                     sheets.push(node_id);
                     sheet_id += 1;
@@ -209,10 +200,7 @@ pub(super) fn parse_content_spreadsheet_fast(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
+                return Err(content_xml_error(e));
             }
             _ => {}
         }
@@ -222,6 +210,20 @@ pub(super) fn parse_content_spreadsheet_fast(
     let mut result = OdfContentResult::default();
     result.content = sheets;
     Ok(result)
+}
+
+fn build_empty_sheet(start: &BytesStart<'_>, sheet_id: u32) -> (Worksheet, NodeId) {
+    let name = attr_value(start, b"table:name").unwrap_or_else(|| format!("Sheet{}", sheet_id));
+    let sheet = Worksheet::new(name, sheet_id);
+    let node_id = sheet.id;
+    (sheet, node_id)
+}
+
+fn content_xml_error(err: quick_xml::Error) -> ParseError {
+    ParseError::Xml {
+        file: "content.xml".to_string(),
+        message: err.to_string(),
+    }
 }
 
 fn parse_ods_pivot_table_full(

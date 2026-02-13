@@ -146,56 +146,8 @@ pub(super) fn parse_ods_table(
         );
     }
 
-    if !validation_ranges.is_empty() {
-        for (name, ranges) in validation_ranges {
-            let validation = if let Some(def) = validations.get(&name) {
-                DataValidation {
-                    id: NodeId::new(),
-                    validation_type: def.validation_type.clone(),
-                    operator: def.operator.clone(),
-                    allow_blank: def.allow_blank,
-                    show_input_message: def.show_input_message,
-                    show_error_message: def.show_error_message,
-                    error_title: def.error_title.clone(),
-                    error: def.error.clone(),
-                    prompt_title: def.prompt_title.clone(),
-                    prompt: def.prompt.clone(),
-                    ranges: ranges.clone(),
-                    formula1: def.formula1.clone(),
-                    formula2: def.formula2.clone(),
-                    span: None,
-                }
-            } else {
-                DataValidation {
-                    id: NodeId::new(),
-                    validation_type: None,
-                    operator: None,
-                    allow_blank: false,
-                    show_input_message: false,
-                    show_error_message: false,
-                    error_title: None,
-                    error: None,
-                    prompt_title: None,
-                    prompt: None,
-                    ranges: ranges.clone(),
-                    formula1: None,
-                    formula2: None,
-                    span: None,
-                }
-            };
-            let validation_id = validation.id;
-            store.insert(IRNode::DataValidation(validation));
-            worksheet.data_validations.push(validation_id);
-        }
-    }
-
-    if !shapes.is_empty() {
-        let mut drawing = WorksheetDrawing::new();
-        drawing.shapes = shapes;
-        let drawing_id = drawing.id;
-        store.insert(IRNode::WorksheetDrawing(drawing));
-        worksheet.drawings.push(drawing_id);
-    }
+    flush_validation_ranges(validation_ranges, validations, store, &mut worksheet, None);
+    attach_shapes_as_drawing(shapes, store, &mut worksheet);
 
     Ok(worksheet)
 }
@@ -320,51 +272,79 @@ pub(super) fn parse_ods_table_fast(
         buf.clear();
     }
 
-    if !validation_ranges.is_empty() {
-        for (name, ranges) in validation_ranges {
-            let mut validation = if let Some(def) = validations.get(&name) {
-                DataValidation {
-                    id: NodeId::new(),
-                    validation_type: def.validation_type.clone(),
-                    operator: def.operator.clone(),
-                    allow_blank: def.allow_blank,
-                    show_input_message: def.show_input_message,
-                    show_error_message: def.show_error_message,
-                    error_title: def.error_title.clone(),
-                    error: def.error.clone(),
-                    prompt_title: def.prompt_title.clone(),
-                    prompt: def.prompt.clone(),
-                    ranges: ranges.clone(),
-                    formula1: def.formula1.clone(),
-                    formula2: def.formula2.clone(),
-                    span: None,
-                }
-            } else {
-                DataValidation {
-                    id: NodeId::new(),
-                    validation_type: None,
-                    operator: None,
-                    allow_blank: false,
-                    show_input_message: false,
-                    show_error_message: false,
-                    error_title: None,
-                    error: None,
-                    prompt_title: None,
-                    prompt: None,
-                    ranges: ranges.clone(),
-                    formula1: None,
-                    formula2: None,
-                    span: None,
-                }
-            };
-            validation.span = Some(SourceSpan::new("content.xml"));
-            let validation_id = validation.id;
-            store.insert(IRNode::DataValidation(validation));
-            worksheet.data_validations.push(validation_id);
-        }
-    }
+    flush_validation_ranges(
+        validation_ranges,
+        validations,
+        store,
+        &mut worksheet,
+        Some("content.xml"),
+    );
 
     Ok(worksheet)
+}
+
+fn flush_validation_ranges(
+    validation_ranges: HashMap<String, Vec<String>>,
+    validations: &HashMap<String, ValidationDef>,
+    store: &mut IrStore,
+    worksheet: &mut Worksheet,
+    span_path: Option<&str>,
+) {
+    for (name, ranges) in validation_ranges {
+        let mut validation = build_data_validation(validations.get(&name), ranges);
+        validation.span = span_path.map(SourceSpan::new);
+        let validation_id = validation.id;
+        store.insert(IRNode::DataValidation(validation));
+        worksheet.data_validations.push(validation_id);
+    }
+}
+
+fn build_data_validation(def: Option<&ValidationDef>, ranges: Vec<String>) -> DataValidation {
+    match def {
+        Some(def) => DataValidation {
+            id: NodeId::new(),
+            validation_type: def.validation_type.clone(),
+            operator: def.operator.clone(),
+            allow_blank: def.allow_blank,
+            show_input_message: def.show_input_message,
+            show_error_message: def.show_error_message,
+            error_title: def.error_title.clone(),
+            error: def.error.clone(),
+            prompt_title: def.prompt_title.clone(),
+            prompt: def.prompt.clone(),
+            ranges,
+            formula1: def.formula1.clone(),
+            formula2: def.formula2.clone(),
+            span: None,
+        },
+        None => DataValidation {
+            id: NodeId::new(),
+            validation_type: None,
+            operator: None,
+            allow_blank: false,
+            show_input_message: false,
+            show_error_message: false,
+            error_title: None,
+            error: None,
+            prompt_title: None,
+            prompt: None,
+            ranges,
+            formula1: None,
+            formula2: None,
+            span: None,
+        },
+    }
+}
+
+fn attach_shapes_as_drawing(shapes: Vec<NodeId>, store: &mut IrStore, worksheet: &mut Worksheet) {
+    if shapes.is_empty() {
+        return;
+    }
+    let mut drawing = WorksheetDrawing::new();
+    drawing.shapes = shapes;
+    let drawing_id = drawing.id;
+    store.insert(IRNode::WorksheetDrawing(drawing));
+    worksheet.drawings.push(drawing_id);
 }
 
 pub(super) fn parse_ods_cell(
