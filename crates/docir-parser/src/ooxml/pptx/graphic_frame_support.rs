@@ -1,0 +1,52 @@
+use super::graphic_frame::GraphicFrameState;
+use docir_core::ir::{Shape, ShapeType};
+use quick_xml::events::BytesStart;
+
+pub(super) fn apply_non_visual_shape_props(shape: &mut Shape, e: &BytesStart<'_>) {
+    for attr in e.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"name" => {
+                shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"descr" => {
+                shape.alt_text = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            _ => {}
+        }
+    }
+}
+
+pub(super) fn apply_graphic_data_shape_type(shape: &mut Shape, e: &BytesStart<'_>) {
+    for attr in e.attributes().flatten() {
+        if attr.key.as_ref() == b"uri" {
+            let uri = String::from_utf8_lossy(&attr.value);
+            if uri.contains("chart") {
+                shape.shape_type = ShapeType::Chart;
+            } else if uri.contains("table") {
+                shape.shape_type = ShapeType::Table;
+            } else if uri.contains("ole") || uri.contains("object") {
+                shape.shape_type = ShapeType::OleObject;
+            }
+        }
+    }
+}
+
+pub(super) fn capture_chart_rel(state: &mut GraphicFrameState, e: &BytesStart<'_>) {
+    for attr in e.attributes().flatten() {
+        let key = attr.key.as_ref();
+        if state.chart_rel.is_none() && (key == b"r:id" || key == b"id" || key.ends_with(b":id")) {
+            let val = String::from_utf8_lossy(&attr.value).to_string();
+            if val.starts_with("rId") {
+                state.chart_rel = Some(val);
+            }
+        }
+    }
+}
+
+pub(super) fn capture_ole_rel(state: &mut GraphicFrameState, e: &BytesStart<'_>) {
+    for attr in e.attributes().flatten() {
+        if attr.key.as_ref() == b"r:id" {
+            state.ole_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
+        }
+    }
+}

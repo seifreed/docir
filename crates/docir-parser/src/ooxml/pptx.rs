@@ -24,6 +24,7 @@ use std::collections::{HashMap, HashSet};
 mod builder;
 mod comments;
 mod graphic_frame;
+mod graphic_frame_support;
 mod metadata;
 mod presentation_parts;
 mod relationships;
