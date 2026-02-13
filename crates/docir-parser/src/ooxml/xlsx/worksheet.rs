@@ -403,9 +403,7 @@ impl XlsxParser {
                     part.span = Some(SourceSpan::new(&external_path));
                     let part_id = part.id;
                     self.store.insert(IRNode::ExternalLinkPart(part));
-                    if let Some(IRNode::Document(doc)) = self.store.get_mut(self.root_id) {
-                        doc.shared_parts.push(part_id);
-                    }
+                    self.push_shared_part(part_id);
                 }
             }
             for ext in rels.by_id.values() {
@@ -416,9 +414,7 @@ impl XlsxParser {
                     relationship_type: Some(ext.rel_type.clone()),
                     ..ext_ref
                 };
-                let id = ext_ref.id;
-                self.store.insert(IRNode::ExternalReference(ext_ref));
-                self.security_info.external_refs.push(id);
+                self.push_external_reference(ext_ref);
             }
         }
 
@@ -430,19 +426,27 @@ impl XlsxParser {
                 let part_id = part.id;
                 let targets = connection_targets(&part);
                 self.store.insert(IRNode::ConnectionPart(part));
-                if let Some(IRNode::Document(doc)) = self.store.get_mut(self.root_id) {
-                    doc.shared_parts.push(part_id);
-                }
+                self.push_shared_part(part_id);
                 for target in targets {
                     let ext_ref = ExternalReference::new(ExternalRefType::DataConnection, target);
-                    let id = ext_ref.id;
-                    self.store.insert(IRNode::ExternalReference(ext_ref));
-                    self.security_info.external_refs.push(id);
+                    self.push_external_reference(ext_ref);
                 }
             }
         }
 
         Ok(())
+    }
+
+    fn push_shared_part(&mut self, part_id: NodeId) {
+        if let Some(IRNode::Document(doc)) = self.store.get_mut(self.root_id) {
+            doc.shared_parts.push(part_id);
+        }
+    }
+
+    fn push_external_reference(&mut self, ext_ref: ExternalReference) {
+        let id = ext_ref.id;
+        self.store.insert(IRNode::ExternalReference(ext_ref));
+        self.security_info.external_refs.push(id);
     }
 
     pub(super) fn parse_pivot_cache(
