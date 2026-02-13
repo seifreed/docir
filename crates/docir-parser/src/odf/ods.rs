@@ -494,52 +494,14 @@ pub(super) fn parse_ods_cell(
     let validation_name = attr_value(start, b"table:content-validation-name");
 
     let style_id = resolve_style_id(start, style_map, next_style_id);
-
-    let mut text = String::new();
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"text:p" => {
-                    let para = parse_text_element(reader, e.name().as_ref())?;
-                    if !text.is_empty() && !para.is_empty() {
-                        text.push('\n');
-                    }
-                    text.push_str(&para);
-                }
-                _ => {}
-            },
-            Ok(Event::Text(e)) => {
-                let chunk = e.unescape().unwrap_or_default();
-                text.push_str(&chunk);
-            }
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"table:table-cell" {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(crate::xml_utils::xml_error("content.xml", e));
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    if value_type.is_none() && !text.is_empty() {
-        value_type = Some("string".to_string());
-    }
-
-    if value_attr.is_none() {
-        value_attr = date_value.or(time_value).or_else(|| {
-            if !text.is_empty() {
-                Some(text.clone())
-            } else {
-                None
-            }
-        });
-    }
+    let text = read_ods_cell_text(reader)?;
+    infer_cell_value_type_and_attr(
+        &mut value_type,
+        &mut value_attr,
+        date_value,
+        time_value,
+        &text,
+    );
 
     let value = parse_cell_value_with_text(value_type.as_deref(), value_attr.as_deref(), &text);
     let formula = parse_cell_formula(formula_attr);
@@ -554,6 +516,53 @@ pub(super) fn parse_ods_cell(
         row_span,
         is_covered: false,
     })
+}
+
+fn read_ods_cell_text(reader: &mut OdfReader<'_>) -> Result<String, ParseError> {
+    let mut text = String::new();
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"text:p" => {
+                let para = parse_text_element(reader, e.name().as_ref())?;
+                if !text.is_empty() && !para.is_empty() {
+                    text.push('\n');
+                }
+                text.push_str(&para);
+            }
+            Ok(Event::Text(e)) => {
+                let chunk = e.unescape().unwrap_or_default();
+                text.push_str(&chunk);
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == b"table:table-cell" => break,
+            Ok(Event::Eof) => break,
+            Err(e) => return Err(crate::xml_utils::xml_error("content.xml", e)),
+            _ => {}
+        }
+        buf.clear();
+    }
+    Ok(text)
+}
+
+fn infer_cell_value_type_and_attr(
+    value_type: &mut Option<String>,
+    value_attr: &mut Option<String>,
+    date_value: Option<String>,
+    time_value: Option<String>,
+    text: &str,
+) {
+    if value_type.is_none() && !text.is_empty() {
+        *value_type = Some("string".to_string());
+    }
+    if value_attr.is_none() {
+        *value_attr = date_value.or(time_value).or_else(|| {
+            if text.is_empty() {
+                None
+            } else {
+                Some(text.to_string())
+            }
+        });
+    }
 }
 
 pub(super) fn parse_ods_cell_empty(
