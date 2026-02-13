@@ -18,9 +18,15 @@ use encoding_rs::Encoding;
 use std::collections::HashMap;
 
 mod controls;
+mod field_utils;
 
 use super::objects::{finalize_object, finalize_picture, ObjectContext, ObjectTextTarget};
 use controls::{handle_group_controls, handle_object_controls, handle_table_controls};
+use field_utils::{
+    parse_field_instruction as parse_field_instruction_impl,
+    parse_hyperlink_instruction as parse_hyperlink_instruction_impl,
+    tokenize_field_instruction as tokenize_field_instruction_impl,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GroupKind {
@@ -1092,97 +1098,15 @@ fn finalize_list_override(ctx: &mut RtfParseContext) {
 }
 
 fn parse_field_instruction(text: &str) -> Option<FieldInstruction> {
-    let tokens = tokenize_field_instruction(text);
-    if tokens.is_empty() {
-        return None;
-    }
-    let first = tokens[0].to_ascii_uppercase();
-    let kind = match first.as_str() {
-        "HYPERLINK" => FieldKind::Hyperlink,
-        "INCLUDETEXT" => FieldKind::IncludeText,
-        "MERGEFIELD" => FieldKind::MergeField,
-        "DATE" => FieldKind::Date,
-        "REF" => FieldKind::Ref,
-        "PAGEREF" => FieldKind::PageRef,
-        _ => FieldKind::Unknown,
-    };
-    let mut args = Vec::new();
-    let mut switches = Vec::new();
-    for token in tokens.iter().skip(1) {
-        if token.starts_with('\\') {
-            switches.push(token.trim_start_matches('\\').to_string());
-        } else {
-            args.push(token.to_string());
-        }
-    }
-    Some(FieldInstruction {
-        kind,
-        args,
-        switches,
-    })
+    parse_field_instruction_impl(text)
 }
 
 fn parse_hyperlink_instruction(text: &str) -> Option<(String, Vec<String>, Vec<String>)> {
-    let tokens = tokenize_field_instruction(text);
-    if tokens.is_empty() || tokens[0].to_ascii_uppercase() != "HYPERLINK" {
-        return None;
-    }
-    let mut target = None;
-    let mut args = Vec::new();
-    let mut switches = Vec::new();
-    for token in tokens.into_iter().skip(1) {
-        if token.starts_with('\\') {
-            switches.push(token.trim_start_matches('\\').to_string());
-        } else if target.is_none() {
-            target = Some(token);
-        } else {
-            args.push(token);
-        }
-    }
-    target.map(|t| (t, args, switches))
+    parse_hyperlink_instruction_impl(text)
 }
 
 fn tokenize_field_instruction(text: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
-    let mut current = String::new();
-    let mut in_quotes = false;
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' => {
-                in_quotes = !in_quotes;
-            }
-            '\\' => {
-                if !current.is_empty() {
-                    tokens.push(current.clone());
-                    current.clear();
-                }
-                let mut switch = String::from("\\");
-                while let Some(&c) = chars.peek() {
-                    if c.is_whitespace() {
-                        break;
-                    }
-                    if c == '"' {
-                        break;
-                    }
-                    switch.push(c);
-                    chars.next();
-                }
-                tokens.push(switch);
-            }
-            c if c.is_whitespace() && !in_quotes => {
-                if !current.is_empty() {
-                    tokens.push(current.clone());
-                    current.clear();
-                }
-            }
-            _ => current.push(ch),
-        }
-    }
-    if !current.is_empty() {
-        tokens.push(current);
-    }
-    tokens
+    tokenize_field_instruction_impl(text)
 }
 
 fn create_external_ref(
