@@ -56,29 +56,29 @@ impl ParserPort for DocumentParser {
 
 impl ParserPort for AppParser {
     fn parse_file<P: AsRef<Path>>(&self, path: P) -> AppResult<ParsedDocument> {
-        wrap_parsed(self.parser.parse_file(path))
+        ParserPort::parse_file(&self.parser, path)
     }
 
     fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
-        wrap_parsed(self.parser.parse_bytes(data))
+        ParserPort::parse_bytes(&self.parser, data)
     }
 
     fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
-        wrap_parsed(self.parser.parse_reader(reader))
+        ParserPort::parse_reader(&self.parser, reader)
     }
 
     fn parse_file_with_bytes<P: AsRef<Path>>(
         &self,
         path: P,
     ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        wrap_parsed_with_bytes(self.parser.parse_file_with_bytes(path))
+        ParserPort::parse_file_with_bytes(&self.parser, path)
     }
 
     fn parse_reader_with_bytes<R: Read + Seek>(
         &self,
         reader: R,
     ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        wrap_parsed_with_bytes(self.parser.parse_reader_with_bytes(reader))
+        ParserPort::parse_reader_with_bytes(&self.parser, reader)
     }
 }
 

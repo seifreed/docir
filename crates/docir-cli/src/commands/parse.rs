@@ -2,11 +2,9 @@
 
 use anyhow::{Context, Result};
 use docir_app::ParserConfig;
-use std::fs;
-use std::io::Write;
 use std::path::PathBuf;
 
-use crate::commands::util::build_app;
+use crate::commands::util::{build_app, write_text_output};
 use crate::OutputFormat;
 
 pub fn run(
@@ -29,17 +27,10 @@ pub fn run(
             .context("Failed to serialize to JSON")?,
     };
 
-    // Write output
-    if let Some(output_path) = output {
-        fs::write(&output_path, &output_data)
-            .with_context(|| format!("Failed to write to {}", output_path.display()))?;
-        eprintln!("Output written to {}", output_path.display());
-    } else {
-        let stdout = std::io::stdout();
-        let mut handle = stdout.lock();
-        handle.write_all(output_data.as_bytes())?;
-        handle.write_all(b"\n")?;
+    let output_path = output.clone();
+    write_text_output(&output_data, output)?;
+    if let Some(path) = output_path {
+        eprintln!("Output written to {}", path.display());
     }
-
     Ok(())
 }

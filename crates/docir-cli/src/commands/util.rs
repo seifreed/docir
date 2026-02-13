@@ -8,6 +8,7 @@ use docir_core::types::{
     DocumentFormat, NodeType,
 };
 use serde::Serialize;
+use std::fs;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -58,5 +59,18 @@ pub fn write_json_output<T: Serialize>(
     }
 
     writeln!(writer)?;
+    Ok(())
+}
+
+pub fn write_text_output(value: &str, output: Option<PathBuf>) -> Result<()> {
+    if let Some(path) = output {
+        fs::write(&path, value)
+            .with_context(|| format!("Failed to write to {}", path.display()))?;
+    } else {
+        let stdout = io::stdout();
+        let mut handle = stdout.lock();
+        handle.write_all(value.as_bytes())?;
+        handle.write_all(b"\n")?;
+    }
     Ok(())
 }
