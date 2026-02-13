@@ -2,10 +2,9 @@
 
 use anyhow::{Context, Result};
 use docir_app::ParserConfig;
-use docir_core::NodeId;
 use std::path::PathBuf;
 
-use crate::commands::util::build_app;
+use crate::commands::util::{build_app, parse_node_id};
 use crate::OutputFormat;
 
 pub fn run(
@@ -20,20 +19,9 @@ pub fn run(
         .parse_file(&input)
         .with_context(|| format!("Failed to parse {}", input.display()))?;
 
-    // Parse the node ID
-    // Expected format: "node_XXXXXXXX" where X is hex
-    let node_id = if node_id_str.starts_with("node_") {
-        let hex_part = node_id_str.strip_prefix("node_").unwrap();
-        let id_value = u64::from_str_radix(hex_part, 16)
-            .with_context(|| format!("Invalid node ID format: {}", node_id_str))?;
-        NodeId::from_raw(id_value)
-    } else {
-        // Try parsing as raw number
-        let id_value: u64 = node_id_str
-            .parse()
-            .with_context(|| format!("Invalid node ID format: {}", node_id_str))?;
-        NodeId::from_raw(id_value)
-    };
+    // Parse the node ID ("node_XXXXXXXX" hex or raw number)
+    let node_id = parse_node_id(node_id_str)
+        .with_context(|| format!("Invalid node ID format: {}", node_id_str))?;
 
     // Find the node
     let node = parsed

@@ -5,7 +5,7 @@ use docir_app::ParserConfig;
 use docir_app::{DocirApp, ParsedDocument};
 use docir_core::types::{
     parse_document_format as parse_core_document_format, parse_node_type as parse_core_node_type,
-    DocumentFormat, NodeType,
+    DocumentFormat, NodeId, NodeType,
 };
 use serde::Serialize;
 use std::fs;
@@ -19,6 +19,18 @@ pub fn parse_node_type(input: &str) -> Result<NodeType> {
 
 pub fn parse_doc_format(input: &str) -> Result<DocumentFormat> {
     parse_core_document_format(input).map_err(|e| anyhow!(e))
+}
+
+pub fn parse_node_id(input: &str) -> Result<NodeId> {
+    let trimmed = input.trim();
+    let value = if let Some(hex) = trimmed.strip_prefix("node_") {
+        u64::from_str_radix(hex, 16).map_err(|_| anyhow!("Invalid node id: {input}"))?
+    } else {
+        trimmed
+            .parse::<u64>()
+            .map_err(|_| anyhow!("Invalid node id: {input}"))?
+    };
+    Ok(NodeId::from_raw(value))
 }
 
 pub fn build_app(config: &ParserConfig) -> DocirApp {

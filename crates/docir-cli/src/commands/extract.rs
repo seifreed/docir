@@ -3,11 +3,10 @@
 use anyhow::{bail, Result};
 use docir_app::ParserConfig;
 use docir_core::ir::IRNode;
-use docir_core::types::NodeId;
 use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::commands::util::{parse_document, parse_node_type, write_json_output};
+use crate::commands::util::{parse_document, parse_node_id, parse_node_type, write_json_output};
 
 #[derive(Debug, Serialize)]
 struct ExtractResult {
@@ -48,16 +47,4 @@ pub fn run(
 
     let result = ExtractResult { nodes };
     write_json_output(&result, pretty, output)
-}
-
-fn parse_node_id(input: &str) -> Result<NodeId> {
-    let trimmed = input.trim();
-    let num = if let Some(hex) = trimmed.strip_prefix("node_") {
-        u64::from_str_radix(hex, 16).map_err(|_| anyhow::anyhow!("Invalid node id: {input}"))?
-    } else {
-        trimmed
-            .parse::<u64>()
-            .map_err(|_| anyhow::anyhow!("Invalid node id: {input}"))?
-    };
-    Ok(NodeId::from_raw(num))
 }
