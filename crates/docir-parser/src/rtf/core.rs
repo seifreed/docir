@@ -34,8 +34,8 @@ use field_utils::{
     tokenize_field_instruction as tokenize_field_instruction_impl,
 };
 use helpers::{
-    handle_encoding_controls, handle_paragraph_controls, hex_val, parse_color_entries,
-    parse_font_entry,
+    attach_flushed_run, flush_object_text, flush_stylesheet_text, handle_encoding_controls,
+    handle_paragraph_controls, hex_val, parse_color_entries, parse_font_entry,
 };
 
 pub(crate) fn parse_rtf(
@@ -360,59 +360,6 @@ fn flush_text(
     attach_flushed_run(ctx, store, &text, run_id);
 
     Ok(())
-}
-
-fn flush_stylesheet_text(ctx: &mut RtfParseContext, text: &str) {
-    if let Some(mut style_ctx) = ctx.current_style.take() {
-        let mut pending = format!("{}{}", style_ctx.name_buf, text);
-        loop {
-            if let Some(pos) = pending.find(';') {
-                let (head, rest) = pending.split_at(pos);
-                let name = head.trim().to_string();
-                push_style_from_ctx(ctx, &style_ctx, name);
-                pending = rest.trim_start_matches(';').to_string();
-                style_ctx.name_buf.clear();
-            } else {
-                style_ctx.name_buf.push_str(pending.trim());
-                ctx.current_style = Some(style_ctx);
-                break;
-            }
-        }
-    }
-}
-
-fn flush_object_text(ctx: &mut RtfParseContext, text: &str) {
-    let Some(target) = ctx.object_text_target else {
-        return;
-    };
-    let Some(obj) = ctx.object_stack.last_mut() else {
-        return;
-    };
-    match target {
-        ObjectTextTarget::Class => obj.class_name = Some(text.trim().to_string()),
-        ObjectTextTarget::Name => obj.object_name = Some(text.trim().to_string()),
-    }
-}
-
-fn attach_flushed_run(ctx: &mut RtfParseContext, store: &mut IrStore, text: &str, run_id: NodeId) {
-    match ctx.current_group_kind() {
-        GroupKind::FieldInst => {
-            if let Some(field) = ctx.field_stack.last_mut() {
-                field.instruction.push_str(text);
-            }
-        }
-        GroupKind::FieldResult => {
-            if let Some(field) = ctx.field_stack.last_mut() {
-                field.runs.push(run_id);
-            }
-        }
-        _ => {
-            ensure_paragraph(ctx, store);
-            if let Some(para) = ctx.current_paragraph.as_mut() {
-                para.runs.push(run_id);
-            }
-        }
-    }
 }
 
 fn append_text(ctx: &mut RtfParseContext, text: &str) {

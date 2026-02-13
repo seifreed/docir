@@ -1,10 +1,12 @@
 use crate::error::ParseError;
 use docir_core::ir::{Indentation, LineSpacingRule, ParagraphBorders, Spacing, TextAlignment};
+use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
 use encoding_rs::Encoding;
 
+use super::super::objects::ObjectTextTarget;
 use super::state::RtfStyleState;
-use super::{append_text, finalize_paragraph, flush_text};
+use super::{append_text, ensure_paragraph, finalize_paragraph, flush_text, push_style_from_ctx};
 use super::{GroupKind, RtfParseContext};
 
 pub(super) fn handle_encoding_controls(
@@ -215,6 +217,64 @@ pub(super) fn parse_color_entries(text: &str, ctx: &mut RtfParseContext) {
             red = None;
             green = None;
             blue = None;
+        }
+    }
+}
+
+pub(super) fn flush_stylesheet_text(ctx: &mut RtfParseContext, text: &str) {
+    if let Some(mut style_ctx) = ctx.current_style.take() {
+        let mut pending = format!("{}{}", style_ctx.name_buf, text);
+        loop {
+            if let Some(pos) = pending.find(';') {
+                let (head, rest) = pending.split_at(pos);
+                let name = head.trim().to_string();
+                push_style_from_ctx(ctx, &style_ctx, name);
+                pending = rest.trim_start_matches(';').to_string();
+                style_ctx.name_buf.clear();
+            } else {
+                style_ctx.name_buf.push_str(pending.trim());
+                ctx.current_style = Some(style_ctx);
+                break;
+            }
+        }
+    }
+}
+
+pub(super) fn flush_object_text(ctx: &mut RtfParseContext, text: &str) {
+    let Some(target) = ctx.object_text_target else {
+        return;
+    };
+    let Some(obj) = ctx.object_stack.last_mut() else {
+        return;
+    };
+    match target {
+        ObjectTextTarget::Class => obj.class_name = Some(text.trim().to_string()),
+        ObjectTextTarget::Name => obj.object_name = Some(text.trim().to_string()),
+    }
+}
+
+pub(super) fn attach_flushed_run(
+    ctx: &mut RtfParseContext,
+    store: &mut IrStore,
+    text: &str,
+    run_id: NodeId,
+) {
+    match ctx.current_group_kind() {
+        GroupKind::FieldInst => {
+            if let Some(field) = ctx.field_stack.last_mut() {
+                field.instruction.push_str(text);
+            }
+        }
+        GroupKind::FieldResult => {
+            if let Some(field) = ctx.field_stack.last_mut() {
+                field.runs.push(run_id);
+            }
+        }
+        _ => {
+            ensure_paragraph(ctx, store);
+            if let Some(para) = ctx.current_paragraph.as_mut() {
+                para.runs.push(run_id);
+            }
         }
     }
 }
