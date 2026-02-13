@@ -30,27 +30,6 @@ struct QueryResult {
     matches: Vec<QueryMatch>,
 }
 
-pub fn run(
-    input: PathBuf,
-    node_type: Option<String>,
-    contains: Option<String>,
-    format: Option<String>,
-    has_external_refs: Option<bool>,
-    has_macros: Option<bool>,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    let filters = QueryFilters {
-        node_type,
-        contains,
-        format,
-        has_external_refs,
-        has_macros,
-    };
-    run_with_filters(input, filters, pretty, output, parser_config)
-}
-
 pub(crate) fn run_with_filters(
     input: PathBuf,
     filters: QueryFilters,

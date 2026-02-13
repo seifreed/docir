@@ -1,6 +1,7 @@
 use crate::{Cli, Commands};
 use anyhow::Result;
 use docir_app::ParserConfig;
+use std::path::PathBuf;
 
 pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
     run_command(cli.command, parser_config)
@@ -72,7 +73,7 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             has_macros,
             pretty,
             output,
-        } => run_query(
+        } => run_query_like(
             input,
             node_type,
             contains,
@@ -92,7 +93,7 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             has_macros,
             pretty,
             output,
-        } => run_select(
+        } => run_query_like(
             input,
             node_type,
             contains,
@@ -158,49 +159,26 @@ fn run_coverage(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_query(
-    input: std::path::PathBuf,
+fn run_query_like(
+    input: PathBuf,
     node_type: Option<String>,
     contains: Option<String>,
     format: Option<String>,
     has_external_refs: Option<bool>,
     has_macros: Option<bool>,
     pretty: bool,
-    output: Option<std::path::PathBuf>,
+    output: Option<PathBuf>,
     parser_config: &ParserConfig,
 ) -> Result<()> {
-    super::query::run(
+    super::query::run_with_filters(
         input,
-        node_type,
-        contains,
-        format,
-        has_external_refs,
-        has_macros,
-        pretty,
-        output,
-        parser_config,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn run_select(
-    input: std::path::PathBuf,
-    node_type: Option<String>,
-    contains: Option<String>,
-    format: Option<String>,
-    has_external_refs: Option<bool>,
-    has_macros: Option<bool>,
-    pretty: bool,
-    output: Option<std::path::PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::select::run(
-        input,
-        node_type,
-        contains,
-        format,
-        has_external_refs,
-        has_macros,
+        super::query::QueryFilters {
+            node_type,
+            contains,
+            format,
+            has_external_refs,
+            has_macros,
+        },
         pretty,
         output,
         parser_config,

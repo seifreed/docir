@@ -10,6 +10,5 @@ pub mod parse;
 pub mod query;
 pub mod rules;
 pub mod security;
-pub mod select;
 pub mod summary;
 pub mod util;
