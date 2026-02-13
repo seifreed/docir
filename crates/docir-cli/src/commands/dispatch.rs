@@ -3,6 +3,18 @@ use anyhow::Result;
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
+struct CoverageCommand {
+    input: PathBuf,
+    options: super::coverage::CoverageOptions,
+}
+
+struct QueryLikeCommand {
+    input: PathBuf,
+    filters: super::query::QueryFilters,
+    pretty: bool,
+    output: Option<PathBuf>,
+}
+
 pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
     run_command(cli.command, parser_config)
 }
@@ -26,14 +38,18 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             export_format,
             export_mode,
         } => run_coverage(
-            input,
-            json,
-            details,
-            inventory,
-            unknown,
-            export,
-            export_format,
-            export_mode,
+            CoverageCommand {
+                input,
+                options: super::coverage::CoverageOptions {
+                    json,
+                    details,
+                    inventory,
+                    unknown,
+                    export,
+                    export_format,
+                    export_mode,
+                },
+            },
             parser_config,
         ),
         Commands::Security {
@@ -74,14 +90,18 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             pretty,
             output,
         } => run_query_like(
-            input,
-            node_type,
-            contains,
-            format,
-            has_external_refs,
-            has_macros,
-            pretty,
-            output,
+            QueryLikeCommand {
+                input,
+                filters: super::query::QueryFilters {
+                    node_type,
+                    contains,
+                    format,
+                    has_external_refs,
+                    has_macros,
+                },
+                pretty,
+                output,
+            },
             parser_config,
         ),
         Commands::Select {
@@ -94,14 +114,18 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             pretty,
             output,
         } => run_query_like(
-            input,
-            node_type,
-            contains,
-            format,
-            has_external_refs,
-            has_macros,
-            pretty,
-            output,
+            QueryLikeCommand {
+                input,
+                filters: super::query::QueryFilters {
+                    node_type,
+                    contains,
+                    format,
+                    has_external_refs,
+                    has_macros,
+                },
+                pretty,
+                output,
+            },
             parser_config,
         ),
         Commands::Grep {
@@ -131,56 +155,16 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_coverage(
-    input: std::path::PathBuf,
-    json: bool,
-    details: bool,
-    inventory: bool,
-    unknown: bool,
-    export: Option<std::path::PathBuf>,
-    export_format: crate::CoverageExportFormat,
-    export_mode: crate::CoverageExportMode,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::coverage::run(
-        input,
-        super::coverage::CoverageOptions {
-            json,
-            details,
-            inventory,
-            unknown,
-            export,
-            export_format,
-            export_mode,
-        },
-        parser_config,
-    )
+fn run_coverage(command: CoverageCommand, parser_config: &ParserConfig) -> Result<()> {
+    super::coverage::run(command.input, command.options, parser_config)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_query_like(
-    input: PathBuf,
-    node_type: Option<String>,
-    contains: Option<String>,
-    format: Option<String>,
-    has_external_refs: Option<bool>,
-    has_macros: Option<bool>,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
+fn run_query_like(command: QueryLikeCommand, parser_config: &ParserConfig) -> Result<()> {
     super::query::run_with_filters(
-        input,
-        super::query::QueryFilters {
-            node_type,
-            contains,
-            format,
-            has_external_refs,
-            has_macros,
-        },
-        pretty,
-        output,
+        command.input,
+        command.filters,
+        command.pretty,
+        command.output,
         parser_config,
     )
 }
