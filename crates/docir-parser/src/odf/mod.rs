@@ -6,7 +6,7 @@ use crate::format::FormatParser;
 use crate::input::enforce_input_size;
 use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
-use crate::xml_utils::{attr_value, read_event};
+use crate::xml_utils::{attr_value, read_event, xml_error};
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{
     BookmarkEnd, BookmarkStart, Cell, CellFormula, CellValue, ChartData, Comment, CommentReference,
@@ -117,13 +117,6 @@ fn parse_content(
             presentation::parse_content_presentation(xml, store, limits)
         }
         _ => Ok(OdfContentResult::default()),
-    }
-}
-
-fn xml_error(file: &str, err: quick_xml::Error) -> ParseError {
-    ParseError::Xml {
-        file: file.to_string(),
-        message: err.to_string(),
     }
 }
 

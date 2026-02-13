@@ -4,7 +4,7 @@ use super::field::parse_field_instruction;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
 use crate::ooxml::shared::normalize_docx_target;
-use crate::xml_utils::{attr_value, read_event, reader_from_str};
+use crate::xml_utils::{attr_value, read_event, reader_from_str, xml_error};
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
     Footer, GlossaryDocument, Header, Hyperlink, LineSpacingRule, NumberingInfo, PageBorders,
@@ -1235,13 +1235,6 @@ fn parse_num_abstract_id(reader: &mut Reader<&[u8]>) -> Result<u32, ParseError> 
         buf.clear();
     }
     Ok(abstract_id)
-}
-
-fn xml_error(file: &str, err: quick_xml::Error) -> ParseError {
-    ParseError::Xml {
-        file: file.to_string(),
-        message: err.to_string(),
-    }
 }
 
 fn line_col(data: &[u8], pos: usize) -> Option<(u32, u32)> {
