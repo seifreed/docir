@@ -82,17 +82,7 @@ pub(super) fn parse_ods_conditional_formatting(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
 ) -> Result<Option<ConditionalFormat>, ParseError> {
-    let mut cf = ConditionalFormat {
-        id: NodeId::new(),
-        ranges: Vec::new(),
-        rules: Vec::new(),
-        span: Some(SourceSpan::new(ODF_CONTENT_XML)),
-    };
-    if let Some(ranges) = attr_value(start, b"table:target-range-address")
-        .or_else(|| attr_value(start, b"table:cell-range-address"))
-    {
-        cf.ranges = ranges.split_whitespace().map(|s| s.to_string()).collect();
-    }
+    let mut cf = init_conditional_format(start);
 
     let mut buf = Vec::new();
     loop {
@@ -132,6 +122,15 @@ pub(super) fn parse_ods_conditional_formatting(
 pub(super) fn parse_ods_conditional_formatting_empty(
     start: &BytesStart<'_>,
 ) -> Result<Option<ConditionalFormat>, ParseError> {
+    let cf = init_conditional_format(start);
+    if cf.rules.is_empty() && cf.ranges.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(cf))
+    }
+}
+
+fn init_conditional_format(start: &BytesStart<'_>) -> ConditionalFormat {
     let mut cf = ConditionalFormat {
         id: NodeId::new(),
         ranges: Vec::new(),
@@ -143,11 +142,7 @@ pub(super) fn parse_ods_conditional_formatting_empty(
     {
         cf.ranges = ranges.split_whitespace().map(|s| s.to_string()).collect();
     }
-    if cf.rules.is_empty() && cf.ranges.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(cf))
-    }
+    cf
 }
 
 pub(super) fn build_ods_conditional_rule(start: &BytesStart<'_>) -> ConditionalRule {
