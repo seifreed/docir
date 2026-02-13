@@ -34,61 +34,12 @@ struct CoverageReport {
 
 pub fn run(input: PathBuf, options: CoverageOptions, parser_config: &ParserConfig) -> Result<()> {
     let parsed = parse_document(&input, parser_config)?;
-
     let doc = parsed.document().context("Failed to get document root")?;
-
-    let mut entries: Vec<DiagnosticEntry> = Vec::new();
-    for diag_id in &doc.diagnostics {
-        if let Some(IRNode::Diagnostics(diag)) = parsed.store().get(*diag_id) {
-            entries.extend(diag.entries.clone());
-        }
-    }
-
-    let mut report = CoverageReport {
-        summary: None,
-        unparsed_summary: None,
-        counts: None,
-        parts: Vec::new(),
-        part_rows: Vec::new(),
-        missing: Vec::new(),
-        inventory: Vec::new(),
-        unknown: Vec::new(),
-        histogram: Vec::new(),
-    };
-
-    for entry in entries {
-        match entry.code.as_str() {
-            "COVERAGE_SUMMARY" => {
-                report.summary = Some(entry.message);
-            }
-            "UNPARSED_SUMMARY" => {
-                report.unparsed_summary = Some(entry.message);
-            }
-            "COVERAGE_COUNTS" => {
-                report.counts = Some(entry.message);
-            }
-            "COVERAGE_PART" => report.parts.push(entry),
-            "COVERAGE_PART_ROW" => report.part_rows.push(entry),
-            "COVERAGE_MISSING" => report.missing.push(entry),
-            "CONTENT_TYPE_INVENTORY" => report.inventory.push(entry),
-            "CONTENT_TYPE_UNKNOWN" => report.unknown.push(entry),
-            "CONTENT_TYPE_HISTOGRAM" => report.histogram.push(entry),
-            _ => {}
-        }
-    }
+    let entries = collect_coverage_entries(&parsed, doc);
+    let report = build_report(entries);
 
     if options.json {
-        let json = serde_json::to_string_pretty(&report)?;
-        println!("{}", json);
-        if let Some(path) = options.export.as_ref() {
-            write_export(
-                path,
-                options.export_format,
-                options.export_mode,
-                &report,
-                json,
-            )?;
-        }
+        output_json_report(&report, options.export.as_ref(), &options)?;
         return Ok(());
     }
 
@@ -103,17 +54,90 @@ pub fn run(input: PathBuf, options: CoverageOptions, parser_config: &ParserConfi
         )?;
     }
 
+    print_text_report(&input, doc.format.display_name(), &report, &options);
+
+    Ok(())
+}
+
+fn collect_coverage_entries(
+    parsed: &docir_app::ParsedDocument,
+    doc: &docir_core::ir::Document,
+) -> Vec<DiagnosticEntry> {
+    let mut entries = Vec::new();
+    for diag_id in &doc.diagnostics {
+        if let Some(IRNode::Diagnostics(diag)) = parsed.store().get(*diag_id) {
+            entries.extend(diag.entries.clone());
+        }
+    }
+    entries
+}
+
+fn build_report(entries: Vec<DiagnosticEntry>) -> CoverageReport {
+    let mut report = CoverageReport {
+        summary: None,
+        unparsed_summary: None,
+        counts: None,
+        parts: Vec::new(),
+        part_rows: Vec::new(),
+        missing: Vec::new(),
+        inventory: Vec::new(),
+        unknown: Vec::new(),
+        histogram: Vec::new(),
+    };
+
+    for entry in entries {
+        match entry.code.as_str() {
+            "COVERAGE_SUMMARY" => report.summary = Some(entry.message),
+            "UNPARSED_SUMMARY" => report.unparsed_summary = Some(entry.message),
+            "COVERAGE_COUNTS" => report.counts = Some(entry.message),
+            "COVERAGE_PART" => report.parts.push(entry),
+            "COVERAGE_PART_ROW" => report.part_rows.push(entry),
+            "COVERAGE_MISSING" => report.missing.push(entry),
+            "CONTENT_TYPE_INVENTORY" => report.inventory.push(entry),
+            "CONTENT_TYPE_UNKNOWN" => report.unknown.push(entry),
+            "CONTENT_TYPE_HISTOGRAM" => report.histogram.push(entry),
+            _ => {}
+        }
+    }
+
+    report
+}
+
+fn output_json_report(
+    report: &CoverageReport,
+    export_path: Option<&PathBuf>,
+    options: &CoverageOptions,
+) -> Result<()> {
+    let json = serde_json::to_string_pretty(report)?;
+    println!("{}", json);
+    if let Some(path) = export_path {
+        write_export(
+            path,
+            options.export_format,
+            options.export_mode,
+            report,
+            json,
+        )?;
+    }
+    Ok(())
+}
+
+fn print_text_report(
+    input: &PathBuf,
+    format_name: &str,
+    report: &CoverageReport,
+    options: &CoverageOptions,
+) {
     println!("Coverage Report");
     println!("===============");
     println!();
     println!("File: {}", input.display());
-    println!("Format: {}", doc.format.display_name());
+    println!("Format: {}", format_name);
     println!();
 
-    if let Some(summary) = &report.summary {
-        println!("{}", summary);
-    } else {
-        println!("coverage summary: missing");
+    match &report.summary {
+        Some(summary) => println!("{}", summary),
+        None => println!("coverage summary: missing"),
     }
     if let Some(unparsed) = &report.unparsed_summary {
         println!("{}", unparsed);
@@ -141,60 +165,29 @@ pub fn run(input: PathBuf, options: CoverageOptions, parser_config: &ParserConfi
     );
 
     if options.details {
-        if !report.parts.is_empty() {
-            println!();
-            println!("Matched Parts:");
-            let mut parts = report.parts.clone();
-            parts.sort_by(|a, b| a.path.cmp(&b.path));
-            for part in parts {
-                println!("  {}", part.message);
-            }
-        }
-
-        if !report.missing.is_empty() {
-            println!();
-            println!("Missing Patterns:");
-            let mut missing = report.missing.clone();
-            missing.sort_by(|a, b| a.path.cmp(&b.path));
-            for part in missing {
-                println!("  {}", part.message);
-            }
-        }
+        print_entry_section("Matched Parts", &report.parts);
+        print_entry_section("Missing Patterns", &report.missing);
     }
-
     if options.inventory {
-        println!();
-        println!("Content Types Inventory:");
-        let mut inventory = report.inventory.clone();
-        inventory.sort_by(|a, b| a.path.cmp(&b.path));
-        for entry in inventory {
-            println!("  {}", entry.message);
-        }
+        print_entry_section("Content Types Inventory", &report.inventory);
     }
-
-    if !report.histogram.is_empty() {
-        println!();
-        println!("Content Type Histogram:");
-        let mut hist = report.histogram.clone();
-        hist.sort_by(|a, b| a.path.cmp(&b.path));
-        for entry in hist {
-            println!("  {}", entry.message);
-        }
-    }
-
+    print_entry_section("Content Type Histogram", &report.histogram);
     if options.unknown {
-        if !report.unknown.is_empty() {
-            println!();
-            println!("Unknown Content Types:");
-            let mut unknown = report.unknown.clone();
-            unknown.sort_by(|a, b| a.path.cmp(&b.path));
-            for entry in unknown {
-                println!("  {}", entry.message);
-            }
-        }
+        print_entry_section("Unknown Content Types", &report.unknown);
     }
+}
 
-    Ok(())
+fn print_entry_section(label: &str, entries: &[DiagnosticEntry]) {
+    if entries.is_empty() {
+        return;
+    }
+    println!();
+    println!("{label}:");
+    let mut rows = entries.to_vec();
+    rows.sort_by(|a, b| a.path.cmp(&b.path));
+    for entry in rows {
+        println!("  {}", entry.message);
+    }
 }
 
 fn write_export(
