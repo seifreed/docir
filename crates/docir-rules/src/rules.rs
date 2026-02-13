@@ -96,14 +96,13 @@ fn count_activex_controls(ctx: &RuleContext) -> usize {
 
 fn count_external_links(ctx: &RuleContext) -> usize {
     let mut count = 0usize;
-    let mut visited = HashSet::new();
-    for node in iter_nodes(ctx.store, ctx.root, &mut visited) {
+    visit_nodes(ctx, |node| {
         if let IRNode::Hyperlink(link) = node {
             if link.is_external {
                 count += 1;
             }
         }
-    }
+    });
     count
 }
 
@@ -594,8 +593,7 @@ impl Rule for ExternalHyperlinkRule {
     }
 
     fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let mut visited = HashSet::new();
-        for node in iter_nodes(ctx.store, ctx.root, &mut visited) {
+        visit_nodes(ctx, |node| {
             if let IRNode::Hyperlink(link) = node {
                 if link.is_external {
                     add_finding(
@@ -607,7 +605,7 @@ impl Rule for ExternalHyperlinkRule {
                     );
                 }
             }
-        }
+        });
     }
 }
 
@@ -636,8 +634,7 @@ impl Rule for HiddenWorksheetRule {
     }
 
     fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let mut visited = HashSet::new();
-        for node in iter_nodes(ctx.store, ctx.root, &mut visited) {
+        visit_nodes(ctx, |node| {
             if let IRNode::Worksheet(sheet) = node {
                 if sheet.state != docir_core::ir::SheetState::Visible {
                     add_finding(
@@ -649,7 +646,7 @@ impl Rule for HiddenWorksheetRule {
                     );
                 }
             }
-        }
+        });
     }
 }
 
@@ -678,8 +675,7 @@ impl Rule for HiddenSlideRule {
     }
 
     fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let mut visited = HashSet::new();
-        for node in iter_nodes(ctx.store, ctx.root, &mut visited) {
+        visit_nodes(ctx, |node| {
             if let IRNode::Slide(slide) = node {
                 if slide.hidden {
                     add_finding(
@@ -691,7 +687,7 @@ impl Rule for HiddenSlideRule {
                     );
                 }
             }
-        }
+        });
     }
 }
 
@@ -720,8 +716,7 @@ impl Rule for SuspiciousFormulaRule {
     }
 
     fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let mut visited = HashSet::new();
-        for node in iter_nodes(ctx.store, ctx.root, &mut visited) {
+        visit_nodes(ctx, |node| {
             if let IRNode::Cell(cell) = node {
                 if let Some(formula) = &cell.formula {
                     if is_suspicious_formula(&formula.text) {
@@ -735,7 +730,14 @@ impl Rule for SuspiciousFormulaRule {
                     }
                 }
             }
-        }
+        });
+    }
+}
+
+fn visit_nodes(ctx: &RuleContext, mut visitor: impl FnMut(&IRNode)) {
+    let mut visited = HashSet::new();
+    for node in iter_nodes(ctx.store, ctx.root, &mut visited) {
+        visitor(node);
     }
 }
 
