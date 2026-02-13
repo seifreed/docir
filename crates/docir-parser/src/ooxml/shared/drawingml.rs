@@ -21,7 +21,6 @@ pub fn parse_drawingml_part(
 
     let mut buf = Vec::new();
     let mut current_name: Option<String> = None;
-    let mut current_diagram_rel_ids: Vec<String> = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
@@ -29,76 +28,43 @@ pub fn parse_drawingml_part(
                 let local = local_name(&name_buf);
                 match local {
                     b"docPr" => {
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            if key == b"name" {
-                                current_name =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
+                        current_name = attr_value_by_local_keys(&e, &[b"name"]);
                     }
                     b"blip" => {
-                        let mut rel_id = None;
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            if key == b"embed" || key == b"link" || key == b"id" {
-                                rel_id = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
-                        if let Some(rel_id) = rel_id {
-                            if let Some(rel) = rels.get(&rel_id) {
-                                let mut shape = Shape::new(ShapeType::Picture);
-                                shape.name = current_name.clone();
-                                shape.relationship_id = Some(rel_id);
-                                shape.media_target =
-                                    Some(resolve_drawingml_target(path, &rel.target));
-                                shape.span = Some(SourceSpan::new(path));
+                        if let Some(rel_id) =
+                            attr_value_by_local_keys(&e, &[b"embed", b"link", b"id"])
+                        {
+                            if let Some(shape) = build_target_shape(
+                                rels,
+                                path,
+                                current_name.clone(),
+                                rel_id,
+                                ShapeType::Picture,
+                            ) {
                                 shapes.push(shape);
                             }
                         }
                     }
                     b"relIds" => {
-                        current_diagram_rel_ids.clear();
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            if key == b"dm" || key == b"lo" || key == b"qs" || key == b"cs" {
-                                current_diagram_rel_ids
-                                    .push(String::from_utf8_lossy(&attr.value).to_string());
-                            }
+                        let rel_ids = rel_ids_from_attr_keys(&e, &[b"dm", b"lo", b"qs", b"cs"]);
+                        if !rel_ids.is_empty() {
+                            shapes.push(build_custom_shape(
+                                rels,
+                                path,
+                                current_name.clone(),
+                                rel_ids,
+                            ));
                         }
-                        if !current_diagram_rel_ids.is_empty() {
-                            let mut related_targets = Vec::new();
-                            for rel_id in &current_diagram_rel_ids {
-                                if let Some(rel) = rels.get(rel_id) {
-                                    related_targets
-                                        .push(resolve_drawingml_target(path, &rel.target));
-                                }
-                            }
-                            let mut shape = Shape::new(ShapeType::Custom);
-                            shape.name = current_name.clone();
-                            shape.relationship_id = current_diagram_rel_ids.first().cloned();
-                            shape.related_targets = related_targets;
-                            shape.span = Some(SourceSpan::new(path));
-                            shapes.push(shape);
-                        }
-                        current_diagram_rel_ids.clear();
                     }
                     b"chart" => {
-                        let mut rel_id = None;
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            if key == b"id" || key == b"rid" {
-                                rel_id = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
-                        if let Some(rel_id) = rel_id {
-                            if let Some(rel) = rels.get(&rel_id) {
-                                let mut shape = Shape::new(ShapeType::Chart);
-                                shape.name = current_name.clone();
-                                shape.relationship_id = Some(rel_id);
-                                shape.media_target =
-                                    Some(resolve_drawingml_target(path, &rel.target));
-                                shape.span = Some(SourceSpan::new(path));
+                        if let Some(rel_id) = attr_value_by_local_keys(&e, &[b"id", b"rid"]) {
+                            if let Some(shape) = build_target_shape(
+                                rels,
+                                path,
+                                current_name.clone(),
+                                rel_id,
+                                ShapeType::Chart,
+                            ) {
                                 shapes.push(shape);
                             }
                         }
@@ -124,4 +90,70 @@ fn resolve_drawingml_target(path: &str, target: &str) -> String {
     } else {
         Relationships::resolve_target(path, target)
     }
+}
+
+fn attr_value_by_local_keys(
+    event: &quick_xml::events::BytesStart<'_>,
+    keys: &[&[u8]],
+) -> Option<String> {
+    for attr in event.attributes().flatten() {
+        let key = local_name(attr.key.as_ref());
+        if keys.iter().any(|candidate| key == *candidate) {
+            return Some(String::from_utf8_lossy(&attr.value).to_string());
+        }
+    }
+    None
+}
+
+fn rel_ids_from_attr_keys(
+    event: &quick_xml::events::BytesStart<'_>,
+    keys: &[&[u8]],
+) -> Vec<String> {
+    event
+        .attributes()
+        .flatten()
+        .filter_map(|attr| {
+            let key = local_name(attr.key.as_ref());
+            if keys.iter().any(|candidate| key == *candidate) {
+                Some(String::from_utf8_lossy(&attr.value).to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn build_target_shape(
+    rels: &Relationships,
+    path: &str,
+    current_name: Option<String>,
+    rel_id: String,
+    shape_type: ShapeType,
+) -> Option<Shape> {
+    let rel = rels.get(&rel_id)?;
+    let mut shape = Shape::new(shape_type);
+    shape.name = current_name;
+    shape.relationship_id = Some(rel_id);
+    shape.media_target = Some(resolve_drawingml_target(path, &rel.target));
+    shape.span = Some(SourceSpan::new(path));
+    Some(shape)
+}
+
+fn build_custom_shape(
+    rels: &Relationships,
+    path: &str,
+    current_name: Option<String>,
+    rel_ids: Vec<String>,
+) -> Shape {
+    let related_targets = rel_ids
+        .iter()
+        .filter_map(|rel_id| rels.get(rel_id))
+        .map(|rel| resolve_drawingml_target(path, &rel.target))
+        .collect();
+    let mut shape = Shape::new(ShapeType::Custom);
+    shape.name = current_name;
+    shape.relationship_id = rel_ids.first().cloned();
+    shape.related_targets = related_targets;
+    shape.span = Some(SourceSpan::new(path));
+    shape
 }
