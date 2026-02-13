@@ -159,7 +159,7 @@ fn parse_doc_format(input: &str) -> PyResult<DocumentFormat> {
 }
 
 #[pymodule]
-fn docir(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn docir(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_json, m)?)?;
     m.add_function(wrap_pyfunction!(rules, m)?)?;
     m.add_function(wrap_pyfunction!(query, m)?)?;
