@@ -1,4 +1,5 @@
 use super::*;
+use crate::parse_utils::is_zip_container;
 
 /// Unified parser that dispatches OOXML vs ODF based on package signature.
 pub struct DocumentParser {
@@ -124,10 +125,6 @@ impl DocumentParser {
         let parsed = self.parse_bytes(&data)?;
         Ok((parsed, data))
     }
-}
-
-fn is_zip_container(data: &[u8]) -> bool {
-    data.len() >= 4 && data[0] == b'P' && data[1] == b'K'
 }
 
 pub(super) fn parse_activex_xml(

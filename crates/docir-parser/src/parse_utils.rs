@@ -41,3 +41,7 @@ pub(crate) fn finalize_and_normalize(
     normalize_store(&mut parsed.store, parsed.root_id);
     parsed
 }
+
+pub(crate) fn is_zip_container(data: &[u8]) -> bool {
+    data.len() >= 4 && data[0] == b'P' && data[1] == b'K'
+}

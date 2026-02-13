@@ -41,14 +41,10 @@ pub fn scan_security_bytes(
     data: &[u8],
     store: &mut IrStore,
 ) -> Result<(), ParseError> {
-    if !is_zip_container(data) {
+    if !parse_utils::is_zip_container(data) {
         return Ok(());
     }
     let mut zip = SecureZipReader::new(Cursor::new(data), config.zip_config.clone())?;
     let scanner = security_scan::DefaultSecurityScanner;
     scanner.scan_ooxml(config, &mut zip, store)
-}
-
-fn is_zip_container(data: &[u8]) -> bool {
-    data.len() >= 4 && data[0] == b'P' && data[1] == b'K'
 }
