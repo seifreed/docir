@@ -1,3 +1,4 @@
+use super::styles::parse_hwpx_styles;
 use super::*;
 use crate::parse_utils::{finalize_and_normalize, init_store_and_document};
 
