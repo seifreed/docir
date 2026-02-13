@@ -1,6 +1,16 @@
 use super::*;
 use crate::parse_utils::{finalize_document, init_document_state};
 
+struct OdfReadState {
+    content_xml: Option<String>,
+    content_bytes: Option<Vec<u8>>,
+    fast_mode: bool,
+    styles_xml: Option<String>,
+    settings_xml: Option<String>,
+    signatures_xml: Option<String>,
+    file_names: Vec<String>,
+}
+
 impl OdfParser {
     /// Parses from any reader.
     pub fn parse_reader<R: Read + Seek>(
@@ -19,8 +29,7 @@ impl OdfParser {
         let (mut store, mut doc, mut diagnostics) = init_document_state(format);
 
         load_meta(&mut zip, &mut store, &mut doc)?;
-        let content_state = handle_content_xml(
-            &self.config,
+        let read_state = self.parse_content_and_collect_parts(
             &mut zip,
             format,
             &manifest_entries,
@@ -28,37 +37,21 @@ impl OdfParser {
             &mut doc,
             &mut diagnostics,
         )?;
-        let content_xml = content_state.content_xml;
-        let content_bytes = content_state.content_bytes;
-        let fast_mode = content_state.fast_mode;
-        let content_size = content_state.content_size;
-
-        let (styles_xml, settings_xml, signatures_xml) =
-            self.load_styles_settings_signatures(&mut zip, &mut store, &mut doc)?;
-
-        self.emit_fast_mode_diagnostics(
-            &mut diagnostics,
-            fast_mode,
-            content_size,
-            content_xml.is_none(),
-        );
-        let manifest_index = collect_manifest_index(&manifest_entries, &mut diagnostics);
-        let file_names = collect_shared_parts(&mut zip, &manifest_index, &mut store, &mut doc);
 
         self.process_odf_styles_and_layouts(
             &self.config,
-            styles_xml.as_deref(),
-            content_xml.as_deref(),
-            fast_mode,
+            read_state.styles_xml.as_deref(),
+            read_state.content_xml.as_deref(),
+            read_state.fast_mode,
             &mut store,
             &mut doc,
             &mut diagnostics,
         )?;
 
         self.capture_fast_mode_spreadsheet_chunks(
-            fast_mode,
+            read_state.fast_mode,
             format,
-            content_bytes.as_deref(),
+            read_state.content_bytes.as_deref(),
             &mut store,
             &mut doc,
             &mut diagnostics,
@@ -66,37 +59,93 @@ impl OdfParser {
 
         let mut macro_project = build_odf_macro_project(
             &manifest_entries,
-            &content_xml,
-            &styles_xml,
-            &settings_xml,
-            &file_names,
+            &read_state.content_xml,
+            &read_state.styles_xml,
+            &read_state.settings_xml,
+            &read_state.file_names,
             &mut store,
         );
         self.insert_macro_project(&mut store, &mut macro_project);
 
         let scanner = DefaultSecurityScanner;
         scanner.scan_odf(
-            content_xml.as_deref(),
-            styles_xml.as_deref(),
-            settings_xml.as_deref(),
-            &file_names,
+            read_state.content_xml.as_deref(),
+            read_state.styles_xml.as_deref(),
+            read_state.settings_xml.as_deref(),
+            &read_state.file_names,
             &mut zip,
             &mut store,
             &mut doc,
             &mut diagnostics,
         );
 
-        self.insert_signatures(signatures_xml.as_deref(), &mut store, &mut doc);
-
-        self.emit_encryption_diagnostics(&manifest_entries, &mut diagnostics);
-
-        attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);
-
-        self.add_filter_diagnostics(content_xml.as_deref(), &mut store, &mut doc);
-
-        self.add_defined_names(format, content_bytes.as_deref(), &mut store, &mut doc);
+        self.finalize_parsed_artifacts(
+            &read_state,
+            &manifest_entries,
+            format,
+            &mut store,
+            &mut doc,
+            diagnostics,
+        );
 
         Ok(finalize_document(format, store, doc))
+    }
+
+    fn parse_content_and_collect_parts<R: Read + Seek>(
+        &self,
+        zip: &mut SecureZipReader<R>,
+        format: DocumentFormat,
+        manifest_entries: &[OdfManifestEntry],
+        store: &mut IrStore,
+        doc: &mut Document,
+        diagnostics: &mut Diagnostics,
+    ) -> Result<OdfReadState, ParseError> {
+        let content_state = handle_content_xml(
+            &self.config,
+            zip,
+            format,
+            manifest_entries,
+            store,
+            doc,
+            diagnostics,
+        )?;
+        let (styles_xml, settings_xml, signatures_xml) =
+            self.load_styles_settings_signatures(zip, store, doc)?;
+
+        self.emit_fast_mode_diagnostics(
+            diagnostics,
+            content_state.fast_mode,
+            content_state.content_size,
+            content_state.content_xml.is_none(),
+        );
+        let manifest_index = collect_manifest_index(manifest_entries, diagnostics);
+        let file_names = collect_shared_parts(zip, &manifest_index, store, doc);
+
+        Ok(OdfReadState {
+            content_xml: content_state.content_xml,
+            content_bytes: content_state.content_bytes,
+            fast_mode: content_state.fast_mode,
+            styles_xml,
+            settings_xml,
+            signatures_xml,
+            file_names,
+        })
+    }
+
+    fn finalize_parsed_artifacts(
+        &self,
+        read_state: &OdfReadState,
+        manifest_entries: &[OdfManifestEntry],
+        format: DocumentFormat,
+        store: &mut IrStore,
+        doc: &mut Document,
+        mut diagnostics: Diagnostics,
+    ) {
+        self.insert_signatures(read_state.signatures_xml.as_deref(), store, doc);
+        self.emit_encryption_diagnostics(manifest_entries, &mut diagnostics);
+        attach_diagnostics_if_any(store, doc, diagnostics);
+        self.add_filter_diagnostics(read_state.content_xml.as_deref(), store, doc);
+        self.add_defined_names(format, read_state.content_bytes.as_deref(), store, doc);
     }
 
     fn capture_fast_mode_spreadsheet_chunks(
@@ -116,7 +165,8 @@ impl OdfParser {
         };
         let chunks = spreadsheet_chunks::extract_spreadsheet_table_chunks(bytes);
         for (idx, chunk) in chunks.iter().enumerate() {
-            let sheet_name = spreadsheet_chunks::table_name_from_chunk(&chunk.bytes, (idx + 1) as u32);
+            let sheet_name =
+                spreadsheet_chunks::table_name_from_chunk(&chunk.bytes, (idx + 1) as u32);
             let path = format!(
                 "content.xml#sheet:{}@{}-{}",
                 sheet_name, chunk.start, chunk.end
