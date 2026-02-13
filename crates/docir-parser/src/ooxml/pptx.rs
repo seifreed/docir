@@ -155,19 +155,7 @@ impl PptxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => match e.name().as_ref() {
                     b"p:cNvPr" => {
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"name" => {
-                                    shape.name =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                b"descr" => {
-                                    shape.alt_text =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                _ => {}
-                            }
-                        }
+                        parse_shape_non_visual_props(&e, &mut shape);
                     }
                     b"a:hlinkClick" => {
                         self.attach_hyperlink(&mut shape, &e, relationships, slide_path);
@@ -187,19 +175,7 @@ impl PptxParser {
                 Ok(Event::Empty(e)) => {
                     match e.name().as_ref() {
                         b"p:cNvPr" => {
-                            for attr in e.attributes().flatten() {
-                                match attr.key.as_ref() {
-                                    b"name" => {
-                                        shape.name =
-                                            Some(String::from_utf8_lossy(&attr.value).to_string());
-                                    }
-                                    b"descr" => {
-                                        shape.alt_text =
-                                            Some(String::from_utf8_lossy(&attr.value).to_string());
-                                    }
-                                    _ => {}
-                                }
-                            }
+                            parse_shape_non_visual_props(&e, &mut shape);
                         }
                         b"a:hlinkClick" => {
                             self.attach_hyperlink(&mut shape, &e, relationships, slide_path);
@@ -512,6 +488,39 @@ fn parse_slide_list(xml: &str) -> Result<Vec<String>, ParseError> {
     Ok(slide_ids)
 }
 
+fn parse_shape_non_visual_props(start: &BytesStart<'_>, shape: &mut Shape) {
+    for attr in start.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"name" => {
+                shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"descr" => {
+                shape.alt_text = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            _ => {}
+        }
+    }
+}
+
+fn parse_u64_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<u64> {
+    start
+        .attributes()
+        .flatten()
+        .find(|attr| attr.key.as_ref() == key_name)
+        .and_then(|attr| String::from_utf8_lossy(&attr.value).parse::<u64>().ok())
+}
+
+fn parse_bool_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<bool> {
+    start
+        .attributes()
+        .flatten()
+        .find(|attr| attr.key.as_ref() == key_name)
+        .map(|attr| {
+            let val = String::from_utf8_lossy(&attr.value);
+            val == "1" || val.eq_ignore_ascii_case("true")
+        })
+}
+
 fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationInfo>, ParseError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -526,13 +535,11 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                 let name_bytes = e.name().as_ref().to_vec();
                 let name = name_bytes.as_slice();
                 if name == b"p:sldSz" {
-                    let mut cx = None;
-                    let mut cy = None;
+                    let cx = parse_u64_attr(&e, b"cx");
+                    let cy = parse_u64_attr(&e, b"cy");
                     let mut size_type = None;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"cx" => cx = String::from_utf8_lossy(&attr.value).parse::<u64>().ok(),
-                            b"cy" => cy = String::from_utf8_lossy(&attr.value).parse::<u64>().ok(),
                             b"type" => {
                                 size_type = Some(String::from_utf8_lossy(&attr.value).to_string())
                             }
@@ -544,15 +551,8 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                         found = true;
                     }
                 } else if name == b"p:notesSz" {
-                    let mut cx = None;
-                    let mut cy = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"cx" => cx = String::from_utf8_lossy(&attr.value).parse::<u64>().ok(),
-                            b"cy" => cy = String::from_utf8_lossy(&attr.value).parse::<u64>().ok(),
-                            _ => {}
-                        }
-                    }
+                    let cx = parse_u64_attr(&e, b"cx");
+                    let cy = parse_u64_attr(&e, b"cy");
                     if let (Some(cx), Some(cy)) = (cx, cy) {
                         info.notes_size = Some(SlideSize {
                             cx,
@@ -567,22 +567,14 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                         let val = String::from_utf8_lossy(&attr.value);
                         match key {
                             b"showType" => info.show_type = Some(val.to_string()),
-                            b"loop" => {
-                                info.show_loop =
-                                    Some(val == "1" || val.eq_ignore_ascii_case("true"))
-                            }
+                            b"loop" => info.show_loop = parse_bool_attr(&e, b"loop"),
                             b"showNarration" => {
-                                info.show_narration =
-                                    Some(val == "1" || val.eq_ignore_ascii_case("true"))
+                                info.show_narration = parse_bool_attr(&e, b"showNarration")
                             }
                             b"showAnimation" => {
-                                info.show_animation =
-                                    Some(val == "1" || val.eq_ignore_ascii_case("true"))
+                                info.show_animation = parse_bool_attr(&e, b"showAnimation")
                             }
-                            b"useTimings" => {
-                                info.use_timings =
-                                    Some(val == "1" || val.eq_ignore_ascii_case("true"))
-                            }
+                            b"useTimings" => info.use_timings = parse_bool_attr(&e, b"useTimings"),
                             _ => {}
                         }
                     }
