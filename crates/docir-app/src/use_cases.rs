@@ -7,7 +7,6 @@ use docir_core::visitor::IrStore;
 use docir_diff::{DiffEngine, DiffResult};
 use docir_rules::{RuleProfile, RuleReport};
 use docir_security::analyzer::AnalysisResult;
-use docir_serialization::json::to_json;
 use std::io::{Read, Seek};
 use std::path::Path;
 
@@ -74,14 +73,6 @@ impl EnrichSecurity {
     pub(crate) fn run(enricher: &dyn SecurityEnricherPort, parsed: &mut ParsedDocument) {
         let root_id = parsed.root_id();
         enricher.enrich(parsed.store_mut(), root_id);
-    }
-}
-
-pub(crate) struct SerializeDocument;
-
-impl SerializeDocument {
-    pub(crate) fn to_json(parsed: &ParsedDocument, pretty: bool) -> AppResult<String> {
-        Ok(to_json(parsed.store(), parsed.root_id(), pretty)?)
     }
 }
 

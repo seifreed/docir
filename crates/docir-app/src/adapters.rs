@@ -11,10 +11,9 @@ use docir_parser::{scan_security_bytes as scan_parser_bytes, DocumentParser, Par
 use docir_rules::RuleEngine;
 use docir_security::populate_security_indicators;
 use docir_security::SecurityAnalyzer;
+use docir_serialization::json::to_json;
 use std::io::{Read, Seek};
 use std::path::Path;
-
-use crate::use_cases::SerializeDocument;
 
 /// Parser adapter that bundles a configured parser with its config.
 pub struct AppParser {
@@ -48,7 +47,7 @@ struct DefaultJsonSerializer;
 
 impl SerializerPort for DefaultJsonSerializer {
     fn to_json(&self, parsed: &ParsedDocument, pretty: bool) -> AppResult<String> {
-        SerializeDocument::to_json(parsed, pretty)
+        Ok(to_json(parsed.store(), parsed.root_id(), pretty)?)
     }
 }
 
