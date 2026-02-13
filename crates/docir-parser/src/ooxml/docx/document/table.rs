@@ -8,7 +8,7 @@ use docir_core::ir::{
     TableBorders, TableCell, TableCellProperties, TableRow, TableWidth, TableWidthType,
 };
 use docir_core::types::NodeId;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
 pub(super) fn parse_table(
@@ -154,99 +154,9 @@ fn parse_table_cell_properties(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"w:tcW" => {
-                    if let Some(val) = attr_value(&e, b"w:w").and_then(|v| v.parse().ok()) {
-                        let width_type = match attr_value(&e, b"w:type").as_deref() {
-                            Some("dxa") => TableWidthType::Dxa,
-                            Some("pct") => TableWidthType::Pct,
-                            Some("auto") => TableWidthType::Auto,
-                            _ => TableWidthType::Nil,
-                        };
-                        props.width = Some(TableWidth {
-                            value: val,
-                            width_type,
-                        });
-                    }
-                }
-                b"w:gridSpan" => {
-                    if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
-                        props.grid_span = Some(val);
-                    }
-                }
-                b"w:vMerge" => {
-                    let merge = match attr_value(&e, b"w:val").as_deref() {
-                        Some("restart") => MergeType::Restart,
-                        Some("continue") => MergeType::Continue,
-                        _ => MergeType::Continue,
-                    };
-                    props.vertical_merge = Some(merge);
-                }
-                b"w:vAlign" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
-                        props.vertical_align = match val.as_str() {
-                            "center" => Some(CellVerticalAlignment::Center),
-                            "bottom" => Some(CellVerticalAlignment::Bottom),
-                            _ => Some(CellVerticalAlignment::Top),
-                        };
-                    }
-                }
-                b"w:tcBorders" => {
-                    if let Some(borders) = parse_table_borders(reader, b"w:tcBorders")? {
-                        props.borders = Some(borders);
-                    }
-                }
-                b"w:shd" => {
-                    if let Some(fill) = attr_value(&e, b"w:fill") {
-                        props.shading = Some(fill);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"w:tcW" => {
-                    if let Some(val) = attr_value(&e, b"w:w").and_then(|v| v.parse().ok()) {
-                        let width_type = match attr_value(&e, b"w:type").as_deref() {
-                            Some("dxa") => TableWidthType::Dxa,
-                            Some("pct") => TableWidthType::Pct,
-                            Some("auto") => TableWidthType::Auto,
-                            _ => TableWidthType::Nil,
-                        };
-                        props.width = Some(TableWidth {
-                            value: val,
-                            width_type,
-                        });
-                    }
-                }
-                b"w:gridSpan" => {
-                    if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
-                        props.grid_span = Some(val);
-                    }
-                }
-                b"w:vMerge" => {
-                    let merge = match attr_value(&e, b"w:val").as_deref() {
-                        Some("restart") => MergeType::Restart,
-                        Some("continue") => MergeType::Continue,
-                        _ => MergeType::Continue,
-                    };
-                    props.vertical_merge = Some(merge);
-                }
-                b"w:vAlign" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
-                        props.vertical_align = match val.as_str() {
-                            "center" => Some(CellVerticalAlignment::Center),
-                            "bottom" => Some(CellVerticalAlignment::Bottom),
-                            _ => Some(CellVerticalAlignment::Top),
-                        };
-                    }
-                }
-                b"w:shd" => {
-                    if let Some(fill) = attr_value(&e, b"w:fill") {
-                        props.shading = Some(fill);
-                    }
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+                apply_table_cell_property_event(reader, &e, props)?
+            }
             Ok(Event::End(e)) => {
                 if e.name().as_ref() == b"w:tcPr" {
                     break;
@@ -262,6 +172,63 @@ fn parse_table_cell_properties(
             _ => {}
         }
         buf.clear();
+    }
+    Ok(())
+}
+
+fn apply_table_cell_property_event(
+    reader: &mut Reader<&[u8]>,
+    event: &BytesStart<'_>,
+    props: &mut TableCellProperties,
+) -> Result<(), ParseError> {
+    match event.name().as_ref() {
+        b"w:tcW" => {
+            if let Some(val) = attr_value(event, b"w:w").and_then(|v| v.parse().ok()) {
+                let width_type = match attr_value(event, b"w:type").as_deref() {
+                    Some("dxa") => TableWidthType::Dxa,
+                    Some("pct") => TableWidthType::Pct,
+                    Some("auto") => TableWidthType::Auto,
+                    _ => TableWidthType::Nil,
+                };
+                props.width = Some(TableWidth {
+                    value: val,
+                    width_type,
+                });
+            }
+        }
+        b"w:gridSpan" => {
+            if let Some(val) = attr_value(event, b"w:val").and_then(|v| v.parse().ok()) {
+                props.grid_span = Some(val);
+            }
+        }
+        b"w:vMerge" => {
+            let merge = match attr_value(event, b"w:val").as_deref() {
+                Some("restart") => MergeType::Restart,
+                Some("continue") => MergeType::Continue,
+                _ => MergeType::Continue,
+            };
+            props.vertical_merge = Some(merge);
+        }
+        b"w:vAlign" => {
+            if let Some(val) = attr_value(event, b"w:val") {
+                props.vertical_align = match val.as_str() {
+                    "center" => Some(CellVerticalAlignment::Center),
+                    "bottom" => Some(CellVerticalAlignment::Bottom),
+                    _ => Some(CellVerticalAlignment::Top),
+                };
+            }
+        }
+        b"w:tcBorders" => {
+            if let Some(borders) = parse_table_borders(reader, b"w:tcBorders")? {
+                props.borders = Some(borders);
+            }
+        }
+        b"w:shd" => {
+            if let Some(fill) = attr_value(event, b"w:fill") {
+                props.shading = Some(fill);
+            }
+        }
+        _ => {}
     }
     Ok(())
 }
