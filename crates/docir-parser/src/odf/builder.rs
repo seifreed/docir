@@ -55,39 +55,14 @@ impl OdfParser {
             &mut diagnostics,
         )?;
 
-        if fast_mode && format == DocumentFormat::OdfSpreadsheet {
-            if let Some(bytes) = content_bytes.as_deref() {
-                let chunks = spreadsheet::extract_spreadsheet_table_chunks(bytes);
-                for (idx, chunk) in chunks.iter().enumerate() {
-                    let sheet_name =
-                        spreadsheet::table_name_from_chunk(&chunk.bytes, (idx + 1) as u32);
-                    let path = format!(
-                        "content.xml#sheet:{}@{}-{}",
-                        sheet_name, chunk.start, chunk.end
-                    );
-                    let mut part = ExtensionPart::new(
-                        path,
-                        (chunk.end.saturating_sub(chunk.start) + 1) as u64,
-                        ExtensionPartKind::VendorSpecific,
-                    );
-                    part.content_type =
-                        Some("application/vnd.docir.odf.lazy-sheet+xml".to_string());
-                    part.span = Some(SourceSpan::new("content.xml"));
-                    let part_id = part.id;
-                    store.insert(IRNode::ExtensionPart(part));
-                    doc.shared_parts.push(part_id);
-                    push_info(
-                        &mut diagnostics,
-                        "ODF_LAZY_SHEET",
-                        format!(
-                            "Lazy sheet range stored for {} ({}-{})",
-                            sheet_name, chunk.start, chunk.end
-                        ),
-                        Some("content.xml"),
-                    );
-                }
-            }
-        }
+        self.capture_fast_mode_spreadsheet_chunks(
+            fast_mode,
+            format,
+            content_bytes.as_deref(),
+            &mut store,
+            &mut doc,
+            &mut diagnostics,
+        );
 
         let mut macro_project = build_odf_macro_project(
             &manifest_entries,
@@ -97,9 +72,7 @@ impl OdfParser {
             &file_names,
             &mut store,
         );
-        if let Some(project) = macro_project.take() {
-            store.insert(IRNode::MacroProject(project));
-        }
+        self.insert_macro_project(&mut store, &mut macro_project);
 
         let scanner = DefaultSecurityScanner;
         scanner.scan_odf(
@@ -113,73 +86,167 @@ impl OdfParser {
             &mut diagnostics,
         );
 
-        if let Some(sig_xml) = signatures_xml.as_deref() {
-            let sigs = parse_odf_signatures(sig_xml);
-            for sig in sigs {
-                let sig_id = sig.id;
-                store.insert(IRNode::DigitalSignature(sig));
-                doc.shared_parts.push(sig_id);
-            }
-        }
+        self.insert_signatures(signatures_xml.as_deref(), &mut store, &mut doc);
 
-        let encrypted_entries = encrypted_manifest_entries(&manifest_entries);
-        for entry in &manifest_entries {
+        self.emit_encryption_diagnostics(&manifest_entries, &mut diagnostics);
+
+        attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);
+
+        self.add_filter_diagnostics(content_xml.as_deref(), &mut store, &mut doc);
+
+        self.add_defined_names(format, content_bytes.as_deref(), &mut store, &mut doc);
+
+        Ok(finalize_document(format, store, doc))
+    }
+
+    fn capture_fast_mode_spreadsheet_chunks(
+        &self,
+        fast_mode: bool,
+        format: DocumentFormat,
+        content_bytes: Option<&[u8]>,
+        store: &mut IrStore,
+        doc: &mut Document,
+        diagnostics: &mut Diagnostics,
+    ) {
+        if !(fast_mode && format == DocumentFormat::OdfSpreadsheet) {
+            return;
+        }
+        let Some(bytes) = content_bytes else {
+            return;
+        };
+        let chunks = spreadsheet::extract_spreadsheet_table_chunks(bytes);
+        for (idx, chunk) in chunks.iter().enumerate() {
+            let sheet_name = spreadsheet::table_name_from_chunk(&chunk.bytes, (idx + 1) as u32);
+            let path = format!(
+                "content.xml#sheet:{}@{}-{}",
+                sheet_name, chunk.start, chunk.end
+            );
+            let mut part = ExtensionPart::new(
+                path,
+                (chunk.end.saturating_sub(chunk.start) + 1) as u64,
+                ExtensionPartKind::VendorSpecific,
+            );
+            part.content_type = Some("application/vnd.docir.odf.lazy-sheet+xml".to_string());
+            part.span = Some(SourceSpan::new("content.xml"));
+            let part_id = part.id;
+            store.insert(IRNode::ExtensionPart(part));
+            doc.shared_parts.push(part_id);
+            push_info(
+                diagnostics,
+                "ODF_LAZY_SHEET",
+                format!(
+                    "Lazy sheet range stored for {} ({}-{})",
+                    sheet_name, chunk.start, chunk.end
+                ),
+                Some("content.xml"),
+            );
+        }
+    }
+
+    fn insert_macro_project(
+        &self,
+        store: &mut IrStore,
+        macro_project: &mut Option<docir_core::security::MacroProject>,
+    ) {
+        if let Some(project) = macro_project.take() {
+            store.insert(IRNode::MacroProject(project));
+        }
+    }
+
+    fn insert_signatures(
+        &self,
+        signatures_xml: Option<&str>,
+        store: &mut IrStore,
+        doc: &mut Document,
+    ) {
+        let Some(sig_xml) = signatures_xml else {
+            return;
+        };
+        let sigs = parse_odf_signatures(sig_xml);
+        for sig in sigs {
+            let sig_id = sig.id;
+            store.insert(IRNode::DigitalSignature(sig));
+            doc.shared_parts.push(sig_id);
+        }
+    }
+
+    fn emit_encryption_diagnostics(
+        &self,
+        manifest_entries: &[OdfManifestEntry],
+        diagnostics: &mut Diagnostics,
+    ) {
+        let encrypted_entries = encrypted_manifest_entries(manifest_entries);
+        for entry in manifest_entries {
             if let Some(message) = format_odf_encryption_metadata(entry) {
                 push_info(
-                    &mut diagnostics,
+                    diagnostics,
                     "ODF_ENCRYPTION_META",
                     message,
                     Some("META-INF/manifest.xml"),
                 );
             }
         }
-        if !encrypted_entries.is_empty() {
+        if encrypted_entries.is_empty() {
+            return;
+        }
+        push_warning(
+            diagnostics,
+            "ODF_ENCRYPTION",
+            "ODF encrypted content detected in manifest".to_string(),
+            Some("META-INF/manifest.xml"),
+        );
+        for path in encrypted_entries {
             push_warning(
-                &mut diagnostics,
-                "ODF_ENCRYPTION",
-                "ODF encrypted content detected in manifest".to_string(),
+                diagnostics,
+                "ODF_ENCRYPTED_PART",
+                format!("Encrypted ODF part not decrypted: {}", path),
                 Some("META-INF/manifest.xml"),
             );
-            for path in encrypted_entries {
-                push_warning(
-                    &mut diagnostics,
-                    "ODF_ENCRYPTED_PART",
-                    format!("Encrypted ODF part not decrypted: {}", path),
-                    Some("META-INF/manifest.xml"),
-                );
-            }
         }
+    }
 
-        attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);
-
-        if let Some(xml) = content_xml.as_deref() {
-            for filter in scan_odf_filters(xml) {
-                let mut diag = Diagnostics::new();
-                push_entry(
-                    &mut diag.entries,
-                    DiagnosticSeverity::Info,
-                    "ODF_FILTER",
-                    format!("ODF filter detected: {}", filter),
-                    Some("content.xml"),
-                );
-                let diag_id = diag.id;
-                store.insert(IRNode::Diagnostics(diag));
-                doc.add_diagnostic(diag_id);
-            }
+    fn add_filter_diagnostics(
+        &self,
+        content_xml: Option<&str>,
+        store: &mut IrStore,
+        doc: &mut Document,
+    ) {
+        let Some(xml) = content_xml else {
+            return;
+        };
+        for filter in scan_odf_filters(xml) {
+            let mut diag = Diagnostics::new();
+            push_entry(
+                &mut diag.entries,
+                DiagnosticSeverity::Info,
+                "ODF_FILTER",
+                format!("ODF filter detected: {}", filter),
+                Some("content.xml"),
+            );
+            let diag_id = diag.id;
+            store.insert(IRNode::Diagnostics(diag));
+            doc.add_diagnostic(diag_id);
         }
+    }
 
-        if format == DocumentFormat::OdfSpreadsheet {
-            if let Some(bytes) = content_bytes.as_deref() {
-                let defined_names = parse_ods_named_ranges(bytes);
-                for name in defined_names {
-                    let id = name.id;
-                    store.insert(IRNode::DefinedName(name));
-                    doc.defined_names.push(id);
-                }
-            }
+    fn add_defined_names(
+        &self,
+        format: DocumentFormat,
+        content_bytes: Option<&[u8]>,
+        store: &mut IrStore,
+        doc: &mut Document,
+    ) {
+        if format != DocumentFormat::OdfSpreadsheet {
+            return;
         }
-
-        Ok(finalize_document(format, store, doc))
+        let Some(bytes) = content_bytes else {
+            return;
+        };
+        for name in parse_ods_named_ranges(bytes) {
+            let id = name.id;
+            store.insert(IRNode::DefinedName(name));
+            doc.defined_names.push(id);
+        }
     }
 
     fn emit_fast_mode_diagnostics(

@@ -150,107 +150,139 @@ fn handle_hwpx_start(
 ) -> Result<(), ParseError> {
     let name = e.name().as_ref().to_vec();
     let local = local_name(&name);
-    if let Some(kind) = note_kind_from_local(local) {
-        let id = attr_any(
-            e,
-            &[b"id", b"commentId", b"comment-id", b"refId", b"ref-id"],
-        )
-        .unwrap_or_else(|| match kind {
-            HwpxNoteKind::Comment => {
-                state.comment_counter = state.comment_counter.saturating_add(1);
-                format!("hwpx-comment-{}", state.comment_counter)
-            }
-            HwpxNoteKind::Footnote => {
-                state.footnote_counter = state.footnote_counter.saturating_add(1);
-                format!("hwpx-footnote-{}", state.footnote_counter)
-            }
-            HwpxNoteKind::Endnote => {
-                state.endnote_counter = state.endnote_counter.saturating_add(1);
-                format!("hwpx-endnote-{}", state.endnote_counter)
-            }
-        });
-        state.note_stack.push(HwpxNoteState {
-            kind,
-            id,
-            author: attr_any(e, &[b"author", b"writer"]),
-            date: attr_any(e, &[b"date", b"created", b"time"]),
-            parent: attr_any(e, &[b"parent", b"parentId", b"parent-id"]),
-            content: Vec::new(),
-            current_para: None,
-        });
+    if start_hwpx_note(e, local, state) {
         return Ok(());
     }
-    if matches!(
+    if push_hwpx_comment_reference(e, local, source, store, state) {
+        return Ok(());
+    }
+    if push_hwpx_revision(e, local, source, state) {
+        return Ok(());
+    }
+    if push_hwpx_shape(e, local, source, store, media_lookup, state) {
+        return Ok(());
+    }
+    apply_hwpx_start_element(local, e, source, store, state);
+
+    let _ = (comments, footnotes, endnotes);
+    Ok(())
+}
+
+fn start_hwpx_note(e: &BytesStart<'_>, local: &[u8], state: &mut HwpxSectionState) -> bool {
+    let Some(kind) = note_kind_from_local(local) else {
+        return false;
+    };
+    let id = attr_any(
+        e,
+        &[b"id", b"commentId", b"comment-id", b"refId", b"ref-id"],
+    )
+    .unwrap_or_else(|| next_hwpx_note_id(kind, state));
+    state.note_stack.push(HwpxNoteState {
+        kind,
+        id,
+        author: attr_any(e, &[b"author", b"writer"]),
+        date: attr_any(e, &[b"date", b"created", b"time"]),
+        parent: attr_any(e, &[b"parent", b"parentId", b"parent-id"]),
+        content: Vec::new(),
+        current_para: None,
+    });
+    true
+}
+
+fn next_hwpx_note_id(kind: HwpxNoteKind, state: &mut HwpxSectionState) -> String {
+    match kind {
+        HwpxNoteKind::Comment => {
+            state.comment_counter = state.comment_counter.saturating_add(1);
+            format!("hwpx-comment-{}", state.comment_counter)
+        }
+        HwpxNoteKind::Footnote => {
+            state.footnote_counter = state.footnote_counter.saturating_add(1);
+            format!("hwpx-footnote-{}", state.footnote_counter)
+        }
+        HwpxNoteKind::Endnote => {
+            state.endnote_counter = state.endnote_counter.saturating_add(1);
+            format!("hwpx-endnote-{}", state.endnote_counter)
+        }
+    }
+}
+
+fn push_hwpx_comment_reference(
+    e: &BytesStart<'_>,
+    local: &[u8],
+    source: &str,
+    store: &mut IrStore,
+    state: &mut HwpxSectionState,
+) -> bool {
+    if !matches!(
         local,
         b"commentRef" | b"comment-ref" | b"annotationRef" | b"noteRef" | b"note-ref"
     ) {
-        if let Some(comment_id) = attr_any(e, &[b"id", b"ref", b"refId", b"ref-id"]) {
-            let mut node = CommentReference::new(comment_id);
-            node.span = Some(SourceSpan::new(source));
-            let node_id = node.id;
-            store.insert(IRNode::CommentReference(node));
-            push_node_to_hwpx_context(
-                node_id,
-                &mut state.current_para,
-                &mut state.note_stack,
-                source,
-            );
-        }
-        return Ok(());
+        return false;
     }
-    if let Some(change_type) = revision_type_from_local(local) {
-        let mut revision = Revision::new(change_type);
-        revision.revision_id = attr_any(e, &[b"id", b"revId", b"revisionId", b"revision-id"]);
-        revision.author = attr_any(e, &[b"author", b"writer"]);
-        revision.date = attr_any(e, &[b"date", b"created", b"time"]);
-        revision.span = Some(SourceSpan::new(source));
-        state.revision_stack.push(revision);
-        return Ok(());
-    }
-    if let Some(shape_id) = parse_hwpx_shape(e, local, source, media_lookup, store) {
+    if let Some(comment_id) = attr_any(e, &[b"id", b"ref", b"refId", b"ref-id"]) {
+        let mut node = CommentReference::new(comment_id);
+        node.span = Some(SourceSpan::new(source));
+        let node_id = node.id;
+        store.insert(IRNode::CommentReference(node));
         push_node_to_hwpx_context(
-            shape_id,
+            node_id,
             &mut state.current_para,
             &mut state.note_stack,
             source,
         );
-        return Ok(());
     }
+    true
+}
+
+fn push_hwpx_revision(
+    e: &BytesStart<'_>,
+    local: &[u8],
+    source: &str,
+    state: &mut HwpxSectionState,
+) -> bool {
+    let Some(change_type) = revision_type_from_local(local) else {
+        return false;
+    };
+    let mut revision = Revision::new(change_type);
+    revision.revision_id = attr_any(e, &[b"id", b"revId", b"revisionId", b"revision-id"]);
+    revision.author = attr_any(e, &[b"author", b"writer"]);
+    revision.date = attr_any(e, &[b"date", b"created", b"time"]);
+    revision.span = Some(SourceSpan::new(source));
+    state.revision_stack.push(revision);
+    true
+}
+
+fn push_hwpx_shape(
+    e: &BytesStart<'_>,
+    local: &[u8],
+    source: &str,
+    store: &mut IrStore,
+    media_lookup: &HashMap<String, NodeId>,
+    state: &mut HwpxSectionState,
+) -> bool {
+    let Some(shape_id) = parse_hwpx_shape(e, local, source, media_lookup, store) else {
+        return false;
+    };
+    push_node_to_hwpx_context(
+        shape_id,
+        &mut state.current_para,
+        &mut state.note_stack,
+        source,
+    );
+    true
+}
+
+fn apply_hwpx_start_element(
+    local: &[u8],
+    e: &BytesStart<'_>,
+    source: &str,
+    store: &mut IrStore,
+    state: &mut HwpxSectionState,
+) {
     match local {
-        b"p" => {
-            if let Some(note) = state.note_stack.last_mut() {
-                finalize_note_paragraph(note, store);
-                let mut para = Paragraph::new();
-                para.span = Some(SourceSpan::new(source));
-                note.current_para = Some(para);
-            } else {
-                finalize_paragraph_hwpx(
-                    &mut state.current_para,
-                    &mut state.current_cell,
-                    &mut state.content,
-                    store,
-                );
-                let mut para = Paragraph::new();
-                para.span = Some(SourceSpan::new(source));
-                if let Some(style_id) = attr_any(e, &[b"styleId", b"style-id", b"style"]) {
-                    para.style_id = Some(style_id);
-                }
-                if state.list_level > 0 {
-                    para.properties.numbering = Some(NumberingInfo {
-                        num_id: 1,
-                        level: state.list_level - 1,
-                        format: None,
-                    });
-                }
-                state.current_para = Some(para);
-            }
-        }
-        b"t" => {
-            state.in_text = true;
-        }
-        b"r" | b"run" | b"span" => {
-            state.run_props = Some(run_properties_from_attrs(e));
-        }
+        b"p" => start_hwpx_paragraph(e, source, store, state),
+        b"t" => state.in_text = true,
+        b"r" | b"run" | b"span" => state.run_props = Some(run_properties_from_attrs(e)),
         b"tbl" | b"table" => {
             finalize_paragraph_hwpx(
                 &mut state.current_para,
@@ -262,38 +294,65 @@ fn handle_hwpx_start(
                 state.current_table = Some(Table::new());
             }
         }
-        b"tr" | b"row" => {
-            if state.current_table.is_some() {
-                state.current_row = Some(TableRow::new());
-            }
+        b"tr" | b"row" if state.current_table.is_some() => {
+            state.current_row = Some(TableRow::new());
         }
-        b"tc" | b"cell" => {
-            if state.current_row.is_some() {
-                state.current_cell = Some(TableCell::new());
-            }
+        b"tc" | b"cell" if state.current_row.is_some() => {
+            state.current_cell = Some(TableCell::new());
         }
-        b"list" | b"ul" | b"ol" => {
-            state.list_level = state.list_level.saturating_add(1);
-        }
-        b"li" | b"list-item" => {
-            if state.note_stack.is_empty() && state.current_para.is_none() {
-                let mut para = Paragraph::new();
-                para.span = Some(SourceSpan::new(source));
-                if state.list_level > 0 {
-                    para.properties.numbering = Some(NumberingInfo {
-                        num_id: 1,
-                        level: state.list_level - 1,
-                        format: None,
-                    });
-                }
-                state.current_para = Some(para);
-            }
-        }
+        b"list" | b"ul" | b"ol" => state.list_level = state.list_level.saturating_add(1),
+        b"li" | b"list-item" => ensure_list_item_paragraph(source, state),
         _ => {}
     }
+}
 
-    let _ = (comments, footnotes, endnotes);
-    Ok(())
+fn start_hwpx_paragraph(
+    e: &BytesStart<'_>,
+    source: &str,
+    store: &mut IrStore,
+    state: &mut HwpxSectionState,
+) {
+    if let Some(note) = state.note_stack.last_mut() {
+        finalize_note_paragraph(note, store);
+        let mut para = Paragraph::new();
+        para.span = Some(SourceSpan::new(source));
+        note.current_para = Some(para);
+        return;
+    }
+    finalize_paragraph_hwpx(
+        &mut state.current_para,
+        &mut state.current_cell,
+        &mut state.content,
+        store,
+    );
+    let mut para = Paragraph::new();
+    para.span = Some(SourceSpan::new(source));
+    if let Some(style_id) = attr_any(e, &[b"styleId", b"style-id", b"style"]) {
+        para.style_id = Some(style_id);
+    }
+    apply_hwpx_numbering(&mut para, state.list_level);
+    state.current_para = Some(para);
+}
+
+fn ensure_list_item_paragraph(source: &str, state: &mut HwpxSectionState) {
+    if !state.note_stack.is_empty() || state.current_para.is_some() {
+        return;
+    }
+    let mut para = Paragraph::new();
+    para.span = Some(SourceSpan::new(source));
+    apply_hwpx_numbering(&mut para, state.list_level);
+    state.current_para = Some(para);
+}
+
+fn apply_hwpx_numbering(paragraph: &mut Paragraph, list_level: u32) {
+    if list_level == 0 {
+        return;
+    }
+    paragraph.properties.numbering = Some(NumberingInfo {
+        num_id: 1,
+        level: list_level - 1,
+        format: None,
+    });
 }
 
 fn handle_hwpx_empty(
@@ -345,54 +404,86 @@ fn handle_hwpx_end(
 ) {
     let name = e.name().as_ref().to_vec();
     let local = local_name(&name);
-    if let Some(kind) = note_kind_from_local(local) {
-        if let Some(mut note) = state.note_stack.pop() {
-            finalize_note_paragraph(&mut note, store);
-            match kind {
-                HwpxNoteKind::Comment => {
-                    let mut comment = Comment::new(note.id);
-                    comment.author = note.author;
-                    comment.date = note.date;
-                    comment.parent_id = note.parent;
-                    comment.content = note.content;
-                    comment.span = Some(SourceSpan::new(source));
-                    let comment_id = comment.id;
-                    store.insert(IRNode::Comment(comment));
-                    comments.push(comment_id);
-                }
-                HwpxNoteKind::Footnote => {
-                    let mut footnote = Footnote::new(note.id);
-                    footnote.content = note.content;
-                    footnote.span = Some(SourceSpan::new(source));
-                    let footnote_id = footnote.id;
-                    store.insert(IRNode::Footnote(footnote));
-                    footnotes.push(footnote_id);
-                }
-                HwpxNoteKind::Endnote => {
-                    let mut endnote = Endnote::new(note.id);
-                    endnote.content = note.content;
-                    endnote.span = Some(SourceSpan::new(source));
-                    let endnote_id = endnote.id;
-                    store.insert(IRNode::Endnote(endnote));
-                    endnotes.push(endnote_id);
-                }
-            }
-        }
+    if close_hwpx_note(local, source, store, comments, footnotes, endnotes, state) {
         return;
     }
-    if let Some(_change_type) = revision_type_from_local(local) {
-        if let Some(revision) = state.revision_stack.pop() {
-            let revision_id = revision.id;
-            store.insert(IRNode::Revision(revision));
-            push_node_to_hwpx_context(
-                revision_id,
-                &mut state.current_para,
-                &mut state.note_stack,
-                source,
-            );
-        }
+    if close_hwpx_revision(local, source, store, state) {
         return;
     }
+    apply_hwpx_end_element(local, store, state);
+}
+
+fn close_hwpx_note(
+    local: &[u8],
+    source: &str,
+    store: &mut IrStore,
+    comments: &mut Vec<NodeId>,
+    footnotes: &mut Vec<NodeId>,
+    endnotes: &mut Vec<NodeId>,
+    state: &mut HwpxSectionState,
+) -> bool {
+    let Some(kind) = note_kind_from_local(local) else {
+        return false;
+    };
+    let Some(mut note) = state.note_stack.pop() else {
+        return true;
+    };
+    finalize_note_paragraph(&mut note, store);
+    match kind {
+        HwpxNoteKind::Comment => {
+            let mut comment = Comment::new(note.id);
+            comment.author = note.author;
+            comment.date = note.date;
+            comment.parent_id = note.parent;
+            comment.content = note.content;
+            comment.span = Some(SourceSpan::new(source));
+            let comment_id = comment.id;
+            store.insert(IRNode::Comment(comment));
+            comments.push(comment_id);
+        }
+        HwpxNoteKind::Footnote => {
+            let mut footnote = Footnote::new(note.id);
+            footnote.content = note.content;
+            footnote.span = Some(SourceSpan::new(source));
+            let footnote_id = footnote.id;
+            store.insert(IRNode::Footnote(footnote));
+            footnotes.push(footnote_id);
+        }
+        HwpxNoteKind::Endnote => {
+            let mut endnote = Endnote::new(note.id);
+            endnote.content = note.content;
+            endnote.span = Some(SourceSpan::new(source));
+            let endnote_id = endnote.id;
+            store.insert(IRNode::Endnote(endnote));
+            endnotes.push(endnote_id);
+        }
+    }
+    true
+}
+
+fn close_hwpx_revision(
+    local: &[u8],
+    source: &str,
+    store: &mut IrStore,
+    state: &mut HwpxSectionState,
+) -> bool {
+    if revision_type_from_local(local).is_none() {
+        return false;
+    }
+    if let Some(revision) = state.revision_stack.pop() {
+        let revision_id = revision.id;
+        store.insert(IRNode::Revision(revision));
+        push_node_to_hwpx_context(
+            revision_id,
+            &mut state.current_para,
+            &mut state.note_stack,
+            source,
+        );
+    }
+    true
+}
+
+fn apply_hwpx_end_element(local: &[u8], store: &mut IrStore, state: &mut HwpxSectionState) {
     match local {
         b"p" => {
             if let Some(note) = state.note_stack.last_mut() {
@@ -406,29 +497,21 @@ fn handle_hwpx_end(
                 );
             }
         }
-        b"t" => {
-            state.in_text = false;
-        }
-        b"r" | b"run" | b"span" => {
-            state.run_props = None;
-        }
+        b"t" => state.in_text = false,
+        b"r" | b"run" | b"span" => state.run_props = None,
         b"tc" | b"cell" => {
-            finalize_cell_hwpx(&mut state.current_cell, &mut state.current_row, store);
+            finalize_cell_hwpx(&mut state.current_cell, &mut state.current_row, store)
         }
         b"tr" | b"row" => {
-            finalize_row_hwpx(&mut state.current_row, &mut state.current_table, store);
+            finalize_row_hwpx(&mut state.current_row, &mut state.current_table, store)
         }
-        b"tbl" | b"table" => {
-            finalize_table_hwpx(
-                &mut state.current_table,
-                &mut state.current_cell,
-                &mut state.content,
-                store,
-            );
-        }
-        b"list" | b"ul" | b"ol" => {
-            state.list_level = state.list_level.saturating_sub(1);
-        }
+        b"tbl" | b"table" => finalize_table_hwpx(
+            &mut state.current_table,
+            &mut state.current_cell,
+            &mut state.content,
+            store,
+        ),
+        b"list" | b"ul" | b"ol" => state.list_level = state.list_level.saturating_sub(1),
         _ => {}
     }
 }

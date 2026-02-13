@@ -83,94 +83,143 @@ fn handle_text_start(
 ) -> Result<(), ParseError> {
     match e.name().as_ref() {
         b"office:text" => state.in_text = true,
-        b"text:list" if state.in_text => {
-            let style_name = attr_value(e, b"text:style-name").unwrap_or_default();
-            let num_id = state.list_id_map.entry(style_name).or_insert_with(|| {
-                let id = state.next_list_id;
-                state.next_list_id += 1;
-                id
-            });
-            let level = state.list_stack.len() as u32;
-            state.list_stack.push(ListContext {
-                num_id: *num_id,
-                level,
-            });
-        }
+        b"text:list" if state.in_text => push_text_list(state, e),
         b"text:p" | b"text:h" if state.in_text => {
-            let outline_level =
-                attr_value(e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
-            let numbering = state.list_stack.last().map(|ctx| NumberingInfo {
-                num_id: ctx.num_id,
-                level: ctx.level,
-                format: None,
-            });
-            let paragraph_id = parse_paragraph(
-                reader,
-                e.name().as_ref(),
-                numbering,
-                outline_level,
-                store,
-                &mut state.pending_inline_nodes,
-                limits,
-            )?;
-            section.content.extend(state.pending_inline_nodes.drain(..));
-            section.content.push(paragraph_id);
+            parse_text_paragraph(e, reader, store, limits, section, state)?
         }
-        b"table:table" if state.in_text => {
-            let table_id = parse_table(reader, store, limits)?;
-            section.content.extend(state.pending_inline_nodes.drain(..));
-            section.content.push(table_id);
-        }
+        b"table:table" if state.in_text => parse_text_table(reader, store, limits, section, state)?,
         b"office:annotation" if state.in_text => {
-            let comment_id = format!("odf-annotation-{}", state.comment_counter);
-            state.comment_counter += 1;
-            let comment_node = parse_annotation(reader, &comment_id, store, limits)?;
-            state.content_result.comments.push(comment_node);
-            let comment_ref = CommentReference::new(comment_id);
-            let ref_id = comment_ref.id;
-            store.insert(IRNode::CommentReference(comment_ref));
-            section.content.push(ref_id);
+            parse_text_annotation(reader, store, limits, section, state)?
         }
-        b"text:note" if state.in_text => {
-            let note_class =
-                attr_value(e, b"text:note-class").unwrap_or_else(|| "footnote".to_string());
-            let note_id = format!("odf-note-{}", state.comment_counter);
-            state.comment_counter += 1;
-            let note = parse_note(reader, &note_id, &note_class, store, limits)?;
-            match note_class.as_str() {
-                "endnote" => state.content_result.endnotes.push(note),
-                _ => state.content_result.footnotes.push(note),
-            }
-        }
-        b"text:bookmark-start" if state.in_text => {
+        b"text:note" if state.in_text => parse_text_note(e, reader, store, limits, state)?,
+        b"text:bookmark-start" | b"text:reference-mark-start" if state.in_text => {
             push_bookmark_start(e, store, section);
         }
-        b"text:bookmark-end" if state.in_text => {
+        b"text:bookmark-end" | b"text:reference-mark-end" if state.in_text => {
             push_bookmark_end(e, store, section);
         }
-        b"text:reference-mark-start" if state.in_text => {
-            push_bookmark_start(e, store, section);
-        }
-        b"text:reference-mark-end" if state.in_text => {
-            push_bookmark_end(e, store, section);
-        }
-        b"text:date" if state.in_text => {
-            push_date_field(store, section);
-        }
-        b"text:time" if state.in_text => {
-            push_time_field(store, section);
-        }
-        b"draw:frame" if state.in_text => {
-            if let Some(shape_id) = parse_draw_frame(reader, e, store)? {
-                section.content.push(shape_id);
-            }
-        }
+        b"text:date" if state.in_text => push_date_field(store, section),
+        b"text:time" if state.in_text => push_time_field(store, section),
+        b"draw:frame" if state.in_text => push_draw_frame(e, reader, store, section)?,
         b"text:tracked-changes" if state.in_text => {
-            let mut tracked = parse_tracked_changes(reader, store, limits)?;
-            state.revisions.append(&mut tracked);
+            parse_text_tracked_changes(reader, store, limits, state)?
         }
         _ => {}
     }
+    Ok(())
+}
+
+fn push_text_list(state: &mut OdfTextState, e: &BytesStart<'_>) {
+    let style_name = attr_value(e, b"text:style-name").unwrap_or_default();
+    let num_id = state.list_id_map.entry(style_name).or_insert_with(|| {
+        let id = state.next_list_id;
+        state.next_list_id += 1;
+        id
+    });
+    let level = state.list_stack.len() as u32;
+    state.list_stack.push(ListContext {
+        num_id: *num_id,
+        level,
+    });
+}
+
+fn parse_text_paragraph(
+    e: &BytesStart<'_>,
+    reader: &mut Reader<std::io::Cursor<&[u8]>>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    section: &mut Section,
+    state: &mut OdfTextState,
+) -> Result<(), ParseError> {
+    let outline_level = attr_value(e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
+    let numbering = state.list_stack.last().map(|ctx| NumberingInfo {
+        num_id: ctx.num_id,
+        level: ctx.level,
+        format: None,
+    });
+    let paragraph_id = parse_paragraph(
+        reader,
+        e.name().as_ref(),
+        numbering,
+        outline_level,
+        store,
+        &mut state.pending_inline_nodes,
+        limits,
+    )?;
+    section.content.extend(state.pending_inline_nodes.drain(..));
+    section.content.push(paragraph_id);
+    Ok(())
+}
+
+fn parse_text_table(
+    reader: &mut Reader<std::io::Cursor<&[u8]>>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    section: &mut Section,
+    state: &mut OdfTextState,
+) -> Result<(), ParseError> {
+    let table_id = parse_table(reader, store, limits)?;
+    section.content.extend(state.pending_inline_nodes.drain(..));
+    section.content.push(table_id);
+    Ok(())
+}
+
+fn parse_text_annotation(
+    reader: &mut Reader<std::io::Cursor<&[u8]>>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    section: &mut Section,
+    state: &mut OdfTextState,
+) -> Result<(), ParseError> {
+    let comment_id = format!("odf-annotation-{}", state.comment_counter);
+    state.comment_counter += 1;
+    let comment_node = parse_annotation(reader, &comment_id, store, limits)?;
+    state.content_result.comments.push(comment_node);
+    let comment_ref = CommentReference::new(comment_id);
+    let ref_id = comment_ref.id;
+    store.insert(IRNode::CommentReference(comment_ref));
+    section.content.push(ref_id);
+    Ok(())
+}
+
+fn parse_text_note(
+    e: &BytesStart<'_>,
+    reader: &mut Reader<std::io::Cursor<&[u8]>>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    state: &mut OdfTextState,
+) -> Result<(), ParseError> {
+    let note_class = attr_value(e, b"text:note-class").unwrap_or_else(|| "footnote".to_string());
+    let note_id = format!("odf-note-{}", state.comment_counter);
+    state.comment_counter += 1;
+    let note = parse_note(reader, &note_id, &note_class, store, limits)?;
+    match note_class.as_str() {
+        "endnote" => state.content_result.endnotes.push(note),
+        _ => state.content_result.footnotes.push(note),
+    }
+    Ok(())
+}
+
+fn push_draw_frame(
+    e: &BytesStart<'_>,
+    reader: &mut Reader<std::io::Cursor<&[u8]>>,
+    store: &mut IrStore,
+    section: &mut Section,
+) -> Result<(), ParseError> {
+    if let Some(shape_id) = parse_draw_frame(reader, e, store)? {
+        section.content.push(shape_id);
+    }
+    Ok(())
+}
+
+fn parse_text_tracked_changes(
+    reader: &mut Reader<std::io::Cursor<&[u8]>>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    state: &mut OdfTextState,
+) -> Result<(), ParseError> {
+    let mut tracked = parse_tracked_changes(reader, store, limits)?;
+    state.revisions.append(&mut tracked);
     Ok(())
 }
 

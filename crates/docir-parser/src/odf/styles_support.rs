@@ -286,63 +286,24 @@ fn parse_odf_header_footer_block(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"text:list" => {
-                    let style_name = attr_value(&e, b"text:style-name").unwrap_or_default();
-                    let num_id = list_id_map.entry(style_name).or_insert_with(|| {
-                        let id = next_list_id;
-                        next_list_id += 1;
-                        id
-                    });
-                    let level = list_stack.len() as u32;
-                    list_stack.push(ListContext {
-                        num_id: *num_id,
-                        level,
-                    });
-                }
-                b"text:p" | b"text:h" => {
-                    let outline_level =
-                        attr_value(&e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
-                    let numbering = list_stack.last().map(|ctx| NumberingInfo {
-                        num_id: ctx.num_id,
-                        level: ctx.level,
-                        format: None,
-                    });
-                    let paragraph_id = parse_paragraph(
-                        reader,
-                        e.name().as_ref(),
-                        numbering,
-                        outline_level,
-                        store,
-                        &mut pending_inline_nodes,
-                        limits,
-                    )?;
-                    content.extend(pending_inline_nodes.drain(..));
-                    content.push(paragraph_id);
-                }
-                b"table:table" => {
-                    let table_id = parse_table(reader, store, limits)?;
-                    content.extend(pending_inline_nodes.drain(..));
-                    content.push(table_id);
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"text:list" => {}
-                b"text:p" | b"text:h" => {
-                    let outline_level =
-                        attr_value(&e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
-                    let numbering = list_stack.last().map(|ctx| NumberingInfo {
-                        num_id: ctx.num_id,
-                        level: ctx.level,
-                        format: None,
-                    });
-                    let paragraph_id = text::build_paragraph(store, "", numbering, outline_level);
-                    content.extend(pending_inline_nodes.drain(..));
-                    content.push(paragraph_id);
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => handle_header_footer_start(
+                &e,
+                reader,
+                store,
+                limits,
+                &mut content,
+                &mut list_stack,
+                &mut list_id_map,
+                &mut next_list_id,
+                &mut pending_inline_nodes,
+            )?,
+            Ok(Event::Empty(e)) => handle_header_footer_empty(
+                &e,
+                store,
+                &mut content,
+                &list_stack,
+                &mut pending_inline_nodes,
+            ),
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"text:list" => {
                     list_stack.pop();
@@ -358,4 +319,100 @@ fn parse_odf_header_footer_block(
     }
 
     Ok(content)
+}
+
+fn handle_header_footer_start(
+    e: &BytesStart<'_>,
+    reader: &mut OdfReader<'_>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    content: &mut Vec<NodeId>,
+    list_stack: &mut Vec<ListContext>,
+    list_id_map: &mut HashMap<String, u32>,
+    next_list_id: &mut u32,
+    pending_inline_nodes: &mut Vec<NodeId>,
+) -> Result<(), ParseError> {
+    match e.name().as_ref() {
+        b"text:list" => {
+            let style_name = attr_value(e, b"text:style-name").unwrap_or_default();
+            let num_id = list_id_map.entry(style_name).or_insert_with(|| {
+                let id = *next_list_id;
+                *next_list_id += 1;
+                id
+            });
+            let level = list_stack.len() as u32;
+            list_stack.push(ListContext {
+                num_id: *num_id,
+                level,
+            });
+        }
+        b"text:p" | b"text:h" => {
+            let paragraph_id = parse_header_footer_paragraph(
+                e,
+                reader,
+                store,
+                limits,
+                list_stack,
+                pending_inline_nodes,
+            )?;
+            content.extend(pending_inline_nodes.drain(..));
+            content.push(paragraph_id);
+        }
+        b"table:table" => {
+            let table_id = parse_table(reader, store, limits)?;
+            content.extend(pending_inline_nodes.drain(..));
+            content.push(table_id);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_header_footer_empty(
+    e: &BytesStart<'_>,
+    store: &mut IrStore,
+    content: &mut Vec<NodeId>,
+    list_stack: &[ListContext],
+    pending_inline_nodes: &mut Vec<NodeId>,
+) {
+    match e.name().as_ref() {
+        b"text:p" | b"text:h" => {
+            let outline_level =
+                attr_value(e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
+            let numbering = list_stack.last().map(|ctx| NumberingInfo {
+                num_id: ctx.num_id,
+                level: ctx.level,
+                format: None,
+            });
+            let paragraph_id = text::build_paragraph(store, "", numbering, outline_level);
+            content.extend(pending_inline_nodes.drain(..));
+            content.push(paragraph_id);
+        }
+        _ => {}
+    }
+}
+
+fn parse_header_footer_paragraph(
+    e: &BytesStart<'_>,
+    reader: &mut OdfReader<'_>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    list_stack: &[ListContext],
+    pending_inline_nodes: &mut Vec<NodeId>,
+) -> Result<NodeId, ParseError> {
+    let outline_level = attr_value(e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
+    let numbering = list_stack.last().map(|ctx| NumberingInfo {
+        num_id: ctx.num_id,
+        level: ctx.level,
+        format: None,
+    });
+    parse_paragraph(
+        reader,
+        e.name().as_ref(),
+        numbering,
+        outline_level,
+        store,
+        pending_inline_nodes,
+        limits,
+    )
 }
