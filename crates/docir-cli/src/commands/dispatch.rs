@@ -1,6 +1,7 @@
 use crate::{Cli, Commands};
 use anyhow::Result;
 use docir_app::ParserConfig;
+use std::path::PathBuf;
 
 pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
     match cli.command {
@@ -70,7 +71,7 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             has_macros,
             pretty,
             output,
-        } => super::query::run(
+        } => run_query_like(
             input,
             node_type,
             contains,
@@ -80,6 +81,7 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             pretty,
             output,
             parser_config,
+            super::query::run,
         ),
 
         Commands::Select {
@@ -91,7 +93,7 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             has_macros,
             pretty,
             output,
-        } => super::select::run(
+        } => run_query_like(
             input,
             node_type,
             contains,
@@ -101,6 +103,7 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             pretty,
             output,
             parser_config,
+            super::select::run,
         ),
 
         Commands::Grep {
@@ -128,4 +131,39 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             output,
         } => super::extract::run(input, node_id, node_type, pretty, output, parser_config),
     }
+}
+
+fn run_query_like(
+    input: PathBuf,
+    node_type: Option<String>,
+    contains: Option<String>,
+    format: Option<String>,
+    has_external_refs: Option<bool>,
+    has_macros: Option<bool>,
+    pretty: bool,
+    output: Option<PathBuf>,
+    parser_config: &ParserConfig,
+    runner: fn(
+        PathBuf,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<bool>,
+        Option<bool>,
+        bool,
+        Option<PathBuf>,
+        &ParserConfig,
+    ) -> Result<()>,
+) -> Result<()> {
+    runner(
+        input,
+        node_type,
+        contains,
+        format,
+        has_external_refs,
+        has_macros,
+        pretty,
+        output,
+        parser_config,
+    )
 }
