@@ -89,20 +89,8 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             has_macros,
             pretty,
             output,
-        } => run_query_like(
-            build_query_like_command(
-                input,
-                node_type,
-                contains,
-                format,
-                has_external_refs,
-                has_macros,
-                pretty,
-                output,
-            ),
-            parser_config,
-        ),
-        Commands::Select {
+        }
+        | Commands::Select {
             input,
             node_type,
             contains,
