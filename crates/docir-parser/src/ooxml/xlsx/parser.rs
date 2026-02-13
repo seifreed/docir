@@ -5,6 +5,7 @@ use crate::error::ParseError;
 use crate::ooxml::part_utils::parse_xml_part_with_span;
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
+use crate::xml_utils::attr_value;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     parse_cell_reference, CalcChain, CalcChainEntry, Cell, CellError, CellFormula,
@@ -188,14 +189,7 @@ impl XlsxParser {
         start: &BytesStart,
         sheet_path: &str,
     ) -> Result<Cell, ParseError> {
-        let mut cell_ref: Option<String> = None;
-        for attr in start.attributes().flatten() {
-            if attr.key.as_ref() == b"r" {
-                cell_ref = Some(String::from_utf8_lossy(&attr.value).to_string());
-            }
-        }
-
-        let reference = cell_ref.ok_or_else(|| {
+        let reference = attr_value(start, b"r").ok_or_else(|| {
             ParseError::InvalidStructure("Cell missing reference attribute".to_string())
         })?;
         let (col, row) = parse_cell_reference(&reference).ok_or_else(|| {
@@ -213,14 +207,7 @@ impl XlsxParser {
         relationships: &Relationships,
         sheet_path: &str,
     ) {
-        let mut rel_id: Option<String> = None;
-        for attr in element.attributes().flatten() {
-            if attr.key.as_ref() == b"r:id" {
-                rel_id = Some(String::from_utf8_lossy(&attr.value).to_string());
-            }
-        }
-
-        let Some(rel_id) = rel_id else {
+        let Some(rel_id) = attr_value(element, b"r:id") else {
             return;
         };
         let Some(rel) = relationships.get(&rel_id) else {
