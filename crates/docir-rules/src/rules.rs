@@ -63,6 +63,23 @@ fn count_external_links(ctx: &RuleContext) -> usize {
     count
 }
 
+fn add_security_node_findings(
+    ctx: &RuleContext,
+    findings: &mut Vec<Finding>,
+    rule: &dyn Rule,
+    ids: &[docir_core::types::NodeId],
+    message_for_node: impl Fn(&IRNode) -> Option<String>,
+    fallback_message: &'static str,
+) {
+    for id in ids {
+        let node = ctx.store.get(*id);
+        let message = node
+            .and_then(&message_for_node)
+            .unwrap_or_else(|| fallback_message.to_string());
+        add_finding(findings, rule, message, node, ctx);
+    }
+}
+
 const OLE_OBJECT_BURST_RULE: BurstRuleSpec = BurstRuleSpec {
     id: "SEC-006",
     title: "Excessive OLE objects",
@@ -351,23 +368,20 @@ impl Rule for OleObjectRule {
         if doc.security.ole_objects.is_empty() {
             return;
         }
-        for ole_id in &doc.security.ole_objects {
-            let node = ctx.store.get(*ole_id);
-            if let Some(IRNode::OleObject(ole)) = node {
-                add_finding(
-                    findings,
-                    self,
-                    format!(
-                        "OLE object: {}",
-                        ole.prog_id.as_deref().unwrap_or("unknown")
-                    ),
-                    node,
-                    ctx,
-                );
-            } else {
-                add_finding(findings, self, "OLE object detected".to_string(), node, ctx);
-            }
-        }
+        add_security_node_findings(
+            ctx,
+            findings,
+            self,
+            &doc.security.ole_objects,
+            |node| match node {
+                IRNode::OleObject(ole) => Some(format!(
+                    "OLE object: {}",
+                    ole.prog_id.as_deref().unwrap_or("unknown")
+                )),
+                _ => None,
+            },
+            "OLE object detected",
+        );
     }
 }
 
@@ -402,29 +416,20 @@ impl Rule for ActiveXControlRule {
         if doc.security.activex_controls.is_empty() {
             return;
         }
-        for id in &doc.security.activex_controls {
-            let node = ctx.store.get(*id);
-            if let Some(IRNode::ActiveXControl(ctrl)) = node {
-                add_finding(
-                    findings,
-                    self,
-                    format!(
-                        "ActiveX control detected: {}",
-                        ctrl.name.as_deref().unwrap_or("unknown")
-                    ),
-                    node,
-                    ctx,
-                );
-            } else {
-                add_finding(
-                    findings,
-                    self,
-                    "ActiveX control detected".to_string(),
-                    node,
-                    ctx,
-                );
-            }
-        }
+        add_security_node_findings(
+            ctx,
+            findings,
+            self,
+            &doc.security.activex_controls,
+            |node| match node {
+                IRNode::ActiveXControl(ctrl) => Some(format!(
+                    "ActiveX control detected: {}",
+                    ctrl.name.as_deref().unwrap_or("unknown")
+                )),
+                _ => None,
+            },
+            "ActiveX control detected",
+        );
     }
 }
 
@@ -502,26 +507,19 @@ impl Rule for ExternalReferenceRule {
         if doc.security.external_refs.is_empty() {
             return;
         }
-        for ref_id in &doc.security.external_refs {
-            let node = ctx.store.get(*ref_id);
-            if let Some(IRNode::ExternalReference(ext)) = node {
-                add_finding(
-                    findings,
-                    self,
-                    format!("External reference: {}", ext.target),
-                    node,
-                    ctx,
-                );
-            } else {
-                add_finding(
-                    findings,
-                    self,
-                    "External reference detected".to_string(),
-                    node,
-                    ctx,
-                );
-            }
-        }
+        add_security_node_findings(
+            ctx,
+            findings,
+            self,
+            &doc.security.external_refs,
+            |node| match node {
+                IRNode::ExternalReference(ext) => {
+                    Some(format!("External reference: {}", ext.target))
+                }
+                _ => None,
+            },
+            "External reference detected",
+        );
     }
 }
 
