@@ -29,35 +29,11 @@ pub fn parse_vml_drawing(
                 if local == b"shape" {
                     let mut shape = VmlShape::new();
                     shape.span = Some(SourceSpan::new(path));
-                    for attr in e.attributes().flatten() {
-                        let key = local_name(attr.key.as_ref());
-                        let val = String::from_utf8_lossy(&attr.value).to_string();
-                        match key {
-                            b"id" | b"name" => shape.name = Some(val),
-                            b"type" => shape.shape_type = Some(val),
-                            b"style" => shape.style = Some(val),
-                            b"filled" => {
-                                shape.filled = Some(val == "t" || val == "true" || val == "1")
-                            }
-                            b"stroked" => {
-                                shape.stroked = Some(val == "t" || val == "true" || val == "1")
-                            }
-                            _ => {}
-                        }
-                    }
+                    apply_shape_attrs(&mut shape, &e);
                     current = Some(shape);
                 } else if local == b"imagedata" {
                     if let Some(shape) = current.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            if key == b"id" || key == b"rid" || key == b"rId" {
-                                shape.rel_id = Some(val.clone());
-                                if let Some(rel) = rels.get(&val) {
-                                    shape.image_target = Some(rel.target.clone());
-                                }
-                            }
-                        }
+                        apply_imagedata_attrs(shape, &e, rels);
                     }
                 } else if local == b"textbox" {
                     if let Some(shape) = current.as_mut() {
@@ -74,35 +50,11 @@ pub fn parse_vml_drawing(
                 if local == b"shape" {
                     let mut shape = VmlShape::new();
                     shape.span = Some(SourceSpan::new(path));
-                    for attr in e.attributes().flatten() {
-                        let key = local_name(attr.key.as_ref());
-                        let val = String::from_utf8_lossy(&attr.value).to_string();
-                        match key {
-                            b"id" | b"name" => shape.name = Some(val),
-                            b"type" => shape.shape_type = Some(val),
-                            b"style" => shape.style = Some(val),
-                            b"filled" => {
-                                shape.filled = Some(val == "t" || val == "true" || val == "1")
-                            }
-                            b"stroked" => {
-                                shape.stroked = Some(val == "t" || val == "true" || val == "1")
-                            }
-                            _ => {}
-                        }
-                    }
+                    apply_shape_attrs(&mut shape, &e);
                     shapes.push(shape);
                 } else if local == b"imagedata" {
                     if let Some(shape) = current.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            if key == b"id" || key == b"rid" || key == b"rId" {
-                                shape.rel_id = Some(val.clone());
-                                if let Some(rel) = rels.get(&val) {
-                                    shape.image_target = Some(rel.target.clone());
-                                }
-                            }
-                        }
+                        apply_imagedata_attrs(shape, &e, rels);
                     }
                 }
             }
@@ -125,6 +77,38 @@ pub fn parse_vml_drawing(
     }
 
     Ok((drawing, shapes))
+}
+
+fn apply_shape_attrs(shape: &mut VmlShape, e: &quick_xml::events::BytesStart<'_>) {
+    for attr in e.attributes().flatten() {
+        let key = local_name(attr.key.as_ref());
+        let val = String::from_utf8_lossy(&attr.value).to_string();
+        match key {
+            b"id" | b"name" => shape.name = Some(val),
+            b"type" => shape.shape_type = Some(val),
+            b"style" => shape.style = Some(val),
+            b"filled" => shape.filled = Some(val == "t" || val == "true" || val == "1"),
+            b"stroked" => shape.stroked = Some(val == "t" || val == "true" || val == "1"),
+            _ => {}
+        }
+    }
+}
+
+fn apply_imagedata_attrs(
+    shape: &mut VmlShape,
+    e: &quick_xml::events::BytesStart<'_>,
+    rels: &Relationships,
+) {
+    for attr in e.attributes().flatten() {
+        let key = local_name(attr.key.as_ref());
+        let val = String::from_utf8_lossy(&attr.value).to_string();
+        if key == b"id" || key == b"rid" || key == b"rId" {
+            shape.rel_id = Some(val.clone());
+            if let Some(rel) = rels.get(&val) {
+                shape.image_target = Some(rel.target.clone());
+            }
+        }
+    }
 }
 
 fn read_textbox_text(reader: &mut Reader<&[u8]>) -> Result<String, ParseError> {

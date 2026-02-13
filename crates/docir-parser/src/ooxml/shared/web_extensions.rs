@@ -99,34 +99,11 @@ pub fn parse_web_extension_taskpanes(
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
                 if local == b"taskpane" {
-                    let mut pane = WebExtensionTaskpane::new();
-                    pane.span = Some(SourceSpan::new(path));
-                    for attr in e.attributes().flatten() {
-                        let key = local_name(attr.key.as_ref());
-                        let val = String::from_utf8_lossy(&attr.value).to_string();
-                        match key {
-                            b"dockState" | b"dockstate" => pane.dock_state = Some(val),
-                            b"visibility" => {
-                                let v = val.eq_ignore_ascii_case("true") || val == "1";
-                                pane.visibility = Some(v);
-                            }
-                            b"width" => pane.width = val.parse::<u32>().ok(),
-                            b"height" => pane.height = val.parse::<u32>().ok(),
-                            b"row" => pane.row = val.parse::<u32>().ok(),
-                            b"column" => pane.column = val.parse::<u32>().ok(),
-                            _ => {}
-                        }
-                    }
+                    let pane = new_taskpane(path, &e);
                     current = Some(pane);
                 } else if local == b"webextensionref" {
                     if let Some(pane) = current.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            if key == b"id" || key == b"rid" || key == b"rId" {
-                                pane.web_extension_ref = Some(val);
-                            }
-                        }
+                        apply_webextension_ref(pane, &e);
                     }
                 }
             }
@@ -134,34 +111,11 @@ pub fn parse_web_extension_taskpanes(
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
                 if local == b"taskpane" {
-                    let mut pane = WebExtensionTaskpane::new();
-                    pane.span = Some(SourceSpan::new(path));
-                    for attr in e.attributes().flatten() {
-                        let key = local_name(attr.key.as_ref());
-                        let val = String::from_utf8_lossy(&attr.value).to_string();
-                        match key {
-                            b"dockState" | b"dockstate" => pane.dock_state = Some(val),
-                            b"visibility" => {
-                                let v = val.eq_ignore_ascii_case("true") || val == "1";
-                                pane.visibility = Some(v);
-                            }
-                            b"width" => pane.width = val.parse::<u32>().ok(),
-                            b"height" => pane.height = val.parse::<u32>().ok(),
-                            b"row" => pane.row = val.parse::<u32>().ok(),
-                            b"column" => pane.column = val.parse::<u32>().ok(),
-                            _ => {}
-                        }
-                    }
+                    let pane = new_taskpane(path, &e);
                     panes.push(pane);
                 } else if local == b"webextensionref" {
                     if let Some(pane) = current.as_mut() {
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            if key == b"id" || key == b"rid" || key == b"rId" {
-                                pane.web_extension_ref = Some(val);
-                            }
-                        }
+                        apply_webextension_ref(pane, &e);
                     }
                 }
             }
@@ -181,4 +135,40 @@ pub fn parse_web_extension_taskpanes(
     }
 
     Ok(panes)
+}
+
+fn new_taskpane(path: &str, e: &quick_xml::events::BytesStart<'_>) -> WebExtensionTaskpane {
+    let mut pane = WebExtensionTaskpane::new();
+    pane.span = Some(SourceSpan::new(path));
+    apply_taskpane_attrs(&mut pane, e);
+    pane
+}
+
+fn apply_taskpane_attrs(pane: &mut WebExtensionTaskpane, e: &quick_xml::events::BytesStart<'_>) {
+    for attr in e.attributes().flatten() {
+        let key = local_name(attr.key.as_ref());
+        let val = String::from_utf8_lossy(&attr.value).to_string();
+        match key {
+            b"dockState" | b"dockstate" => pane.dock_state = Some(val),
+            b"visibility" => {
+                let v = val.eq_ignore_ascii_case("true") || val == "1";
+                pane.visibility = Some(v);
+            }
+            b"width" => pane.width = val.parse::<u32>().ok(),
+            b"height" => pane.height = val.parse::<u32>().ok(),
+            b"row" => pane.row = val.parse::<u32>().ok(),
+            b"column" => pane.column = val.parse::<u32>().ok(),
+            _ => {}
+        }
+    }
+}
+
+fn apply_webextension_ref(pane: &mut WebExtensionTaskpane, e: &quick_xml::events::BytesStart<'_>) {
+    for attr in e.attributes().flatten() {
+        let key = local_name(attr.key.as_ref());
+        let val = String::from_utf8_lossy(&attr.value).to_string();
+        if key == b"id" || key == b"rid" || key == b"rId" {
+            pane.web_extension_ref = Some(val);
+        }
+    }
 }
