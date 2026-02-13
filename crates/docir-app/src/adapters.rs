@@ -149,15 +149,21 @@ fn scan_security_bytes(
 }
 
 fn wrap_parsed(result: Result<ParserParsedDocument, ParseError>) -> AppResult<ParsedDocument> {
-    map_parse_error(result.map(ParsedDocument::new))
+    map_parsed_result(result, ParsedDocument::new)
 }
 
 fn wrap_parsed_with_bytes(
     result: Result<(ParserParsedDocument, Vec<u8>), ParseError>,
 ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-    map_parse_error(result.map(|(parsed, data)| (ParsedDocument::new(parsed), data)))
+    map_parsed_result(result, |(parsed, data)| (ParsedDocument::new(parsed), data))
 }
 
-fn map_parse_error<T>(result: Result<T, ParseError>) -> AppResult<T> {
-    result.map_err(AppParseError::from).map_err(Into::into)
+fn map_parsed_result<T, U, F>(result: Result<T, ParseError>, map: F) -> AppResult<U>
+where
+    F: FnOnce(T) -> U,
+{
+    result
+        .map(map)
+        .map_err(AppParseError::from)
+        .map_err(Into::into)
 }
