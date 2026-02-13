@@ -126,56 +126,13 @@ pub(crate) fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
-    let supported = ["SUM", "AVERAGE", "MIN", "MAX", "COUNT"];
     let mut unsupported: Vec<String> = Vec::new();
     let mut has_array = false;
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 if let Some(formula_attr) = super::attr_value(&e, b"table:formula") {
-                    let formula_raw = unescape_xml_value(&formula_attr);
-                    let formula = super::strip_odf_formula_prefix(&formula_raw)
-                        .trim()
-                        .to_string();
-                    if formula.contains('{') || formula.contains('}') {
-                        has_array = true;
-                    }
-                    if let Some(dde) =
-                        parse_dde_formula(&formula, SourceSpan::new("content.xml"), false)
-                    {
-                        scan.dde_fields.push(dde);
-                    }
-                    let func_names = extract_formula_functions(&formula);
-                    for name in func_names {
-                        if supported.contains(&name.as_str()) {
-                            continue;
-                        }
-                        if name == "DDE" || name == "DDEAUTO" {
-                            continue;
-                        }
-                        if !unsupported.contains(&name) {
-                            unsupported.push(name);
-                        }
-                    }
-                    let lower = formula.to_ascii_lowercase();
-                    let ref_type = if lower.contains("hyperlink(") {
-                        ExternalRefType::Hyperlink
-                    } else {
-                        ExternalRefType::DataConnection
-                    };
-                    for target in extract_quoted_strings(&formula) {
-                        let target_lower = target.to_ascii_lowercase();
-                        if target_lower.contains("://")
-                            || target_lower.starts_with("file:")
-                            || target_lower.starts_with("smb:")
-                            || target_lower.starts_with("ftp:")
-                            || target_lower.starts_with("mailto:")
-                        {
-                            let mut ext = ExternalReference::new(ref_type, target);
-                            ext.span = Some(SourceSpan::new("content.xml"));
-                            scan.external_refs.push(ext);
-                        }
-                    }
+                    process_formula(&formula_attr, &mut scan, &mut unsupported, &mut has_array);
                 }
             }
             Ok(Event::Eof) => break,
@@ -184,9 +141,89 @@ pub(crate) fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
         }
         buf.clear();
     }
+    push_formula_diagnostics(&mut scan.diagnostics, &unsupported, has_array);
+    scan
+}
+
+fn process_formula(
+    formula_attr: &str,
+    scan: &mut OdfFormulaScan,
+    unsupported: &mut Vec<String>,
+    has_array: &mut bool,
+) {
+    let formula = normalize_formula(formula_attr);
+    if is_array_formula(&formula) {
+        *has_array = true;
+    }
+
+    if let Some(dde) = parse_dde_formula(&formula, SourceSpan::new("content.xml"), false) {
+        scan.dde_fields.push(dde);
+    }
+
+    collect_unsupported_functions(&formula, unsupported);
+    scan.external_refs
+        .extend(extract_formula_external_refs(&formula));
+}
+
+fn normalize_formula(formula_attr: &str) -> String {
+    let formula_raw = unescape_xml_value(formula_attr);
+    super::strip_odf_formula_prefix(&formula_raw)
+        .trim()
+        .to_string()
+}
+
+fn is_array_formula(formula: &str) -> bool {
+    formula.contains('{') || formula.contains('}')
+}
+
+fn collect_unsupported_functions(formula: &str, unsupported: &mut Vec<String>) {
+    let supported = ["SUM", "AVERAGE", "MIN", "MAX", "COUNT"];
+    for name in extract_formula_functions(formula) {
+        if supported.contains(&name.as_str()) || name == "DDE" || name == "DDEAUTO" {
+            continue;
+        }
+        if !unsupported.contains(&name) {
+            unsupported.push(name);
+        }
+    }
+}
+
+fn extract_formula_external_refs(formula: &str) -> Vec<ExternalReference> {
+    let lower = formula.to_ascii_lowercase();
+    let ref_type = if lower.contains("hyperlink(") {
+        ExternalRefType::Hyperlink
+    } else {
+        ExternalRefType::DataConnection
+    };
+
+    extract_quoted_strings(formula)
+        .into_iter()
+        .filter(|target| is_external_target(target))
+        .map(|target| {
+            let mut ext = ExternalReference::new(ref_type, target);
+            ext.span = Some(SourceSpan::new("content.xml"));
+            ext
+        })
+        .collect()
+}
+
+fn is_external_target(target: &str) -> bool {
+    let lower = target.to_ascii_lowercase();
+    lower.contains("://")
+        || lower.starts_with("file:")
+        || lower.starts_with("smb:")
+        || lower.starts_with("ftp:")
+        || lower.starts_with("mailto:")
+}
+
+fn push_formula_diagnostics(
+    diagnostics: &mut Vec<DiagnosticEntry>,
+    unsupported: &[String],
+    has_array: bool,
+) {
     if !unsupported.is_empty() {
         push_entry(
-            &mut scan.diagnostics,
+            diagnostics,
             DiagnosticSeverity::Info,
             "ODF_FORMULA_UNSUPPORTED_FUNCTION",
             format!(
@@ -198,14 +235,13 @@ pub(crate) fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
     }
     if has_array {
         push_entry(
-            &mut scan.diagnostics,
+            diagnostics,
             DiagnosticSeverity::Info,
             "ODF_FORMULA_ARRAY",
             "ODF array formula detected (not fully evaluated)".to_string(),
             Some("content.xml"),
         );
     }
-    scan
 }
 
 pub(crate) fn scan_odf_security(
