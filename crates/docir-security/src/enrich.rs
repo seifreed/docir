@@ -185,20 +185,7 @@ fn build_odf_indicators(
 ) -> Vec<ThreatIndicator> {
     let mut indicators = Vec::new();
 
-    for id in &security.external_refs {
-        let Some(IRNode::ExternalReference(ext)) = store.get(*id) else {
-            continue;
-        };
-        if ext.is_remote() {
-            indicators.push(make_indicator(
-                ThreatIndicatorType::RemoteResource,
-                ThreatLevel::Medium,
-                format!("Remote resource: {}", ext.target),
-                ext.span.as_ref().map(|s| s.file_path.clone()),
-                None,
-            ));
-        }
-    }
+    push_remote_external_ref_indicators(store, &security.external_refs, &mut indicators);
 
     for _ in &security.ole_objects {
         indicators.push(make_indicator(
@@ -230,34 +217,15 @@ fn build_hwp_indicators(
 ) -> Vec<ThreatIndicator> {
     let mut indicators = Vec::new();
 
-    for id in &security.external_refs {
-        let Some(IRNode::ExternalReference(ext)) = store.get(*id) else {
-            continue;
-        };
-        if ext.is_remote() {
-            indicators.push(make_indicator(
-                ThreatIndicatorType::RemoteResource,
-                ThreatLevel::Medium,
-                format!("Remote resource: {}", ext.target),
-                ext.span.as_ref().map(|s| s.file_path.clone()),
-                None,
-            ));
-        }
-    }
-
-    for id in &security.ole_objects {
-        let Some(IRNode::OleObject(ole)) = store.get(*id) else {
-            continue;
-        };
-        let location = ole_location(ole);
-        indicators.push(make_indicator(
-            ThreatIndicatorType::OleObject,
-            ThreatLevel::High,
-            "Embedded OLE object".to_string(),
-            location,
-            Some(*id),
-        ));
-    }
+    push_remote_external_ref_indicators(store, &security.external_refs, &mut indicators);
+    push_ole_object_indicators(
+        store,
+        &security.ole_objects,
+        "Embedded OLE object",
+        true,
+        ole_location,
+        &mut indicators,
+    );
 
     if hwpx_autoexec {
         if let Some(macro_id) = security.macro_project {
@@ -410,7 +378,25 @@ fn build_rtf_indicators(
 ) -> Vec<ThreatIndicator> {
     let mut indicators = Vec::new();
 
-    for id in &security.external_refs {
+    push_remote_external_ref_indicators(store, &security.external_refs, &mut indicators);
+    push_ole_object_indicators(
+        store,
+        &security.ole_objects,
+        "Embedded OLE object",
+        true,
+        |_| Some("rtf".to_string()),
+        &mut indicators,
+    );
+
+    indicators
+}
+
+fn push_remote_external_ref_indicators(
+    store: &IrStore,
+    external_refs: &[NodeId],
+    indicators: &mut Vec<ThreatIndicator>,
+) {
+    for id in external_refs {
         let Some(IRNode::ExternalReference(ext)) = store.get(*id) else {
             continue;
         };
@@ -424,21 +410,31 @@ fn build_rtf_indicators(
             ));
         }
     }
+}
 
-    for id in &security.ole_objects {
-        if store.get(*id).is_none() {
+fn push_ole_object_indicators<F>(
+    store: &IrStore,
+    ole_objects: &[NodeId],
+    description: &str,
+    include_node_id: bool,
+    location_fn: F,
+    indicators: &mut Vec<ThreatIndicator>,
+) where
+    F: Fn(&OleObject) -> Option<String>,
+{
+    for id in ole_objects {
+        let Some(IRNode::OleObject(ole)) = store.get(*id) else {
             continue;
-        }
+        };
+        let node_id = if include_node_id { Some(*id) } else { None };
         indicators.push(make_indicator(
             ThreatIndicatorType::OleObject,
             ThreatLevel::High,
-            "Embedded OLE object".to_string(),
-            Some("rtf".to_string()),
-            Some(*id),
+            description.to_string(),
+            location_fn(ole),
+            node_id,
         ));
     }
-
-    indicators
 }
 
 fn macro_project_details(project: &MacroProject) -> (Option<String>, String) {
