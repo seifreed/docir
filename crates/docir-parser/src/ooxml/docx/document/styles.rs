@@ -3,7 +3,7 @@ use crate::error::ParseError;
 use crate::xml_utils::attr_value;
 use docir_core::ir::{Paragraph, RunProperties, Style, StyleSet, StyleType};
 use docir_core::types::NodeId;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
 use super::paragraph::parse_paragraph_properties;
@@ -21,98 +21,10 @@ impl DocxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"w:style" => {
-                        let style_id = attr_value(&e, b"w:styleId").unwrap_or_default();
-                        let mut style = Style {
-                            style_id,
-                            name: None,
-                            style_type: StyleType::Other,
-                            based_on: None,
-                            next: None,
-                            is_default: attr_value(&e, b"w:default")
-                                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                                .unwrap_or(false),
-                            run_props: None,
-                            paragraph_props: None,
-                            table_props: None,
-                        };
-                        if let Some(t) = attr_value(&e, b"w:type") {
-                            style.style_type = match t.as_str() {
-                                "paragraph" => StyleType::Paragraph,
-                                "character" => StyleType::Character,
-                                "table" => StyleType::Table,
-                                "numbering" => StyleType::Numbering,
-                                _ => StyleType::Other,
-                            };
-                        }
-                        current = Some(style);
-                    }
-                    b"w:name" => {
-                        in_name = true;
-                    }
-                    b"w:rPr" => {
-                        let mut props = RunProperties::default();
-                        super::parse_run_properties(&mut reader, &mut props)?;
-                        if let Some(style) = current.as_mut() {
-                            style.run_props = Some(super::style_run_from_run_props(props));
-                        }
-                    }
-                    b"w:pPr" => {
-                        let mut para = Paragraph::new();
-                        let _ = parse_paragraph_properties(&mut reader, &mut para, None)?;
-                        if let Some(style) = current.as_mut() {
-                            style.paragraph_props =
-                                Some(super::style_paragraph_from_paragraph_props(para.properties));
-                        }
-                    }
-                    b"w:tblPr" => {
-                        if let Some(style) = current.as_mut() {
-                            let mut props = docir_core::ir::TableProperties::default();
-                            parse_table_properties(&mut reader, &mut props)?;
-                            style.table_props = Some(props);
-                        }
-                    }
-                    b"w:basedOn" => {
-                        if let Some(val) = attr_value(&e, b"w:val") {
-                            if let Some(style) = current.as_mut() {
-                                style.based_on = Some(val);
-                            }
-                        }
-                    }
-                    b"w:next" => {
-                        if let Some(val) = attr_value(&e, b"w:val") {
-                            if let Some(style) = current.as_mut() {
-                                style.next = Some(val);
-                            }
-                        }
-                    }
-                    _ => {}
-                },
-                Ok(Event::Empty(e)) => match e.name().as_ref() {
-                    b"w:name" => {
-                        if let Some(val) = attr_value(&e, b"w:val") {
-                            if let Some(style) = current.as_mut() {
-                                style.name = Some(val);
-                            }
-                        }
-                    }
-                    b"w:basedOn" => {
-                        if let Some(val) = attr_value(&e, b"w:val") {
-                            if let Some(style) = current.as_mut() {
-                                style.based_on = Some(val);
-                            }
-                        }
-                    }
-                    b"w:next" => {
-                        if let Some(val) = attr_value(&e, b"w:val") {
-                            if let Some(style) = current.as_mut() {
-                                style.next = Some(val);
-                            }
-                        }
-                    }
-                    _ => {}
-                },
+                Ok(Event::Start(e)) => {
+                    handle_style_start(&mut reader, &e, &mut current, &mut in_name)?
+                }
+                Ok(Event::Empty(e)) => handle_style_empty(&e, &mut current),
                 Ok(Event::Text(e)) => {
                     if in_name {
                         if let Some(style) = current.as_mut() {
@@ -152,5 +64,103 @@ impl DocxParser {
             set.with_effects = true;
         }
         Ok(id)
+    }
+}
+
+fn handle_style_start(
+    reader: &mut Reader<&[u8]>,
+    event: &BytesStart<'_>,
+    current: &mut Option<Style>,
+    in_name: &mut bool,
+) -> Result<(), ParseError> {
+    match event.name().as_ref() {
+        b"w:style" => {
+            *current = Some(build_style(event));
+        }
+        b"w:name" => {
+            *in_name = true;
+        }
+        b"w:rPr" => {
+            let mut props = RunProperties::default();
+            super::parse_run_properties(reader, &mut props)?;
+            if let Some(style) = current.as_mut() {
+                style.run_props = Some(super::style_run_from_run_props(props));
+            }
+        }
+        b"w:pPr" => {
+            let mut para = Paragraph::new();
+            let _ = parse_paragraph_properties(reader, &mut para, None)?;
+            if let Some(style) = current.as_mut() {
+                style.paragraph_props =
+                    Some(super::style_paragraph_from_paragraph_props(para.properties));
+            }
+        }
+        b"w:tblPr" => {
+            if let Some(style) = current.as_mut() {
+                let mut props = docir_core::ir::TableProperties::default();
+                parse_table_properties(reader, &mut props)?;
+                style.table_props = Some(props);
+            }
+        }
+        b"w:basedOn" => assign_style_attr(event, current.as_mut(), StyleAttr::BasedOn),
+        b"w:next" => assign_style_attr(event, current.as_mut(), StyleAttr::Next),
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_style_empty(event: &BytesStart<'_>, current: &mut Option<Style>) {
+    match event.name().as_ref() {
+        b"w:name" => assign_style_attr(event, current.as_mut(), StyleAttr::Name),
+        b"w:basedOn" => assign_style_attr(event, current.as_mut(), StyleAttr::BasedOn),
+        b"w:next" => assign_style_attr(event, current.as_mut(), StyleAttr::Next),
+        _ => {}
+    }
+}
+
+fn build_style(event: &BytesStart<'_>) -> Style {
+    let style_id = attr_value(event, b"w:styleId").unwrap_or_default();
+    let mut style = Style {
+        style_id,
+        name: None,
+        style_type: StyleType::Other,
+        based_on: None,
+        next: None,
+        is_default: attr_value(event, b"w:default")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false),
+        run_props: None,
+        paragraph_props: None,
+        table_props: None,
+    };
+    if let Some(t) = attr_value(event, b"w:type") {
+        style.style_type = match t.as_str() {
+            "paragraph" => StyleType::Paragraph,
+            "character" => StyleType::Character,
+            "table" => StyleType::Table,
+            "numbering" => StyleType::Numbering,
+            _ => StyleType::Other,
+        };
+    }
+    style
+}
+
+enum StyleAttr {
+    Name,
+    BasedOn,
+    Next,
+}
+
+fn assign_style_attr(event: &BytesStart<'_>, style: Option<&mut Style>, attr: StyleAttr) {
+    let Some(style) = style else {
+        return;
+    };
+    let Some(val) = attr_value(event, b"w:val") else {
+        return;
+    };
+    match attr {
+        StyleAttr::Name => style.name = Some(val),
+        StyleAttr::BasedOn => style.based_on = Some(val),
+        StyleAttr::Next => style.next = Some(val),
     }
 }
