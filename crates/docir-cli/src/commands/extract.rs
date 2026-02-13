@@ -7,7 +7,7 @@ use docir_core::types::NodeId;
 use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::commands::util::{build_app, parse_node_type, write_json_output};
+use crate::commands::util::{parse_document, parse_node_type, write_json_output};
 
 #[derive(Debug, Serialize)]
 struct ExtractResult {
@@ -26,8 +26,7 @@ pub fn run(
         bail!("Provide --node-id or --node-type");
     }
 
-    let app = build_app(parser_config);
-    let parsed = app.parse_file(&input)?;
+    let parsed = parse_document(&input, parser_config)?;
 
     let mut nodes = Vec::new();
 

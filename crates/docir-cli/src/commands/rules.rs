@@ -1,6 +1,6 @@
 //! Run rule engine on a document.
 
-use crate::commands::util::{build_app, write_json_output};
+use crate::commands::util::{build_app_and_parse, write_json_output};
 use anyhow::Result;
 use docir_app::{ParserConfig, RuleProfile};
 use std::fs::File;
@@ -13,8 +13,7 @@ pub fn run(
     profile_path: Option<PathBuf>,
     parser_config: &ParserConfig,
 ) -> Result<()> {
-    let app = build_app(parser_config);
-    let parsed = app.parse_file(&input)?;
+    let (app, parsed) = build_app_and_parse(&input, parser_config)?;
 
     let profile = if let Some(path) = profile_path {
         let file = File::open(path)?;

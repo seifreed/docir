@@ -1,7 +1,6 @@
 //! Query the IR with simple predicates.
 
-use crate::commands::util::build_app;
-use crate::commands::util::{parse_doc_format, parse_node_type, write_json_output};
+use crate::commands::util::{parse_doc_format, parse_document, parse_node_type, write_json_output};
 use anyhow::Result;
 use docir_app::ParserConfig;
 use docir_core::ir::IrNode as IrNodeTrait;
@@ -33,8 +32,7 @@ pub fn run(
     output: Option<PathBuf>,
     parser_config: &ParserConfig,
 ) -> Result<()> {
-    let app = build_app(parser_config);
-    let parsed = app.parse_file(&input)?;
+    let parsed = parse_document(&input, parser_config)?;
 
     let mut query = Query::new();
 

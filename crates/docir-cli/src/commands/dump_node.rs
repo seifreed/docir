@@ -1,6 +1,6 @@
 //! Dump node command implementation.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use docir_app::ParserConfig;
 use docir_core::NodeId;
 use std::path::PathBuf;
