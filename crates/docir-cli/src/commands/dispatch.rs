@@ -3,23 +3,13 @@ use anyhow::Result;
 use docir_app::ParserConfig;
 
 pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
-    dispatch_command(cli.command, parser_config)
-}
-
-fn dispatch_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
-    match command {
+    match cli.command {
         Commands::Parse {
             input,
             format,
             pretty,
             output,
         } => super::parse::run(input, format, pretty, output, parser_config),
-        other => dispatch_non_parse(other, parser_config),
-    }
-}
-
-fn dispatch_non_parse(command: Commands, parser_config: &ParserConfig) -> Result<()> {
-    match command {
         Commands::Summary { input } => super::summary::run(input, parser_config),
         Commands::Coverage {
             input,
@@ -65,12 +55,6 @@ fn dispatch_non_parse(command: Commands, parser_config: &ParserConfig) -> Result
             output,
             profile,
         } => super::rules::run(input, pretty, output, profile, parser_config),
-        other => dispatch_query_extract(other, parser_config),
-    }
-}
-
-fn dispatch_query_extract(command: Commands, parser_config: &ParserConfig) -> Result<()> {
-    match command {
         Commands::Query {
             input,
             node_type,
@@ -134,12 +118,5 @@ fn dispatch_query_extract(command: Commands, parser_config: &ParserConfig) -> Re
             pretty,
             output,
         } => super::extract::run(input, node_id, node_type, pretty, output, parser_config),
-        Commands::Parse { .. }
-        | Commands::Summary { .. }
-        | Commands::Coverage { .. }
-        | Commands::Security { .. }
-        | Commands::DumpNode { .. }
-        | Commands::Diff { .. }
-        | Commands::Rules { .. } => unreachable!("command handled in prior dispatcher"),
     }
 }
