@@ -493,16 +493,7 @@ pub(super) fn parse_ods_cell(
         attr_value(start, b"table:number-rows-spanned").and_then(|v| v.parse::<u32>().ok());
     let validation_name = attr_value(start, b"table:content-validation-name");
 
-    let style_id = attr_value(start, b"table:style-name").and_then(|name| {
-        if let Some(id) = style_map.get(&name) {
-            Some(*id)
-        } else {
-            let id = *next_style_id;
-            *next_style_id += 1;
-            style_map.insert(name, id);
-            Some(id)
-        }
-    });
+    let style_id = resolve_style_id(start, style_map, next_style_id);
 
     let mut text = String::new();
     let mut buf = Vec::new();
@@ -550,53 +541,8 @@ pub(super) fn parse_ods_cell(
         });
     }
 
-    let value = match value_type.as_deref() {
-        Some("string") | Some("text") => {
-            if !text.is_empty() {
-                CellValue::String(text.clone())
-            } else {
-                CellValue::String(value_attr.unwrap_or_default())
-            }
-        }
-        Some("float") | Some("currency") | Some("percentage") => value_attr
-            .as_deref()
-            .and_then(|v| v.parse::<f64>().ok())
-            .map(CellValue::Number)
-            .unwrap_or_else(|| CellValue::String(text.clone())),
-        Some("boolean") => {
-            let v = value_attr.unwrap_or_else(|| text.clone());
-            CellValue::Boolean(v == "true" || v == "1")
-        }
-        Some("date") | Some("time") => {
-            CellValue::String(value_attr.unwrap_or_else(|| text.clone()))
-        }
-        _ => {
-            if !text.is_empty() {
-                CellValue::String(text.clone())
-            } else {
-                CellValue::Empty
-            }
-        }
-    };
-
-    let formula = formula_attr.and_then(|formula| {
-        let mut text = formula;
-        if let Some(stripped) = text.strip_prefix("of:=") {
-            text = stripped.to_string();
-        } else if let Some(stripped) = text.strip_prefix("of:") {
-            text = stripped.to_string();
-        } else if let Some(stripped) = text.strip_prefix('=') {
-            text = stripped.to_string();
-        }
-        Some(CellFormula {
-            text,
-            formula_type: docir_core::ir::FormulaType::Normal,
-            shared_index: None,
-            shared_ref: None,
-            is_array: false,
-            array_ref: None,
-        })
-    });
+    let value = parse_cell_value_with_text(value_type.as_deref(), value_attr.as_deref(), &text);
+    let formula = parse_cell_formula(formula_attr);
 
     Ok(OdsCellData {
         value,
@@ -630,58 +576,9 @@ pub(super) fn parse_ods_cell_empty(
     let row_span =
         attr_value(start, b"table:number-rows-spanned").and_then(|v| v.parse::<u32>().ok());
     let validation_name = attr_value(start, b"table:content-validation-name");
-    let style_id = attr_value(start, b"table:style-name").and_then(|name| {
-        if let Some(id) = style_map.get(&name) {
-            Some(*id)
-        } else {
-            let id = *next_style_id;
-            *next_style_id += 1;
-            style_map.insert(name, id);
-            Some(id)
-        }
-    });
-
-    let value = match value_type.as_deref() {
-        Some("float") | Some("currency") | Some("percentage") => value_attr
-            .as_deref()
-            .and_then(|v| v.parse::<f64>().ok())
-            .map(CellValue::Number)
-            .unwrap_or(CellValue::Empty),
-        Some("boolean") => {
-            let v = value_attr.unwrap_or_default();
-            if v.is_empty() {
-                CellValue::Empty
-            } else {
-                CellValue::Boolean(v == "true" || v == "1")
-            }
-        }
-        Some("string") | Some("text") => value_attr
-            .map(CellValue::String)
-            .unwrap_or(CellValue::Empty),
-        Some("date") | Some("time") => value_attr
-            .map(CellValue::String)
-            .unwrap_or(CellValue::Empty),
-        _ => CellValue::Empty,
-    };
-
-    let formula = formula_attr.and_then(|formula| {
-        let mut text = formula;
-        if let Some(stripped) = text.strip_prefix("of:=") {
-            text = stripped.to_string();
-        } else if let Some(stripped) = text.strip_prefix("of:") {
-            text = stripped.to_string();
-        } else if let Some(stripped) = text.strip_prefix('=') {
-            text = stripped.to_string();
-        }
-        Some(CellFormula {
-            text,
-            formula_type: docir_core::ir::FormulaType::Normal,
-            shared_index: None,
-            shared_ref: None,
-            is_array: false,
-            array_ref: None,
-        })
-    });
+    let style_id = resolve_style_id(start, style_map, next_style_id);
+    let value = parse_cell_value_empty(value_type.as_deref(), value_attr.as_deref());
+    let formula = parse_cell_formula(formula_attr);
 
     Ok(OdsCellData {
         value,
@@ -693,4 +590,98 @@ pub(super) fn parse_ods_cell_empty(
         row_span,
         is_covered: false,
     })
+}
+
+fn resolve_style_id(
+    start: &BytesStart<'_>,
+    style_map: &mut HashMap<String, u32>,
+    next_style_id: &mut u32,
+) -> Option<u32> {
+    attr_value(start, b"table:style-name").map(|name| {
+        if let Some(id) = style_map.get(&name) {
+            *id
+        } else {
+            let id = *next_style_id;
+            *next_style_id += 1;
+            style_map.insert(name, id);
+            id
+        }
+    })
+}
+
+fn parse_cell_formula(formula_attr: Option<String>) -> Option<CellFormula> {
+    formula_attr.map(|formula| CellFormula {
+        text: normalize_formula_text(formula),
+        formula_type: docir_core::ir::FormulaType::Normal,
+        shared_index: None,
+        shared_ref: None,
+        is_array: false,
+        array_ref: None,
+    })
+}
+
+fn normalize_formula_text(formula: String) -> String {
+    if let Some(stripped) = formula.strip_prefix("of:=") {
+        stripped.to_string()
+    } else if let Some(stripped) = formula.strip_prefix("of:") {
+        stripped.to_string()
+    } else if let Some(stripped) = formula.strip_prefix('=') {
+        stripped.to_string()
+    } else {
+        formula
+    }
+}
+
+fn parse_cell_value_with_text(
+    value_type: Option<&str>,
+    value_attr: Option<&str>,
+    text: &str,
+) -> CellValue {
+    match value_type {
+        Some("string") | Some("text") => {
+            if !text.is_empty() {
+                CellValue::String(text.to_string())
+            } else {
+                CellValue::String(value_attr.unwrap_or_default().to_string())
+            }
+        }
+        Some("float") | Some("currency") | Some("percentage") => value_attr
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(CellValue::Number)
+            .unwrap_or_else(|| CellValue::String(text.to_string())),
+        Some("boolean") => {
+            let v = value_attr.unwrap_or(text);
+            CellValue::Boolean(v == "true" || v == "1")
+        }
+        Some("date") | Some("time") => CellValue::String(value_attr.unwrap_or(text).to_string()),
+        _ => {
+            if !text.is_empty() {
+                CellValue::String(text.to_string())
+            } else {
+                CellValue::Empty
+            }
+        }
+    }
+}
+
+fn parse_cell_value_empty(value_type: Option<&str>, value_attr: Option<&str>) -> CellValue {
+    match value_type {
+        Some("float") | Some("currency") | Some("percentage") => value_attr
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(CellValue::Number)
+            .unwrap_or(CellValue::Empty),
+        Some("boolean") => {
+            let v = value_attr.unwrap_or_default();
+            if v.is_empty() {
+                CellValue::Empty
+            } else {
+                CellValue::Boolean(v == "true" || v == "1")
+            }
+        }
+        Some("string") | Some("text") | Some("date") | Some("time") => value_attr
+            .map_or(CellValue::Empty, |value| {
+                CellValue::String(value.to_string())
+            }),
+        _ => CellValue::Empty,
+    }
 }
