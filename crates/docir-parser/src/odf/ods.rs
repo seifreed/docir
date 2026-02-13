@@ -27,9 +27,7 @@ pub(super) fn parse_ods_table(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"table:table-row" => {
-                    let row_repeat = attr_value(&e, b"table:number-rows-repeated")
-                        .and_then(|v| v.parse::<u32>().ok())
-                        .unwrap_or(1);
+                    let row_repeat = row_repeat_from(&e);
                     limits.bump_rows(row_repeat as u64)?;
                     let row_cells =
                         parse_ods_row(reader, &e, store, &mut style_map, &mut next_style_id)?;
@@ -57,9 +55,7 @@ pub(super) fn parse_ods_table(
                 }
                 b"table:conditional-formatting" => {
                     if let Some(cf) = parse_ods_conditional_formatting(reader, &e)? {
-                        let id = cf.id;
-                        store.insert(IRNode::ConditionalFormat(cf));
-                        worksheet.conditional_formats.push(id);
+                        push_conditional_format(store, &mut worksheet, cf);
                     }
                 }
                 b"table:filter" | b"table:filter-and" | b"table:filter-or" => {
@@ -69,9 +65,7 @@ pub(super) fn parse_ods_table(
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
                 b"table:table-row" => {
-                    let row_repeat = attr_value(&e, b"table:number-rows-repeated")
-                        .and_then(|v| v.parse::<u32>().ok())
-                        .unwrap_or(1);
+                    let row_repeat = row_repeat_from(&e);
                     limits.bump_rows(row_repeat as u64)?;
                     row_idx += row_repeat;
                 }
@@ -84,9 +78,7 @@ pub(super) fn parse_ods_table(
                 }
                 b"table:conditional-formatting" => {
                     if let Some(cf) = parse_ods_conditional_formatting_empty(&e)? {
-                        let id = cf.id;
-                        store.insert(IRNode::ConditionalFormat(cf));
-                        worksheet.conditional_formats.push(id);
+                        push_conditional_format(store, &mut worksheet, cf);
                     }
                 }
                 _ => {}
@@ -144,9 +136,7 @@ pub(super) fn parse_ods_table_fast(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"table:table-row" => {
-                    let row_repeat = attr_value(&e, b"table:number-rows-repeated")
-                        .and_then(|v| v.parse::<u32>().ok())
-                        .unwrap_or(1);
+                    let row_repeat = row_repeat_from(&e);
                     limits.bump_rows(row_repeat as u64)?;
 
                     if sample_enabled && row_idx < sample_rows {
@@ -187,9 +177,7 @@ pub(super) fn parse_ods_table_fast(
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
                 b"table:table-row" => {
-                    let row_repeat = attr_value(&e, b"table:number-rows-repeated")
-                        .and_then(|v| v.parse::<u32>().ok())
-                        .unwrap_or(1);
+                    let row_repeat = row_repeat_from(&e);
                     limits.bump_rows(row_repeat as u64)?;
                     row_idx += row_repeat;
                 }
@@ -218,6 +206,18 @@ pub(super) fn parse_ods_table_fast(
     );
 
     Ok(worksheet)
+}
+
+fn row_repeat_from(start: &BytesStart<'_>) -> u32 {
+    attr_value(start, b"table:number-rows-repeated")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(1)
+}
+
+fn push_conditional_format(store: &mut IrStore, worksheet: &mut Worksheet, cf: ConditionalFormat) {
+    let id = cf.id;
+    store.insert(IRNode::ConditionalFormat(cf));
+    worksheet.conditional_formats.push(id);
 }
 
 fn flush_validation_ranges(
