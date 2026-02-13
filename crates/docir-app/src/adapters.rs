@@ -2,13 +2,15 @@
 
 use crate::{
     AppParseError, AppResult, ParsedDocument, ParserConfig, ParserPort, RuleProfile, RuleReport,
-    RulesEnginePort, SecurityEnricherPort, SecurityScannerPort, SerializerPort,
+    RulesEnginePort, SecurityAnalyzerPort, SecurityEnricherPort, SecurityScannerPort,
+    SerializerPort,
 };
 use docir_core::visitor::IrStore;
 use docir_parser::parser::ParsedDocument as ParserParsedDocument;
 use docir_parser::{scan_security_bytes as scan_parser_bytes, DocumentParser, ParseError};
 use docir_rules::RuleEngine;
 use docir_security::populate_security_indicators;
+use docir_security::SecurityAnalyzer;
 use std::io::{Read, Seek};
 use std::path::Path;
 
@@ -52,6 +54,10 @@ impl SerializerPort for DefaultJsonSerializer {
 
 pub(crate) fn default_security_enricher() -> Box<dyn SecurityEnricherPort> {
     Box::new(DefaultSecurityEnricher)
+}
+
+pub(crate) fn default_security_analyzer_factory() -> impl Fn() -> Box<dyn SecurityAnalyzerPort> {
+    || Box::new(SecurityAnalyzer::new())
 }
 
 pub(crate) fn default_rules_engine_factory() -> impl Fn() -> Box<dyn RulesEnginePort> {

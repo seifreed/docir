@@ -28,9 +28,7 @@ pub use summary::{
     SecuritySummary, TextStatsSummary, ThreatIndicatorSummary,
 };
 
-use use_cases::{
-    AnalyzeSecurity, DefaultSecurityAnalyzerFactory, DiffDocuments, ParseDocument, RunRules,
-};
+use use_cases::{AnalyzeSecurity, DiffDocuments, ParseDocument, RunRules};
 
 pub type AppResult<T> = Result<T, AppError>;
 
@@ -175,7 +173,7 @@ impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
     pub fn with_parser(parser: P) -> Self {
         Self::with_parser_and_ports(
             parser,
-            DefaultSecurityAnalyzerFactory::build,
+            adapters::default_security_analyzer_factory(),
             adapters::default_rules_engine_factory(),
             adapters::default_json_serializer(),
         )

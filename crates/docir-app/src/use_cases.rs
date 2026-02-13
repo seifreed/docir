@@ -7,7 +7,6 @@ use docir_core::visitor::IrStore;
 use docir_diff::{DiffEngine, DiffResult};
 use docir_rules::{RuleProfile, RuleReport};
 use docir_security::analyzer::AnalysisResult;
-use docir_security::SecurityAnalyzer;
 use docir_serialization::json::to_json;
 use std::io::{Read, Seek};
 use std::path::Path;
@@ -138,13 +137,5 @@ pub(crate) struct DiffDocuments;
 impl DiffDocuments {
     pub(crate) fn diff(left: &ParsedDocument, right: &ParsedDocument) -> DiffResult {
         DiffEngine::diff(left.store(), left.root_id(), right.store(), right.root_id())
-    }
-}
-
-pub(crate) struct DefaultSecurityAnalyzerFactory;
-
-impl DefaultSecurityAnalyzerFactory {
-    pub(crate) fn build() -> Box<dyn SecurityAnalyzerPort> {
-        Box::new(SecurityAnalyzer::new())
     }
 }
