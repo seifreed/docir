@@ -37,6 +37,7 @@ mod ods;
 mod paragraph;
 mod presentation;
 mod presentation_helpers;
+mod sampling;
 pub(crate) mod security;
 mod security_helpers;
 mod spreadsheet;
@@ -59,6 +60,7 @@ use paragraph::parse_paragraph;
 use presentation_helpers::{
     build_media_asset, classify_media_shape, parse_draw_page, parse_odf_chart, parse_odp_transition,
 };
+use sampling::parse_ods_row_sample;
 use utils::{parse_frame_transform, parse_ods_named_ranges, strip_odf_formula_prefix};
 
 type OdfReader<'a> = Reader<std::io::Cursor<&'a [u8]>>;
@@ -549,95 +551,6 @@ fn parse_ods_row(
                 b"table:covered-table-cell" => {
                     let cell = parse_ods_covered_cell_empty(&e)?;
                     cells.push(cell);
-                }
-                _ => {}
-            },
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"table:table-row" {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(OdsRow { cells })
-}
-
-fn parse_ods_row_sample(
-    reader: &mut OdfReader<'_>,
-    _start: &BytesStart<'_>,
-    store: &mut IrStore,
-    style_map: &mut HashMap<String, u32>,
-    next_style_id: &mut u32,
-    sample_cols: u32,
-) -> Result<OdsRow, ParseError> {
-    let mut buf = Vec::new();
-    let mut cells = Vec::new();
-    let mut col_idx: u32 = 0;
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"table:table-cell" => {
-                    if col_idx >= sample_cols {
-                        let repeat = attr_value(&e, b"table:number-columns-repeated")
-                            .and_then(|v| v.parse::<u32>().ok())
-                            .unwrap_or(1);
-                        col_idx = col_idx.saturating_add(repeat);
-                        spreadsheet::skip_element(reader, e.name().as_ref())?;
-                    } else {
-                        let cell = parse_ods_cell(reader, &e, store, style_map, next_style_id)?;
-                        col_idx = col_idx.saturating_add(cell.col_repeat);
-                        cells.push(cell);
-                    }
-                }
-                b"table:covered-table-cell" => {
-                    if col_idx >= sample_cols {
-                        let repeat = attr_value(&e, b"table:number-columns-repeated")
-                            .and_then(|v| v.parse::<u32>().ok())
-                            .unwrap_or(1);
-                        col_idx = col_idx.saturating_add(repeat);
-                        spreadsheet::skip_element(reader, e.name().as_ref())?;
-                    } else {
-                        let cell = parse_ods_covered_cell(reader, &e)?;
-                        col_idx = col_idx.saturating_add(cell.col_repeat);
-                        cells.push(cell);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"table:table-cell" => {
-                    if col_idx < sample_cols {
-                        let cell = parse_ods_cell_empty(&e, style_map, next_style_id)?;
-                        col_idx = col_idx.saturating_add(cell.col_repeat);
-                        cells.push(cell);
-                    } else {
-                        let repeat = attr_value(&e, b"table:number-columns-repeated")
-                            .and_then(|v| v.parse::<u32>().ok())
-                            .unwrap_or(1);
-                        col_idx = col_idx.saturating_add(repeat);
-                    }
-                }
-                b"table:covered-table-cell" => {
-                    if col_idx < sample_cols {
-                        let cell = parse_ods_covered_cell_empty(&e)?;
-                        col_idx = col_idx.saturating_add(cell.col_repeat);
-                        cells.push(cell);
-                    } else {
-                        let repeat = attr_value(&e, b"table:number-columns-repeated")
-                            .and_then(|v| v.parse::<u32>().ok())
-                            .unwrap_or(1);
-                        col_idx = col_idx.saturating_add(repeat);
-                    }
                 }
                 _ => {}
             },
