@@ -34,48 +34,17 @@ pub(super) fn parse_ods_table(
                     let row_cells =
                         parse_ods_row(reader, &e, store, &mut style_map, &mut next_style_id)?;
                     for _ in 0..row_repeat {
-                        let mut col_idx: u32 = 0;
-                        for cell_data in &row_cells.cells {
-                            for _ in 0..cell_data.col_repeat {
-                                if cell_data.is_covered {
-                                    col_idx += 1;
-                                    continue;
-                                }
-                                if let Some(range) = cell_data.merge_range(row_idx, col_idx) {
-                                    worksheet.merged_cells.push(range);
-                                }
-                                if cell_data.should_emit() {
-                                    limits.bump_cells(1)?;
-                                    let reference =
-                                        format!("{}{}", column_index_to_name(col_idx), row_idx + 1);
-                                    let mut cell = Cell::new(reference.clone(), col_idx, row_idx);
-                                    cell.value = cell_data.value.clone();
-                                    cell.formula = cell_data.formula.clone();
-                                    cell.style_id = cell_data.style_id;
-                                    let cell_id = cell.id;
-                                    store.insert(IRNode::Cell(cell));
-                                    worksheet.cells.push(cell_id);
-                                    cell_values.insert((row_idx, col_idx), cell_data.value.clone());
-                                    if let Some(formula) = &cell_data.formula {
-                                        formula_map
-                                            .insert((row_idx, col_idx), formula.text.clone());
-                                        formula_cells.push((
-                                            cell_id,
-                                            row_idx,
-                                            col_idx,
-                                            formula.text.clone(),
-                                        ));
-                                    }
-                                    if let Some(validation) = &cell_data.validation_name {
-                                        validation_ranges
-                                            .entry(validation.clone())
-                                            .or_default()
-                                            .push(reference);
-                                    }
-                                }
-                                col_idx += 1;
-                            }
-                        }
+                        emit_full_row_cells(
+                            &row_cells,
+                            row_idx,
+                            store,
+                            &mut worksheet,
+                            limits,
+                            &mut validation_ranges,
+                            &mut cell_values,
+                            &mut formula_cells,
+                            &mut formula_map,
+                        )?;
                         row_idx += 1;
                     }
                 }
@@ -192,47 +161,15 @@ pub(super) fn parse_ods_table_fast(
                         let remaining = sample_rows.saturating_sub(row_idx);
                         let repeat = row_repeat.min(remaining);
                         for _ in 0..repeat {
-                            let mut col_idx: u32 = 0;
-                            for cell_data in &row_cells.cells {
-                                for _ in 0..cell_data.col_repeat {
-                                    if col_idx >= sample_cols {
-                                        break;
-                                    }
-                                    if cell_data.is_covered {
-                                        col_idx += 1;
-                                        continue;
-                                    }
-                                    if let Some(range) = cell_data.merge_range(row_idx, col_idx) {
-                                        worksheet.merged_cells.push(range);
-                                    }
-                                    if cell_data.should_emit() {
-                                        limits.bump_cells(1)?;
-                                        let reference = format!(
-                                            "{}{}",
-                                            column_index_to_name(col_idx),
-                                            row_idx + 1
-                                        );
-                                        let mut cell =
-                                            Cell::new(reference.clone(), col_idx, row_idx);
-                                        cell.value = cell_data.value.clone();
-                                        cell.formula = cell_data.formula.clone();
-                                        cell.style_id = cell_data.style_id;
-                                        let cell_id = cell.id;
-                                        store.insert(IRNode::Cell(cell));
-                                        worksheet.cells.push(cell_id);
-                                        if let Some(validation) = &cell_data.validation_name {
-                                            validation_ranges
-                                                .entry(validation.clone())
-                                                .or_default()
-                                                .push(reference);
-                                        }
-                                    }
-                                    col_idx += 1;
-                                }
-                                if col_idx >= sample_cols {
-                                    break;
-                                }
-                            }
+                            emit_sampled_row_cells(
+                                &row_cells,
+                                row_idx,
+                                sample_cols,
+                                store,
+                                &mut worksheet,
+                                limits,
+                                &mut validation_ranges,
+                            )?;
                             row_idx += 1;
                         }
                         if row_repeat > repeat {
@@ -345,6 +282,103 @@ fn attach_shapes_as_drawing(shapes: Vec<NodeId>, store: &mut IrStore, worksheet:
     let drawing_id = drawing.id;
     store.insert(IRNode::WorksheetDrawing(drawing));
     worksheet.drawings.push(drawing_id);
+}
+
+fn emit_full_row_cells(
+    row_cells: &OdsRow,
+    row_idx: u32,
+    store: &mut IrStore,
+    worksheet: &mut Worksheet,
+    limits: &dyn OdfLimitCounter,
+    validation_ranges: &mut HashMap<String, Vec<String>>,
+    cell_values: &mut HashMap<(u32, u32), CellValue>,
+    formula_cells: &mut Vec<(NodeId, u32, u32, String)>,
+    formula_map: &mut HashMap<(u32, u32), String>,
+) -> Result<(), ParseError> {
+    let mut col_idx: u32 = 0;
+    for cell_data in &row_cells.cells {
+        for _ in 0..cell_data.col_repeat {
+            if cell_data.is_covered {
+                col_idx += 1;
+                continue;
+            }
+            if let Some(range) = cell_data.merge_range(row_idx, col_idx) {
+                worksheet.merged_cells.push(range);
+            }
+            if cell_data.should_emit() {
+                limits.bump_cells(1)?;
+                let reference = format!("{}{}", column_index_to_name(col_idx), row_idx + 1);
+                let mut cell = Cell::new(reference.clone(), col_idx, row_idx);
+                cell.value = cell_data.value.clone();
+                cell.formula = cell_data.formula.clone();
+                cell.style_id = cell_data.style_id;
+                let cell_id = cell.id;
+                store.insert(IRNode::Cell(cell));
+                worksheet.cells.push(cell_id);
+                cell_values.insert((row_idx, col_idx), cell_data.value.clone());
+                if let Some(formula) = &cell_data.formula {
+                    formula_map.insert((row_idx, col_idx), formula.text.clone());
+                    formula_cells.push((cell_id, row_idx, col_idx, formula.text.clone()));
+                }
+                if let Some(validation) = &cell_data.validation_name {
+                    validation_ranges
+                        .entry(validation.clone())
+                        .or_default()
+                        .push(reference);
+                }
+            }
+            col_idx += 1;
+        }
+    }
+    Ok(())
+}
+
+fn emit_sampled_row_cells(
+    row_cells: &OdsRow,
+    row_idx: u32,
+    sample_cols: u32,
+    store: &mut IrStore,
+    worksheet: &mut Worksheet,
+    limits: &dyn OdfLimitCounter,
+    validation_ranges: &mut HashMap<String, Vec<String>>,
+) -> Result<(), ParseError> {
+    let mut col_idx: u32 = 0;
+    for cell_data in &row_cells.cells {
+        for _ in 0..cell_data.col_repeat {
+            if col_idx >= sample_cols {
+                break;
+            }
+            if cell_data.is_covered {
+                col_idx += 1;
+                continue;
+            }
+            if let Some(range) = cell_data.merge_range(row_idx, col_idx) {
+                worksheet.merged_cells.push(range);
+            }
+            if cell_data.should_emit() {
+                limits.bump_cells(1)?;
+                let reference = format!("{}{}", column_index_to_name(col_idx), row_idx + 1);
+                let mut cell = Cell::new(reference.clone(), col_idx, row_idx);
+                cell.value = cell_data.value.clone();
+                cell.formula = cell_data.formula.clone();
+                cell.style_id = cell_data.style_id;
+                let cell_id = cell.id;
+                store.insert(IRNode::Cell(cell));
+                worksheet.cells.push(cell_id);
+                if let Some(validation) = &cell_data.validation_name {
+                    validation_ranges
+                        .entry(validation.clone())
+                        .or_default()
+                        .push(reference);
+                }
+            }
+            col_idx += 1;
+        }
+        if col_idx >= sample_cols {
+            break;
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn parse_ods_cell(
