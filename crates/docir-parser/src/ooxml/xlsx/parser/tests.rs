@@ -1,6 +1,7 @@
 use super::*;
 use docir_core::ir::IRNode;
 use docir_core::CellValue;
+use docir_core::SpreadsheetStyles;
 
 mod analysis_parts;
 mod integration_parts;
@@ -95,58 +96,22 @@ fn test_parse_worksheet_cells() {
     assert_eq!(worksheet.merged_cells.len(), 1);
     assert_eq!(worksheet.cells.len(), 6);
 
-    let cell_a1 = store
-        .get(worksheet.cells[0])
-        .and_then(|n| match n {
-            IRNode::Cell(c) => Some(c),
-            _ => None,
-        })
-        .expect("cell a1");
+    let cell_a1 = get_cell(&store, worksheet.cells[0], "cell a1");
     assert!(matches!(cell_a1.value, CellValue::String(ref v) if v == "Hello"));
 
-    let cell_b1 = store
-        .get(worksheet.cells[1])
-        .and_then(|n| match n {
-            IRNode::Cell(c) => Some(c),
-            _ => None,
-        })
-        .expect("cell b1");
+    let cell_b1 = get_cell(&store, worksheet.cells[1], "cell b1");
     assert!(matches!(cell_b1.value, CellValue::Number(v) if (v - 42.0).abs() < f64::EPSILON));
 
-    let cell_c1 = store
-        .get(worksheet.cells[2])
-        .and_then(|n| match n {
-            IRNode::Cell(c) => Some(c),
-            _ => None,
-        })
-        .expect("cell c1");
+    let cell_c1 = get_cell(&store, worksheet.cells[2], "cell c1");
     assert!(matches!(cell_c1.value, CellValue::Boolean(true)));
 
-    let cell_d1 = store
-        .get(worksheet.cells[3])
-        .and_then(|n| match n {
-            IRNode::Cell(c) => Some(c),
-            _ => None,
-        })
-        .expect("cell d1");
+    let cell_d1 = get_cell(&store, worksheet.cells[3], "cell d1");
     assert!(matches!(cell_d1.value, CellValue::Error(CellError::Ref)));
 
-    let cell_e1 = store
-        .get(worksheet.cells[4])
-        .and_then(|n| match n {
-            IRNode::Cell(c) => Some(c),
-            _ => None,
-        })
-        .expect("cell e1");
+    let cell_e1 = get_cell(&store, worksheet.cells[4], "cell e1");
     assert!(cell_e1.formula.is_some());
 
-    let cell_f1 = store
-        .get(worksheet.cells[5])
-        .and_then(|n| match n {
-            IRNode::Cell(c) => Some(c),
-            _ => None,
-        })
-        .expect("cell f1");
+    let cell_f1 = get_cell(&store, worksheet.cells[5], "cell f1");
     assert!(matches!(cell_f1.value, CellValue::InlineString(ref v) if v == "Inline"));
 }
 
@@ -455,6 +420,11 @@ fn test_parse_styles_minimal() {
         "#;
 
     let styles = parse_styles(xml, "xl/styles.xml").expect("styles");
+    assert_style_counts(&styles);
+    assert_style_content(&styles);
+}
+
+fn assert_style_counts(styles: &SpreadsheetStyles) {
     assert_eq!(styles.number_formats.len(), 1);
     assert_eq!(styles.fonts.len(), 1);
     assert_eq!(styles.fills.len(), 1);
@@ -463,9 +433,12 @@ fn test_parse_styles_minimal() {
     assert_eq!(styles.cell_style_xfs.len(), 1);
     assert_eq!(styles.dxfs.len(), 1);
     assert!(styles.table_styles.is_some());
+}
+
+fn assert_style_content(styles: &SpreadsheetStyles) {
     assert_eq!(styles.fonts[0].name.as_deref(), Some("Calibri"));
     assert!(styles.fonts[0].bold);
-    assert_eq!(styles.cell_xfs[0].apply_number_format, true);
+    assert!(styles.cell_xfs[0].apply_number_format);
     assert_eq!(styles.dxfs[0].num_fmt.as_ref().map(|n| n.id), Some(200));
     assert_eq!(
         styles
@@ -511,6 +484,16 @@ fn test_parse_styles_minimal() {
             .and_then(|p| p.locked),
         Some(true)
     );
+}
+
+fn get_cell<'a>(store: &'a IrStore, id: NodeId, label: &str) -> &'a Cell {
+    store
+        .get(id)
+        .and_then(|n| match n {
+            IRNode::Cell(c) => Some(c),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{label}"))
 }
 
 #[test]
