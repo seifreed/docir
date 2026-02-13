@@ -18,6 +18,57 @@ impl GraphicFrameState {
 }
 
 impl PptxParser {
+    fn apply_non_visual_shape_props(shape: &mut Shape, e: &BytesStart<'_>) {
+        for attr in e.attributes().flatten() {
+            match attr.key.as_ref() {
+                b"name" => {
+                    shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
+                }
+                b"descr" => {
+                    shape.alt_text = Some(String::from_utf8_lossy(&attr.value).to_string());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn apply_graphic_data_shape_type(shape: &mut Shape, e: &BytesStart<'_>) {
+        for attr in e.attributes().flatten() {
+            if attr.key.as_ref() == b"uri" {
+                let uri = String::from_utf8_lossy(&attr.value);
+                if uri.contains("chart") {
+                    shape.shape_type = ShapeType::Chart;
+                } else if uri.contains("table") {
+                    shape.shape_type = ShapeType::Table;
+                } else if uri.contains("ole") || uri.contains("object") {
+                    shape.shape_type = ShapeType::OleObject;
+                }
+            }
+        }
+    }
+
+    fn capture_chart_rel(state: &mut GraphicFrameState, e: &BytesStart<'_>) {
+        for attr in e.attributes().flatten() {
+            let key = attr.key.as_ref();
+            if state.chart_rel.is_none()
+                && (key == b"r:id" || key == b"id" || key.ends_with(b":id"))
+            {
+                let val = String::from_utf8_lossy(&attr.value).to_string();
+                if val.starts_with("rId") {
+                    state.chart_rel = Some(val);
+                }
+            }
+        }
+    }
+
+    fn capture_ole_rel(state: &mut GraphicFrameState, e: &BytesStart<'_>) {
+        for attr in e.attributes().flatten() {
+            if attr.key.as_ref() == b"r:id" {
+                state.ole_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+        }
+    }
+
     pub(super) fn handle_graphic_frame_start(
         &mut self,
         e: &BytesStart<'_>,
@@ -28,19 +79,7 @@ impl PptxParser {
         state: &mut GraphicFrameState,
     ) -> Result<(), ParseError> {
         match e.name().as_ref() {
-            b"p:cNvPr" => {
-                for attr in e.attributes().flatten() {
-                    match attr.key.as_ref() {
-                        b"name" => {
-                            shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
-                        }
-                        b"descr" => {
-                            shape.alt_text = Some(String::from_utf8_lossy(&attr.value).to_string());
-                        }
-                        _ => {}
-                    }
-                }
-            }
+            b"p:cNvPr" => Self::apply_non_visual_shape_props(shape, e),
             b"a:hlinkClick" => {
                 self.attach_hyperlink(shape, e, relationships, slide_path);
             }
@@ -48,18 +87,7 @@ impl PptxParser {
                 parse_transform(reader, &mut shape.transform, slide_path)?;
             }
             _ if e.name().as_ref().ends_with(b"graphicData") => {
-                for attr in e.attributes().flatten() {
-                    if attr.key.as_ref() == b"uri" {
-                        let uri = String::from_utf8_lossy(&attr.value);
-                        if uri.contains("chart") {
-                            shape.shape_type = ShapeType::Chart;
-                        } else if uri.contains("table") {
-                            shape.shape_type = ShapeType::Table;
-                        } else if uri.contains("ole") || uri.contains("object") {
-                            shape.shape_type = ShapeType::OleObject;
-                        }
-                    }
-                }
+                Self::apply_graphic_data_shape_type(shape, e);
             }
             b"a:tbl" => {
                 let table = self.parse_pptx_table(reader, slide_path)?;
@@ -69,27 +97,13 @@ impl PptxParser {
                 shape.shape_type = ShapeType::Table;
             }
             _ if e.name().as_ref().ends_with(b"chart") => {
-                for attr in e.attributes().flatten() {
-                    let key = attr.key.as_ref();
-                    if state.chart_rel.is_none()
-                        && (key == b"r:id" || key == b"id" || key.ends_with(b":id"))
-                    {
-                        let val = String::from_utf8_lossy(&attr.value).to_string();
-                        if val.starts_with("rId") {
-                            state.chart_rel = Some(val);
-                        }
-                    }
-                }
+                Self::capture_chart_rel(state, e);
                 shape.shape_type = ShapeType::Chart;
             }
             _ if e.name().as_ref().ends_with(b"oleObj")
                 || e.name().as_ref().ends_with(b"oleObject") =>
             {
-                for attr in e.attributes().flatten() {
-                    if attr.key.as_ref() == b"r:id" {
-                        state.ole_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
-                    }
-                }
+                Self::capture_ole_rel(state, e);
                 shape.shape_type = ShapeType::OleObject;
             }
             _ => {}
@@ -107,19 +121,7 @@ impl PptxParser {
         state: &mut GraphicFrameState,
     ) -> Result<(), ParseError> {
         match e.name().as_ref() {
-            b"p:cNvPr" => {
-                for attr in e.attributes().flatten() {
-                    match attr.key.as_ref() {
-                        b"name" => {
-                            shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
-                        }
-                        b"descr" => {
-                            shape.alt_text = Some(String::from_utf8_lossy(&attr.value).to_string());
-                        }
-                        _ => {}
-                    }
-                }
-            }
+            b"p:cNvPr" => Self::apply_non_visual_shape_props(shape, e),
             b"a:hlinkClick" => {
                 self.attach_hyperlink(shape, e, relationships, slide_path);
             }
@@ -133,27 +135,13 @@ impl PptxParser {
                 shape.shape_type = ShapeType::Table;
             }
             _ if e.name().as_ref().ends_with(b"chart") => {
-                for attr in e.attributes().flatten() {
-                    let key = attr.key.as_ref();
-                    if state.chart_rel.is_none()
-                        && (key == b"r:id" || key == b"id" || key.ends_with(b":id"))
-                    {
-                        let val = String::from_utf8_lossy(&attr.value).to_string();
-                        if val.starts_with("rId") {
-                            state.chart_rel = Some(val);
-                        }
-                    }
-                }
+                Self::capture_chart_rel(state, e);
                 shape.shape_type = ShapeType::Chart;
             }
             _ if e.name().as_ref().ends_with(b"oleObj")
                 || e.name().as_ref().ends_with(b"oleObject") =>
             {
-                for attr in e.attributes().flatten() {
-                    if attr.key.as_ref() == b"r:id" {
-                        state.ole_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
-                    }
-                }
+                Self::capture_ole_rel(state, e);
                 shape.shape_type = ShapeType::OleObject;
             }
             _ => {}
