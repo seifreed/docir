@@ -7,43 +7,52 @@ use std::path::PathBuf;
 use crate::commands::util::parse_document;
 
 pub fn run(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
-    // Parse the document
     let parsed = parse_document(&input, parser_config)?;
-
     let summary = summarize_document(&parsed).context("Failed to build document summary")?;
 
-    // Print header
     println!("Document Summary");
     println!("================");
     println!();
-
-    // Basic info
     println!("File: {}", input.display());
     println!("Format: {}", summary.format);
     println!();
 
-    // Metadata
-    if summary.metadata.title.is_some()
-        || summary.metadata.author.is_some()
-        || summary.metadata.modified.is_some()
-        || summary.metadata.application.is_some()
+    print_metadata(&summary);
+    print_structure(&summary);
+    print_text_stats(&summary);
+    print_metrics(&summary);
+    print_security(&summary);
+    print_threat_indicators(&summary);
+
+    Ok(())
+}
+
+fn print_metadata(summary: &docir_app::DocumentSummary) {
+    if summary.metadata.title.is_none()
+        && summary.metadata.author.is_none()
+        && summary.metadata.modified.is_none()
+        && summary.metadata.application.is_none()
     {
-        println!("Metadata:");
-        if let Some(title) = &summary.metadata.title {
-            println!("  Title: {}", title);
-        }
-        if let Some(creator) = &summary.metadata.author {
-            println!("  Author: {}", creator);
-        }
-        if let Some(modified) = &summary.metadata.modified {
-            println!("  Modified: {}", modified);
-        }
-        if let Some(app) = &summary.metadata.application {
-            println!("  Application: {}", app);
-        }
-        println!();
+        return;
     }
 
+    println!("Metadata:");
+    if let Some(title) = &summary.metadata.title {
+        println!("  Title: {}", title);
+    }
+    if let Some(creator) = &summary.metadata.author {
+        println!("  Author: {}", creator);
+    }
+    if let Some(modified) = &summary.metadata.modified {
+        println!("  Modified: {}", modified);
+    }
+    if let Some(app) = &summary.metadata.application {
+        println!("  Application: {}", app);
+    }
+    println!();
+}
+
+fn print_structure(summary: &docir_app::DocumentSummary) {
     println!("Structure:");
     for count in &summary.node_counts {
         if count.count > 0 {
@@ -51,25 +60,32 @@ pub fn run(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
         }
     }
     println!();
+}
 
+fn print_text_stats(summary: &docir_app::DocumentSummary) {
     println!("Text Statistics:");
     println!("  Characters: {}", summary.text_stats.char_count);
     println!("  Words: ~{}", summary.text_stats.word_count);
     println!();
+}
 
-    if let Some(metrics) = &summary.metrics {
-        println!("Parse Metrics (ms):");
-        println!("  Content Types: {}", metrics.content_types_ms);
-        println!("  Relationships: {}", metrics.relationships_ms);
-        println!("  Main Parse: {}", metrics.main_parse_ms);
-        println!("  Shared Parts: {}", metrics.shared_parts_ms);
-        println!("  Security Scan: {}", metrics.security_scan_ms);
-        println!("  Extension Parts: {}", metrics.extension_parts_ms);
-        println!("  Normalization: {}", metrics.normalization_ms);
-        println!();
-    }
+fn print_metrics(summary: &docir_app::DocumentSummary) {
+    let Some(metrics) = &summary.metrics else {
+        return;
+    };
 
-    // Security summary
+    println!("Parse Metrics (ms):");
+    println!("  Content Types: {}", metrics.content_types_ms);
+    println!("  Relationships: {}", metrics.relationships_ms);
+    println!("  Main Parse: {}", metrics.main_parse_ms);
+    println!("  Shared Parts: {}", metrics.shared_parts_ms);
+    println!("  Security Scan: {}", metrics.security_scan_ms);
+    println!("  Extension Parts: {}", metrics.extension_parts_ms);
+    println!("  Normalization: {}", metrics.normalization_ms);
+    println!();
+}
+
+fn print_security(summary: &docir_app::DocumentSummary) {
     println!("Security:");
     println!("  Threat Level: {}", summary.security.threat_level);
     println!(
@@ -82,39 +98,37 @@ pub fn run(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
     );
     println!(
         "  OLE Objects: {}",
-        if summary.security.ole_objects == 0 {
-            "No".to_string()
-        } else {
-            format!("{} found", summary.security.ole_objects)
-        }
+        count_or_none(summary.security.ole_objects)
     );
     println!(
         "  External References: {}",
-        if summary.security.external_refs == 0 {
-            "No".to_string()
-        } else {
-            format!("{} found", summary.security.external_refs)
-        }
+        count_or_none(summary.security.external_refs)
     );
     println!(
         "  DDE Fields: {}",
-        if summary.security.dde_fields == 0 {
-            "No".to_string()
-        } else {
-            format!("{} found", summary.security.dde_fields)
-        }
+        count_or_none(summary.security.dde_fields)
     );
+}
 
-    if !summary.threat_indicators.is_empty() {
-        println!();
-        println!("Threat Indicators:");
-        for indicator in &summary.threat_indicators {
-            println!(
-                "  [{}] {}: {}",
-                indicator.severity, indicator.indicator_type, indicator.description
-            );
-        }
+fn count_or_none(count: usize) -> String {
+    if count == 0 {
+        "No".to_string()
+    } else {
+        format!("{} found", count)
+    }
+}
+
+fn print_threat_indicators(summary: &docir_app::DocumentSummary) {
+    if summary.threat_indicators.is_empty() {
+        return;
     }
 
-    Ok(())
+    println!();
+    println!("Threat Indicators:");
+    for indicator in &summary.threat_indicators {
+        println!(
+            "  [{}] {}: {}",
+            indicator.severity, indicator.indicator_type, indicator.description
+        );
+    }
 }
