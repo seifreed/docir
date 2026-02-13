@@ -1,5 +1,6 @@
 use super::*;
 use crate::ooxml::relationships::Relationships;
+use docir_core::ir::{LineNumberRestart, PageOrientation, SectionType};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 mod advanced_features;

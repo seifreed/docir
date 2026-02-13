@@ -3,13 +3,12 @@
 use super::field::parse_field_instruction;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
-use crate::xml_utils::{attr_value, read_event, reader_from_str, xml_error};
+use crate::xml_utils::{attr_value, read_event, reader_from_str};
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
-    Footer, GlossaryDocument, GlossaryEntry, Header, Hyperlink, LineNumberRestart, LineSpacingRule,
-    NumberingInfo, NumberingLevel, NumberingSet, PageBorders, PageMargins, PageOrientation,
-    Paragraph, ParagraphProperties, Revision, RevisionType, Run, RunProperties, SectionProperties,
-    SectionType, Style, StyleParagraphProperties, StyleRunProperties, StyleSet, StyleType,
+    Footer, GlossaryDocument, Header, Hyperlink, LineSpacingRule, NumberingInfo, NumberingLevel,
+    NumberingSet, PageBorders, Paragraph, ParagraphProperties, Revision, RevisionType, Run,
+    RunProperties, Style, StyleParagraphProperties, StyleRunProperties, StyleSet, StyleType,
     TextAlignment, UnderlineStyle, VerticalTextAlignment, WebSettings, WordSettings,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
@@ -22,13 +21,17 @@ mod body;
 mod comments;
 mod drawing;
 mod font_table;
+mod glossary;
 mod numbering;
 mod paragraph;
+mod sections;
 mod styles;
 mod table;
 use body::{parse_block_until, parse_body_sections};
 use drawing::parse_drawing;
+use glossary::parse_doc_part;
 use paragraph::{parse_paragraph, parse_paragraph_simple};
+use sections::{apply_section_refs, SectionRef};
 use table::parse_table;
 
 #[derive(Debug, Clone, Copy)]
@@ -46,12 +49,6 @@ pub enum HeaderFooterKind {
 /// DOCX parser with internal store.
 pub struct DocxParser {
     store: IrStore,
-}
-
-struct SectionRef {
-    headers: Vec<NodeId>,
-    footers: Vec<NodeId>,
-    properties: SectionProperties,
 }
 
 struct ParagraphParse {
@@ -226,277 +223,6 @@ fn style_paragraph_from_paragraph_props(props: ParagraphProperties) -> StylePara
         keep_lines: props.keep_lines,
         page_break_before: props.page_break_before,
         widow_control: props.widow_control,
-    }
-}
-
-fn parse_doc_part(
-    parser: &mut DocxParser,
-    reader: &mut Reader<&[u8]>,
-    rels: &Relationships,
-) -> Result<GlossaryEntry, ParseError> {
-    let mut entry = GlossaryEntry::new();
-    entry.span = Some(SourceSpan::new("word/glossary/document.xml"));
-    let mut buf = Vec::new();
-
-    loop {
-        let event = read_event(reader, &mut buf, "word/glossary/document.xml")?;
-        match event {
-            Event::Start(e) => match e.name().as_ref() {
-                b"w:docPartPr" => {
-                    let (name, gallery) = parse_doc_part_pr(reader)?;
-                    entry.name = name;
-                    entry.gallery = gallery;
-                }
-                b"w:docPartBody" => {
-                    let content = parse_block_until(parser, reader, rels, b"w:docPartBody")?;
-                    entry.content.extend(content);
-                }
-                _ => {}
-            },
-            Event::End(e) => {
-                if e.name().as_ref() == b"w:docPart" {
-                    break;
-                }
-            }
-            Event::Eof => break,
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(entry)
-}
-
-fn parse_doc_part_pr(
-    reader: &mut Reader<&[u8]>,
-) -> Result<(Option<String>, Option<String>), ParseError> {
-    let mut name = None;
-    let mut gallery = None;
-    let mut buf = Vec::new();
-
-    loop {
-        let event = read_event(reader, &mut buf, "word/glossary/document.xml")?;
-        match event {
-            Event::Start(e) | Event::Empty(e) => match e.name().as_ref() {
-                b"w:name" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
-                        name = Some(val);
-                    }
-                }
-                b"w:gallery" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
-                        gallery = Some(val);
-                    }
-                }
-                _ => {}
-            },
-            Event::End(e) => {
-                if e.name().as_ref() == b"w:docPartPr" {
-                    break;
-                }
-            }
-            Event::Eof => break,
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok((name, gallery))
-}
-
-fn apply_section_refs(
-    reader: &mut Reader<&[u8]>,
-    header_footer_map: Option<&HashMap<String, NodeId>>,
-) -> Result<SectionRef, ParseError> {
-    let mut headers = Vec::new();
-    let mut footers = Vec::new();
-    let mut properties = SectionProperties::default();
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"w:headerReference" | b"w:footerReference" => {
-                    apply_section_header_footer(&e, header_footer_map, &mut headers, &mut footers);
-                }
-                b"w:pgSz" => apply_section_page_size(&e, &mut properties),
-                b"w:pgMar" => apply_section_margins(&e, &mut properties),
-                b"w:cols" => apply_section_columns(&e, &mut properties),
-                b"w:type" => apply_section_type(&e, &mut properties),
-                b"w:titlePg" => apply_section_title_page(&e, &mut properties),
-                b"w:pgNumType" => apply_section_page_numbering(&e, &mut properties),
-                b"w:lnNumType" | b"w:lineNumberType" => {
-                    apply_section_line_numbering(&e, &mut properties)
-                }
-                b"w:pgBorders" => apply_section_page_borders(reader, &mut properties)?,
-                b"w:textDirection" => apply_section_text_direction(&e, &mut properties),
-                _ => {}
-            },
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:sectPr" {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error("word/document.xml", e));
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-    Ok(SectionRef {
-        headers,
-        footers,
-        properties,
-    })
-}
-
-fn apply_section_header_footer(
-    e: &BytesStart<'_>,
-    header_footer_map: Option<&HashMap<String, NodeId>>,
-    headers: &mut Vec<NodeId>,
-    footers: &mut Vec<NodeId>,
-) {
-    let Some(map) = header_footer_map else {
-        return;
-    };
-    let Some(id) = attr_value(e, b"r:id") else {
-        return;
-    };
-    let Some(node_id) = map.get(&id) else {
-        return;
-    };
-    if e.name().as_ref() == b"w:headerReference" {
-        headers.push(*node_id);
-    } else {
-        footers.push(*node_id);
-    }
-}
-
-fn apply_section_page_size(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    if let Some(val) = attr_value(e, b"w:w").and_then(|v| v.parse().ok()) {
-        properties.page_width = Some(val);
-    }
-    if let Some(val) = attr_value(e, b"w:h").and_then(|v| v.parse().ok()) {
-        properties.page_height = Some(val);
-    }
-    if let Some(val) = attr_value(e, b"w:orient") {
-        properties.orientation = match val.as_str() {
-            "landscape" => Some(PageOrientation::Landscape),
-            "portrait" => Some(PageOrientation::Portrait),
-            _ => None,
-        };
-    }
-}
-
-fn apply_section_margins(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    let mut margins = properties.margins.take().unwrap_or(PageMargins {
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        header: None,
-        footer: None,
-        gutter: None,
-    });
-    if let Some(val) = attr_value(e, b"w:top").and_then(|v| v.parse().ok()) {
-        margins.top = val;
-    }
-    if let Some(val) = attr_value(e, b"w:bottom").and_then(|v| v.parse().ok()) {
-        margins.bottom = val;
-    }
-    if let Some(val) = attr_value(e, b"w:left").and_then(|v| v.parse().ok()) {
-        margins.left = val;
-    }
-    if let Some(val) = attr_value(e, b"w:right").and_then(|v| v.parse().ok()) {
-        margins.right = val;
-    }
-    if let Some(val) = attr_value(e, b"w:header").and_then(|v| v.parse().ok()) {
-        margins.header = Some(val);
-    }
-    if let Some(val) = attr_value(e, b"w:footer").and_then(|v| v.parse().ok()) {
-        margins.footer = Some(val);
-    }
-    if let Some(val) = attr_value(e, b"w:gutter").and_then(|v| v.parse().ok()) {
-        margins.gutter = Some(val);
-    }
-    properties.margins = Some(margins);
-}
-
-fn apply_section_columns(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    if let Some(val) = attr_value(e, b"w:num").and_then(|v| v.parse().ok()) {
-        properties.columns = Some(val);
-    }
-    if let Some(val) = attr_value(e, b"w:space").and_then(|v| v.parse().ok()) {
-        properties.column_spacing = Some(val);
-    }
-    if let Some(val) = attr_value(e, b"w:sep") {
-        properties.column_separator = Some(val == "1" || val.eq_ignore_ascii_case("true"));
-    }
-}
-
-fn apply_section_type(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    if let Some(val) = attr_value(e, b"w:val") {
-        properties.section_type = match val.as_str() {
-            "continuous" => Some(SectionType::Continuous),
-            "evenPage" => Some(SectionType::EvenPage),
-            "oddPage" => Some(SectionType::OddPage),
-            "nextPage" => Some(SectionType::NextPage),
-            _ => None,
-        };
-    }
-}
-
-fn apply_section_title_page(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    properties.title_page = Some(bool_from_val(e));
-}
-
-fn apply_section_page_numbering(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    let mut numbering = properties.page_numbering.take().unwrap_or_default();
-    if let Some(val) = attr_value(e, b"w:start").and_then(|v| v.parse().ok()) {
-        numbering.start = Some(val);
-    }
-    if let Some(val) = attr_value(e, b"w:fmt") {
-        numbering.format = Some(val);
-    }
-    properties.page_numbering = Some(numbering);
-}
-
-fn apply_section_line_numbering(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    let mut numbering = properties.line_numbering.take().unwrap_or_default();
-    if let Some(val) = attr_value(e, b"w:start").and_then(|v| v.parse().ok()) {
-        numbering.start = Some(val);
-    }
-    if let Some(val) = attr_value(e, b"w:countBy").and_then(|v| v.parse().ok()) {
-        numbering.count_by = Some(val);
-    }
-    if let Some(val) = attr_value(e, b"w:distance").and_then(|v| v.parse().ok()) {
-        numbering.distance = Some(val);
-    }
-    if let Some(val) = attr_value(e, b"w:restart") {
-        numbering.restart = match val.as_str() {
-            "newPage" => Some(LineNumberRestart::NewPage),
-            "newSection" => Some(LineNumberRestart::NewSection),
-            "continuous" => Some(LineNumberRestart::Continuous),
-            _ => None,
-        };
-    }
-    properties.line_numbering = Some(numbering);
-}
-
-fn apply_section_page_borders(
-    reader: &mut Reader<&[u8]>,
-    properties: &mut SectionProperties,
-) -> Result<(), ParseError> {
-    if let Some(borders) = parse_page_borders(reader)? {
-        properties.page_borders = Some(borders);
-    }
-    Ok(())
-}
-
-fn apply_section_text_direction(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    if let Some(val) = attr_value(e, b"w:val") {
-        properties.text_direction = Some(val);
     }
 }
 
