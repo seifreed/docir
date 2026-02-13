@@ -402,85 +402,9 @@ fn parse_sdt_content_inline(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"w:r" => {
-                    let run = parse_run(parser, reader, rels)?;
-                    runs.push(run.run_id);
-                    runs.extend(run.embedded);
-                }
-                b"w:hyperlink" => {
-                    let link_id = parse_hyperlink(parser, reader, rels, &e)?;
-                    runs.push(link_id);
-                }
-                b"w:fldSimple" => {
-                    let instr = attr_value(&e, b"w:instr");
-                    let field_id = parse_field(parser, reader, instr)?;
-                    runs.push(field_id);
-                }
-                b"w:commentRangeStart" => {
-                    if let Some(cid) = attr_value(&e, b"w:id") {
-                        let mut node = CommentRangeStart::new(cid);
-                        node.span = Some(SourceSpan::new(DOC_XML_PATH));
-                        let node_id = node.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::CommentRangeStart(node));
-                        runs.push(node_id);
-                    }
-                }
-                b"w:commentRangeEnd" => {
-                    if let Some(cid) = attr_value(&e, b"w:id") {
-                        let mut node = CommentRangeEnd::new(cid);
-                        node.span = Some(SourceSpan::new(DOC_XML_PATH));
-                        let node_id = node.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::CommentRangeEnd(node));
-                        runs.push(node_id);
-                    }
-                }
-                b"w:commentReference" => {
-                    if let Some(cid) = attr_value(&e, b"w:id") {
-                        let mut node = CommentReference::new(cid);
-                        node.span = Some(SourceSpan::new(DOC_XML_PATH));
-                        let node_id = node.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::CommentReference(node));
-                        runs.push(node_id);
-                    }
-                }
-                b"w:bookmarkStart" => {
-                    if let Some(bm_id) = attr_value(&e, b"w:id") {
-                        let mut bm = docir_core::ir::BookmarkStart::new(bm_id);
-                        bm.name = attr_value(&e, b"w:name");
-                        let bm_id = bm.id;
-                        parser
-                            .store
-                            .insert(docir_core::ir::IRNode::BookmarkStart(bm));
-                        runs.push(bm_id);
-                    }
-                }
-                b"w:bookmarkEnd" => {
-                    if let Some(bm_id) = attr_value(&e, b"w:id") {
-                        let bm = docir_core::ir::BookmarkEnd::new(bm_id);
-                        let bm_id = bm.id;
-                        parser.store.insert(docir_core::ir::IRNode::BookmarkEnd(bm));
-                        runs.push(bm_id);
-                    }
-                }
-                b"w:ins" => {
-                    let rev_id =
-                        parse_revision_inline(parser, reader, rels, &e, RevisionType::Insert)?;
-                    runs.push(rev_id);
-                }
-                b"w:del" => {
-                    let rev_id =
-                        parse_revision_inline(parser, reader, rels, &e, RevisionType::Delete)?;
-                    runs.push(rev_id);
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => {
+                handle_sdt_content_inline_start(parser, reader, rels, &e, &mut runs)?
+            }
             Ok(Event::End(e)) => {
                 if e.name().as_ref() == b"w:sdtContent" {
                     break;
@@ -495,6 +419,118 @@ fn parse_sdt_content_inline(
         buf.clear();
     }
     Ok(runs)
+}
+
+fn handle_sdt_content_inline_start(
+    parser: &mut DocxParser,
+    reader: &mut Reader<&[u8]>,
+    rels: &Relationships,
+    start: &BytesStart<'_>,
+    runs: &mut Vec<NodeId>,
+) -> Result<(), ParseError> {
+    match start.name().as_ref() {
+        b"w:r" => {
+            let run = parse_run(parser, reader, rels)?;
+            runs.push(run.run_id);
+            runs.extend(run.embedded);
+        }
+        b"w:hyperlink" => {
+            let link_id = parse_hyperlink(parser, reader, rels, start)?;
+            runs.push(link_id);
+        }
+        b"w:fldSimple" => {
+            let instr = attr_value(start, b"w:instr");
+            let field_id = parse_field(parser, reader, instr)?;
+            runs.push(field_id);
+        }
+        b"w:commentRangeStart" => {
+            if let Some(node_id) = insert_comment_range_start(parser, start) {
+                runs.push(node_id);
+            }
+        }
+        b"w:commentRangeEnd" => {
+            if let Some(node_id) = insert_comment_range_end(parser, start) {
+                runs.push(node_id);
+            }
+        }
+        b"w:commentReference" => {
+            if let Some(node_id) = insert_comment_reference(parser, start) {
+                runs.push(node_id);
+            }
+        }
+        b"w:bookmarkStart" => {
+            if let Some(node_id) = insert_bookmark_start(parser, start) {
+                runs.push(node_id);
+            }
+        }
+        b"w:bookmarkEnd" => {
+            if let Some(node_id) = insert_bookmark_end(parser, start) {
+                runs.push(node_id);
+            }
+        }
+        b"w:ins" => {
+            let rev_id = parse_revision_inline(parser, reader, rels, start, RevisionType::Insert)?;
+            runs.push(rev_id);
+        }
+        b"w:del" => {
+            let rev_id = parse_revision_inline(parser, reader, rels, start, RevisionType::Delete)?;
+            runs.push(rev_id);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn insert_comment_range_start(parser: &mut DocxParser, start: &BytesStart<'_>) -> Option<NodeId> {
+    let cid = attr_value(start, b"w:id")?;
+    let mut node = CommentRangeStart::new(cid);
+    node.span = Some(SourceSpan::new(DOC_XML_PATH));
+    let node_id = node.id;
+    parser
+        .store
+        .insert(docir_core::ir::IRNode::CommentRangeStart(node));
+    Some(node_id)
+}
+
+fn insert_comment_range_end(parser: &mut DocxParser, start: &BytesStart<'_>) -> Option<NodeId> {
+    let cid = attr_value(start, b"w:id")?;
+    let mut node = CommentRangeEnd::new(cid);
+    node.span = Some(SourceSpan::new(DOC_XML_PATH));
+    let node_id = node.id;
+    parser
+        .store
+        .insert(docir_core::ir::IRNode::CommentRangeEnd(node));
+    Some(node_id)
+}
+
+fn insert_comment_reference(parser: &mut DocxParser, start: &BytesStart<'_>) -> Option<NodeId> {
+    let cid = attr_value(start, b"w:id")?;
+    let mut node = CommentReference::new(cid);
+    node.span = Some(SourceSpan::new(DOC_XML_PATH));
+    let node_id = node.id;
+    parser
+        .store
+        .insert(docir_core::ir::IRNode::CommentReference(node));
+    Some(node_id)
+}
+
+fn insert_bookmark_start(parser: &mut DocxParser, start: &BytesStart<'_>) -> Option<NodeId> {
+    let bm_id = attr_value(start, b"w:id")?;
+    let mut bm = docir_core::ir::BookmarkStart::new(bm_id);
+    bm.name = attr_value(start, b"w:name");
+    let node_id = bm.id;
+    parser
+        .store
+        .insert(docir_core::ir::IRNode::BookmarkStart(bm));
+    Some(node_id)
+}
+
+fn insert_bookmark_end(parser: &mut DocxParser, start: &BytesStart<'_>) -> Option<NodeId> {
+    let bm_id = attr_value(start, b"w:id")?;
+    let bm = docir_core::ir::BookmarkEnd::new(bm_id);
+    let node_id = bm.id;
+    parser.store.insert(docir_core::ir::IRNode::BookmarkEnd(bm));
+    Some(node_id)
 }
 
 pub(super) fn parse_hyperlink(
