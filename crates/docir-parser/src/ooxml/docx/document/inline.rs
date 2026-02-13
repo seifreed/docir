@@ -44,26 +44,20 @@ pub(super) fn parse_run(
                         embedded.push(shape_id);
                     }
                 }
-                b"w:footnoteReference" => {
-                    if let Some(field_id) = parse_note_reference(
-                        parser,
-                        reader,
-                        &e,
-                        docir_core::ir::FieldKind::FootnoteRef,
-                    ) {
-                        embedded.push(field_id);
-                    }
-                }
-                b"w:endnoteReference" => {
-                    if let Some(field_id) = parse_note_reference(
-                        parser,
-                        reader,
-                        &e,
-                        docir_core::ir::FieldKind::EndnoteRef,
-                    ) {
-                        embedded.push(field_id);
-                    }
-                }
+                b"w:footnoteReference" => push_note_reference_if_present(
+                    parser,
+                    reader,
+                    &e,
+                    docir_core::ir::FieldKind::FootnoteRef,
+                    &mut embedded,
+                ),
+                b"w:endnoteReference" => push_note_reference_if_present(
+                    parser,
+                    reader,
+                    &e,
+                    docir_core::ir::FieldKind::EndnoteRef,
+                    &mut embedded,
+                ),
                 b"w:fldChar" => {
                     field_char = attr_value(&e, b"w:fldCharType");
                 }
@@ -83,23 +77,21 @@ pub(super) fn parse_run(
                 } else if e.name().as_ref() == b"w:fldChar" {
                     field_char = attr_value(&e, b"w:fldCharType");
                 } else if e.name().as_ref() == b"w:footnoteReference" {
-                    if let Some(field_id) = parse_note_reference(
+                    push_note_reference_if_present(
                         parser,
                         reader,
                         &e,
                         docir_core::ir::FieldKind::FootnoteRef,
-                    ) {
-                        embedded.push(field_id);
-                    }
+                        &mut embedded,
+                    );
                 } else if e.name().as_ref() == b"w:endnoteReference" {
-                    if let Some(field_id) = parse_note_reference(
+                    push_note_reference_if_present(
                         parser,
                         reader,
                         &e,
                         docir_core::ir::FieldKind::EndnoteRef,
-                    ) {
-                        embedded.push(field_id);
-                    }
+                        &mut embedded,
+                    );
                 }
             }
             Ok(Event::End(e)) => {
@@ -129,6 +121,18 @@ pub(super) fn parse_run(
         field_char,
         embedded,
     })
+}
+
+fn push_note_reference_if_present(
+    parser: &mut DocxParser,
+    reader: &Reader<&[u8]>,
+    start: &BytesStart<'_>,
+    kind: docir_core::ir::FieldKind,
+    embedded: &mut Vec<NodeId>,
+) {
+    if let Some(field_id) = parse_note_reference(parser, reader, start, kind) {
+        embedded.push(field_id);
+    }
 }
 
 fn parse_note_reference(
