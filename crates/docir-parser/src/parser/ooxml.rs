@@ -548,22 +548,6 @@ impl OoxmlParser {
         font_table_id
     }
 
-    fn parse_docx_part_by_rel<F>(
-        &self,
-        zip: &mut impl PackageReader,
-        main_part_path: &str,
-        doc_rels: &Relationships,
-        rel_type: &str,
-        mut parse: F,
-    ) -> Option<NodeId>
-    where
-        F: FnMut(&str, &str) -> Option<NodeId>,
-    {
-        let (part_path, xml) =
-            self.read_xml_part_by_rel_optional(zip, main_part_path, doc_rels, rel_type)?;
-        parse(&part_path, &xml)
-    }
-
     fn parse_docx_part_by_rel_with_span<F, S>(
         &self,
         zip: &mut impl PackageReader,
