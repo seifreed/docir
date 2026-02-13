@@ -8,6 +8,48 @@ use super::{
 use crate::error::ParseError;
 use docir_core::visitor::IrStore;
 
+fn set_last_group_kind(ctx: &mut RtfParseContext, kind: GroupKind) {
+    if let Some(group) = ctx.group_stack.last_mut() {
+        group.kind = kind;
+    }
+}
+
+fn set_stylesheet_entry(ctx: &mut RtfParseContext, style_id: String, style_type: StyleType) {
+    set_last_group_kind(ctx, GroupKind::StylesheetEntry);
+    ctx.current_style = Some(StyleEntryContext {
+        style_id: Some(style_id),
+        style_type: Some(style_type),
+        name_buf: String::new(),
+    });
+}
+
+fn apply_pending_numbering_to_current_paragraph(ctx: &mut RtfParseContext) {
+    let numbering = pending_numbering(ctx);
+    if let Some(para) = ctx.current_paragraph.as_mut() {
+        if let Some(numbering) = numbering {
+            para.properties.numbering = Some(numbering);
+        }
+    }
+}
+
+fn set_last_object_media_image(ctx: &mut RtfParseContext) {
+    if let Some(obj) = ctx.object_stack.last_mut() {
+        obj.media_type = Some(super::MediaType::Image);
+    }
+}
+
+fn set_last_object_dimension(
+    ctx: &mut RtfParseContext,
+    param: Option<i32>,
+    mut apply: impl FnMut(&mut ObjectContext, u32),
+) {
+    if let Some(value) = param {
+        if let Some(obj) = ctx.object_stack.last_mut() {
+            apply(obj, value.max(0) as u32);
+        }
+    }
+}
+
 pub(super) fn handle_group_controls(
     word: &str,
     param: Option<i32>,
@@ -15,24 +57,18 @@ pub(super) fn handle_group_controls(
 ) -> Result<bool, ParseError> {
     match word {
         "fonttbl" => {
-            if let Some(group) = ctx.group_stack.last_mut() {
-                group.kind = GroupKind::FontTable;
-            }
+            set_last_group_kind(ctx, GroupKind::FontTable);
             ctx.current_text.clear();
         }
         "colortbl" => {
-            if let Some(group) = ctx.group_stack.last_mut() {
-                group.kind = GroupKind::ColorTable;
-            }
+            set_last_group_kind(ctx, GroupKind::ColorTable);
             if ctx.color_table.colors.is_empty() {
                 ctx.color_table.colors.push(None);
             }
             ctx.current_text.clear();
         }
         "stylesheet" => {
-            if let Some(group) = ctx.group_stack.last_mut() {
-                group.kind = GroupKind::Stylesheet;
-            }
+            set_last_group_kind(ctx, GroupKind::Stylesheet);
             if ctx.style_set.is_none() {
                 ctx.style_set = Some(StyleSet::new());
             }
@@ -41,14 +77,7 @@ pub(super) fn handle_group_controls(
             if let Some(id) = param {
                 let style_id = format!("s{}", id.max(0));
                 if ctx.current_group_kind() == GroupKind::Stylesheet {
-                    ctx.group_stack
-                        .last_mut()
-                        .map(|g| g.kind = GroupKind::StylesheetEntry);
-                    ctx.current_style = Some(StyleEntryContext {
-                        style_id: Some(style_id),
-                        style_type: Some(StyleType::Paragraph),
-                        name_buf: String::new(),
-                    });
+                    set_stylesheet_entry(ctx, style_id, StyleType::Paragraph);
                 } else {
                     ctx.pending_para_style = Some(style_id);
                     if let Some(para) = ctx.current_paragraph.as_mut() {
@@ -61,14 +90,7 @@ pub(super) fn handle_group_controls(
             if let Some(id) = param {
                 let style_id = format!("cs{}", id.max(0));
                 if ctx.current_group_kind() == GroupKind::Stylesheet {
-                    ctx.group_stack
-                        .last_mut()
-                        .map(|g| g.kind = GroupKind::StylesheetEntry);
-                    ctx.current_style = Some(StyleEntryContext {
-                        style_id: Some(style_id),
-                        style_type: Some(StyleType::Character),
-                        name_buf: String::new(),
-                    });
+                    set_stylesheet_entry(ctx, style_id, StyleType::Character);
                 } else {
                     ctx.current_props.style_id = Some(style_id);
                 }
@@ -77,51 +99,29 @@ pub(super) fn handle_group_controls(
         "ds" => {
             if let Some(id) = param {
                 if ctx.current_group_kind() == GroupKind::Stylesheet {
-                    ctx.group_stack
-                        .last_mut()
-                        .map(|g| g.kind = GroupKind::StylesheetEntry);
-                    ctx.current_style = Some(StyleEntryContext {
-                        style_id: Some(format!("ds{}", id.max(0))),
-                        style_type: Some(StyleType::Other),
-                        name_buf: String::new(),
-                    });
+                    set_stylesheet_entry(ctx, format!("ds{}", id.max(0)), StyleType::Other);
                 }
             }
         }
         "ts" => {
             if let Some(id) = param {
                 if ctx.current_group_kind() == GroupKind::Stylesheet {
-                    ctx.group_stack
-                        .last_mut()
-                        .map(|g| g.kind = GroupKind::StylesheetEntry);
-                    ctx.current_style = Some(StyleEntryContext {
-                        style_id: Some(format!("ts{}", id.max(0))),
-                        style_type: Some(StyleType::Table),
-                        name_buf: String::new(),
-                    });
+                    set_stylesheet_entry(ctx, format!("ts{}", id.max(0)), StyleType::Table);
                 }
             }
         }
         "info" => {
-            if let Some(group) = ctx.group_stack.last_mut() {
-                group.kind = GroupKind::Info;
-            }
+            set_last_group_kind(ctx, GroupKind::Info);
         }
         "listtable" => {
-            if let Some(group) = ctx.group_stack.last_mut() {
-                group.kind = GroupKind::ListTable;
-            }
+            set_last_group_kind(ctx, GroupKind::ListTable);
         }
         "listoverridetable" => {
-            if let Some(group) = ctx.group_stack.last_mut() {
-                group.kind = GroupKind::ListOverrideTable;
-            }
+            set_last_group_kind(ctx, GroupKind::ListOverrideTable);
         }
         "list" => {
             if ctx.current_group_kind() == GroupKind::ListTable {
-                if let Some(group) = ctx.group_stack.last_mut() {
-                    group.kind = GroupKind::List;
-                }
+                set_last_group_kind(ctx, GroupKind::List);
                 ctx.current_list_id = None;
                 ctx.current_list_level = 0;
             }
@@ -129,9 +129,7 @@ pub(super) fn handle_group_controls(
         "listlevel" => {
             if ctx.current_group_kind() == GroupKind::List {
                 ctx.current_list_level = ctx.current_list_level.saturating_add(1);
-                if let Some(group) = ctx.group_stack.last_mut() {
-                    group.kind = GroupKind::ListLevel;
-                }
+                set_last_group_kind(ctx, GroupKind::ListLevel);
             }
         }
         "levelnfc" => {
@@ -156,9 +154,7 @@ pub(super) fn handle_group_controls(
         }
         "listoverride" => {
             if ctx.current_group_kind() == GroupKind::ListOverrideTable {
-                if let Some(group) = ctx.group_stack.last_mut() {
-                    group.kind = GroupKind::ListOverride;
-                }
+                set_last_group_kind(ctx, GroupKind::ListOverride);
                 ctx.current_list_override = None;
                 ctx.current_list_override_list_id = None;
             }
@@ -169,24 +165,14 @@ pub(super) fn handle_group_controls(
                     ctx.current_list_override = Some(id);
                 } else {
                     ctx.pending_list_override = Some(id);
-                    let numbering = pending_numbering(ctx);
-                    if let Some(para) = ctx.current_paragraph.as_mut() {
-                        if let Some(numbering) = numbering {
-                            para.properties.numbering = Some(numbering);
-                        }
-                    }
+                    apply_pending_numbering_to_current_paragraph(ctx);
                 }
             }
         }
         "ilvl" => {
             if let Some(level) = param {
                 ctx.pending_list_level = Some(level.max(0) as u32);
-                let numbering = pending_numbering(ctx);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    if let Some(numbering) = numbering {
-                        para.properties.numbering = Some(numbering);
-                    }
-                }
+                apply_pending_numbering_to_current_paragraph(ctx);
             }
         }
         _ => return Ok(false),
@@ -342,58 +328,40 @@ pub(super) fn handle_object_controls(
 ) -> bool {
     match word {
         "pict" => {
-            if let Some(group) = ctx.group_stack.last_mut() {
-                group.kind = GroupKind::Picture;
-            }
+            set_last_group_kind(ctx, GroupKind::Picture);
             ctx.object_stack.push(ObjectContext::default());
         }
         "pngblip" => {
-            if let Some(obj) = ctx.object_stack.last_mut() {
-                obj.media_type = Some(super::MediaType::Image);
-            }
+            set_last_object_media_image(ctx);
         }
         "jpegblip" | "jpgblip" => {
-            if let Some(obj) = ctx.object_stack.last_mut() {
-                obj.media_type = Some(super::MediaType::Image);
-            }
+            set_last_object_media_image(ctx);
         }
         "wmetafile" | "emfblip" | "wmetafile8" => {
-            if let Some(obj) = ctx.object_stack.last_mut() {
-                obj.media_type = Some(super::MediaType::Image);
-            }
+            set_last_object_media_image(ctx);
         }
         "picw" => {
-            if let Some(value) = param {
-                if let Some(obj) = ctx.object_stack.last_mut() {
-                    obj.pic_width = Some(value.max(0) as u32);
-                }
-            }
+            set_last_object_dimension(ctx, param, |obj, value| {
+                obj.pic_width = Some(value);
+            });
         }
         "pich" => {
-            if let Some(value) = param {
-                if let Some(obj) = ctx.object_stack.last_mut() {
-                    obj.pic_height = Some(value.max(0) as u32);
-                }
-            }
+            set_last_object_dimension(ctx, param, |obj, value| {
+                obj.pic_height = Some(value);
+            });
         }
         "picwgoal" => {
-            if let Some(value) = param {
-                if let Some(obj) = ctx.object_stack.last_mut() {
-                    obj.pic_width = Some(value.max(0) as u32);
-                }
-            }
+            set_last_object_dimension(ctx, param, |obj, value| {
+                obj.pic_width = Some(value);
+            });
         }
         "pichgoal" => {
-            if let Some(value) = param {
-                if let Some(obj) = ctx.object_stack.last_mut() {
-                    obj.pic_height = Some(value.max(0) as u32);
-                }
-            }
+            set_last_object_dimension(ctx, param, |obj, value| {
+                obj.pic_height = Some(value);
+            });
         }
         "object" => {
-            if let Some(group) = ctx.group_stack.last_mut() {
-                group.kind = GroupKind::Object;
-            }
+            set_last_group_kind(ctx, GroupKind::Object);
             ctx.object_stack.push(ObjectContext::default());
         }
         "objclass" => {
@@ -405,9 +373,7 @@ pub(super) fn handle_object_controls(
             ctx.object_text_target = Some(ObjectTextTarget::Name);
         }
         "objdata" => {
-            if let Some(group) = ctx.group_stack.last_mut() {
-                group.kind = GroupKind::Object;
-            }
+            set_last_group_kind(ctx, GroupKind::Object);
             ctx.current_text.clear();
             ctx.object_text_target = None;
         }
