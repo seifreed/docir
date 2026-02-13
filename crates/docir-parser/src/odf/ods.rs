@@ -144,7 +144,7 @@ pub(super) fn parse_ods_table(
 
     if !validation_ranges.is_empty() {
         for (name, ranges) in validation_ranges {
-            let mut validation = if let Some(def) = validations.get(&name) {
+            let validation = if let Some(def) = validations.get(&name) {
                 DataValidation {
                     id: NodeId::new(),
                     validation_type: def.validation_type.clone(),

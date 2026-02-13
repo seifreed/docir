@@ -212,7 +212,7 @@ fn parse_ods_pivot_table_full(
     )>,
     ParseError,
 > {
-    let (mut pivot, sheet_name, mut cache) = build_ods_pivot(start, cache_id);
+    let (mut pivot, sheet_name, cache) = build_ods_pivot(start, cache_id);
     let mut field_count: u32 = 0;
     let mut buf = Vec::new();
     loop {
@@ -269,7 +269,7 @@ fn parse_ods_pivot_table_empty(
     Option<PivotCache>,
     Option<PivotCacheRecords>,
 )> {
-    let (mut pivot, sheet_name, mut cache) = build_ods_pivot(start, cache_id);
+    let (mut pivot, sheet_name, cache) = build_ods_pivot(start, cache_id);
     if let Some(cache) = cache.as_ref() {
         pivot.cache_id = Some(cache.cache_id);
     }

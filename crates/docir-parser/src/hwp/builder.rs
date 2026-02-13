@@ -3,10 +3,7 @@ use super::*;
 use crate::parse_utils::{finalize_and_normalize, init_store_and_document};
 
 impl HwpParser {
-    pub fn parse_reader<R: Read + Seek>(
-        &self,
-        mut reader: R,
-    ) -> Result<ParsedDocument, ParseError> {
+    pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
         let data = read_all_with_limit(reader, self.config.max_input_size)?;
 
         let cfb = Cfb::parse(data)?;
