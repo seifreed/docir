@@ -36,86 +36,28 @@ pub struct Cfb {
 
 impl Cfb {
     pub fn parse(data: Vec<u8>) -> Result<Self, ParseError> {
-        if data.len() < 512 || data[..8] != SIGNATURE {
-            return Err(ParseError::InvalidStructure(
-                "Invalid OLE header".to_string(),
-            ));
-        }
-
-        let sector_shift = read_u16(&data, 0x1E)? as u32;
-        let mini_sector_shift = read_u16(&data, 0x20)? as u32;
-        let sector_size = 1u32 << sector_shift;
-        let mini_sector_size = 1u32 << mini_sector_shift;
-
-        let num_fat_sectors = read_u32(&data, 0x2C)?;
-        let first_dir_sector = read_u32(&data, 0x30)?;
-        let mini_cutoff = read_u32(&data, 0x38)?;
-        let first_mini_fat = read_u32(&data, 0x3C)?;
-        let num_mini_fat = read_u32(&data, 0x40)?;
-        let first_difat = read_u32(&data, 0x44)?;
-        let num_difat = read_u32(&data, 0x48)?;
-
-        let mut difat = Vec::new();
-        for i in 0..109usize {
-            let off = 0x4C + i * 4;
-            let v = read_u32(&data, off)?;
-            if v != FREE_SECT {
-                difat.push(v);
-            }
-        }
-
-        let mut next_difat = first_difat;
-        for _ in 0..num_difat {
-            if next_difat == END_OF_CHAIN || next_difat == FREE_SECT {
-                break;
-            }
-            let sector = read_sector(&data, sector_size, next_difat)?;
-            let count = (sector_size / 4) as usize - 1;
-            for i in 0..count {
-                let v = read_u32(&sector, i * 4)?;
-                if v != FREE_SECT {
-                    difat.push(v);
-                }
-            }
-            next_difat = read_u32(&sector, count * 4)?;
-        }
-
-        let mut fat = Vec::new();
-        for &fat_sector in difat.iter().take(num_fat_sectors as usize) {
-            if fat_sector == FREE_SECT || fat_sector == END_OF_CHAIN || fat_sector == FAT_SECT {
-                continue;
-            }
-            let sector = read_sector(&data, sector_size, fat_sector)?;
-            for i in 0..(sector_size / 4) as usize {
-                fat.push(read_u32(&sector, i * 4)?);
-            }
-        }
-
-        let dir_stream = read_stream_from_fat(&data, sector_size, &fat, first_dir_sector)?;
-        let entries = parse_dir_entries(&dir_stream)?;
-
-        let root = entries
-            .get(0)
-            .ok_or_else(|| ParseError::InvalidStructure("Missing root entry".to_string()))?;
-        let root_stream = read_stream_from_fat(&data, sector_size, &fat, root.start_sector)?;
-
-        let mut mini_fat = Vec::new();
-        if num_mini_fat > 0 && first_mini_fat != END_OF_CHAIN {
-            let mini_fat_stream = read_stream_from_fat(&data, sector_size, &fat, first_mini_fat)?;
-            for i in 0..(mini_fat_stream.len() / 4) {
-                mini_fat.push(read_u32(&mini_fat_stream, i * 4)?);
-            }
-        }
-
-        let mut streams = HashMap::new();
-        if let Some(child) = entries.get(0).map(|e| e.child) {
-            walk_siblings(child, "", &entries, &mut streams);
-        }
+        let header = parse_header(&data)?;
+        let difat = read_difat_chain(&data, &header)?;
+        let fat = read_fat_table(&data, header.sector_size, &difat, header.num_fat_sectors)?;
+        let (entries, root_stream) = read_directory_entries_and_root_stream(
+            &data,
+            header.sector_size,
+            &fat,
+            header.first_dir_sector,
+        )?;
+        let mini_fat = read_mini_fat_table(
+            &data,
+            header.sector_size,
+            &fat,
+            header.first_mini_fat,
+            header.num_mini_fat,
+        )?;
+        let streams = collect_stream_entries(&entries);
 
         Ok(Self {
-            sector_size,
-            mini_sector_size,
-            mini_cutoff,
+            sector_size: header.sector_size,
+            mini_sector_size: header.mini_sector_size,
+            mini_cutoff: header.mini_cutoff,
             fat,
             mini_fat,
             root_stream,
@@ -166,6 +108,127 @@ impl Cfb {
             .or_else(|| self.streams.get(&path.replace('\\', "/")))
             .map(|entry| entry.size)
     }
+}
+
+struct OleHeader {
+    sector_size: u32,
+    mini_sector_size: u32,
+    num_fat_sectors: u32,
+    first_dir_sector: u32,
+    mini_cutoff: u32,
+    first_mini_fat: u32,
+    num_mini_fat: u32,
+    first_difat: u32,
+    num_difat: u32,
+}
+
+fn parse_header(data: &[u8]) -> Result<OleHeader, ParseError> {
+    if data.len() < 512 || data[..8] != SIGNATURE {
+        return Err(ParseError::InvalidStructure(
+            "Invalid OLE header".to_string(),
+        ));
+    }
+    let sector_shift = read_u16(data, 0x1E)? as u32;
+    let mini_sector_shift = read_u16(data, 0x20)? as u32;
+    Ok(OleHeader {
+        sector_size: 1u32 << sector_shift,
+        mini_sector_size: 1u32 << mini_sector_shift,
+        num_fat_sectors: read_u32(data, 0x2C)?,
+        first_dir_sector: read_u32(data, 0x30)?,
+        mini_cutoff: read_u32(data, 0x38)?,
+        first_mini_fat: read_u32(data, 0x3C)?,
+        num_mini_fat: read_u32(data, 0x40)?,
+        first_difat: read_u32(data, 0x44)?,
+        num_difat: read_u32(data, 0x48)?,
+    })
+}
+
+fn read_difat_chain(data: &[u8], header: &OleHeader) -> Result<Vec<u32>, ParseError> {
+    let mut difat = Vec::new();
+    for i in 0..109usize {
+        let off = 0x4C + i * 4;
+        let v = read_u32(data, off)?;
+        if v != FREE_SECT {
+            difat.push(v);
+        }
+    }
+
+    let mut next_difat = header.first_difat;
+    for _ in 0..header.num_difat {
+        if next_difat == END_OF_CHAIN || next_difat == FREE_SECT {
+            break;
+        }
+        let sector = read_sector(data, header.sector_size, next_difat)?;
+        let count = (header.sector_size / 4) as usize - 1;
+        for i in 0..count {
+            let v = read_u32(&sector, i * 4)?;
+            if v != FREE_SECT {
+                difat.push(v);
+            }
+        }
+        next_difat = read_u32(&sector, count * 4)?;
+    }
+    Ok(difat)
+}
+
+fn read_fat_table(
+    data: &[u8],
+    sector_size: u32,
+    difat: &[u32],
+    num_fat_sectors: u32,
+) -> Result<Vec<u32>, ParseError> {
+    let mut fat = Vec::new();
+    for &fat_sector in difat.iter().take(num_fat_sectors as usize) {
+        if fat_sector == FREE_SECT || fat_sector == END_OF_CHAIN || fat_sector == FAT_SECT {
+            continue;
+        }
+        let sector = read_sector(data, sector_size, fat_sector)?;
+        for i in 0..(sector_size / 4) as usize {
+            fat.push(read_u32(&sector, i * 4)?);
+        }
+    }
+    Ok(fat)
+}
+
+fn read_directory_entries_and_root_stream(
+    data: &[u8],
+    sector_size: u32,
+    fat: &[u32],
+    first_dir_sector: u32,
+) -> Result<(Vec<DirEntry>, Vec<u8>), ParseError> {
+    let dir_stream = read_stream_from_fat(data, sector_size, fat, first_dir_sector)?;
+    let entries = parse_dir_entries(&dir_stream)?;
+    let root = entries
+        .first()
+        .ok_or_else(|| ParseError::InvalidStructure("Missing root entry".to_string()))?;
+    let root_stream = read_stream_from_fat(data, sector_size, fat, root.start_sector)?;
+    Ok((entries, root_stream))
+}
+
+fn read_mini_fat_table(
+    data: &[u8],
+    sector_size: u32,
+    fat: &[u32],
+    first_mini_fat: u32,
+    num_mini_fat: u32,
+) -> Result<Vec<u32>, ParseError> {
+    if num_mini_fat == 0 || first_mini_fat == END_OF_CHAIN {
+        return Ok(Vec::new());
+    }
+    let mini_fat_stream = read_stream_from_fat(data, sector_size, fat, first_mini_fat)?;
+    let mut mini_fat = Vec::new();
+    for i in 0..(mini_fat_stream.len() / 4) {
+        mini_fat.push(read_u32(&mini_fat_stream, i * 4)?);
+    }
+    Ok(mini_fat)
+}
+
+fn collect_stream_entries(entries: &[DirEntry]) -> HashMap<String, DirEntry> {
+    let mut streams = HashMap::new();
+    if let Some(child) = entries.first().map(|e| e.child) {
+        walk_siblings(child, "", entries, &mut streams);
+    }
+    streams
 }
 
 pub struct CfbReader<'a> {
