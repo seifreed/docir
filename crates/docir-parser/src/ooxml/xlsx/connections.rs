@@ -52,56 +52,20 @@ pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<Connection
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"connection" => {
-                    let mut entry = ConnectionEntry::new();
-                    apply_connection_attrs(&mut entry, &e);
-                    current = Some(entry);
+            Ok(Event::Start(e)) => {
+                if e.name().as_ref() == b"connection" {
+                    current = Some(connection_entry_from_attrs(&e));
+                } else {
+                    apply_connection_child_attrs(&mut current, &e);
                 }
-                b"dbPr" => {
-                    if let Some(entry) = current.as_mut() {
-                        apply_dbpr_attrs(entry, &e);
-                    }
+            }
+            Ok(Event::Empty(e)) => {
+                if e.name().as_ref() == b"connection" {
+                    part.entries.push(connection_entry_from_attrs(&e));
+                } else {
+                    apply_connection_child_attrs(&mut current, &e);
                 }
-                b"webPr" => {
-                    if let Some(entry) = current.as_mut() {
-                        if let Some(url) = attr_value(&e, b"url") {
-                            entry.url = Some(url);
-                        }
-                    }
-                }
-                b"textPr" => {
-                    if let Some(entry) = current.as_mut() {
-                        apply_textpr_attrs(entry, &e);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"connection" => {
-                    let mut entry = ConnectionEntry::new();
-                    apply_connection_attrs(&mut entry, &e);
-                    part.entries.push(entry);
-                }
-                b"dbPr" => {
-                    if let Some(entry) = current.as_mut() {
-                        apply_dbpr_attrs(entry, &e);
-                    }
-                }
-                b"webPr" => {
-                    if let Some(entry) = current.as_mut() {
-                        if let Some(url) = attr_value(&e, b"url") {
-                            entry.url = Some(url);
-                        }
-                    }
-                }
-                b"textPr" => {
-                    if let Some(entry) = current.as_mut() {
-                        apply_textpr_attrs(entry, &e);
-                    }
-                }
-                _ => {}
-            },
+            }
             Ok(Event::End(e)) => {
                 if e.name().as_ref() == b"connection" {
                     if let Some(entry) = current.take() {
@@ -119,6 +83,12 @@ pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<Connection
     }
 
     Ok(part)
+}
+
+fn connection_entry_from_attrs(e: &BytesStart<'_>) -> ConnectionEntry {
+    let mut entry = ConnectionEntry::new();
+    apply_connection_attrs(&mut entry, e);
+    entry
 }
 
 fn apply_connection_attrs(entry: &mut ConnectionEntry, e: &BytesStart<'_>) {
@@ -142,6 +112,22 @@ fn apply_dbpr_attrs(entry: &mut ConnectionEntry, e: &BytesStart<'_>) {
 
 fn apply_textpr_attrs(entry: &mut ConnectionEntry, e: &BytesStart<'_>) {
     entry.source_file = attr_value(e, b"sourceFile").or_else(|| attr_value(e, b"file"));
+}
+
+fn apply_connection_child_attrs(current: &mut Option<ConnectionEntry>, e: &BytesStart<'_>) {
+    let Some(entry) = current.as_mut() else {
+        return;
+    };
+    match e.name().as_ref() {
+        b"dbPr" => apply_dbpr_attrs(entry, e),
+        b"webPr" => {
+            if let Some(url) = attr_value(e, b"url") {
+                entry.url = Some(url);
+            }
+        }
+        b"textPr" => apply_textpr_attrs(entry, e),
+        _ => {}
+    }
 }
 
 pub(crate) fn connection_targets(part: &ConnectionPart) -> Vec<String> {
