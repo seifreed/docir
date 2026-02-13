@@ -58,57 +58,35 @@ impl SecurityInfo {
     pub fn recalculate_threat_level(&mut self) {
         self.threat_level = ThreatLevel::None;
 
-        // Check for various threats in order of severity
-        if self.macro_project.is_some() {
+        // Keep macro/XLM precedence explicit because these conditions short-circuit.
+        if self.macro_project.is_some() || !self.xlm_macros.is_empty() {
             self.threat_level = ThreatLevel::Critical;
             return;
         }
 
-        if !self.xlm_macros.is_empty() {
-            self.threat_level = ThreatLevel::Critical;
-            return;
-        }
-
-        if !self.dde_fields.is_empty() {
+        // These threat classes intentionally return early and ignore indicator aggregation.
+        if !self.dde_fields.is_empty()
+            || !self.ole_objects.is_empty()
+            || !self.activex_controls.is_empty()
+        {
             self.threat_level = ThreatLevel::High;
             return;
         }
 
-        if !self.ole_objects.is_empty() || !self.activex_controls.is_empty() {
-            self.threat_level = ThreatLevel::High;
-            return;
-        }
-
-        // Check external refs
-        for indicator in &self.threat_indicators {
-            match indicator.severity {
-                ThreatLevel::Critical => {
-                    self.threat_level = ThreatLevel::Critical;
-                    return;
-                }
-                ThreatLevel::High => {
-                    if self.threat_level < ThreatLevel::High {
-                        self.threat_level = ThreatLevel::High;
-                    }
-                }
-                ThreatLevel::Medium => {
-                    if self.threat_level < ThreatLevel::Medium {
-                        self.threat_level = ThreatLevel::Medium;
-                    }
-                }
-                ThreatLevel::Low => {
-                    if self.threat_level < ThreatLevel::Low {
-                        self.threat_level = ThreatLevel::Low;
-                    }
-                }
-                ThreatLevel::None => {}
-            }
-        }
+        self.threat_level = max_indicator_threat_level(&self.threat_indicators);
 
         if !self.external_refs.is_empty() && self.threat_level < ThreatLevel::Medium {
             self.threat_level = ThreatLevel::Medium;
         }
     }
+}
+
+fn max_indicator_threat_level(indicators: &[ThreatIndicator]) -> ThreatLevel {
+    indicators
+        .iter()
+        .map(|indicator| indicator.severity)
+        .max()
+        .unwrap_or(ThreatLevel::None)
 }
 
 /// Threat level classification.
