@@ -1,16 +1,19 @@
 use crate::make_indicator;
-use docir_core::ir::{DefinedName, Field, IRNode};
-use docir_core::security::{
-    ActiveXControl, DdeField, MacroProject, OleObject, ThreatIndicator, ThreatIndicatorType,
-    ThreatLevel,
-};
+use docir_core::ir::{Field, IRNode};
+use docir_core::security::{DdeField, ThreatIndicator, ThreatIndicatorType, ThreatLevel};
 use docir_core::types::{DocumentFormat, NodeId};
 use docir_core::visitor::IrStore;
-use std::collections::HashMap;
 
 mod dde;
+mod helpers;
+mod xlm;
 
 use self::dde::parse_dde_instruction;
+use self::helpers::{
+    activex_indicator_details, is_activex_ole, macro_project_details, ole_indicator_details,
+    ole_location, push_ole_object_indicators, push_remote_external_ref_indicators,
+};
+use self::xlm::{apply_xlm_defined_name_targets, build_xlm_indicators};
 
 pub fn populate_security_indicators(store: &mut IrStore, root_id: NodeId) {
     let (format, mut security) = match store.get(root_id) {
@@ -229,147 +232,22 @@ fn build_hwp_indicators(
 
     if hwpx_autoexec {
         if let Some(macro_id) = security.macro_project {
-            if let Some(IRNode::MacroProject(project)) = store.get(macro_id) {
-                if project.has_auto_exec {
-                    indicators.push(make_indicator(
-                        ThreatIndicatorType::AutoExecMacro,
-                        ThreatLevel::Critical,
-                        "Auto-exec script detected".to_string(),
-                        None,
-                        Some(macro_id),
-                    ));
-                }
+            if matches!(
+                store.get(macro_id),
+                Some(IRNode::MacroProject(project)) if project.has_auto_exec
+            ) {
+                indicators.push(make_indicator(
+                    ThreatIndicatorType::AutoExecMacro,
+                    ThreatLevel::Critical,
+                    "Auto-exec script detected".to_string(),
+                    None,
+                    Some(macro_id),
+                ));
             }
         }
     }
 
     indicators
-}
-
-fn build_xlm_indicators(
-    store: &IrStore,
-    security: &docir_core::security::SecurityInfo,
-) -> Vec<ThreatIndicator> {
-    let mut indicators = Vec::new();
-    let mut sheet_locations = HashMap::new();
-
-    for node in store.values() {
-        if let IRNode::Worksheet(sheet) = node {
-            if let Some(span) = sheet.span.as_ref() {
-                sheet_locations.insert(sheet.name.to_ascii_uppercase(), span.file_path.clone());
-            }
-        }
-    }
-
-    if security.xlm_macros.is_empty() {
-        return indicators;
-    }
-
-    for macro_entry in &security.xlm_macros {
-        let location = sheet_locations
-            .get(&macro_entry.sheet_name.to_ascii_uppercase())
-            .cloned();
-
-        if macro_entry.has_auto_open {
-            indicators.push(make_indicator(
-                ThreatIndicatorType::XlmMacro,
-                ThreatLevel::Critical,
-                "XLM Auto_Open macro detected".to_string(),
-                location.clone(),
-                None,
-            ));
-        }
-
-        if macro_entry.sheet_state != docir_core::ir::SheetState::Visible
-            && !macro_entry.macro_cells.is_empty()
-        {
-            indicators.push(make_indicator(
-                ThreatIndicatorType::HiddenMacroSheet,
-                ThreatLevel::High,
-                format!("Hidden macro sheet: {}", macro_entry.sheet_name),
-                location.clone(),
-                None,
-            ));
-        }
-
-        for func in &macro_entry.dangerous_functions {
-            indicators.push(make_indicator(
-                ThreatIndicatorType::XlmMacro,
-                ThreatLevel::Critical,
-                format!("XLM macro function {} at {}", func.name, func.cell_ref),
-                location.clone(),
-                None,
-            ));
-        }
-    }
-
-    indicators
-}
-
-fn apply_xlm_defined_name_targets(
-    store: &IrStore,
-    security: &mut docir_core::security::SecurityInfo,
-    indicators: &mut Vec<ThreatIndicator>,
-) {
-    let mut targets: Vec<Option<String>> = Vec::new();
-    let mut location: Option<String> = None;
-
-    for node in store.values() {
-        if let IRNode::DefinedName(name) = node {
-            if let Some(target) = auto_open_target_from_defined_name(name) {
-                if location.is_none() {
-                    location = name.span.as_ref().map(|s| s.file_path.clone());
-                }
-                targets.push(target);
-            }
-        }
-    }
-
-    if targets.is_empty() || security.xlm_macros.is_empty() {
-        return;
-    }
-
-    let mut any_marked = false;
-    for target in &targets {
-        if let Some(target) = target {
-            let target_upper = target.to_ascii_uppercase();
-            for macro_entry in security.xlm_macros.iter_mut() {
-                if macro_entry.sheet_name.to_ascii_uppercase() == target_upper {
-                    macro_entry.has_auto_open = true;
-                    any_marked = true;
-                }
-            }
-        }
-    }
-
-    if !any_marked {
-        for macro_entry in security.xlm_macros.iter_mut() {
-            macro_entry.has_auto_open = true;
-        }
-    }
-
-    indicators.push(make_indicator(
-        ThreatIndicatorType::XlmMacro,
-        ThreatLevel::Critical,
-        "XLM Auto_Open defined name detected".to_string(),
-        location,
-        None,
-    ));
-}
-
-fn auto_open_target_from_defined_name(name: &DefinedName) -> Option<Option<String>> {
-    let upper = name.name.to_ascii_uppercase();
-    if upper == "_XLNM.AUTO_OPEN" || upper == "AUTO_OPEN" || upper == "AUTO.OPEN" {
-        let val = name.value.trim();
-        if let Some((sheet, _)) = val.split_once('!') {
-            let cleaned = sheet.trim().trim_matches('\'').to_string();
-            if !cleaned.is_empty() {
-                return Some(Some(cleaned));
-            }
-        }
-        return Some(None);
-    }
-    None
 }
 
 fn build_rtf_indicators(
@@ -389,106 +267,4 @@ fn build_rtf_indicators(
     );
 
     indicators
-}
-
-fn push_remote_external_ref_indicators(
-    store: &IrStore,
-    external_refs: &[NodeId],
-    indicators: &mut Vec<ThreatIndicator>,
-) {
-    for id in external_refs {
-        let Some(IRNode::ExternalReference(ext)) = store.get(*id) else {
-            continue;
-        };
-        if ext.is_remote() {
-            indicators.push(make_indicator(
-                ThreatIndicatorType::RemoteResource,
-                ThreatLevel::Medium,
-                format!("Remote resource: {}", ext.target),
-                ext.span.as_ref().map(|s| s.file_path.clone()),
-                None,
-            ));
-        }
-    }
-}
-
-fn push_ole_object_indicators<F>(
-    store: &IrStore,
-    ole_objects: &[NodeId],
-    description: &str,
-    include_node_id: bool,
-    location_fn: F,
-    indicators: &mut Vec<ThreatIndicator>,
-) where
-    F: Fn(&OleObject) -> Option<String>,
-{
-    for id in ole_objects {
-        let Some(IRNode::OleObject(ole)) = store.get(*id) else {
-            continue;
-        };
-        let node_id = if include_node_id { Some(*id) } else { None };
-        indicators.push(make_indicator(
-            ThreatIndicatorType::OleObject,
-            ThreatLevel::High,
-            description.to_string(),
-            location_fn(ole),
-            node_id,
-        ));
-    }
-}
-
-fn macro_project_details(project: &MacroProject) -> (Option<String>, String) {
-    if let Some(span) = project.span.as_ref() {
-        (
-            Some(span.file_path.clone()),
-            format!("VBA macro project found at {}", span.file_path),
-        )
-    } else {
-        (None, "VBA macro project found".to_string())
-    }
-}
-
-fn activex_indicator_details(control: &ActiveXControl) -> (Option<String>, String) {
-    if let Some(span) = control.span.as_ref() {
-        (
-            Some(span.file_path.clone()),
-            format!("ActiveX control found at {}", span.file_path),
-        )
-    } else {
-        (None, "ActiveX control found".to_string())
-    }
-}
-
-fn ole_indicator_details(
-    prefix: &str,
-    fallback: &str,
-    ole: &OleObject,
-) -> (Option<String>, String) {
-    if let Some(span) = ole.span.as_ref() {
-        (
-            Some(span.file_path.clone()),
-            format!("{prefix} {}", span.file_path),
-        )
-    } else if let Some(name) = ole.name.as_ref() {
-        (Some(name.clone()), format!("{prefix} {}", name))
-    } else {
-        (None, fallback.to_string())
-    }
-}
-
-fn ole_location(ole: &OleObject) -> Option<String> {
-    ole.span
-        .as_ref()
-        .map(|s| s.file_path.clone())
-        .or_else(|| ole.name.clone())
-}
-
-fn is_activex_ole(ole: &OleObject) -> bool {
-    let path = ole
-        .span
-        .as_ref()
-        .map(|s| s.file_path.as_str())
-        .or_else(|| ole.name.as_deref())
-        .unwrap_or("");
-    path.to_ascii_lowercase().contains("activex")
 }
