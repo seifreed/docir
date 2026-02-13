@@ -17,20 +17,12 @@ pub struct AppParser {
 
 impl AppParser {
     pub fn new(parser: DocumentParser, config: ParserConfig) -> Self {
-        let parser_config = config.to_parser_config();
-        Self {
-            parser,
-            config: parser_config,
-        }
+        Self { parser, config }
     }
 
     pub fn with_config(config: ParserConfig) -> Self {
-        let parser_config = config.to_parser_config();
-        let parser = DocumentParser::with_config(parser_config.clone());
-        Self {
-            parser,
-            config: parser_config,
-        }
+        let parser = DocumentParser::with_config(config.clone());
+        Self { parser, config }
     }
 }
 

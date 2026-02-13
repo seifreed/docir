@@ -67,7 +67,7 @@ pub struct ParsedDocument {
 
 impl ParsedDocument {
     pub(crate) fn new(inner: ParserParsedDocument) -> Self {
-        let metrics = inner.metrics.as_ref().map(ParseMetrics::from_parser);
+        let metrics = inner.metrics.clone();
         Self { inner, metrics }
     }
 
