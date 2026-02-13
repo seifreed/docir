@@ -120,6 +120,13 @@ fn parse_content(
     }
 }
 
+fn xml_error(file: &str, err: quick_xml::Error) -> ParseError {
+    ParseError::Xml {
+        file: file.to_string(),
+        message: err.to_string(),
+    }
+}
+
 fn parse_notes(reader: &mut OdfReader<'_>) -> Result<Option<String>, ParseError> {
     let mut buf = Vec::new();
     let mut text = String::new();
@@ -232,12 +239,7 @@ fn parse_ods_conditional_formatting(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -384,12 +386,7 @@ fn parse_ods_row(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -414,12 +411,7 @@ fn parse_ods_covered_cell(
         match reader.read_event_into(&mut buf) {
             Ok(Event::End(e)) if e.name().as_ref() == b"table:covered-table-cell" => break,
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -493,12 +485,7 @@ fn parse_text_element(reader: &mut OdfReader<'_>, end_name: &[u8]) -> Result<Str
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -593,12 +580,7 @@ fn parse_draw_frame_spreadsheet(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -694,12 +676,7 @@ fn parse_table(
                 _ => {}
             },
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -749,12 +726,7 @@ fn parse_table_cell(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -815,12 +787,7 @@ fn parse_annotation(
                 _ => {}
             },
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -864,12 +831,7 @@ fn parse_note(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -933,12 +895,7 @@ fn parse_draw_frame(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -1022,12 +979,7 @@ fn parse_tracked_changes(
                 _ => {}
             },
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -1291,10 +1243,7 @@ fn parse_odf_headers_footers(
             },
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "styles.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("styles.xml", e));
             }
             _ => {}
         }
@@ -1384,12 +1333,7 @@ fn parse_odf_header_footer_block(
                 _ => {}
             },
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "styles.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("styles.xml", e)),
             _ => {}
         }
         buf.clear();

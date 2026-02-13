@@ -341,10 +341,7 @@ fn parse_run(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -405,10 +402,7 @@ fn parse_revision_inline(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -469,10 +463,7 @@ fn parse_revision_block(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -518,10 +509,7 @@ fn parse_sdt(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -578,10 +566,7 @@ fn parse_sdt_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -621,10 +606,7 @@ fn parse_sdt_content_block(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -728,10 +710,7 @@ fn parse_sdt_content_inline(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -786,10 +765,7 @@ fn parse_hyperlink(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -828,10 +804,7 @@ fn parse_field(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -868,10 +841,7 @@ fn parse_numbering(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -960,10 +930,7 @@ fn parse_run_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -1061,10 +1028,7 @@ fn parse_page_borders(reader: &mut Reader<&[u8]>) -> Result<Option<PageBorders>,
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -1183,10 +1147,7 @@ fn parse_vml_pict(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -1238,10 +1199,7 @@ fn parse_settings_like(xml: &str) -> Result<WordSettings, ParseError> {
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/settings.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/settings.xml", e));
             }
             _ => {}
         }
@@ -1270,16 +1228,20 @@ fn parse_num_abstract_id(reader: &mut Reader<&[u8]>) -> Result<u32, ParseError> 
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/numbering.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/numbering.xml", e));
             }
             _ => {}
         }
         buf.clear();
     }
     Ok(abstract_id)
+}
+
+fn xml_error(file: &str, err: quick_xml::Error) -> ParseError {
+    ParseError::Xml {
+        file: file.to_string(),
+        message: err.to_string(),
+    }
 }
 
 fn skip_to_end(reader: &mut Reader<&[u8]>, end: &[u8]) -> Result<(), ParseError> {
@@ -1302,10 +1264,7 @@ fn skip_to_end(reader: &mut Reader<&[u8]>, end: &[u8]) -> Result<(), ParseError>
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
