@@ -44,24 +44,15 @@ pub(super) fn parse_content_spreadsheet(
                     sheet_id += 1;
                 }
                 b"table:data-pilot-table" if in_spreadsheet => {
-                    if let Some((pivot, sheet_name, cache, records)) =
-                        parse_ods_pivot_table_full(&mut reader, &e, next_cache_id)?
-                    {
-                        let id = pivot.id;
-                        store.insert(IRNode::PivotTable(pivot));
-                        pivot_links.push((sheet_name, id));
-                        if let Some(mut cache) = cache {
-                            if let Some(records) = records {
-                                let records_id = records.id;
-                                store.insert(IRNode::PivotCacheRecords(records));
-                                cache.records = Some(records_id);
-                            }
-                            let cache_node_id = cache.id;
-                            store.insert(IRNode::PivotCache(cache));
-                            pivot_caches.push(cache_node_id);
-                            next_cache_id = next_cache_id.saturating_add(1);
-                        }
-                    }
+                    let cache_id = next_cache_id;
+                    let parsed = parse_ods_pivot_table_full(&mut reader, &e, cache_id)?;
+                    record_pivot_parse(
+                        store,
+                        &mut pivot_links,
+                        &mut pivot_caches,
+                        &mut next_cache_id,
+                        parsed,
+                    );
                 }
                 _ => {}
             },
@@ -82,24 +73,15 @@ pub(super) fn parse_content_spreadsheet(
                     }
                 }
                 b"table:data-pilot-table" if in_spreadsheet => {
-                    if let Some((pivot, sheet_name, cache, records)) =
-                        parse_ods_pivot_table_empty(&e, next_cache_id)
-                    {
-                        let id = pivot.id;
-                        store.insert(IRNode::PivotTable(pivot));
-                        pivot_links.push((sheet_name, id));
-                        if let Some(mut cache) = cache {
-                            if let Some(records) = records {
-                                let records_id = records.id;
-                                store.insert(IRNode::PivotCacheRecords(records));
-                                cache.records = Some(records_id);
-                            }
-                            let cache_node_id = cache.id;
-                            store.insert(IRNode::PivotCache(cache));
-                            pivot_caches.push(cache_node_id);
-                            next_cache_id = next_cache_id.saturating_add(1);
-                        }
-                    }
+                    let cache_id = next_cache_id;
+                    let parsed = parse_ods_pivot_table_empty(&e, cache_id);
+                    record_pivot_parse(
+                        store,
+                        &mut pivot_links,
+                        &mut pivot_caches,
+                        &mut next_cache_id,
+                        parsed,
+                    );
                 }
                 _ => {}
             },
@@ -319,6 +301,39 @@ fn parse_ods_pivot_table_empty(
     Some((pivot, sheet_name, cache, None))
 }
 
+fn record_pivot_parse(
+    store: &mut IrStore,
+    pivot_links: &mut Vec<(Option<String>, NodeId)>,
+    pivot_caches: &mut Vec<NodeId>,
+    next_cache_id: &mut u32,
+    parsed: Option<(
+        PivotTable,
+        Option<String>,
+        Option<PivotCache>,
+        Option<PivotCacheRecords>,
+    )>,
+) {
+    let Some((pivot, sheet_name, cache, records)) = parsed else {
+        return;
+    };
+
+    let id = pivot.id;
+    store.insert(IRNode::PivotTable(pivot));
+    pivot_links.push((sheet_name, id));
+
+    if let Some(mut cache) = cache {
+        if let Some(records) = records {
+            let records_id = records.id;
+            store.insert(IRNode::PivotCacheRecords(records));
+            cache.records = Some(records_id);
+        }
+        let cache_node_id = cache.id;
+        store.insert(IRNode::PivotCache(cache));
+        pivot_caches.push(cache_node_id);
+        *next_cache_id = next_cache_id.saturating_add(1);
+    }
+}
+
 fn build_ods_pivot(
     start: &BytesStart<'_>,
     cache_id: u32,
@@ -457,47 +472,29 @@ fn parse_ods_pivots_from_xml(
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"office:spreadsheet" => in_spreadsheet = true,
                 b"table:data-pilot-table" if in_spreadsheet => {
-                    if let Some((pivot, sheet_name, cache, records)) =
-                        parse_ods_pivot_table_full(&mut reader, &e, next_cache_id)?
-                    {
-                        let id = pivot.id;
-                        store.insert(IRNode::PivotTable(pivot));
-                        pivot_links.push((sheet_name, id));
-                        if let Some(mut cache) = cache {
-                            if let Some(records) = records {
-                                let records_id = records.id;
-                                store.insert(IRNode::PivotCacheRecords(records));
-                                cache.records = Some(records_id);
-                            }
-                            let cache_node_id = cache.id;
-                            store.insert(IRNode::PivotCache(cache));
-                            pivot_caches.push(cache_node_id);
-                            next_cache_id = next_cache_id.saturating_add(1);
-                        }
-                    }
+                    let cache_id = next_cache_id;
+                    let parsed = parse_ods_pivot_table_full(&mut reader, &e, cache_id)?;
+                    record_pivot_parse(
+                        store,
+                        &mut pivot_links,
+                        &mut pivot_caches,
+                        &mut next_cache_id,
+                        parsed,
+                    );
                 }
                 _ => {}
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
                 b"table:data-pilot-table" if in_spreadsheet => {
-                    if let Some((pivot, sheet_name, cache, records)) =
-                        parse_ods_pivot_table_empty(&e, next_cache_id)
-                    {
-                        let id = pivot.id;
-                        store.insert(IRNode::PivotTable(pivot));
-                        pivot_links.push((sheet_name, id));
-                        if let Some(mut cache) = cache {
-                            if let Some(records) = records {
-                                let records_id = records.id;
-                                store.insert(IRNode::PivotCacheRecords(records));
-                                cache.records = Some(records_id);
-                            }
-                            let cache_node_id = cache.id;
-                            store.insert(IRNode::PivotCache(cache));
-                            pivot_caches.push(cache_node_id);
-                            next_cache_id = next_cache_id.saturating_add(1);
-                        }
-                    }
+                    let cache_id = next_cache_id;
+                    let parsed = parse_ods_pivot_table_empty(&e, cache_id);
+                    record_pivot_parse(
+                        store,
+                        &mut pivot_links,
+                        &mut pivot_caches,
+                        &mut next_cache_id,
+                        parsed,
+                    );
                 }
                 _ => {}
             },
