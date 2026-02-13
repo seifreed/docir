@@ -7,10 +7,10 @@ use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{attr_value, read_event, reader_from_str};
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
-    Footer, GlossaryDocument, Header, Hyperlink, LineSpacingRule, NumberingInfo, NumberingLevel,
-    NumberingSet, PageBorders, Paragraph, ParagraphProperties, Revision, RevisionType, Run,
-    RunProperties, Style, StyleParagraphProperties, StyleRunProperties, StyleSet, StyleType,
-    TextAlignment, UnderlineStyle, VerticalTextAlignment, WebSettings, WordSettings,
+    Footer, GlossaryDocument, Header, Hyperlink, LineSpacingRule, NumberingInfo, PageBorders,
+    Paragraph, ParagraphProperties, Revision, RevisionType, Run, RunProperties,
+    StyleParagraphProperties, StyleRunProperties, TextAlignment, UnderlineStyle,
+    VerticalTextAlignment, WebSettings, WordSettings,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -1242,35 +1242,6 @@ fn xml_error(file: &str, err: quick_xml::Error) -> ParseError {
         file: file.to_string(),
         message: err.to_string(),
     }
-}
-
-fn skip_to_end(reader: &mut Reader<&[u8]>, end: &[u8]) -> Result<(), ParseError> {
-    let mut depth = 0usize;
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                if e.name().as_ref() == end {
-                    depth += 1;
-                }
-            }
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == end {
-                    if depth == 0 {
-                        break;
-                    }
-                    depth -= 1;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error("word/document.xml", e));
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-    Ok(())
 }
 
 fn line_col(data: &[u8], pos: usize) -> Option<(u32, u32)> {
