@@ -1,10 +1,12 @@
 use super::*;
 
+const ODF_CONTENT_XML: &str = "content.xml";
+
 pub(super) fn parse_notes(reader: &mut OdfReader<'_>) -> Result<Option<String>, ParseError> {
     let mut buf = Vec::new();
     let mut text = String::new();
     loop {
-        match read_event(reader, &mut buf, "content.xml")? {
+        match read_event(reader, &mut buf, ODF_CONTENT_XML)? {
             Event::Start(e) => {
                 if e.name().as_ref() == b"text:p" {
                     let para = parse_text_element(reader, b"text:p")?;
@@ -84,7 +86,7 @@ pub(super) fn parse_ods_conditional_formatting(
         id: NodeId::new(),
         ranges: Vec::new(),
         rules: Vec::new(),
-        span: Some(SourceSpan::new("content.xml")),
+        span: Some(SourceSpan::new(ODF_CONTENT_XML)),
     };
     if let Some(ranges) = attr_value(start, b"table:target-range-address")
         .or_else(|| attr_value(start, b"table:cell-range-address"))
@@ -114,7 +116,7 @@ pub(super) fn parse_ods_conditional_formatting(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
+            Err(e) => return Err(xml_error(ODF_CONTENT_XML, e)),
             _ => {}
         }
         buf.clear();
@@ -134,7 +136,7 @@ pub(super) fn parse_ods_conditional_formatting_empty(
         id: NodeId::new(),
         ranges: Vec::new(),
         rules: Vec::new(),
-        span: Some(SourceSpan::new("content.xml")),
+        span: Some(SourceSpan::new(ODF_CONTENT_XML)),
     };
     if let Some(ranges) = attr_value(start, b"table:target-range-address")
         .or_else(|| attr_value(start, b"table:cell-range-address"))
@@ -261,7 +263,7 @@ pub(super) fn parse_ods_row(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
+            Err(e) => return Err(xml_error(ODF_CONTENT_XML, e)),
             _ => {}
         }
         buf.clear();
@@ -286,7 +288,7 @@ pub(super) fn parse_ods_covered_cell(
         match reader.read_event_into(&mut buf) {
             Ok(Event::End(e)) if e.name().as_ref() == b"table:covered-table-cell" => break,
             Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
+            Err(e) => return Err(xml_error(ODF_CONTENT_XML, e)),
             _ => {}
         }
         buf.clear();
@@ -365,7 +367,7 @@ pub(super) fn parse_text_element(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
+            Err(e) => return Err(xml_error(ODF_CONTENT_XML, e)),
             _ => {}
         }
         buf.clear();
@@ -449,7 +451,7 @@ pub(super) fn parse_table(
                 _ => {}
             },
             Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
+            Err(e) => return Err(xml_error(ODF_CONTENT_XML, e)),
             _ => {}
         }
         buf.clear();
@@ -499,7 +501,7 @@ pub(super) fn parse_table_cell(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
+            Err(e) => return Err(xml_error(ODF_CONTENT_XML, e)),
             _ => {}
         }
         buf.clear();
@@ -560,7 +562,7 @@ pub(super) fn parse_annotation(
                 _ => {}
             },
             Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
+            Err(e) => return Err(xml_error(ODF_CONTENT_XML, e)),
             _ => {}
         }
         buf.clear();
@@ -604,7 +606,7 @@ pub(super) fn parse_note(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
+            Err(e) => return Err(xml_error(ODF_CONTENT_XML, e)),
             _ => {}
         }
         buf.clear();
@@ -668,7 +670,7 @@ pub(super) fn parse_draw_frame(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
+            Err(e) => return Err(xml_error(ODF_CONTENT_XML, e)),
             _ => {}
         }
         buf.clear();
@@ -752,7 +754,7 @@ pub(super) fn parse_tracked_changes(
                 _ => {}
             },
             Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
+            Err(e) => return Err(xml_error(ODF_CONTENT_XML, e)),
             _ => {}
         }
         buf.clear();

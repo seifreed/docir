@@ -1,5 +1,7 @@
 use super::*;
 
+const DOC_XML_PATH: &str = "word/document.xml";
+
 pub(super) struct RunParse {
     pub(super) run_id: NodeId,
     pub(super) text: String,
@@ -107,7 +109,7 @@ pub(super) fn parse_run(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -116,7 +118,7 @@ pub(super) fn parse_run(
 
     let mut run = Run::new(text);
     run.properties = props;
-    run.span = Some(span_from_reader(reader, "word/document.xml"));
+    run.span = Some(span_from_reader(reader, DOC_XML_PATH));
     let run_text = run.text.clone();
     let id = run.id;
     parser.store.insert(docir_core::ir::IRNode::Run(run));
@@ -150,7 +152,7 @@ pub(super) fn parse_revision_inline(
     revision.revision_id = attr_value(start, b"w:id");
     revision.author = attr_value(start, b"w:author");
     revision.date = attr_value(start, b"w:date");
-    revision.span = Some(SourceSpan::new("word/document.xml"));
+    revision.span = Some(SourceSpan::new(DOC_XML_PATH));
 
     let mut buf = Vec::new();
     loop {
@@ -178,7 +180,7 @@ pub(super) fn parse_revision_inline(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -203,7 +205,7 @@ pub(super) fn parse_revision_block(
     revision.revision_id = attr_value(start, b"w:id");
     revision.author = attr_value(start, b"w:author");
     revision.date = attr_value(start, b"w:date");
-    revision.span = Some(SourceSpan::new("word/document.xml"));
+    revision.span = Some(SourceSpan::new(DOC_XML_PATH));
 
     let mut buf = Vec::new();
     loop {
@@ -239,7 +241,7 @@ pub(super) fn parse_revision_block(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -260,7 +262,7 @@ pub(super) fn parse_sdt(
     mode: SdtMode,
 ) -> Result<NodeId, ParseError> {
     let mut control = docir_core::ir::ContentControl::new();
-    control.span = Some(span_from_reader(reader, "word/document.xml"));
+    control.span = Some(span_from_reader(reader, DOC_XML_PATH));
 
     let mut buf = Vec::new();
     loop {
@@ -285,7 +287,7 @@ pub(super) fn parse_sdt(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -342,7 +344,7 @@ fn parse_sdt_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -382,7 +384,7 @@ fn parse_sdt_content_block(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -418,7 +420,7 @@ fn parse_sdt_content_inline(
                 b"w:commentRangeStart" => {
                     if let Some(cid) = attr_value(&e, b"w:id") {
                         let mut node = CommentRangeStart::new(cid);
-                        node.span = Some(SourceSpan::new("word/document.xml"));
+                        node.span = Some(SourceSpan::new(DOC_XML_PATH));
                         let node_id = node.id;
                         parser
                             .store
@@ -429,7 +431,7 @@ fn parse_sdt_content_inline(
                 b"w:commentRangeEnd" => {
                     if let Some(cid) = attr_value(&e, b"w:id") {
                         let mut node = CommentRangeEnd::new(cid);
-                        node.span = Some(SourceSpan::new("word/document.xml"));
+                        node.span = Some(SourceSpan::new(DOC_XML_PATH));
                         let node_id = node.id;
                         parser
                             .store
@@ -440,7 +442,7 @@ fn parse_sdt_content_inline(
                 b"w:commentReference" => {
                     if let Some(cid) = attr_value(&e, b"w:id") {
                         let mut node = CommentReference::new(cid);
-                        node.span = Some(SourceSpan::new("word/document.xml"));
+                        node.span = Some(SourceSpan::new(DOC_XML_PATH));
                         let node_id = node.id;
                         parser
                             .store
@@ -486,7 +488,7 @@ fn parse_sdt_content_inline(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -521,7 +523,7 @@ pub(super) fn parse_hyperlink(
             link.target = format!("{}#{}", link.target, anchor);
         }
     }
-    let mut span = span_from_reader(reader, "word/document.xml");
+    let mut span = span_from_reader(reader, DOC_XML_PATH);
     span.relationship_id = rel_id_opt.clone();
     link.span = Some(span);
 
@@ -541,7 +543,7 @@ pub(super) fn parse_hyperlink(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -580,7 +582,7 @@ pub(super) fn parse_field(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -617,7 +619,7 @@ pub(super) fn parse_numbering(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -706,7 +708,7 @@ pub(super) fn parse_run_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
