@@ -1,6 +1,7 @@
 use super::*;
 use crate::diagnostics::attach_diagnostics_if_any_to_store;
 use crate::zip_handler::PackageReader;
+use std::collections::HashSet;
 
 impl OoxmlParser {
     pub(super) fn post_process_ooxml(
@@ -36,40 +37,87 @@ impl OoxmlParser {
         store: &mut IrStore,
         root_id: NodeId,
     ) -> Result<(), ParseError> {
-        let mut seen_paths = coverage::collect_seen_paths(store);
-        seen_paths.insert("[Content_Types].xml".to_string());
-        if let Some(IRNode::Document(doc)) = store.get(root_id) {
-            if doc.metadata.is_some() {
-                if zip.contains("docProps/core.xml") {
-                    seen_paths.insert("docProps/core.xml".to_string());
-                }
-                if zip.contains("docProps/app.xml") {
-                    seen_paths.insert("docProps/app.xml".to_string());
-                }
-                if zip.contains("docProps/custom.xml") {
-                    seen_paths.insert("docProps/custom.xml".to_string());
-                }
-            }
-            match doc.format {
-                DocumentFormat::WordProcessing => {
-                    if zip.contains("word/comments.xml") {
-                        seen_paths.insert("word/comments.xml".to_string());
-                    }
-                }
-                DocumentFormat::Presentation => {
-                    if zip.contains("ppt/commentAuthors.xml") {
-                        seen_paths.insert("ppt/commentAuthors.xml".to_string());
-                    }
-                }
-                _ => {}
-            }
-        }
+        let mut seen_paths = self.seed_seen_paths(zip, store, root_id);
 
-        let mut extension_ids = Vec::new();
         let mut diagnostics = Diagnostics::new();
         diagnostics.span = Some(SourceSpan::new("package"));
-        let mut unparsed_count: usize = 0;
+        let (extension_ids, unparsed_count) = self.insert_unparsed_extension_parts(
+            zip,
+            content_types,
+            store,
+            &mut seen_paths,
+            &mut diagnostics,
+        )?;
 
+        let format = self.document_format_or_default(store, root_id);
+        let coverage_entries = coverage::build_coverage_diagnostics(
+            format,
+            content_types,
+            zip.file_names(),
+            &seen_paths,
+        );
+        diagnostics.entries.extend(coverage_entries);
+        push_info(
+            &mut diagnostics,
+            "UNPARSED_SUMMARY",
+            format!("unparsed parts: {}", unparsed_count),
+            None,
+        );
+
+        self.attach_extension_ids_to_document(store, root_id, extension_ids);
+
+        if !diagnostics.entries.is_empty() {
+            attach_diagnostics_if_any_to_store(store, root_id, diagnostics);
+        }
+
+        Ok(())
+    }
+
+    fn seed_seen_paths(
+        &self,
+        zip: &mut impl PackageReader,
+        store: &IrStore,
+        root_id: NodeId,
+    ) -> HashSet<String> {
+        let mut seen_paths = coverage::collect_seen_paths(store);
+        seen_paths.insert("[Content_Types].xml".to_string());
+        let Some(IRNode::Document(doc)) = store.get(root_id) else {
+            return seen_paths;
+        };
+
+        if doc.metadata.is_some() {
+            for path in [
+                "docProps/core.xml",
+                "docProps/app.xml",
+                "docProps/custom.xml",
+            ] {
+                if zip.contains(path) {
+                    seen_paths.insert(path.to_string());
+                }
+            }
+        }
+        match doc.format {
+            DocumentFormat::WordProcessing if zip.contains("word/comments.xml") => {
+                seen_paths.insert("word/comments.xml".to_string());
+            }
+            DocumentFormat::Presentation if zip.contains("ppt/commentAuthors.xml") => {
+                seen_paths.insert("ppt/commentAuthors.xml".to_string());
+            }
+            _ => {}
+        }
+        seen_paths
+    }
+
+    fn insert_unparsed_extension_parts(
+        &self,
+        zip: &mut impl PackageReader,
+        content_types: &ContentTypes,
+        store: &mut IrStore,
+        seen_paths: &mut HashSet<String>,
+        diagnostics: &mut Diagnostics,
+    ) -> Result<(Vec<NodeId>, usize), ParseError> {
+        let mut extension_ids = Vec::new();
+        let mut unparsed_count = 0usize;
         let all_paths: Vec<String> = zip
             .file_names()
             .into_iter()
@@ -87,42 +135,32 @@ impl OoxmlParser {
             store.insert(IRNode::ExtensionPart(part));
             extension_ids.push(part_id);
             unparsed_count += 1;
-
             push_warning(
-                &mut diagnostics,
+                diagnostics,
                 "UNPARSED_PART",
                 format!("No parser registered for part: {}", path),
                 Some(&path),
             );
         }
+        Ok((extension_ids, unparsed_count))
+    }
 
-        let format = match store.get(root_id) {
+    fn document_format_or_default(&self, store: &IrStore, root_id: NodeId) -> DocumentFormat {
+        match store.get(root_id) {
             Some(IRNode::Document(doc)) => doc.format,
             _ => DocumentFormat::WordProcessing,
-        };
-        let coverage_entries = coverage::build_coverage_diagnostics(
-            format,
-            content_types,
-            zip.file_names(),
-            &seen_paths,
-        );
-        diagnostics.entries.extend(coverage_entries);
-        push_info(
-            &mut diagnostics,
-            "UNPARSED_SUMMARY",
-            format!("unparsed parts: {}", unparsed_count),
-            None,
-        );
+        }
+    }
 
+    fn attach_extension_ids_to_document(
+        &self,
+        store: &mut IrStore,
+        root_id: NodeId,
+        extension_ids: Vec<NodeId>,
+    ) {
         if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
             doc.shared_parts.extend(extension_ids);
         }
-
-        if !diagnostics.entries.is_empty() {
-            attach_diagnostics_if_any_to_store(store, root_id, diagnostics);
-        }
-
-        Ok(())
     }
 
     fn link_shapes_to_shared_parts(&self, store: &mut IrStore) {
