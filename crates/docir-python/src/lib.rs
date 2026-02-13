@@ -1,7 +1,6 @@
 //! Python bindings for docir.
 
-use docir_app::DocirApp;
-use docir_app::ParserConfig;
+use docir_app::{DocirApp, ParsedDocument, ParserConfig};
 use docir_core::ir::IrNode as IrNodeTrait;
 use docir_core::query::Query;
 use docir_core::types::{
@@ -18,10 +17,7 @@ use std::path::Path;
 
 #[pyfunction]
 fn parse_json(path: String, pretty: Option<bool>) -> PyResult<String> {
-    let app = DocirApp::new(ParserConfig::default());
-    let parsed = app
-        .parse_file(Path::new(&path))
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let (_, parsed) = build_app_and_parse(&path)?;
     let serializer = if pretty.unwrap_or(false) {
         JsonSerializer::pretty()
     } else {
@@ -29,29 +25,21 @@ fn parse_json(path: String, pretty: Option<bool>) -> PyResult<String> {
     };
     serializer
         .serialize_to_string(parsed.store(), parsed.root_id())
-        .map_err(|e| PyValueError::new_err(e.to_string()))
+        .map_err(to_py_value_error)
 }
 
 #[pyfunction]
 fn rules(path: String, profile_json: Option<String>, pretty: Option<bool>) -> PyResult<String> {
-    let app = DocirApp::new(ParserConfig::default());
-    let parsed = app
-        .parse_file(Path::new(&path))
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let (app, parsed) = build_app_and_parse(&path)?;
 
     let profile = if let Some(text) = profile_json {
-        serde_json::from_str(&text).map_err(|e| PyValueError::new_err(e.to_string()))?
+        serde_json::from_str(&text).map_err(to_py_value_error)?
     } else {
         RuleProfile::default()
     };
 
     let report = app.run_rules(&parsed, &profile);
-
-    if pretty.unwrap_or(false) {
-        serde_json::to_string_pretty(&report).map_err(|e| PyValueError::new_err(e.to_string()))
-    } else {
-        serde_json::to_string(&report).map_err(|e| PyValueError::new_err(e.to_string()))
-    }
+    to_json_string(&report, pretty.unwrap_or(false))
 }
 
 #[pyfunction]
@@ -64,10 +52,7 @@ fn query(
     has_macros: Option<bool>,
     pretty: Option<bool>,
 ) -> PyResult<String> {
-    let app = DocirApp::new(ParserConfig::default());
-    let parsed = app
-        .parse_file(Path::new(&path))
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let (_, parsed) = build_app_and_parse(&path)?;
 
     let mut q = Query::new();
     if let Some(t) = node_type {
@@ -97,19 +82,12 @@ fn query(
         .collect();
 
     let value = json!({"matches": matches});
-    if pretty.unwrap_or(false) {
-        serde_json::to_string_pretty(&value).map_err(|e| PyValueError::new_err(e.to_string()))
-    } else {
-        serde_json::to_string(&value).map_err(|e| PyValueError::new_err(e.to_string()))
-    }
+    to_json_string(&value, pretty.unwrap_or(false))
 }
 
 #[pyfunction]
 fn summary(path: String) -> PyResult<String> {
-    let app = DocirApp::new(ParserConfig::default());
-    let parsed = app
-        .parse_file(Path::new(&path))
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let (_, parsed) = build_app_and_parse(&path)?;
 
     let doc = parsed
         .document()
@@ -151,11 +129,29 @@ fn summary(path: String) -> PyResult<String> {
 }
 
 fn parse_node_type(input: &str) -> PyResult<NodeType> {
-    parse_core_node_type(input).map_err(|e| PyValueError::new_err(e.to_string()))
+    parse_core_node_type(input).map_err(to_py_value_error)
 }
 
 fn parse_doc_format(input: &str) -> PyResult<DocumentFormat> {
-    parse_core_document_format(input).map_err(|e| PyValueError::new_err(e.to_string()))
+    parse_core_document_format(input).map_err(to_py_value_error)
+}
+
+fn build_app_and_parse(path: &str) -> PyResult<(DocirApp, ParsedDocument)> {
+    let app = DocirApp::new(ParserConfig::default());
+    let parsed = app.parse_file(Path::new(path)).map_err(to_py_value_error)?;
+    Ok((app, parsed))
+}
+
+fn to_json_string<T: serde::Serialize>(value: &T, pretty: bool) -> PyResult<String> {
+    if pretty {
+        serde_json::to_string_pretty(value).map_err(to_py_value_error)
+    } else {
+        serde_json::to_string(value).map_err(to_py_value_error)
+    }
+}
+
+fn to_py_value_error<E: std::fmt::Display>(err: E) -> PyErr {
+    PyValueError::new_err(err.to_string())
 }
 
 #[pymodule]

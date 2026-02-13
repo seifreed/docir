@@ -453,6 +453,7 @@ dependencies = [
  "docir-rules",
  "docir-serialization",
  "pyo3",
+ "serde",
  "serde_json",
 ]
 

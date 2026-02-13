@@ -17,5 +17,6 @@ docir-app = { workspace = true }
 docir-parser = { workspace = true }
 docir-rules = { workspace = true }
 docir-serialization = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 pyo3 = { version = "0.24.1", features = ["extension-module", "abi3-py37"] }
