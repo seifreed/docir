@@ -42,6 +42,7 @@ mod sampling;
 pub(crate) mod security;
 mod security_helpers;
 mod spreadsheet;
+mod spreadsheet_chunks;
 mod styles_support;
 mod text;
 mod utils;

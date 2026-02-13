@@ -114,9 +114,9 @@ impl OdfParser {
         let Some(bytes) = content_bytes else {
             return;
         };
-        let chunks = spreadsheet::extract_spreadsheet_table_chunks(bytes);
+        let chunks = spreadsheet_chunks::extract_spreadsheet_table_chunks(bytes);
         for (idx, chunk) in chunks.iter().enumerate() {
-            let sheet_name = spreadsheet::table_name_from_chunk(&chunk.bytes, (idx + 1) as u32);
+            let sheet_name = spreadsheet_chunks::table_name_from_chunk(&chunk.bytes, (idx + 1) as u32);
             let path = format!(
                 "content.xml#sheet:{}@{}-{}",
                 sheet_name, chunk.start, chunk.end

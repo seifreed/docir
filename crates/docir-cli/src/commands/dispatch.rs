@@ -3,7 +3,11 @@ use anyhow::Result;
 use docir_app::ParserConfig;
 
 pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
-    match cli.command {
+    run_command(cli.command, parser_config)
+}
+
+fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
+    match command {
         Commands::Parse {
             input,
             format,
@@ -53,6 +57,12 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             output,
             profile,
         } => super::rules::run(input, pretty, output, profile, parser_config),
+        other => run_query_extract_commands(other, parser_config),
+    }
+}
+
+fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -> Result<()> {
+    match command {
         Commands::Query {
             input,
             node_type,
@@ -118,6 +128,7 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             pretty,
             output,
         } => super::extract::run(input, node_id, node_type, pretty, output, parser_config),
+        _ => unreachable!("command should be routed by run_command"),
     }
 }
 
