@@ -271,13 +271,7 @@ pub(super) fn parse_ods_covered_cell(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
 ) -> Result<OdsCellData, ParseError> {
-    let col_repeat = attr_value(start, b"table:number-columns-repeated")
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(1);
-    let col_span =
-        attr_value(start, b"table:number-columns-spanned").and_then(|v| v.parse::<u32>().ok());
-    let row_span =
-        attr_value(start, b"table:number-rows-spanned").and_then(|v| v.parse::<u32>().ok());
+    let cell = covered_cell_from_start(start);
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
@@ -288,21 +282,16 @@ pub(super) fn parse_ods_covered_cell(
         }
         buf.clear();
     }
-    Ok(OdsCellData {
-        value: CellValue::Empty,
-        formula: None,
-        style_id: None,
-        col_repeat,
-        validation_name: None,
-        col_span,
-        row_span,
-        is_covered: true,
-    })
+    Ok(cell)
 }
 
 pub(super) fn parse_ods_covered_cell_empty(
     start: &BytesStart<'_>,
 ) -> Result<OdsCellData, ParseError> {
+    Ok(covered_cell_from_start(start))
+}
+
+fn covered_cell_from_start(start: &BytesStart<'_>) -> OdsCellData {
     let col_repeat = attr_value(start, b"table:number-columns-repeated")
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(1);
@@ -310,7 +299,7 @@ pub(super) fn parse_ods_covered_cell_empty(
         attr_value(start, b"table:number-columns-spanned").and_then(|v| v.parse::<u32>().ok());
     let row_span =
         attr_value(start, b"table:number-rows-spanned").and_then(|v| v.parse::<u32>().ok());
-    Ok(OdsCellData {
+    OdsCellData {
         value: CellValue::Empty,
         formula: None,
         style_id: None,
@@ -319,7 +308,21 @@ pub(super) fn parse_ods_covered_cell_empty(
         col_span,
         row_span,
         is_covered: true,
-    })
+    }
+}
+
+fn append_text_control(text: &mut String, e: &BytesStart<'_>) {
+    match e.name().as_ref() {
+        b"text:s" => {
+            let count = attr_value(e, b"text:c")
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(1);
+            text.extend(std::iter::repeat(' ').take(count));
+        }
+        b"text:tab" => text.push('\t'),
+        b"text:line-break" => text.push('\n'),
+        _ => {}
+    }
 }
 
 pub(super) fn parse_text_element(
@@ -330,28 +333,7 @@ pub(super) fn parse_text_element(
     let mut text = String::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"text:s" => {
-                    let count = attr_value(&e, b"text:c")
-                        .and_then(|v| v.parse::<usize>().ok())
-                        .unwrap_or(1);
-                    text.extend(std::iter::repeat(' ').take(count));
-                }
-                b"text:tab" => text.push('\t'),
-                b"text:line-break" => text.push('\n'),
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"text:s" => {
-                    let count = attr_value(&e, b"text:c")
-                        .and_then(|v| v.parse::<usize>().ok())
-                        .unwrap_or(1);
-                    text.extend(std::iter::repeat(' ').take(count));
-                }
-                b"text:tab" => text.push('\t'),
-                b"text:line-break" => text.push('\n'),
-                _ => {}
-            },
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => append_text_control(&mut text, &e),
             Ok(Event::Text(e)) => {
                 let chunk = e.unescape().unwrap_or_default();
                 text.push_str(&chunk);
