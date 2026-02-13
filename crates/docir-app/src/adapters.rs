@@ -1,6 +1,8 @@
 //! Infrastructure adapters for application ports.
 
-use crate::{AppResult, ParsedDocument, ParserConfig, ParserPort, SecurityScannerPort};
+use crate::{
+    AppParseError, AppResult, ParsedDocument, ParserConfig, ParserPort, SecurityScannerPort,
+};
 use docir_core::visitor::IrStore;
 use docir_parser::parser::ParsedDocument as ParserParsedDocument;
 use docir_parser::{scan_security_bytes as scan_parser_bytes, DocumentParser, ParseError};
@@ -98,12 +100,15 @@ fn scan_security_bytes(
     config: &docir_parser::ParserConfig,
     data: &[u8],
     store: &mut IrStore,
-) -> Result<(), ParseError> {
-    scan_parser_bytes(config, data, store)
+) -> Result<(), AppParseError> {
+    scan_parser_bytes(config, data, store).map_err(AppParseError::from)
 }
 
 fn wrap_parsed(result: Result<ParserParsedDocument, ParseError>) -> AppResult<ParsedDocument> {
-    result.map(ParsedDocument::new).map_err(Into::into)
+    result
+        .map(ParsedDocument::new)
+        .map_err(AppParseError::from)
+        .map_err(Into::into)
 }
 
 fn wrap_parsed_with_bytes(
@@ -111,5 +116,6 @@ fn wrap_parsed_with_bytes(
 ) -> AppResult<(ParsedDocument, Vec<u8>)> {
     result
         .map(|(parsed, data)| (ParsedDocument::new(parsed), data))
+        .map_err(AppParseError::from)
         .map_err(Into::into)
 }

@@ -6,7 +6,7 @@ use docir_core::types::{DocumentFormat, NodeId};
 use docir_core::visitor::IrStore;
 use docir_diff::DiffResult;
 use docir_parser::parser::ParsedDocument as ParserParsedDocument;
-use docir_parser::ParseError;
+use docir_parser::ParseError as ParserParseError;
 pub use docir_rules::RuleProfile;
 use docir_rules::{RuleEngine, RuleReport};
 use docir_security::analyzer::AnalysisResult;
@@ -37,9 +37,23 @@ use use_cases::{
 pub type AppResult<T> = Result<T, AppError>;
 
 #[derive(Debug, Error)]
+#[error("{message}")]
+pub struct AppParseError {
+    message: String,
+}
+
+impl From<ParserParseError> for AppParseError {
+    fn from(err: ParserParseError) -> Self {
+        Self {
+            message: err.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
 pub enum AppError {
     #[error(transparent)]
-    Parse(#[from] ParseError),
+    Parse(#[from] AppParseError),
     #[error(transparent)]
     Serialization(#[from] SerializationError),
 }
