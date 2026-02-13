@@ -80,7 +80,9 @@ pub(super) fn parse_ods_table(
                     }
                 }
                 b"draw:frame" => {
-                    if let Some(shape_id) = parse_draw_frame_spreadsheet(reader, &e, store)? {
+                    if let Some(shape_id) =
+                        spreadsheet::parse_draw_frame_spreadsheet(reader, &e, store)?
+                    {
                         shapes.push(shape_id);
                     }
                 }
@@ -105,7 +107,9 @@ pub(super) fn parse_ods_table(
                     row_idx += row_repeat;
                 }
                 b"draw:frame" => {
-                    if let Some(shape_id) = parse_draw_frame_spreadsheet(reader, &e, store)? {
+                    if let Some(shape_id) =
+                        spreadsheet::parse_draw_frame_spreadsheet(reader, &e, store)?
+                    {
                         shapes.push(shape_id);
                     }
                 }

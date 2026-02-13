@@ -59,8 +59,7 @@ use manifest::{
 use ods::{parse_ods_cell, parse_ods_cell_empty, parse_ods_table, parse_ods_table_fast};
 use paragraph::parse_paragraph;
 use presentation_helpers::{
-    build_media_asset, classify_media_shape, parse_draw_page, parse_frame_shape_empty,
-    parse_frame_shape_start, parse_odp_transition, FrameShapeState,
+    build_media_asset, classify_media_shape, parse_draw_page, parse_odp_transition,
 };
 use sampling::parse_ods_row_sample;
 use utils::{parse_frame_transform, parse_ods_named_ranges, strip_odf_formula_prefix};
@@ -485,46 +484,6 @@ fn parse_text_element(reader: &mut OdfReader<'_>, end_name: &[u8]) -> Result<Str
         buf.clear();
     }
     Ok(text)
-}
-
-fn parse_draw_frame_spreadsheet(
-    reader: &mut OdfReader<'_>,
-    start: &BytesStart<'_>,
-    store: &mut IrStore,
-) -> Result<Option<NodeId>, ParseError> {
-    let transform = parse_frame_transform(start);
-    let mut frame = FrameShapeState::new();
-    let mut buf = Vec::new();
-    let mut name = attr_value(start, b"draw:name");
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => parse_frame_shape_start(reader, &e, store, &mut frame)?,
-            Ok(Event::Empty(e)) => parse_frame_shape_empty(&e, store, &mut frame),
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"draw:frame" {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    if frame.has_shape {
-        let mut shape = Shape::new(frame.shape_type);
-        shape.name = name.take();
-        shape.media_target = frame.media_target;
-        shape.chart_id = frame.chart_id;
-        shape.transform = transform;
-        let shape_id = shape.id;
-        store.insert(IRNode::Shape(shape));
-        Ok(Some(shape_id))
-    } else {
-        Ok(None)
-    }
 }
 
 fn column_index_to_name(mut index: u32) -> String {

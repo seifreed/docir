@@ -1,5 +1,8 @@
 //! ODF spreadsheet parsing helpers.
 
+use super::presentation_helpers::{
+    parse_frame_shape_empty, parse_frame_shape_start, FrameShapeState,
+};
 use super::*;
 
 pub(super) fn parse_content_spreadsheet(
@@ -130,6 +133,46 @@ pub(super) fn parse_content_spreadsheet(
         }
     }
     Ok(result)
+}
+
+pub(super) fn parse_draw_frame_spreadsheet(
+    reader: &mut OdfReader<'_>,
+    start: &BytesStart<'_>,
+    store: &mut IrStore,
+) -> Result<Option<NodeId>, ParseError> {
+    let transform = parse_frame_transform(start);
+    let mut frame = FrameShapeState::new();
+    let mut buf = Vec::new();
+    let mut name = attr_value(start, b"draw:name");
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) => parse_frame_shape_start(reader, &e, store, &mut frame)?,
+            Ok(Event::Empty(e)) => parse_frame_shape_empty(&e, store, &mut frame),
+            Ok(Event::End(e)) => {
+                if e.name().as_ref() == b"draw:frame" {
+                    break;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => return Err(xml_error("content.xml", e)),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    if frame.has_shape {
+        let mut shape = Shape::new(frame.shape_type);
+        shape.name = name.take();
+        shape.media_target = frame.media_target;
+        shape.chart_id = frame.chart_id;
+        shape.transform = transform;
+        let shape_id = shape.id;
+        store.insert(IRNode::Shape(shape));
+        Ok(Some(shape_id))
+    } else {
+        Ok(None)
+    }
 }
 
 pub(super) fn parse_content_spreadsheet_fast(
