@@ -21,6 +21,7 @@ use quick_xml::Reader;
 use std::collections::{HashMap, HashSet};
 
 mod cell;
+mod comments;
 mod connections;
 mod drawing;
 mod metadata;
