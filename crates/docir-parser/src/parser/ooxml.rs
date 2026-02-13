@@ -351,33 +351,47 @@ impl OoxmlParser {
     ) -> Result<HashMap<String, NodeId>, ParseError> {
         let mut map = HashMap::new();
 
-        for rel in doc_rels.get_by_type(rel_type::HEADER) {
-            let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-            let rels = read_relationships_optional(zip, &part_path);
-            let xml = zip.read_file_string(&part_path)?;
-            let node_id = parser.parse_header_footer(
-                &xml,
-                &part_path,
-                crate::ooxml::docx::document::HeaderFooterKind::Header,
-                &rels,
-            )?;
-            map.insert(rel.id.clone(), node_id);
-        }
-
-        for rel in doc_rels.get_by_type(rel_type::FOOTER) {
-            let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-            let rels = read_relationships_optional(zip, &part_path);
-            let xml = zip.read_file_string(&part_path)?;
-            let node_id = parser.parse_header_footer(
-                &xml,
-                &part_path,
-                crate::ooxml::docx::document::HeaderFooterKind::Footer,
-                &rels,
-            )?;
-            map.insert(rel.id.clone(), node_id);
-        }
+        self.parse_docx_header_footer_kind(
+            zip,
+            main_part_path,
+            doc_rels,
+            parser,
+            rel_type::HEADER,
+            crate::ooxml::docx::document::HeaderFooterKind::Header,
+            &mut map,
+        )?;
+        self.parse_docx_header_footer_kind(
+            zip,
+            main_part_path,
+            doc_rels,
+            parser,
+            rel_type::FOOTER,
+            crate::ooxml::docx::document::HeaderFooterKind::Footer,
+            &mut map,
+        )?;
 
         Ok(map)
+    }
+
+    fn parse_docx_header_footer_kind(
+        &self,
+        zip: &mut impl PackageReader,
+        main_part_path: &str,
+        doc_rels: &Relationships,
+        parser: &mut DocxParser,
+        rel_type: &str,
+        kind: crate::ooxml::docx::document::HeaderFooterKind,
+        map: &mut HashMap<String, NodeId>,
+    ) -> Result<(), ParseError> {
+        for rel in doc_rels.get_by_type(rel_type) {
+            let part_path = Relationships::resolve_target(main_part_path, &rel.target);
+            let rels = read_relationships_optional(zip, &part_path);
+            let xml = zip.read_file_string(&part_path)?;
+            let node_id = parser.parse_header_footer(&xml, &part_path, kind, &rels)?;
+            map.insert(rel.id.clone(), node_id);
+        }
+
+        Ok(())
     }
 
     fn parse_docx_comments(
@@ -509,7 +523,7 @@ impl OoxmlParser {
         F: FnMut(&str, &str) -> Option<NodeId>,
     {
         let (part_path, xml) =
-            read_xml_part_by_rel(zip, main_part_path, doc_rels, rel_type).ok()??;
+            self.read_xml_part_by_rel_optional(zip, main_part_path, doc_rels, rel_type)?;
         parse(&part_path, &xml)
     }
 
@@ -528,7 +542,7 @@ impl OoxmlParser {
         S: FnOnce(&mut IrStore, NodeId, &str),
     {
         let (part_path, xml) =
-            read_xml_part_by_rel(zip, main_part_path, doc_rels, rel_type).ok()??;
+            self.read_xml_part_by_rel_optional(zip, main_part_path, doc_rels, rel_type)?;
         let id = parse(parser, &part_path, &xml)?;
         set_span(parser.store_mut(), id, &part_path);
         Some(id)
@@ -543,7 +557,7 @@ impl OoxmlParser {
     where
         F: FnMut(&str, &str) -> Option<NodeId>,
     {
-        let xml = read_xml_part(zip, part_path).ok()??;
+        let xml = self.read_xml_part_optional(zip, part_path)?;
         parse(part_path, &xml)
     }
 
@@ -559,9 +573,29 @@ impl OoxmlParser {
         F: FnOnce(&mut DocxParser, &str, &str) -> Option<NodeId>,
         S: FnOnce(&mut IrStore, NodeId, &str),
     {
-        let xml = read_xml_part(zip, part_path).ok()??;
+        let xml = self.read_xml_part_optional(zip, part_path)?;
         let id = parse(parser, part_path, &xml)?;
         set_span(parser.store_mut(), id, part_path);
         Some(id)
+    }
+
+    fn read_xml_part_by_rel_optional(
+        &self,
+        zip: &mut impl PackageReader,
+        main_part_path: &str,
+        doc_rels: &Relationships,
+        rel_type: &str,
+    ) -> Option<(String, String)> {
+        read_xml_part_by_rel(zip, main_part_path, doc_rels, rel_type)
+            .ok()
+            .flatten()
+    }
+
+    fn read_xml_part_optional(
+        &self,
+        zip: &mut impl PackageReader,
+        part_path: &str,
+    ) -> Option<String> {
+        read_xml_part(zip, part_path).ok().flatten()
     }
 }
