@@ -368,99 +368,62 @@ fn media_type_from_path(path: &str) -> MediaType {
     }
 }
 
+struct HwpxSecurityScan {
+    external_refs: Vec<ExternalReference>,
+    macro_modules: Vec<NodeId>,
+    has_autoexec: bool,
+    encrypted_flag: bool,
+    protected_flag: bool,
+}
+
+impl HwpxSecurityScan {
+    fn new() -> Self {
+        Self {
+            external_refs: Vec::new(),
+            macro_modules: Vec::new(),
+            has_autoexec: false,
+            encrypted_flag: false,
+            protected_flag: false,
+        }
+    }
+
+    fn mark_flags_from_text(&mut self, text: &str) {
+        let lower = text.to_ascii_lowercase();
+        if lower.contains("encrypt") {
+            self.encrypted_flag = true;
+        }
+        if lower.contains("protect") || lower.contains("password") {
+            self.protected_flag = true;
+        }
+    }
+}
+
 fn scan_hwpx_security<R: Read + Seek>(
     file_names: &[String],
     zip: &mut SecureZipReader<R>,
     store: &mut IrStore,
     doc: &mut Document,
 ) {
-    let mut external_refs = Vec::new();
-    let mut macro_modules = Vec::new();
-    let mut has_autoexec = false;
-    let mut encrypted_flag = false;
-    let mut protected_flag = false;
+    let mut scan = HwpxSecurityScan::new();
     let mut diagnostics = Diagnostics::new();
     diagnostics.span = Some(SourceSpan::new("package"));
+
     for path in file_names {
-        let lower = path.to_ascii_lowercase();
-        if lower.starts_with("bindata/") {
-            if lower.contains("ole") || lower.contains("object") {
-                let mut ole = OleObject::new();
-                ole.name = Some(path.clone());
-                ole.size_bytes = zip.file_size(path).unwrap_or(0);
-                store.insert(IRNode::OleObject(ole));
-            }
-        }
-
-        if lower.contains("encrypt") {
-            encrypted_flag = true;
-        }
-        if lower.contains("protect") || lower.contains("password") {
-            protected_flag = true;
-        }
-
-        let is_script = lower.starts_with("scripts/")
-            || lower.contains("/scripts/")
-            || lower.starts_with("macros/")
-            || lower.contains("/macros/")
-            || lower.ends_with(".js")
-            || lower.ends_with(".vbs")
-            || lower.ends_with(".wsf")
-            || lower.ends_with(".sct")
-            || lower.ends_with(".py");
-        if is_script {
-            if let Ok(data) = zip.read_file(path) {
-                let source = String::from_utf8_lossy(&data).to_string();
-                let mut module = MacroModule::new(path.clone(), MacroModuleType::Standard);
-                module.source_code = Some(source.clone());
-                module.span = Some(SourceSpan::new(path));
-                let id = module.id;
-                store.insert(IRNode::MacroModule(module));
-                macro_modules.push(id);
-                let lower_source = source.to_ascii_lowercase();
-                if lower.contains("auto")
-                    || lower_source.contains("autoexec")
-                    || lower_source.contains("auto_open")
-                    || lower_source.contains("onopen")
-                {
-                    has_autoexec = true;
-                }
-            }
-        }
-
-        if !path.ends_with(".xml") {
-            continue;
-        }
-        if let Ok(xml) = zip.read_file_string(path) {
-            let refs = scan_hwpx_external_refs(&xml, path);
-            external_refs.extend(refs);
-            let lower_xml = xml.to_ascii_lowercase();
-            if lower_xml.contains("encrypt") {
-                encrypted_flag = true;
-            }
-            if lower_xml.contains("protect") || lower_xml.contains("password") {
-                protected_flag = true;
-            }
-            if xml.to_ascii_lowercase().contains("ole") {
-                let mut ole = OleObject::new();
-                ole.name = Some(path.clone());
-                ole.size_bytes = xml.len() as u64;
-                store.insert(IRNode::OleObject(ole));
-            }
-        }
+        scan_hwpx_security_path(path, zip, store, &mut scan);
     }
-    for ext in external_refs {
+
+    for ext in scan.external_refs {
         store.insert(IRNode::ExternalReference(ext));
     }
-    if !macro_modules.is_empty() {
+    if !scan.macro_modules.is_empty() {
         let mut project = MacroProject::new();
         project.name = Some("HWPX Scripts".to_string());
-        project.modules = macro_modules;
-        project.has_auto_exec = has_autoexec;
+        project.modules = scan.macro_modules;
+        project.has_auto_exec = scan.has_autoexec;
         project.span = Some(SourceSpan::new("package"));
         store.insert(IRNode::MacroProject(project));
     }
-    if encrypted_flag {
+    if scan.encrypted_flag {
         push_warning(
             &mut diagnostics,
             "HWPX_ENCRYPTED",
@@ -468,7 +431,7 @@ fn scan_hwpx_security<R: Read + Seek>(
             None,
         );
     }
-    if protected_flag {
+    if scan.protected_flag {
         push_info(
             &mut diagnostics,
             "HWPX_PROTECTED",
@@ -477,6 +440,98 @@ fn scan_hwpx_security<R: Read + Seek>(
         );
     }
     attach_diagnostics_if_any(store, doc, diagnostics);
+}
+
+fn scan_hwpx_security_path<R: Read + Seek>(
+    path: &str,
+    zip: &mut SecureZipReader<R>,
+    store: &mut IrStore,
+    scan: &mut HwpxSecurityScan,
+) {
+    let lower = path.to_ascii_lowercase();
+    scan.mark_flags_from_text(&lower);
+    scan_hwpx_binary_ole(path, &lower, zip, store);
+    scan_hwpx_script(path, &lower, zip, store, scan);
+    if path.ends_with(".xml") {
+        scan_hwpx_xml(path, zip, store, scan);
+    }
+}
+
+fn scan_hwpx_binary_ole<R: Read + Seek>(
+    path: &str,
+    lower: &str,
+    zip: &mut SecureZipReader<R>,
+    store: &mut IrStore,
+) {
+    if !lower.starts_with("bindata/") {
+        return;
+    }
+    if !(lower.contains("ole") || lower.contains("object")) {
+        return;
+    }
+    let mut ole = OleObject::new();
+    ole.name = Some(path.to_string());
+    ole.size_bytes = zip.file_size(path).unwrap_or(0);
+    store.insert(IRNode::OleObject(ole));
+}
+
+fn scan_hwpx_script<R: Read + Seek>(
+    path: &str,
+    lower: &str,
+    zip: &mut SecureZipReader<R>,
+    store: &mut IrStore,
+    scan: &mut HwpxSecurityScan,
+) {
+    let is_script = lower.starts_with("scripts/")
+        || lower.contains("/scripts/")
+        || lower.starts_with("macros/")
+        || lower.contains("/macros/")
+        || lower.ends_with(".js")
+        || lower.ends_with(".vbs")
+        || lower.ends_with(".wsf")
+        || lower.ends_with(".sct")
+        || lower.ends_with(".py");
+    if !is_script {
+        return;
+    }
+
+    if let Ok(data) = zip.read_file(path) {
+        let source = String::from_utf8_lossy(&data).to_string();
+        let mut module = MacroModule::new(path.to_string(), MacroModuleType::Standard);
+        module.source_code = Some(source.clone());
+        module.span = Some(SourceSpan::new(path));
+        let id = module.id;
+        store.insert(IRNode::MacroModule(module));
+        scan.macro_modules.push(id);
+
+        let lower_source = source.to_ascii_lowercase();
+        if lower.contains("auto")
+            || lower_source.contains("autoexec")
+            || lower_source.contains("auto_open")
+            || lower_source.contains("onopen")
+        {
+            scan.has_autoexec = true;
+        }
+    }
+}
+
+fn scan_hwpx_xml<R: Read + Seek>(
+    path: &str,
+    zip: &mut SecureZipReader<R>,
+    store: &mut IrStore,
+    scan: &mut HwpxSecurityScan,
+) {
+    if let Ok(xml) = zip.read_file_string(path) {
+        scan.external_refs
+            .extend(scan_hwpx_external_refs(&xml, path));
+        scan.mark_flags_from_text(&xml);
+        if xml.to_ascii_lowercase().contains("ole") {
+            let mut ole = OleObject::new();
+            ole.name = Some(path.to_string());
+            ole.size_bytes = xml.len() as u64;
+            store.insert(IRNode::OleObject(ole));
+        }
+    }
 }
 
 fn scan_hwpx_external_refs(xml: &str, source: &str) -> Vec<ExternalReference> {
