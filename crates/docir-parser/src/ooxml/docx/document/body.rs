@@ -12,62 +12,6 @@ use super::table::parse_table;
 use super::{apply_section_refs, parse_revision_block, parse_sdt, DocxParser, SdtMode};
 use docir_core::ir::RevisionType;
 
-pub(crate) struct BodyParse {
-    pub(crate) content: Vec<NodeId>,
-    pub(crate) headers: Vec<NodeId>,
-    pub(crate) footers: Vec<NodeId>,
-}
-
-pub(crate) fn parse_body(
-    parser: &mut DocxParser,
-    reader: &mut Reader<&[u8]>,
-    rels: &Relationships,
-    header_footer_map: Option<&HashMap<String, NodeId>>,
-) -> Result<BodyParse, ParseError> {
-    let mut content = Vec::new();
-    let mut headers = Vec::new();
-    let mut footers = Vec::new();
-    let mut buf = Vec::new();
-
-    loop {
-        match read_event(reader, &mut buf, "word/document.xml")? {
-            Event::Start(e) => match e.name().as_ref() {
-                b"w:p" => {
-                    let para = parse_paragraph(parser, reader, rels, header_footer_map)?;
-                    content.push(para.id);
-                }
-                b"w:tbl" => {
-                    let table_id = parse_table(parser, reader, rels)?;
-                    content.push(table_id);
-                }
-                b"w:sectPr" => {
-                    let section_ref = apply_section_refs(reader, header_footer_map)?;
-                    headers.extend(section_ref.headers);
-                    footers.extend(section_ref.footers);
-                }
-                _ => {}
-            },
-            Event::End(e) => {
-                if e.name().as_ref() == b"w:body"
-                    || e.name().as_ref() == b"w:hdr"
-                    || e.name().as_ref() == b"w:ftr"
-                {
-                    break;
-                }
-            }
-            Event::Eof => break,
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(BodyParse {
-        content,
-        headers,
-        footers,
-    })
-}
-
 pub(crate) fn parse_body_sections(
     parser: &mut DocxParser,
     reader: &mut Reader<&[u8]>,

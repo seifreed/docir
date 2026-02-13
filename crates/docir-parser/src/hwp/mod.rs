@@ -12,9 +12,9 @@ use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{
     Comment, CommentReference, Diagnostics, Document, Endnote, ExtensionPart, ExtensionPartKind,
     Footer, Footnote, Header, IRNode, MediaAsset, MediaType, NumberingInfo, Paragraph, Revision,
-    RevisionType, Run, RunProperties, Section, Shape, ShapeType, Style, StyleParagraphProperties,
-    StyleRunProperties, StyleSet, StyleType, Table, TableAlignment, TableCell, TableProperties,
-    TableRow, TableWidth, TableWidthType,
+    RevisionType, Run, RunProperties, Section, Shape, ShapeType, StyleParagraphProperties,
+    StyleRunProperties, Table, TableAlignment, TableCell, TableProperties, TableRow, TableWidth,
+    TableWidthType,
 };
 use docir_core::security::{
     ExternalRefType, ExternalReference, MacroModule, MacroModuleType, MacroProject, OleObject,

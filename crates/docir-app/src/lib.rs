@@ -96,10 +96,6 @@ impl ParsedDocument {
     pub fn metrics(&self) -> Option<&ParseMetrics> {
         self.metrics.as_ref()
     }
-
-    pub(crate) fn into_inner(self) -> ParserParsedDocument {
-        self.inner
-    }
 }
 /// Parser port for application workflows.
 pub trait ParserPort {

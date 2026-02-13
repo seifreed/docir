@@ -36,8 +36,6 @@ pub(super) fn parse_file_header(data: &[u8]) -> Result<HwpHeader, ParseError> {
 
 struct HwpRecord<'a> {
     tag_id: u16,
-    level: u16,
-    size: u32,
     data: &'a [u8],
 }
 
@@ -49,7 +47,7 @@ fn for_each_record<F: FnMut(HwpRecord)>(data: &[u8], mut f: F) -> Result<(), Par
         offset += 4;
 
         let tag_id = (header & 0x3FF) as u16;
-        let level = ((header >> 10) & 0x3FF) as u16;
+        let _level = ((header >> 10) & 0x3FF) as u16;
         let mut size = ((header >> 20) & 0xFFF) as u32;
         if size == 0xFFF {
             size = read_u32_le(data, offset).ok_or_else(|| {
@@ -68,8 +66,6 @@ fn for_each_record<F: FnMut(HwpRecord)>(data: &[u8], mut f: F) -> Result<(), Par
         offset = end;
         f(HwpRecord {
             tag_id,
-            level,
-            size,
             data: payload,
         });
     }

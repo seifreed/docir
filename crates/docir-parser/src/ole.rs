@@ -8,7 +8,6 @@ const SIGNATURE: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 const FREE_SECT: u32 = 0xFFFFFFFF;
 const END_OF_CHAIN: u32 = 0xFFFFFFFE;
 const FAT_SECT: u32 = 0xFFFFFFFD;
-const DIFAT_SECT: u32 = 0xFFFFFFFC;
 
 #[derive(Debug, Clone)]
 struct DirEntry {
@@ -29,7 +28,6 @@ pub struct Cfb {
     fat: Vec<u32>,
     mini_fat: Vec<u32>,
     root_stream: Vec<u8>,
-    entries: Vec<DirEntry>,
     streams: HashMap<String, DirEntry>,
     data: Vec<u8>,
 }
@@ -61,7 +59,6 @@ impl Cfb {
             fat,
             mini_fat,
             root_stream,
-            entries,
             streams,
             data,
         })

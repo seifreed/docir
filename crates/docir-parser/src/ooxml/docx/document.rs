@@ -297,10 +297,6 @@ fn bool_from_val(start: &BytesStart) -> bool {
     support::bool_from_val(start)
 }
 
-fn parse_vml_style_length(style: &str, key: &str) -> Option<i64> {
-    support::parse_vml_style_length(style, key)
-}
-
 fn parse_vml_pict(
     parser: &mut DocxParser,
     reader: &mut Reader<&[u8]>,

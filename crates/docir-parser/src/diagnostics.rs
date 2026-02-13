@@ -49,21 +49,6 @@ pub(crate) fn push_warning(
     );
 }
 
-pub(crate) fn push_error(
-    diagnostics: &mut Diagnostics,
-    code: &str,
-    message: String,
-    path: Option<&str>,
-) {
-    push_entry(
-        &mut diagnostics.entries,
-        DiagnosticSeverity::Error,
-        code,
-        message,
-        path,
-    );
-}
-
 pub(crate) fn attach_diagnostics_if_any(
     store: &mut IrStore,
     doc: &mut Document,

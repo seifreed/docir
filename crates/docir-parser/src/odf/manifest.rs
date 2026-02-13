@@ -175,10 +175,6 @@ pub fn is_manifest_entry_encrypted(entry: &OdfManifestEntry) -> bool {
     entry.path.to_ascii_lowercase().contains("encrypted")
 }
 
-pub fn manifest_has_encryption(entries: &[OdfManifestEntry]) -> bool {
-    entries.iter().any(is_manifest_entry_encrypted)
-}
-
 pub fn encrypted_manifest_entries(entries: &[OdfManifestEntry]) -> Vec<String> {
     entries
         .iter()

@@ -31,7 +31,6 @@ use controls::{handle_group_controls, handle_object_controls, handle_table_contr
 use field_utils::{
     parse_field_instruction as parse_field_instruction_impl,
     parse_hyperlink_instruction as parse_hyperlink_instruction_impl,
-    tokenize_field_instruction as tokenize_field_instruction_impl,
 };
 use helpers::{
     attach_flushed_run, flush_object_text, flush_stylesheet_text, handle_encoding_controls,
@@ -699,10 +698,6 @@ fn parse_field_instruction(text: &str) -> Option<FieldInstruction> {
 
 fn parse_hyperlink_instruction(text: &str) -> Option<(String, Vec<String>, Vec<String>)> {
     parse_hyperlink_instruction_impl(text)
-}
-
-fn tokenize_field_instruction(text: &str) -> Vec<String> {
-    tokenize_field_instruction_impl(text)
 }
 
 fn create_external_ref(

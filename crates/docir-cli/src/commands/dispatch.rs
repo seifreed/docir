@@ -1,8 +1,6 @@
-use super::query::QueryFilters;
 use crate::{Cli, Commands};
 use anyhow::Result;
 use docir_app::ParserConfig;
-use std::path::PathBuf;
 
 pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
     dispatch_command(cli.command, parser_config)
@@ -82,8 +80,7 @@ fn dispatch_query_extract(command: Commands, parser_config: &ParserConfig) -> Re
             has_macros,
             pretty,
             output,
-        }
-        | Commands::Select {
+        } => super::query::run(
             input,
             node_type,
             contains,
@@ -92,9 +89,24 @@ fn dispatch_query_extract(command: Commands, parser_config: &ParserConfig) -> Re
             has_macros,
             pretty,
             output,
-        } => run_query_with_filters(
+            parser_config,
+        ),
+        Commands::Select {
             input,
-            query_filters(node_type, contains, format, has_external_refs, has_macros),
+            node_type,
+            contains,
+            format,
+            has_external_refs,
+            has_macros,
+            pretty,
+            output,
+        } => super::select::run(
+            input,
+            node_type,
+            contains,
+            format,
+            has_external_refs,
+            has_macros,
             pretty,
             output,
             parser_config,
@@ -129,31 +141,5 @@ fn dispatch_query_extract(command: Commands, parser_config: &ParserConfig) -> Re
         | Commands::DumpNode { .. }
         | Commands::Diff { .. }
         | Commands::Rules { .. } => unreachable!("command handled in prior dispatcher"),
-    }
-}
-
-fn run_query_with_filters(
-    input: PathBuf,
-    filters: QueryFilters,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::query::run_with_filters(input, filters, pretty, output, parser_config)
-}
-
-fn query_filters(
-    node_type: Option<String>,
-    contains: Option<String>,
-    format: Option<String>,
-    has_external_refs: Option<bool>,
-    has_macros: Option<bool>,
-) -> QueryFilters {
-    QueryFilters {
-        node_type,
-        contains,
-        format,
-        has_external_refs,
-        has_macros,
     }
 }
