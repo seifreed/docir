@@ -200,6 +200,43 @@ impl OoxmlParser {
         Ok(())
     }
 
+    pub(super) fn finalize_ooxml_document(
+        &self,
+        zip: &mut impl PackageReader,
+        content_types: &ContentTypes,
+        store: &mut IrStore,
+        root_id: NodeId,
+        metrics: &mut Option<ParseMetrics>,
+    ) -> Result<(), ParseError> {
+        let metadata_id = self.parse_metadata(zip)?;
+        if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
+            doc.metadata = metadata_id;
+        }
+        if metadata_id.is_some() {
+            if let Some(metadata) = self.build_metadata(zip) {
+                store.insert(IRNode::Metadata(metadata));
+            }
+        }
+
+        let start = std::time::Instant::now();
+        self.parse_shared_parts(zip, content_types, store, root_id)?;
+        if let Some(m) = metrics.as_mut() {
+            m.shared_parts_ms = start.elapsed().as_millis();
+        }
+
+        if self.config.scan_security_on_parse {
+            let start = std::time::Instant::now();
+            let scanner = security::SecurityScanner::new(&self.config);
+            scanner.scan_zip(zip, store)?;
+            if let Some(m) = metrics.as_mut() {
+                m.security_scan_ms = start.elapsed().as_millis();
+            }
+        }
+
+        self.post_process_ooxml(zip, content_types, store, root_id, metrics)?;
+        Ok(())
+    }
+
     pub(super) fn parse_docx_word_parts(
         &self,
         zip: &mut impl PackageReader,
