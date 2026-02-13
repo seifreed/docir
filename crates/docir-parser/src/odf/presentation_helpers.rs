@@ -2,6 +2,24 @@
 
 use super::*;
 
+pub(super) struct FrameShapeState {
+    pub(super) shape_type: ShapeType,
+    pub(super) media_target: Option<String>,
+    pub(super) chart_id: Option<NodeId>,
+    pub(super) has_shape: bool,
+}
+
+impl FrameShapeState {
+    pub(super) fn new() -> Self {
+        Self {
+            shape_type: ShapeType::Picture,
+            media_target: None,
+            chart_id: None,
+            has_shape: false,
+        }
+    }
+}
+
 pub(super) fn parse_draw_page(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
@@ -80,13 +98,10 @@ pub(super) fn parse_draw_frame_presentation(
     store: &mut IrStore,
 ) -> Result<Option<NodeId>, ParseError> {
     let transform = parse_frame_transform(start);
-    let mut shape_type = ShapeType::Picture;
-    let mut media_target: Option<String> = None;
+    let mut frame = FrameShapeState::new();
     let mut text: Option<ShapeText> = None;
     let mut name = attr_value(start, b"draw:name");
-    let mut chart_id: Option<NodeId> = None;
     let mut buf = Vec::new();
-    let mut has_shape = false;
 
     loop {
         match read_event(reader, &mut buf, "content.xml")? {
@@ -95,75 +110,13 @@ pub(super) fn parse_draw_frame_presentation(
                     let paragraphs = parse_shape_text(reader, b"draw:text-box")?;
                     if !paragraphs.is_empty() {
                         text = Some(ShapeText { paragraphs });
-                        shape_type = ShapeType::TextBox;
-                        has_shape = true;
+                        frame.shape_type = ShapeType::TextBox;
+                        frame.has_shape = true;
                     }
                 }
-                b"draw:image" => {
-                    if let Some(href) = attr_value(&e, b"xlink:href") {
-                        media_target = Some(href);
-                        shape_type = ShapeType::Picture;
-                        has_shape = true;
-                    }
-                }
-                b"chart:chart" => {
-                    shape_type = ShapeType::Chart;
-                    has_shape = true;
-                    let chart = parse_odf_chart(reader, &e)?;
-                    let id = chart.id;
-                    store.insert(IRNode::ChartData(chart));
-                    chart_id = Some(id);
-                }
-                b"draw:plugin" => {
-                    if let Some(href) = attr_value(&e, b"xlink:href") {
-                        media_target = Some(href.clone());
-                        shape_type = classify_media_shape(&href);
-                        has_shape = true;
-                    }
-                }
-                b"draw:object" | b"draw:object-ole" => {
-                    if let Some(href) = attr_value(&e, b"xlink:href") {
-                        media_target = Some(href.clone());
-                    }
-                    shape_type = ShapeType::OleObject;
-                    has_shape = true;
-                }
-                _ => {}
+                _ => parse_frame_shape_start(reader, &e, store, &mut frame)?,
             },
-            Event::Empty(e) => match e.name().as_ref() {
-                b"draw:image" => {
-                    if let Some(href) = attr_value(&e, b"xlink:href") {
-                        media_target = Some(href);
-                        shape_type = ShapeType::Picture;
-                        has_shape = true;
-                    }
-                }
-                b"chart:chart" => {
-                    shape_type = ShapeType::Chart;
-                    has_shape = true;
-                    let mut chart = ChartData::new();
-                    chart.chart_type = attr_value(&e, b"chart:class");
-                    chart.span = Some(SourceSpan::new("content.xml"));
-                    let id = chart.id;
-                    store.insert(IRNode::ChartData(chart));
-                    chart_id = Some(id);
-                }
-                b"draw:plugin" => {
-                    if let Some(href) = attr_value(&e, b"xlink:href") {
-                        media_target = Some(href.clone());
-                        shape_type = classify_media_shape(&href);
-                        has_shape = true;
-                    }
-                }
-                b"draw:object" | b"draw:object-ole" => {
-                    if let Some(href) = attr_value(&e, b"xlink:href") {
-                        media_target = Some(href.clone());
-                    }
-                    shape_type = ShapeType::OleObject;
-                    has_shape = true;
-                }
-                _ => {}
-            },
+            Event::Empty(e) => parse_frame_shape_empty(&e, store, &mut frame),
             Event::End(e) => {
                 if e.name().as_ref() == b"draw:frame" {
                     break;
@@ -175,12 +128,12 @@ pub(super) fn parse_draw_frame_presentation(
         buf.clear();
     }
 
-    if has_shape {
-        let mut shape = Shape::new(shape_type);
+    if frame.has_shape {
+        let mut shape = Shape::new(frame.shape_type);
         shape.name = name.take();
-        shape.media_target = media_target;
+        shape.media_target = frame.media_target;
         shape.text = text;
-        shape.chart_id = chart_id;
+        shape.chart_id = frame.chart_id;
         shape.transform = transform;
         let shape_id = shape.id;
         store.insert(IRNode::Shape(shape));
@@ -270,6 +223,88 @@ pub(super) fn parse_odp_transition(start: &BytesStart<'_>) -> Option<SlideTransi
         })
     } else {
         None
+    }
+}
+
+pub(super) fn parse_frame_shape_start(
+    reader: &mut OdfReader<'_>,
+    start: &BytesStart<'_>,
+    store: &mut IrStore,
+    frame: &mut FrameShapeState,
+) -> Result<(), ParseError> {
+    match start.name().as_ref() {
+        b"draw:image" => {
+            if let Some(href) = attr_value(start, b"xlink:href") {
+                frame.media_target = Some(href);
+                frame.shape_type = ShapeType::Picture;
+                frame.has_shape = true;
+            }
+        }
+        b"chart:chart" => {
+            frame.shape_type = ShapeType::Chart;
+            frame.has_shape = true;
+            let chart = parse_odf_chart(reader, start)?;
+            let id = chart.id;
+            store.insert(IRNode::ChartData(chart));
+            frame.chart_id = Some(id);
+        }
+        b"draw:plugin" => {
+            if let Some(href) = attr_value(start, b"xlink:href") {
+                frame.media_target = Some(href.clone());
+                frame.shape_type = classify_media_shape(&href);
+                frame.has_shape = true;
+            }
+        }
+        b"draw:object" | b"draw:object-ole" => {
+            if let Some(href) = attr_value(start, b"xlink:href") {
+                frame.media_target = Some(href.clone());
+            }
+            frame.shape_type = ShapeType::OleObject;
+            frame.has_shape = true;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+pub(super) fn parse_frame_shape_empty(
+    start: &BytesStart<'_>,
+    store: &mut IrStore,
+    frame: &mut FrameShapeState,
+) {
+    match start.name().as_ref() {
+        b"draw:image" => {
+            if let Some(href) = attr_value(start, b"xlink:href") {
+                frame.media_target = Some(href);
+                frame.shape_type = ShapeType::Picture;
+                frame.has_shape = true;
+            }
+        }
+        b"chart:chart" => {
+            frame.shape_type = ShapeType::Chart;
+            frame.has_shape = true;
+            let mut chart = ChartData::new();
+            chart.chart_type = attr_value(start, b"chart:class");
+            chart.span = Some(SourceSpan::new("content.xml"));
+            let id = chart.id;
+            store.insert(IRNode::ChartData(chart));
+            frame.chart_id = Some(id);
+        }
+        b"draw:plugin" => {
+            if let Some(href) = attr_value(start, b"xlink:href") {
+                frame.media_target = Some(href.clone());
+                frame.shape_type = classify_media_shape(&href);
+                frame.has_shape = true;
+            }
+        }
+        b"draw:object" | b"draw:object-ole" => {
+            if let Some(href) = attr_value(start, b"xlink:href") {
+                frame.media_target = Some(href.clone());
+            }
+            frame.shape_type = ShapeType::OleObject;
+            frame.has_shape = true;
+        }
+        _ => {}
     }
 }
 
