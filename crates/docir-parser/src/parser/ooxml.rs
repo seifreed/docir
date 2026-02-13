@@ -244,6 +244,41 @@ impl OoxmlParser {
         doc_rels: &Relationships,
         parser: &mut DocxParser,
     ) -> DocxWordParts {
+        let (styles_id, styles_with_effects_id, numbering_id) =
+            self.parse_docx_style_parts(zip, main_part_path, doc_rels, parser);
+        let (comments, footnotes, endnotes, comments_ext_id, comments_id_map_id) =
+            self.parse_docx_annotation_parts(zip, main_part_path, doc_rels, parser);
+        let (settings_id, web_settings_id, font_table_id) =
+            self.parse_docx_settings_parts(zip, main_part_path, doc_rels, parser);
+
+        let glossary_id =
+            self.parse_docx_part_by_path(zip, "word/glossary/document.xml", |_, xml| {
+                parser.parse_glossary_document(xml, doc_rels).ok()
+            });
+
+        DocxWordParts {
+            styles_id,
+            styles_with_effects_id,
+            numbering_id,
+            comments,
+            footnotes,
+            endnotes,
+            settings_id,
+            web_settings_id,
+            font_table_id,
+            comments_ext_id,
+            comments_id_map_id,
+            glossary_id,
+        }
+    }
+
+    fn parse_docx_style_parts(
+        &self,
+        zip: &mut impl PackageReader,
+        main_part_path: &str,
+        doc_rels: &Relationships,
+        parser: &mut DocxParser,
+    ) -> (Option<NodeId>, Option<NodeId>, Option<NodeId>) {
         let styles_id = self.parse_docx_part_by_rel_with_span(
             zip,
             main_part_path,
@@ -284,8 +319,23 @@ impl OoxmlParser {
             },
         );
 
-        let comments = self.parse_docx_comments(zip, main_part_path, doc_rels, parser);
+        (styles_id, styles_with_effects_id, numbering_id)
+    }
 
+    fn parse_docx_annotation_parts(
+        &self,
+        zip: &mut impl PackageReader,
+        main_part_path: &str,
+        doc_rels: &Relationships,
+        parser: &mut DocxParser,
+    ) -> (
+        Vec<NodeId>,
+        Vec<NodeId>,
+        Vec<NodeId>,
+        Option<NodeId>,
+        Option<NodeId>,
+    ) {
+        let comments = self.parse_docx_comments(zip, main_part_path, doc_rels, parser);
         let footnotes = self.parse_docx_notes(
             zip,
             main_part_path,
@@ -294,7 +344,6 @@ impl OoxmlParser {
             rel_type::FOOTNOTES,
             crate::ooxml::docx::document::NoteKind::Footnote,
         );
-
         let endnotes = self.parse_docx_notes(
             zip,
             main_part_path,
@@ -304,6 +353,46 @@ impl OoxmlParser {
             crate::ooxml::docx::document::NoteKind::Endnote,
         );
 
+        let comments_ext_id = self.parse_docx_part_by_path_with_span(
+            zip,
+            "word/commentsExtended.xml",
+            parser,
+            |parser, _part_path, xml| parser.parse_comments_extended(xml).ok(),
+            |store, id, part_path| {
+                if let Some(IRNode::CommentExtensionSet(set)) = store.get_mut(id) {
+                    set.span = Some(SourceSpan::new(part_path));
+                }
+            },
+        );
+
+        let comments_id_map_id = self.parse_docx_part_by_path_with_span(
+            zip,
+            "word/commentsIds.xml",
+            parser,
+            |parser, _part_path, xml| parser.parse_comments_ids(xml).ok(),
+            |store, id, part_path| {
+                if let Some(IRNode::CommentIdMap(map)) = store.get_mut(id) {
+                    map.span = Some(SourceSpan::new(part_path));
+                }
+            },
+        );
+
+        (
+            comments,
+            footnotes,
+            endnotes,
+            comments_ext_id,
+            comments_id_map_id,
+        )
+    }
+
+    fn parse_docx_settings_parts(
+        &self,
+        zip: &mut impl PackageReader,
+        main_part_path: &str,
+        doc_rels: &Relationships,
+        parser: &mut DocxParser,
+    ) -> (Option<NodeId>, Option<NodeId>, Option<NodeId>) {
         let settings_id = self.parse_docx_part_by_rel_with_span(
             zip,
             main_part_path,
@@ -333,50 +422,7 @@ impl OoxmlParser {
         );
 
         let font_table_id = self.parse_docx_font_table(zip, main_part_path, doc_rels, parser);
-
-        let comments_ext_id = self.parse_docx_part_by_path_with_span(
-            zip,
-            "word/commentsExtended.xml",
-            parser,
-            |parser, _part_path, xml| parser.parse_comments_extended(xml).ok(),
-            |store, id, part_path| {
-                if let Some(IRNode::CommentExtensionSet(set)) = store.get_mut(id) {
-                    set.span = Some(SourceSpan::new(part_path));
-                }
-            },
-        );
-
-        let comments_id_map_id = self.parse_docx_part_by_path_with_span(
-            zip,
-            "word/commentsIds.xml",
-            parser,
-            |parser, _part_path, xml| parser.parse_comments_ids(xml).ok(),
-            |store, id, part_path| {
-                if let Some(IRNode::CommentIdMap(map)) = store.get_mut(id) {
-                    map.span = Some(SourceSpan::new(part_path));
-                }
-            },
-        );
-
-        let glossary_id =
-            self.parse_docx_part_by_path(zip, "word/glossary/document.xml", |_, xml| {
-                parser.parse_glossary_document(xml, doc_rels).ok()
-            });
-
-        DocxWordParts {
-            styles_id,
-            styles_with_effects_id,
-            numbering_id,
-            comments,
-            footnotes,
-            endnotes,
-            settings_id,
-            web_settings_id,
-            font_table_id,
-            comments_ext_id,
-            comments_id_map_id,
-            glossary_id,
-        }
+        (settings_id, web_settings_id, font_table_id)
     }
 
     pub(super) fn parse_docx_headers_footers(
