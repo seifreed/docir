@@ -741,24 +741,8 @@ pub fn analyze_vba_source(source: &str) -> VbaAnalysis {
         }
 
         let lower = raw.to_ascii_lowercase();
-        let mut tokens: Vec<&str> = raw.split_whitespace().collect();
-        if tokens.len() >= 2 {
-            if tokens[0].eq_ignore_ascii_case("private")
-                || tokens[0].eq_ignore_ascii_case("public")
-                || tokens[0].eq_ignore_ascii_case("friend")
-                || tokens[0].eq_ignore_ascii_case("static")
-            {
-                tokens.remove(0);
-            }
-        }
-        if tokens.len() >= 2 {
-            let keyword = tokens[0].to_ascii_lowercase();
-            if keyword == "sub" || keyword == "function" {
-                let name = tokens[1].split('(').next().unwrap_or("").to_string();
-                if !name.is_empty() {
-                    analysis.procedures.push(name);
-                }
-            }
+        if let Some(procedure) = parse_vba_procedure_name(raw) {
+            analysis.procedures.push(procedure);
         }
 
         for (pattern, category) in SUSPICIOUS_VBA_CALLS {
@@ -779,4 +763,35 @@ pub fn analyze_vba_source(source: &str) -> VbaAnalysis {
     }
 
     analysis
+}
+
+fn parse_vba_procedure_name(raw: &str) -> Option<String> {
+    let mut tokens: Vec<&str> = raw.split_whitespace().collect();
+    strip_visibility_modifier(&mut tokens);
+    if tokens.len() < 2 {
+        return None;
+    }
+
+    let keyword = tokens[0];
+    if !(keyword.eq_ignore_ascii_case("sub") || keyword.eq_ignore_ascii_case("function")) {
+        return None;
+    }
+
+    let name = tokens[1].split('(').next().unwrap_or("");
+    if name.is_empty() {
+        None
+    } else {
+        Some(name.to_string())
+    }
+}
+
+fn strip_visibility_modifier(tokens: &mut Vec<&str>) {
+    if tokens.len() >= 2
+        && (tokens[0].eq_ignore_ascii_case("private")
+            || tokens[0].eq_ignore_ascii_case("public")
+            || tokens[0].eq_ignore_ascii_case("friend")
+            || tokens[0].eq_ignore_ascii_case("static"))
+    {
+        tokens.remove(0);
+    }
 }
