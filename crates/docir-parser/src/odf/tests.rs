@@ -11,6 +11,36 @@ fn build_odf_zip(mimetype: &str, content_xml: &str, styles_xml: Option<&str>) ->
     build_odf_zip_custom(mimetype, content_xml, styles_xml, None, Vec::new())
 }
 
+#[derive(Default)]
+struct RichContentNodeCounts {
+    table: usize,
+    comment: usize,
+    footnote: usize,
+    bookmark: usize,
+    field: usize,
+    shape: usize,
+    revision: usize,
+    styles: usize,
+}
+
+fn collect_rich_content_counts(parsed: &crate::parser::ParsedDocument) -> RichContentNodeCounts {
+    let mut counts = RichContentNodeCounts::default();
+    for node in parsed.store.values() {
+        match node {
+            IRNode::Table(_) => counts.table += 1,
+            IRNode::Comment(_) => counts.comment += 1,
+            IRNode::Footnote(_) => counts.footnote += 1,
+            IRNode::BookmarkStart(_) | IRNode::BookmarkEnd(_) => counts.bookmark += 1,
+            IRNode::Field(_) => counts.field += 1,
+            IRNode::Shape(_) => counts.shape += 1,
+            IRNode::Revision(_) => counts.revision += 1,
+            IRNode::StyleSet(_) => counts.styles += 1,
+            _ => {}
+        }
+    }
+    counts
+}
+
 fn build_odf_zip_custom(
     mimetype: &str,
     content_xml: &str,
@@ -409,38 +439,16 @@ fn test_parse_odt_rich_content() {
     let zip_data = build_odf_zip(mimetype, content_xml, Some(styles_xml));
     let parser = DocumentParser::new();
     let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+    let counts = collect_rich_content_counts(&parsed);
 
-    let mut table_count = 0;
-    let mut comment_count = 0;
-    let mut footnote_count = 0;
-    let mut bookmark_count = 0;
-    let mut field_count = 0;
-    let mut shape_count = 0;
-    let mut revision_count = 0;
-    let mut styles_count = 0;
-
-    for node in parsed.store.values() {
-        match node {
-            IRNode::Table(_) => table_count += 1,
-            IRNode::Comment(_) => comment_count += 1,
-            IRNode::Footnote(_) => footnote_count += 1,
-            IRNode::BookmarkStart(_) | IRNode::BookmarkEnd(_) => bookmark_count += 1,
-            IRNode::Field(_) => field_count += 1,
-            IRNode::Shape(_) => shape_count += 1,
-            IRNode::Revision(_) => revision_count += 1,
-            IRNode::StyleSet(_) => styles_count += 1,
-            _ => {}
-        }
-    }
-
-    assert_eq!(table_count, 1);
-    assert_eq!(comment_count, 1);
-    assert_eq!(footnote_count, 1);
-    assert!(bookmark_count >= 2);
-    assert_eq!(field_count, 1);
-    assert_eq!(shape_count, 1);
-    assert_eq!(revision_count, 1);
-    assert_eq!(styles_count, 1);
+    assert_eq!(counts.table, 1);
+    assert_eq!(counts.comment, 1);
+    assert_eq!(counts.footnote, 1);
+    assert!(counts.bookmark >= 2);
+    assert_eq!(counts.field, 1);
+    assert_eq!(counts.shape, 1);
+    assert_eq!(counts.revision, 1);
+    assert_eq!(counts.styles, 1);
 }
 
 #[test]

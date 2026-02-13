@@ -6,6 +6,79 @@ use docir_core::SpreadsheetStyles;
 mod analysis_parts;
 mod integration_parts;
 
+struct WorksheetDrawingFixture {
+    sheet_xml: &'static str,
+    drawing_xml: &'static str,
+    chart_xml: &'static str,
+    drawing_rels: &'static str,
+    sheet_rels: &'static str,
+}
+
+fn worksheet_drawing_fixture() -> WorksheetDrawingFixture {
+    WorksheetDrawingFixture {
+        sheet_xml: r#"
+        <worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheetData/>
+        </worksheet>
+        "#,
+        drawing_xml: r#"
+        <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                 xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                 xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+          <xdr:twoCellAnchor>
+            <xdr:pic>
+              <xdr:nvPicPr>
+                <xdr:cNvPr id="1" name="Picture 1" descr="Alt text"/>
+              </xdr:nvPicPr>
+              <xdr:blipFill>
+                <a:blip r:embed="rIdImg"/>
+              </xdr:blipFill>
+            </xdr:pic>
+          </xdr:twoCellAnchor>
+          <xdr:graphicFrame>
+            <xdr:nvGraphicFramePr>
+              <xdr:cNvPr id="2" name="Chart 1"/>
+            </xdr:nvGraphicFramePr>
+            <a:graphic>
+              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                <c:chart r:id="rIdChart"/>
+              </a:graphicData>
+            </a:graphic>
+          </xdr:graphicFrame>
+        </xdr:wsDr>
+        "#,
+        chart_xml: r#"
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+          <c:chart>
+            <c:title><c:tx><c:rich><a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
+            <c:barChart>
+              <c:ser><c:tx><c:v>2019</c:v></c:tx></c:ser>
+              <c:ser><c:tx><c:v>2020</c:v></c:tx></c:ser>
+            </c:barChart>
+          </c:chart>
+        </c:chartSpace>
+        "#,
+        drawing_rels: r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rIdImg"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+            Target="../media/image1.png"/>
+          <Relationship Id="rIdChart"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
+            Target="../charts/chart1.xml"/>
+        </Relationships>
+        "#,
+        sheet_rels: r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rIdDraw"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"
+            Target="../drawings/drawing1.xml"/>
+        </Relationships>
+        "#,
+    }
+}
+
 #[test]
 fn test_parse_workbook_info_sheets() {
     let xml = r#"
@@ -165,75 +238,12 @@ fn test_parse_worksheet_properties() {
 
 #[test]
 fn test_parse_worksheet_drawing_pic_and_chart() {
-    let sheet_xml = r#"
-        <worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-          <sheetData/>
-        </worksheet>
-        "#;
-
-    let drawing_xml = r#"
-        <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
-                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-                 xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-                 xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
-          <xdr:twoCellAnchor>
-            <xdr:pic>
-              <xdr:nvPicPr>
-                <xdr:cNvPr id="1" name="Picture 1" descr="Alt text"/>
-              </xdr:nvPicPr>
-              <xdr:blipFill>
-                <a:blip r:embed="rIdImg"/>
-              </xdr:blipFill>
-            </xdr:pic>
-          </xdr:twoCellAnchor>
-          <xdr:graphicFrame>
-            <xdr:nvGraphicFramePr>
-              <xdr:cNvPr id="2" name="Chart 1"/>
-            </xdr:nvGraphicFramePr>
-            <a:graphic>
-              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
-                <c:chart r:id="rIdChart"/>
-              </a:graphicData>
-            </a:graphic>
-          </xdr:graphicFrame>
-        </xdr:wsDr>
-        "#;
-
-    let chart_xml = r#"
-        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
-          <c:chart>
-            <c:title><c:tx><c:rich><a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
-            <c:barChart>
-              <c:ser><c:tx><c:v>2019</c:v></c:tx></c:ser>
-              <c:ser><c:tx><c:v>2020</c:v></c:tx></c:ser>
-            </c:barChart>
-          </c:chart>
-        </c:chartSpace>
-        "#;
-
-    let drawing_rels = r#"
-        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-          <Relationship Id="rIdImg"
-            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
-            Target="../media/image1.png"/>
-          <Relationship Id="rIdChart"
-            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
-            Target="../charts/chart1.xml"/>
-        </Relationships>
-        "#;
-
-    let sheet_rels = r#"
-        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-          <Relationship Id="rIdDraw"
-            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"
-            Target="../drawings/drawing1.xml"/>
-        </Relationships>
-        "#;
+    let fixture = worksheet_drawing_fixture();
 
     let mut zip = build_zip_with_entries(vec![
-        ("xl/drawings/drawing1.xml", drawing_xml),
-        ("xl/drawings/_rels/drawing1.xml.rels", drawing_rels),
-        ("xl/charts/chart1.xml", chart_xml),
+        ("xl/drawings/drawing1.xml", fixture.drawing_xml),
+        ("xl/drawings/_rels/drawing1.xml.rels", fixture.drawing_rels),
+        ("xl/charts/chart1.xml", fixture.chart_xml),
     ]);
 
     let mut parser = XlsxParser::new();
@@ -243,12 +253,12 @@ fn test_parse_worksheet_drawing_pic_and_chart() {
         rel_id: "rId1".to_string(),
         state: SheetState::Visible,
     };
-    let rels = Relationships::parse(sheet_rels).expect("sheet rels");
+    let rels = Relationships::parse(fixture.sheet_rels).expect("sheet rels");
 
     let ws_id = parser
         .parse_worksheet(
             &mut zip,
-            sheet_xml,
+            fixture.sheet_xml,
             &sheet,
             "xl/worksheets/sheet1.xml",
             &rels,

@@ -203,26 +203,30 @@ fn handle_font_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
             true
         }
         b"color" => {
-            if let Some(font) = state.current_font.as_mut() {
-                font.color = parse_color_attr(e);
-            } else if let Some(font) = state.current_dxf_font.as_mut() {
-                font.color = parse_color_attr(e);
-            } else if let Some((_, side)) = state.current_border_side.as_mut() {
-                side.color = parse_color_attr(e);
-            } else if let Some((_, side)) = state.current_dxf_border_side.as_mut() {
-                side.color = parse_color_attr(e);
-            } else if let Some(fill) = state.current_fill.as_mut() {
-                if fill.fg_color.is_none() {
-                    fill.fg_color = parse_color_attr(e);
-                }
-            } else if let Some(fill) = state.current_dxf_fill.as_mut() {
-                if fill.fg_color.is_none() {
-                    fill.fg_color = parse_color_attr(e);
-                }
-            }
+            apply_color_attr(e, state);
             true
         }
         _ => false,
+    }
+}
+
+fn apply_color_attr(e: &BytesStart<'_>, state: &mut StylesParseState) {
+    if let Some(font) = state.current_font.as_mut() {
+        font.color = parse_color_attr(e);
+    } else if let Some(font) = state.current_dxf_font.as_mut() {
+        font.color = parse_color_attr(e);
+    } else if let Some((_, side)) = state.current_border_side.as_mut() {
+        side.color = parse_color_attr(e);
+    } else if let Some((_, side)) = state.current_dxf_border_side.as_mut() {
+        side.color = parse_color_attr(e);
+    } else if let Some(fill) = state.current_fill.as_mut() {
+        if fill.fg_color.is_none() {
+            fill.fg_color = parse_color_attr(e);
+        }
+    } else if let Some(fill) = state.current_dxf_fill.as_mut() {
+        if fill.fg_color.is_none() {
+            fill.fg_color = parse_color_attr(e);
+        }
     }
 }
 

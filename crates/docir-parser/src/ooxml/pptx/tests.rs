@@ -5,6 +5,52 @@ use std::io::Cursor;
 
 mod media_and_tables;
 
+fn build_master_layout_fixture() -> (&'static str, &'static str) {
+    let master_xml = r#"
+        <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                     xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                     preserve="1" showMasterSp="1" showMasterPhAnim="0">
+          <p:cSld name="Master 1">
+            <p:spTree>
+              <p:sp>
+                <p:nvSpPr>
+                  <p:cNvPr id="1" name="MasterShape"/>
+                </p:nvSpPr>
+                <p:spPr>
+                  <a:xfrm>
+                    <a:off x="0" y="0"/>
+                    <a:ext cx="100" cy="100"/>
+                  </a:xfrm>
+                </p:spPr>
+              </p:sp>
+            </p:spTree>
+          </p:cSld>
+        </p:sldMaster>
+        "#;
+    let layout_xml = r#"
+        <p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                     xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                     type="title" matchingName="Title" preserve="1" showMasterSp="1" showMasterPhAnim="0">
+          <p:cSld name="Layout 1">
+            <p:spTree>
+              <p:sp>
+                <p:nvSpPr>
+                  <p:cNvPr id="2" name="LayoutShape"/>
+                </p:nvSpPr>
+                <p:spPr>
+                  <a:xfrm>
+                    <a:off x="0" y="0"/>
+                    <a:ext cx="200" cy="200"/>
+                  </a:xfrm>
+                </p:spPr>
+              </p:sp>
+            </p:spTree>
+          </p:cSld>
+        </p:sldLayout>
+        "#;
+    (master_xml, layout_xml)
+}
+
 #[test]
 fn test_parse_slide_list() {
     let xml = r#"
@@ -335,48 +381,7 @@ fn test_parse_notes_slide_text() {
 
 #[test]
 fn test_parse_master_and_layout_shapes() {
-    let master_xml = r#"
-        <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
-                     xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-                     preserve="1" showMasterSp="1" showMasterPhAnim="0">
-          <p:cSld name="Master 1">
-            <p:spTree>
-              <p:sp>
-                <p:nvSpPr>
-                  <p:cNvPr id="1" name="MasterShape"/>
-                </p:nvSpPr>
-                <p:spPr>
-                  <a:xfrm>
-                    <a:off x="0" y="0"/>
-                    <a:ext cx="100" cy="100"/>
-                  </a:xfrm>
-                </p:spPr>
-              </p:sp>
-            </p:spTree>
-          </p:cSld>
-        </p:sldMaster>
-        "#;
-    let layout_xml = r#"
-        <p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
-                     xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-                     type="title" matchingName="Title" preserve="1" showMasterSp="1" showMasterPhAnim="0">
-          <p:cSld name="Layout 1">
-            <p:spTree>
-              <p:sp>
-                <p:nvSpPr>
-                  <p:cNvPr id="2" name="LayoutShape"/>
-                </p:nvSpPr>
-                <p:spPr>
-                  <a:xfrm>
-                    <a:off x="0" y="0"/>
-                    <a:ext cx="200" cy="200"/>
-                  </a:xfrm>
-                </p:spPr>
-              </p:sp>
-            </p:spTree>
-          </p:cSld>
-        </p:sldLayout>
-        "#;
+    let (master_xml, layout_xml) = build_master_layout_fixture();
 
     let mut parser = PptxParser::new();
     let mut zip = build_empty_zip();

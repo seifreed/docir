@@ -2,6 +2,63 @@ use super::super::*;
 use super::helpers::{create_docx_with_body, create_docx_with_relationships, create_minimal_docx};
 use docir_core::ir::{DocumentMetadata, PropertyValue};
 
+fn docx_sections_fixture() -> (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+) {
+    let body = r#"
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                    xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <w:body>
+            <w:p>
+              <w:pPr>
+                <w:sectPr>
+                  <w:headerReference w:type="default" r:id="rIdHeader1"/>
+                  <w:footerReference w:type="default" r:id="rIdFooter1"/>
+                  <w:pgSz w:w="12240" w:h="15840" w:orient="portrait"/>
+                </w:sectPr>
+              </w:pPr>
+              <w:r><w:t>Section1</w:t></w:r>
+            </w:p>
+            <w:p><w:r><w:t>Section2</w:t></w:r></w:p>
+            <w:sectPr>
+              <w:headerReference w:type="default" r:id="rIdHeader2"/>
+            </w:sectPr>
+          </w:body>
+        </w:document>"#;
+
+    let header1 = r#"
+        <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:p><w:r><w:t>Header1</w:t></w:r></w:p>
+        </w:hdr>"#;
+    let footer1 = r#"
+        <w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:p><w:r><w:t>Footer1</w:t></w:r></w:p>
+        </w:ftr>"#;
+    let header2 = r#"
+        <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:p><w:r><w:t>Header2</w:t></w:r></w:p>
+        </w:hdr>"#;
+
+    let rels = r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rIdHeader1"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"
+            Target="header1.xml"/>
+          <Relationship Id="rIdFooter1"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"
+            Target="footer1.xml"/>
+          <Relationship Id="rIdHeader2"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"
+            Target="header2.xml"/>
+        </Relationships>"#;
+
+    (body, header1, footer1, header2, rels)
+}
+
 #[test]
 fn test_parse_custom_properties() {
     let xml = r#"
@@ -131,52 +188,7 @@ fn test_docx_paragraph_and_run_properties() {
 
 #[test]
 fn test_docx_sections_with_headers_and_footers() {
-    let body = r#"
-        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-                    xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-          <w:body>
-            <w:p>
-              <w:pPr>
-                <w:sectPr>
-                  <w:headerReference w:type="default" r:id="rIdHeader1"/>
-                  <w:footerReference w:type="default" r:id="rIdFooter1"/>
-                  <w:pgSz w:w="12240" w:h="15840" w:orient="portrait"/>
-                </w:sectPr>
-              </w:pPr>
-              <w:r><w:t>Section1</w:t></w:r>
-            </w:p>
-            <w:p><w:r><w:t>Section2</w:t></w:r></w:p>
-            <w:sectPr>
-              <w:headerReference w:type="default" r:id="rIdHeader2"/>
-            </w:sectPr>
-          </w:body>
-        </w:document>"#;
-
-    let header1 = r#"
-        <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-          <w:p><w:r><w:t>Header1</w:t></w:r></w:p>
-        </w:hdr>"#;
-    let footer1 = r#"
-        <w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-          <w:p><w:r><w:t>Footer1</w:t></w:r></w:p>
-        </w:ftr>"#;
-    let header2 = r#"
-        <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-          <w:p><w:r><w:t>Header2</w:t></w:r></w:p>
-        </w:hdr>"#;
-
-    let rels = r#"
-        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-          <Relationship Id="rIdHeader1"
-            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"
-            Target="header1.xml"/>
-          <Relationship Id="rIdFooter1"
-            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"
-            Target="footer1.xml"/>
-          <Relationship Id="rIdHeader2"
-            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"
-            Target="header2.xml"/>
-        </Relationships>"#;
+    let (body, header1, footer1, header2, rels) = docx_sections_fixture();
 
     let content_types = r#"
         <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

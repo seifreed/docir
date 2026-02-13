@@ -3,9 +3,7 @@ use super::helpers::{build_odf_zip_custom, create_docx_with_relationships};
 use docir_core::types::NodeType;
 use docir_core::IrSummary;
 
-#[test]
-fn test_parity_docx_odt_core_nodes() {
-    let docx_body = r#"
+const DOCX_PARITY_BODY: &str = r#"
         <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
                     xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
           <w:body>
@@ -33,7 +31,7 @@ fn test_parity_docx_odt_core_nodes() {
         </w:document>
         "#;
 
-    let docx_rels = r#"
+const DOCX_PARITY_RELS: &str = r#"
         <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
           <Relationship Id="rId3"
             Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
@@ -47,7 +45,7 @@ fn test_parity_docx_odt_core_nodes() {
         </Relationships>
         "#;
 
-    let docx_content_types = r#"
+const DOCX_PARITY_CONTENT_TYPES: &str = r#"
         <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
           <Default Extension="xml" ContentType="application/xml"/>
           <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -60,7 +58,7 @@ fn test_parity_docx_odt_core_nodes() {
         </Types>
         "#;
 
-    let comments_xml = r#"
+const DOCX_PARITY_COMMENTS: &str = r#"
         <w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
           <w:comment w:id="0" w:author="Bob" w:date="2024-01-01T00:00:00Z">
             <w:p><w:r><w:t>Comment text</w:t></w:r></w:p>
@@ -68,7 +66,7 @@ fn test_parity_docx_odt_core_nodes() {
         </w:comments>
         "#;
 
-    let footnotes_xml = r#"
+const DOCX_PARITY_FOOTNOTES: &str = r#"
         <w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
           <w:footnote w:id="1">
             <w:p><w:r><w:t>Footnote</w:t></w:r></w:p>
@@ -76,16 +74,19 @@ fn test_parity_docx_odt_core_nodes() {
         </w:footnotes>
         "#;
 
-    let docx_path = create_docx_with_relationships(
-        docx_body,
-        docx_rels,
-        docx_content_types,
+fn build_docx_parity_fixture() -> std::path::PathBuf {
+    create_docx_with_relationships(
+        DOCX_PARITY_BODY,
+        DOCX_PARITY_RELS,
+        DOCX_PARITY_CONTENT_TYPES,
         &[
-            ("word/comments.xml", comments_xml),
-            ("word/footnotes.xml", footnotes_xml),
+            ("word/comments.xml", DOCX_PARITY_COMMENTS),
+            ("word/footnotes.xml", DOCX_PARITY_FOOTNOTES),
         ],
-    );
+    )
+}
 
+fn build_odt_parity_fixture() -> Vec<u8> {
     let odt_content = r#"
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
   xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
@@ -128,22 +129,15 @@ fn test_parity_docx_odt_core_nodes() {
 </manifest:manifest>
         "#;
 
-    let odt_zip = build_odf_zip_custom(
+    build_odf_zip_custom(
         "application/vnd.oasis.opendocument.text",
         odt_content,
         odt_manifest,
         &[],
-    );
+    )
+}
 
-    let parser = DocumentParser::new();
-    let docx = parser.parse_file(&docx_path).expect("docx parse");
-    let odt = parser
-        .parse_reader(std::io::Cursor::new(odt_zip))
-        .expect("odt parse");
-
-    let docx_summary = IrSummary::from_store(&docx.store);
-    let odt_summary = IrSummary::from_store(&odt.store);
-
+fn assert_docx_odt_parity(docx_summary: &IrSummary, odt_summary: &IrSummary) {
     assert!(docx_summary.run_texts.contains("Hello"));
     assert!(odt_summary.run_texts.contains("Hello"));
     assert!(docx_summary.run_texts.contains("Cell"));
@@ -169,6 +163,22 @@ fn test_parity_docx_odt_core_nodes() {
         docx_summary.count(NodeType::ExternalReference),
         odt_summary.count(NodeType::ExternalReference)
     );
+}
+
+#[test]
+fn test_parity_docx_odt_core_nodes() {
+    let docx_path = build_docx_parity_fixture();
+    let odt_zip = build_odt_parity_fixture();
+
+    let parser = DocumentParser::new();
+    let docx = parser.parse_file(&docx_path).expect("docx parse");
+    let odt = parser
+        .parse_reader(std::io::Cursor::new(odt_zip))
+        .expect("odt parse");
+
+    let docx_summary = IrSummary::from_store(&docx.store);
+    let odt_summary = IrSummary::from_store(&odt.store);
+    assert_docx_odt_parity(&docx_summary, &odt_summary);
 
     std::fs::remove_file(docx_path).ok();
 }

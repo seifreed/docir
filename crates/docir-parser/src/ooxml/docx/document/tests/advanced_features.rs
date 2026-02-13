@@ -1,4 +1,26 @@
 use super::*;
+
+fn parse_single_table(xml: &str) -> (DocxParser, docir_core::types::NodeId) {
+    let mut parser = DocxParser::new();
+    let rels = Relationships::default();
+    let mut reader = reader_from_str(xml);
+    let mut buf = Vec::new();
+    let mut table_id = None;
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:tbl" => {
+                table_id = Some(parse_table(&mut parser, &mut reader, &rels).expect("table"));
+                break;
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => panic!("xml error: {}", e),
+            _ => {}
+        }
+        buf.clear();
+    }
+    (parser, table_id.expect("table parsed"))
+}
+
 #[test]
 fn test_parse_field_instruction_extended() {
     let parsed = parse_field_instruction("DDE \"cmd\" \"args\"").expect("parsed");
@@ -165,24 +187,7 @@ fn test_parse_table_grid_and_properties() {
           </w:tr>
         </w:tbl>
         "#;
-    let mut parser = DocxParser::new();
-    let rels = Relationships::default();
-    let mut reader = reader_from_str(xml);
-    let mut buf = Vec::new();
-    let mut table_id = None;
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"w:tbl" => {
-                table_id = Some(parse_table(&mut parser, &mut reader, &rels).expect("table"));
-                break;
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => panic!("xml error: {}", e),
-            _ => {}
-        }
-        buf.clear();
-    }
-    let table_id = table_id.expect("table parsed");
+    let (parser, table_id) = parse_single_table(xml);
     let store = parser.into_store();
     let table = match store.get(table_id) {
         Some(docir_core::ir::IRNode::Table(t)) => t,

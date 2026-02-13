@@ -33,6 +33,77 @@ fn parse_format(value: &str) -> DocumentFormat {
     }
 }
 
+fn has_node_type(parsed: &docir_parser::parser::ParsedDocument, node_type: NodeType) -> bool {
+    parsed.store.iter_ids_by_type(node_type).next().is_some()
+}
+
+fn assert_rich_fixture_nodes(
+    parsed: &docir_parser::parser::ParsedDocument,
+    expected: DocumentFormat,
+) {
+    match expected {
+        DocumentFormat::WordProcessing => {
+            assert!(has_node_type(parsed, NodeType::StyleSet));
+            assert!(has_node_type(parsed, NodeType::NumberingSet));
+            assert!(has_node_type(parsed, NodeType::Comment));
+            assert!(has_node_type(parsed, NodeType::Footnote));
+            assert!(has_node_type(parsed, NodeType::Header));
+            assert!(has_node_type(parsed, NodeType::Footer));
+        }
+        DocumentFormat::Spreadsheet => {
+            assert!(has_node_type(parsed, NodeType::Worksheet));
+            assert!(has_node_type(parsed, NodeType::SharedStringTable));
+            assert!(has_node_type(parsed, NodeType::SpreadsheetStyles));
+        }
+        DocumentFormat::Presentation => {
+            assert!(has_node_type(parsed, NodeType::Slide));
+            assert!(has_node_type(parsed, NodeType::SlideMaster));
+            assert!(has_node_type(parsed, NodeType::SlideLayout));
+        }
+        DocumentFormat::OdfText => {
+            assert!(has_node_type(parsed, NodeType::StyleSet));
+            assert!(has_node_type(parsed, NodeType::Comment));
+            assert!(has_node_type(parsed, NodeType::Footnote));
+        }
+        DocumentFormat::Hwpx => {
+            assert!(has_node_type(parsed, NodeType::StyleSet));
+            assert!(has_node_type(parsed, NodeType::Header));
+            assert!(has_node_type(parsed, NodeType::Footer));
+        }
+        DocumentFormat::Rtf => {
+            assert!(has_node_type(parsed, NodeType::StyleSet));
+            assert!(has_node_type(parsed, NodeType::Table));
+            assert!(has_node_type(parsed, NodeType::Hyperlink));
+            assert!(has_node_type(parsed, NodeType::OleObject));
+        }
+        _ => {}
+    }
+}
+
+fn assert_no_pending_ooxml_parts(parsed: &docir_parser::parser::ParsedDocument, path: &PathBuf) {
+    let Some(doc) = parsed.document() else {
+        return;
+    };
+
+    let mut pending_parts = 0usize;
+    for diag_id in &doc.diagnostics {
+        if let Some(IRNode::Diagnostics(diag)) = parsed.store.get(*diag_id) {
+            for entry in &diag.entries {
+                if entry.code == "COVERAGE_PART"
+                    && matches!(entry.severity, DiagnosticSeverity::Warning)
+                {
+                    pending_parts += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(
+        pending_parts, 0,
+        "OOXML fixture has pending parts (unparsed content) for {:?}",
+        path
+    );
+}
+
 #[test]
 fn parse_all_fixtures() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -60,131 +131,7 @@ fn parse_all_fixtures() {
         // Rich fixtures: assert presence of key nodes (semantic coverage).
         let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
         if file_name.starts_with("rich.") || file_name == "rich.rtf" || file_name == "rich.hwpx" {
-            match expected {
-                DocumentFormat::WordProcessing => {
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::StyleSet)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::NumberingSet)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Comment)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Footnote)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Header)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Footer)
-                        .next()
-                        .is_some());
-                }
-                DocumentFormat::Spreadsheet => {
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Worksheet)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::SharedStringTable)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::SpreadsheetStyles)
-                        .next()
-                        .is_some());
-                }
-                DocumentFormat::Presentation => {
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Slide)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::SlideMaster)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::SlideLayout)
-                        .next()
-                        .is_some());
-                }
-                DocumentFormat::OdfText => {
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::StyleSet)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Comment)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Footnote)
-                        .next()
-                        .is_some());
-                }
-                DocumentFormat::Hwpx => {
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::StyleSet)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Header)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Footer)
-                        .next()
-                        .is_some());
-                }
-                DocumentFormat::Rtf => {
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::StyleSet)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Table)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::Hyperlink)
-                        .next()
-                        .is_some());
-                    assert!(parsed
-                        .store
-                        .iter_ids_by_type(NodeType::OleObject)
-                        .next()
-                        .is_some());
-                }
-                _ => {}
-            }
+            assert_rich_fixture_nodes(&parsed, expected);
         }
 
         // For OOXML packages, ensure there are no pending matched parts in coverage diagnostics.
@@ -199,25 +146,7 @@ fn parse_all_fixtures() {
                     | DocumentFormat::Presentation
             )
         {
-            if let Some(doc) = parsed.document() {
-                let mut pending_parts = 0usize;
-                for diag_id in &doc.diagnostics {
-                    if let Some(IRNode::Diagnostics(diag)) = parsed.store.get(*diag_id) {
-                        for entry in &diag.entries {
-                            if entry.code == "COVERAGE_PART"
-                                && matches!(entry.severity, DiagnosticSeverity::Warning)
-                            {
-                                pending_parts += 1;
-                            }
-                        }
-                    }
-                }
-                assert_eq!(
-                    pending_parts, 0,
-                    "OOXML fixture has pending parts (unparsed content) for {:?}",
-                    path
-                );
-            }
+            assert_no_pending_ooxml_parts(&parsed, &path);
         }
     }
 }
