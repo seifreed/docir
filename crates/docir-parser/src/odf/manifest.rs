@@ -50,66 +50,12 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"manifest:file-entry" => {
-                    current_entry = Some(parse_manifest_entry(&e));
-                }
-                b"manifest:encryption-data" => {
-                    if let Some(entry) = current_entry.as_mut() {
-                        let mut enc = entry.encryption.take().unwrap_or_default();
-                        apply_encryption_data_attrs(&mut enc, &e);
-                        entry.encryption = Some(enc);
-                    }
-                }
-                b"manifest:algorithm" => {
-                    if let Some(entry) = current_entry.as_mut() {
-                        let mut enc = entry.encryption.take().unwrap_or_default();
-                        apply_algorithm_attrs(&mut enc, &e);
-                        entry.encryption = Some(enc);
-                    }
-                }
-                b"manifest:key-derivation" => {
-                    if let Some(entry) = current_entry.as_mut() {
-                        let mut enc = entry.encryption.take().unwrap_or_default();
-                        apply_key_derivation_attrs(&mut enc, &e);
-                        entry.encryption = Some(enc);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"manifest:file-entry" => {
-                    entries.push(parse_manifest_entry(&e));
-                }
-                b"manifest:encryption-data" => {
-                    if let Some(entry) = current_entry.as_mut() {
-                        let mut enc = entry.encryption.take().unwrap_or_default();
-                        apply_encryption_data_attrs(&mut enc, &e);
-                        entry.encryption = Some(enc);
-                    }
-                }
-                b"manifest:algorithm" => {
-                    if let Some(entry) = current_entry.as_mut() {
-                        let mut enc = entry.encryption.take().unwrap_or_default();
-                        apply_algorithm_attrs(&mut enc, &e);
-                        entry.encryption = Some(enc);
-                    }
-                }
-                b"manifest:key-derivation" => {
-                    if let Some(entry) = current_entry.as_mut() {
-                        let mut enc = entry.encryption.take().unwrap_or_default();
-                        apply_key_derivation_attrs(&mut enc, &e);
-                        entry.encryption = Some(enc);
-                    }
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => handle_manifest_start_event(&e, &mut current_entry),
+            Ok(Event::Empty(e)) => {
+                handle_manifest_empty_event(&e, &mut entries, &mut current_entry)
+            }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"manifest:file-entry" {
-                    if let Some(entry) = current_entry.take() {
-                        entries.push(entry);
-                    }
-                }
+                handle_manifest_end_event(e.name().as_ref(), &mut entries, &mut current_entry)
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -121,6 +67,71 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
     }
 
     Ok(entries)
+}
+
+fn handle_manifest_start_event(
+    e: &quick_xml::events::BytesStart<'_>,
+    current_entry: &mut Option<OdfManifestEntry>,
+) {
+    match e.name().as_ref() {
+        b"manifest:file-entry" => {
+            *current_entry = Some(parse_manifest_entry(e));
+        }
+        b"manifest:encryption-data" => {
+            apply_entry_encryption_attrs(current_entry, e, apply_encryption_data_attrs);
+        }
+        b"manifest:algorithm" => {
+            apply_entry_encryption_attrs(current_entry, e, apply_algorithm_attrs);
+        }
+        b"manifest:key-derivation" => {
+            apply_entry_encryption_attrs(current_entry, e, apply_key_derivation_attrs);
+        }
+        _ => {}
+    }
+}
+
+fn handle_manifest_empty_event(
+    e: &quick_xml::events::BytesStart<'_>,
+    entries: &mut Vec<OdfManifestEntry>,
+    current_entry: &mut Option<OdfManifestEntry>,
+) {
+    match e.name().as_ref() {
+        b"manifest:file-entry" => entries.push(parse_manifest_entry(e)),
+        b"manifest:encryption-data" => {
+            apply_entry_encryption_attrs(current_entry, e, apply_encryption_data_attrs)
+        }
+        b"manifest:algorithm" => {
+            apply_entry_encryption_attrs(current_entry, e, apply_algorithm_attrs)
+        }
+        b"manifest:key-derivation" => {
+            apply_entry_encryption_attrs(current_entry, e, apply_key_derivation_attrs)
+        }
+        _ => {}
+    }
+}
+
+fn handle_manifest_end_event(
+    name: &[u8],
+    entries: &mut Vec<OdfManifestEntry>,
+    current_entry: &mut Option<OdfManifestEntry>,
+) {
+    if name == b"manifest:file-entry" {
+        if let Some(entry) = current_entry.take() {
+            entries.push(entry);
+        }
+    }
+}
+
+fn apply_entry_encryption_attrs(
+    current_entry: &mut Option<OdfManifestEntry>,
+    e: &quick_xml::events::BytesStart<'_>,
+    apply_fn: fn(&mut OdfEncryptionData, &quick_xml::events::BytesStart<'_>),
+) {
+    if let Some(entry) = current_entry.as_mut() {
+        let mut enc = entry.encryption.take().unwrap_or_default();
+        apply_fn(&mut enc, e);
+        entry.encryption = Some(enc);
+    }
 }
 
 fn parse_manifest_entry(e: &quick_xml::events::BytesStart<'_>) -> OdfManifestEntry {

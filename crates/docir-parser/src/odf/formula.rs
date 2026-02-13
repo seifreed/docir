@@ -314,42 +314,66 @@ fn tokenize_formula(formula: &str) -> Vec<FormulaToken> {
                 }
             }
             _ => {
-                if ch.is_ascii_digit() || ch == '.' {
-                    let mut num = String::new();
-                    while let Some(&c) = chars.peek() {
-                        if c.is_ascii_digit() || c == '.' {
-                            num.push(c);
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    if let Ok(value) = num.parse::<f64>() {
-                        tokens.push(FormulaToken::Number(value));
-                    }
-                } else if ch.is_ascii_alphabetic() || ch == '_' {
-                    let mut ident = String::new();
-                    while let Some(&c) = chars.peek() {
-                        if c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '$' {
-                            ident.push(c);
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    if let Some(reference) = parse_simple_reference(&ident) {
-                        tokens.push(FormulaToken::Ref(reference));
-                    } else {
-                        tokens.push(FormulaToken::Ident(ident));
-                    }
-                } else {
-                    chars.next();
-                }
+                consume_numeric_or_identifier_token(&mut chars, &mut tokens);
             }
         }
     }
     tokens.push(FormulaToken::End);
     tokens
+}
+
+fn consume_numeric_or_identifier_token(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    tokens: &mut Vec<FormulaToken>,
+) {
+    let Some(&ch) = chars.peek() else {
+        return;
+    };
+    if ch.is_ascii_digit() || ch == '.' {
+        consume_number_token(chars, tokens);
+    } else if ch.is_ascii_alphabetic() || ch == '_' {
+        consume_identifier_token(chars, tokens);
+    } else {
+        chars.next();
+    }
+}
+
+fn consume_number_token(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    tokens: &mut Vec<FormulaToken>,
+) {
+    let mut num = String::new();
+    while let Some(&c) = chars.peek() {
+        if c.is_ascii_digit() || c == '.' {
+            num.push(c);
+            chars.next();
+        } else {
+            break;
+        }
+    }
+    if let Ok(value) = num.parse::<f64>() {
+        tokens.push(FormulaToken::Number(value));
+    }
+}
+
+fn consume_identifier_token(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    tokens: &mut Vec<FormulaToken>,
+) {
+    let mut ident = String::new();
+    while let Some(&c) = chars.peek() {
+        if c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '$' {
+            ident.push(c);
+            chars.next();
+        } else {
+            break;
+        }
+    }
+    if let Some(reference) = parse_simple_reference(&ident) {
+        tokens.push(FormulaToken::Ref(reference));
+    } else {
+        tokens.push(FormulaToken::Ident(ident));
+    }
 }
 
 fn parse_bracket_reference(input: &str) -> Option<FormulaToken> {
