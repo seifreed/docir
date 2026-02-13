@@ -368,6 +368,15 @@ pub(crate) enum OutputFormat {
 
 pub(crate) fn build_parser_config(cli: &Cli) -> ParserConfig {
     let mut config = ParserConfig::default();
+    apply_zip_overrides(cli, &mut config);
+    apply_odf_overrides(cli, &mut config);
+    apply_hwp_overrides(cli, &mut config);
+    copy_if_some(cli.max_input_size, &mut config.max_input_size);
+    set_if(cli.metrics, &mut config.enable_metrics);
+    config
+}
+
+fn apply_zip_overrides(cli: &Cli, config: &mut ParserConfig) {
     copy_if_some(
         cli.zip_max_total_size,
         &mut config.zip_config.max_total_size,
@@ -385,8 +394,9 @@ pub(crate) fn build_parser_config(cli: &Cli) -> ParserConfig {
         cli.zip_max_path_depth,
         &mut config.zip_config.max_path_depth,
     );
-    copy_if_some(cli.max_input_size, &mut config.max_input_size);
+}
 
+fn apply_odf_overrides(cli: &Cli, config: &mut ParserConfig) {
     set_if(cli.odf_fast, &mut config.odf.force_fast);
     copy_if_some(
         cli.odf_fast_threshold_bytes,
@@ -407,15 +417,15 @@ pub(crate) fn build_parser_config(cli: &Cli) -> ParserConfig {
         &mut config.odf.parallel_max_threads,
     );
     copy_if_some(cli.odf_password.clone().map(Some), &mut config.odf.password);
+}
 
+fn apply_hwp_overrides(cli: &Cli, config: &mut ParserConfig) {
     set_if(
         cli.hwp_force_parse_encrypted,
         &mut config.hwp.force_parse_encrypted,
     );
     copy_if_some(cli.hwp_password.clone().map(Some), &mut config.hwp.password);
     set_if(cli.hwp_dump_streams, &mut config.hwp.dump_streams);
-    set_if(cli.metrics, &mut config.enable_metrics);
-    config
 }
 
 fn copy_if_some<T>(value: Option<T>, target: &mut T) {
