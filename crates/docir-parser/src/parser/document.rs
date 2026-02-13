@@ -35,18 +35,18 @@ impl DocumentParser {
     fn detect_format<R: Read + Seek>(
         &self,
         reader: &mut R,
-    ) -> Result<dispatch::DetectedFormat, ParseError> {
+    ) -> Result<formats::DetectedFormat, ParseError> {
         let mut probe = [0u8; 16];
         let read = reader.read(&mut probe)?;
         reader.seek(SeekFrom::Start(0))?;
         let head = &probe[..read];
 
         if is_rtf_bytes(head) {
-            return Ok(dispatch::DetectedFormat::Rtf);
+            return Ok(formats::DetectedFormat::Rtf);
         }
 
         if is_ole_container(head) {
-            return Ok(dispatch::DetectedFormat::Hwp);
+            return Ok(formats::DetectedFormat::Hwp);
         }
 
         if !is_zip_container(head) {
@@ -70,13 +70,13 @@ impl DocumentParser {
         reader.seek(SeekFrom::Start(0))?;
 
         if is_ooxml {
-            return Ok(dispatch::DetectedFormat::Ooxml);
+            return Ok(formats::DetectedFormat::Ooxml);
         }
         if is_hwpx {
-            return Ok(dispatch::DetectedFormat::Hwpx);
+            return Ok(formats::DetectedFormat::Hwpx);
         }
         if is_odf {
-            return Ok(dispatch::DetectedFormat::Odf);
+            return Ok(formats::DetectedFormat::Odf);
         }
 
         Err(ParseError::UnsupportedFormat(
@@ -86,7 +86,7 @@ impl DocumentParser {
 
     fn validate_detected<R: Read + Seek>(
         &self,
-        _detected: &dispatch::DetectedFormat,
+        _detected: &formats::DetectedFormat,
         _reader: &mut R,
     ) -> Result<(), ParseError> {
         Ok(())
@@ -94,10 +94,10 @@ impl DocumentParser {
 
     fn parse_detected<R: Read + Seek>(
         &self,
-        detected: dispatch::DetectedFormat,
+        detected: formats::DetectedFormat,
         reader: R,
     ) -> Result<ParsedDocument, ParseError> {
-        dispatch::build_parser(detected, self.config.clone()).parse_reader(reader)
+        formats::build_parser(detected, self.config.clone()).parse_reader(reader)
     }
 
     fn normalize_parsed(&self, parsed: ParsedDocument) -> Result<ParsedDocument, ParseError> {

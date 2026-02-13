@@ -30,7 +30,7 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
 mod coverage;
-mod dispatch;
+mod formats;
 mod metadata;
 mod parser_docx;
 mod parser_pptx;
