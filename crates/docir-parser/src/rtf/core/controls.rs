@@ -50,6 +50,17 @@ fn set_last_object_dimension(
     }
 }
 
+fn set_pending_cell_vertical_align(ctx: &mut RtfParseContext, value: CellVerticalAlignment) {
+    ctx.pending_cell_props
+        .get_or_insert_with(TableCellProperties::default)
+        .vertical_align = Some(value);
+}
+
+fn set_pending_border_style(ctx: &mut RtfParseContext, style: BorderStyle) {
+    ctx.pending_border.style = style;
+    apply_border(ctx);
+}
+
 pub(super) fn handle_group_controls(
     word: &str,
     param: Option<i32>,
@@ -232,19 +243,13 @@ pub(super) fn handle_table_controls(
             }
         }
         "clvertalt" => {
-            ctx.pending_cell_props
-                .get_or_insert_with(TableCellProperties::default)
-                .vertical_align = Some(CellVerticalAlignment::Top);
+            set_pending_cell_vertical_align(ctx, CellVerticalAlignment::Top);
         }
         "clvertalc" => {
-            ctx.pending_cell_props
-                .get_or_insert_with(TableCellProperties::default)
-                .vertical_align = Some(CellVerticalAlignment::Center);
+            set_pending_cell_vertical_align(ctx, CellVerticalAlignment::Center);
         }
         "clvertalb" => {
-            ctx.pending_cell_props
-                .get_or_insert_with(TableCellProperties::default)
-                .vertical_align = Some(CellVerticalAlignment::Bottom);
+            set_pending_cell_vertical_align(ctx, CellVerticalAlignment::Bottom);
         }
         "clbrdrt" => set_border_target(ctx, BorderTarget::Top),
         "clbrdrb" => set_border_target(ctx, BorderTarget::Bottom),
@@ -252,30 +257,12 @@ pub(super) fn handle_table_controls(
         "clbrdrr" => set_border_target(ctx, BorderTarget::Right),
         "clbrdrh" => set_border_target(ctx, BorderTarget::InsideH),
         "clbrdrv" => set_border_target(ctx, BorderTarget::InsideV),
-        "brdrs" => {
-            ctx.pending_border.style = BorderStyle::Single;
-            apply_border(ctx);
-        }
-        "brdrth" => {
-            ctx.pending_border.style = BorderStyle::Thick;
-            apply_border(ctx);
-        }
-        "brdrdb" => {
-            ctx.pending_border.style = BorderStyle::Double;
-            apply_border(ctx);
-        }
-        "brdrdot" => {
-            ctx.pending_border.style = BorderStyle::Dotted;
-            apply_border(ctx);
-        }
-        "brdrdash" => {
-            ctx.pending_border.style = BorderStyle::Dashed;
-            apply_border(ctx);
-        }
-        "brdrtriple" => {
-            ctx.pending_border.style = BorderStyle::Triple;
-            apply_border(ctx);
-        }
+        "brdrs" => set_pending_border_style(ctx, BorderStyle::Single),
+        "brdrth" => set_pending_border_style(ctx, BorderStyle::Thick),
+        "brdrdb" => set_pending_border_style(ctx, BorderStyle::Double),
+        "brdrdot" => set_pending_border_style(ctx, BorderStyle::Dotted),
+        "brdrdash" => set_pending_border_style(ctx, BorderStyle::Dashed),
+        "brdrtriple" => set_pending_border_style(ctx, BorderStyle::Triple),
         "brdrw" => {
             if let Some(value) = param {
                 ctx.pending_border.width = Some(value.max(0) as u32);
