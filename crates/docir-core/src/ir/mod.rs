@@ -181,16 +181,9 @@ pub enum IRNode {
     ExtensionPart(ExtensionPart),
 }
 
-impl IrNode for IRNode {
-    fn node_id(&self) -> NodeId {
-        macro_rules! node_id_arms {
-            ($($variant:ident),+ $(,)?) => {
-                match self {
-                    $(IRNode::$variant(n) => n.id,)+
-                }
-            };
-        }
-        node_id_arms!(
+macro_rules! for_each_ir_node_variant {
+    ($macro:ident) => {
+        $macro!(
             Document,
             Section,
             Paragraph,
@@ -278,151 +271,12 @@ impl IrNode for IRNode {
             DigitalSignature,
             ExtensionPart
         )
-    }
+    };
+}
 
-    fn node_type(&self) -> NodeType {
-        macro_rules! node_type_arms {
-            ($(($variant:ident, $ty:ident)),+ $(,)?) => {
-                match self {
-                    $(IRNode::$variant(_) => NodeType::$ty,)+
-                }
-            };
-        }
-        node_type_arms!(
-            (Document, Document),
-            (Section, Section),
-            (Paragraph, Paragraph),
-            (Run, Run),
-            (Hyperlink, Hyperlink),
-            (Table, Table),
-            (TableRow, TableRow),
-            (TableCell, TableCell),
-            (Slide, Slide),
-            (Shape, Shape),
-            (Worksheet, Worksheet),
-            (Cell, Cell),
-            (SharedStringTable, SharedStringTable),
-            (SpreadsheetStyles, SpreadsheetStyles),
-            (DefinedName, DefinedName),
-            (ConditionalFormat, ConditionalFormat),
-            (DataValidation, DataValidation),
-            (TableDefinition, TableDefinition),
-            (PivotTable, PivotTable),
-            (PivotCache, PivotCache),
-            (PivotCacheRecords, PivotCacheRecords),
-            (CalcChain, CalcChain),
-            (SheetComment, SheetComment),
-            (SheetMetadata, SheetMetadata),
-            (WorkbookProperties, WorkbookProperties),
-            (MacroProject, MacroProject),
-            (MacroModule, MacroModule),
-            (OleObject, OleObject),
-            (ExternalReference, ExternalReference),
-            (ActiveXControl, ActiveXControl),
-            (Metadata, Metadata),
-            (StyleSet, StyleSet),
-            (NumberingSet, NumberingSet),
-            (Comment, Comment),
-            (CommentRangeStart, CommentRangeStart),
-            (CommentRangeEnd, CommentRangeEnd),
-            (CommentReference, CommentReference),
-            (Footnote, Footnote),
-            (Endnote, Endnote),
-            (Header, Header),
-            (Footer, Footer),
-            (WordSettings, WordSettings),
-            (WebSettings, WebSettings),
-            (FontTable, FontTable),
-            (ContentControl, ContentControl),
-            (BookmarkStart, BookmarkStart),
-            (BookmarkEnd, BookmarkEnd),
-            (Field, Field),
-            (Revision, Revision),
-            (CommentExtensionSet, CommentExtensionSet),
-            (CommentIdMap, CommentIdMap),
-            (SlideMaster, SlideMaster),
-            (SlideLayout, SlideLayout),
-            (NotesMaster, NotesMaster),
-            (HandoutMaster, HandoutMaster),
-            (NotesSlide, NotesSlide),
-            (WorksheetDrawing, WorksheetDrawing),
-            (ChartData, ChartData),
-            (PresentationProperties, PresentationProperties),
-            (ViewProperties, ViewProperties),
-            (TableStyleSet, TableStyleSet),
-            (PptxCommentAuthor, PptxCommentAuthor),
-            (PptxComment, PptxComment),
-            (PresentationTag, PresentationTag),
-            (PresentationInfo, PresentationInfo),
-            (PeoplePart, PeoplePart),
-            (SmartArtPart, SmartArtPart),
-            (WebExtension, WebExtension),
-            (WebExtensionTaskpane, WebExtensionTaskpane),
-            (GlossaryDocument, GlossaryDocument),
-            (GlossaryEntry, GlossaryEntry),
-            (VmlDrawing, VmlDrawing),
-            (VmlShape, VmlShape),
-            (DrawingPart, DrawingPart),
-            (ExternalLinkPart, ExternalLinkPart),
-            (ConnectionPart, ConnectionPart),
-            (SlicerPart, SlicerPart),
-            (TimelinePart, TimelinePart),
-            (QueryTablePart, QueryTablePart),
-            (Diagnostics, Diagnostics),
-            (Theme, Theme),
-            (MediaAsset, MediaAsset),
-            (CustomXmlPart, CustomXmlPart),
-            (RelationshipGraph, RelationshipGraph),
-            (DigitalSignature, DigitalSignature),
-            (ExtensionPart, ExtensionPart)
-        )
-    }
-
-    fn children(&self) -> Vec<NodeId> {
-        match self {
-            IRNode::Document(n) => n.children(),
-            IRNode::Section(n) => n.children(),
-            IRNode::Paragraph(n) => n.children(),
-            IRNode::Hyperlink(n) => n.children(),
-            IRNode::Table(n) => n.children(),
-            IRNode::TableRow(n) => n.children(),
-            IRNode::TableCell(n) => n.children(),
-            IRNode::Slide(n) => n.children(),
-            IRNode::Shape(n) => n.table.into_iter().collect(),
-            IRNode::Worksheet(n) => n.children(),
-            IRNode::MacroProject(n) => n.children(),
-            IRNode::Comment(n) => n.content.clone(),
-            IRNode::Footnote(n) => n.content.clone(),
-            IRNode::Endnote(n) => n.content.clone(),
-            IRNode::Header(n) => n.content.clone(),
-            IRNode::Footer(n) => n.content.clone(),
-            IRNode::ContentControl(n) => n.content.clone(),
-            IRNode::Field(n) => n.runs.clone(),
-            IRNode::Revision(n) => n.content.clone(),
-            IRNode::SlideMaster(n) => n.children(),
-            IRNode::SlideLayout(n) => n.children(),
-            IRNode::NotesMaster(n) => n.children(),
-            IRNode::HandoutMaster(n) => n.children(),
-            IRNode::NotesSlide(n) => n.shapes.clone(),
-            IRNode::WorksheetDrawing(n) => n.children(),
-            IRNode::GlossaryDocument(n) => n.entries.clone(),
-            IRNode::GlossaryEntry(n) => n.content.clone(),
-            IRNode::VmlDrawing(n) => n.shapes.clone(),
-            IRNode::DrawingPart(n) => n.shapes.clone(),
-            _ => Vec::new(),
-        }
-    }
-
-    fn source_span(&self) -> Option<&SourceSpan> {
-        macro_rules! source_span_arms {
-            ($($variant:ident),+ $(,)?) => {
-                match self {
-                    $(IRNode::$variant(n) => n.span.as_ref(),)+
-                    IRNode::Metadata(_) => None,
-                }
-            };
-        }
-        source_span_arms!(
+macro_rules! for_each_ir_span_variant {
+    ($macro:ident) => {
+        $macro!(
             Document,
             Section,
             Paragraph,
@@ -509,5 +363,76 @@ impl IrNode for IRNode {
             DigitalSignature,
             ExtensionPart
         )
+    };
+}
+
+impl IrNode for IRNode {
+    fn node_id(&self) -> NodeId {
+        macro_rules! node_id_arms {
+            ($($variant:ident),+ $(,)?) => {
+                match self {
+                    $(IRNode::$variant(n) => n.id,)+
+                }
+            };
+        }
+        for_each_ir_node_variant!(node_id_arms)
+    }
+
+    fn node_type(&self) -> NodeType {
+        macro_rules! node_type_arms {
+            ($($variant:ident),+ $(,)?) => {
+                match self {
+                    $(IRNode::$variant(_) => NodeType::$variant,)+
+                }
+            };
+        }
+        for_each_ir_node_variant!(node_type_arms)
+    }
+
+    fn children(&self) -> Vec<NodeId> {
+        match self {
+            IRNode::Document(n) => n.children(),
+            IRNode::Section(n) => n.children(),
+            IRNode::Paragraph(n) => n.children(),
+            IRNode::Hyperlink(n) => n.children(),
+            IRNode::Table(n) => n.children(),
+            IRNode::TableRow(n) => n.children(),
+            IRNode::TableCell(n) => n.children(),
+            IRNode::Slide(n) => n.children(),
+            IRNode::Shape(n) => n.table.into_iter().collect(),
+            IRNode::Worksheet(n) => n.children(),
+            IRNode::MacroProject(n) => n.children(),
+            IRNode::Comment(n) => n.content.clone(),
+            IRNode::Footnote(n) => n.content.clone(),
+            IRNode::Endnote(n) => n.content.clone(),
+            IRNode::Header(n) => n.content.clone(),
+            IRNode::Footer(n) => n.content.clone(),
+            IRNode::ContentControl(n) => n.content.clone(),
+            IRNode::Field(n) => n.runs.clone(),
+            IRNode::Revision(n) => n.content.clone(),
+            IRNode::SlideMaster(n) => n.children(),
+            IRNode::SlideLayout(n) => n.children(),
+            IRNode::NotesMaster(n) => n.children(),
+            IRNode::HandoutMaster(n) => n.children(),
+            IRNode::NotesSlide(n) => n.shapes.clone(),
+            IRNode::WorksheetDrawing(n) => n.children(),
+            IRNode::GlossaryDocument(n) => n.entries.clone(),
+            IRNode::GlossaryEntry(n) => n.content.clone(),
+            IRNode::VmlDrawing(n) => n.shapes.clone(),
+            IRNode::DrawingPart(n) => n.shapes.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    fn source_span(&self) -> Option<&SourceSpan> {
+        macro_rules! source_span_arms {
+            ($($variant:ident),+ $(,)?) => {
+                match self {
+                    $(IRNode::$variant(n) => n.span.as_ref(),)+
+                    IRNode::Metadata(_) => None,
+                }
+            };
+        }
+        for_each_ir_span_variant!(source_span_arms)
     }
 }
