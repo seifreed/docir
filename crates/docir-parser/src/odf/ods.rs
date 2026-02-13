@@ -25,64 +25,30 @@ pub(super) fn parse_ods_table(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"table:table-row" => {
-                    let row_repeat = row_repeat_from(&e);
-                    limits.bump_rows(row_repeat as u64)?;
-                    let row_cells =
-                        parse_ods_row(reader, &e, store, &mut style_map, &mut next_style_id)?;
-                    for _ in 0..row_repeat {
-                        emit_full_row_cells(
-                            &row_cells,
-                            row_idx,
-                            store,
-                            &mut worksheet,
-                            limits,
-                            &mut validation_ranges,
-                            &mut cell_values,
-                            &mut formula_cells,
-                            &mut formula_map,
-                        )?;
-                        row_idx += 1;
-                    }
-                }
-                b"draw:frame" => {
-                    if let Some(shape_id) =
-                        spreadsheet::parse_draw_frame_spreadsheet(reader, &e, store)?
-                    {
-                        shapes.push(shape_id);
-                    }
-                }
-                b"table:conditional-formatting" => {
-                    if let Some(cf) = parse_ods_conditional_formatting(reader, &e)? {
-                        push_conditional_format(store, &mut worksheet, cf);
-                    }
-                }
-                b"table:filter" | b"table:filter-and" | b"table:filter-or" => {
-                    spreadsheet::skip_element(reader, e.name().as_ref())?;
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"table:table-row" => {
-                    let row_repeat = row_repeat_from(&e);
-                    limits.bump_rows(row_repeat as u64)?;
-                    row_idx += row_repeat;
-                }
-                b"draw:frame" => {
-                    if let Some(shape_id) =
-                        spreadsheet::parse_draw_frame_spreadsheet(reader, &e, store)?
-                    {
-                        shapes.push(shape_id);
-                    }
-                }
-                b"table:conditional-formatting" => {
-                    if let Some(cf) = parse_ods_conditional_formatting_empty(&e)? {
-                        push_conditional_format(store, &mut worksheet, cf);
-                    }
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => handle_table_start_full(
+                reader,
+                &e,
+                store,
+                limits,
+                &mut style_map,
+                &mut next_style_id,
+                &mut row_idx,
+                &mut worksheet,
+                &mut validation_ranges,
+                &mut cell_values,
+                &mut formula_cells,
+                &mut formula_map,
+                &mut shapes,
+            )?,
+            Ok(Event::Empty(e)) => handle_table_empty_full(
+                reader,
+                &e,
+                store,
+                limits,
+                &mut row_idx,
+                &mut worksheet,
+                &mut shapes,
+            )?,
             Ok(Event::End(e)) => {
                 if e.name().as_ref() == b"table:table" {
                     break;
@@ -134,55 +100,21 @@ pub(super) fn parse_ods_table_fast(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"table:table-row" => {
-                    let row_repeat = row_repeat_from(&e);
-                    limits.bump_rows(row_repeat as u64)?;
-
-                    if sample_enabled && row_idx < sample_rows {
-                        let row_cells = parse_ods_row_sample(
-                            reader,
-                            &e,
-                            store,
-                            &mut style_map,
-                            &mut next_style_id,
-                            sample_cols,
-                        )?;
-                        let remaining = sample_rows.saturating_sub(row_idx);
-                        let repeat = row_repeat.min(remaining);
-                        for _ in 0..repeat {
-                            emit_sampled_row_cells(
-                                &row_cells,
-                                row_idx,
-                                sample_cols,
-                                store,
-                                &mut worksheet,
-                                limits,
-                                &mut validation_ranges,
-                            )?;
-                            row_idx += 1;
-                        }
-                        if row_repeat > repeat {
-                            row_idx += row_repeat - repeat;
-                        }
-                    } else {
-                        spreadsheet::skip_element(reader, e.name().as_ref())?;
-                        row_idx += row_repeat;
-                    }
-                }
-                b"draw:frame" => {
-                    spreadsheet::skip_element(reader, e.name().as_ref())?;
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"table:table-row" => {
-                    let row_repeat = row_repeat_from(&e);
-                    limits.bump_rows(row_repeat as u64)?;
-                    row_idx += row_repeat;
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => handle_table_start_fast(
+                reader,
+                &e,
+                store,
+                limits,
+                sample_rows,
+                sample_cols,
+                sample_enabled,
+                &mut style_map,
+                &mut next_style_id,
+                &mut row_idx,
+                &mut worksheet,
+                &mut validation_ranges,
+            )?,
+            Ok(Event::Empty(e)) => handle_table_empty_fast(&e, limits, &mut row_idx)?,
             Ok(Event::End(e)) => {
                 if e.name().as_ref() == b"table:table" {
                     break;
@@ -206,6 +138,163 @@ pub(super) fn parse_ods_table_fast(
     );
 
     Ok(worksheet)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_table_start_full(
+    reader: &mut OdfReader<'_>,
+    start: &BytesStart<'_>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    style_map: &mut HashMap<String, u32>,
+    next_style_id: &mut u32,
+    row_idx: &mut u32,
+    worksheet: &mut Worksheet,
+    validation_ranges: &mut HashMap<String, Vec<String>>,
+    cell_values: &mut HashMap<(u32, u32), CellValue>,
+    formula_cells: &mut Vec<(NodeId, u32, u32, String)>,
+    formula_map: &mut HashMap<(u32, u32), String>,
+    shapes: &mut Vec<NodeId>,
+) -> Result<(), ParseError> {
+    match start.name().as_ref() {
+        b"table:table-row" => {
+            let row_repeat = row_repeat_from(start);
+            limits.bump_rows(row_repeat as u64)?;
+            let row_cells = parse_ods_row(reader, start, store, style_map, next_style_id)?;
+            for _ in 0..row_repeat {
+                emit_full_row_cells(
+                    &row_cells,
+                    *row_idx,
+                    store,
+                    worksheet,
+                    limits,
+                    validation_ranges,
+                    cell_values,
+                    formula_cells,
+                    formula_map,
+                )?;
+                *row_idx += 1;
+            }
+        }
+        b"draw:frame" => {
+            if let Some(shape_id) = spreadsheet::parse_draw_frame_spreadsheet(reader, start, store)?
+            {
+                shapes.push(shape_id);
+            }
+        }
+        b"table:conditional-formatting" => {
+            if let Some(cf) = parse_ods_conditional_formatting(reader, start)? {
+                push_conditional_format(store, worksheet, cf);
+            }
+        }
+        b"table:filter" | b"table:filter-and" | b"table:filter-or" => {
+            spreadsheet::skip_element(reader, start.name().as_ref())?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_table_empty_full(
+    reader: &mut OdfReader<'_>,
+    empty: &BytesStart<'_>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    row_idx: &mut u32,
+    worksheet: &mut Worksheet,
+    shapes: &mut Vec<NodeId>,
+) -> Result<(), ParseError> {
+    match empty.name().as_ref() {
+        b"table:table-row" => {
+            let row_repeat = row_repeat_from(empty);
+            limits.bump_rows(row_repeat as u64)?;
+            *row_idx += row_repeat;
+        }
+        b"draw:frame" => {
+            if let Some(shape_id) = spreadsheet::parse_draw_frame_spreadsheet(reader, empty, store)?
+            {
+                shapes.push(shape_id);
+            }
+        }
+        b"table:conditional-formatting" => {
+            if let Some(cf) = parse_ods_conditional_formatting_empty(empty)? {
+                push_conditional_format(store, worksheet, cf);
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_table_start_fast(
+    reader: &mut OdfReader<'_>,
+    start: &BytesStart<'_>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    sample_rows: u32,
+    sample_cols: u32,
+    sample_enabled: bool,
+    style_map: &mut HashMap<String, u32>,
+    next_style_id: &mut u32,
+    row_idx: &mut u32,
+    worksheet: &mut Worksheet,
+    validation_ranges: &mut HashMap<String, Vec<String>>,
+) -> Result<(), ParseError> {
+    match start.name().as_ref() {
+        b"table:table-row" => {
+            let row_repeat = row_repeat_from(start);
+            limits.bump_rows(row_repeat as u64)?;
+            if sample_enabled && *row_idx < sample_rows {
+                let row_cells = parse_ods_row_sample(
+                    reader,
+                    start,
+                    store,
+                    style_map,
+                    next_style_id,
+                    sample_cols,
+                )?;
+                let remaining = sample_rows.saturating_sub(*row_idx);
+                let repeat = row_repeat.min(remaining);
+                for _ in 0..repeat {
+                    emit_sampled_row_cells(
+                        &row_cells,
+                        *row_idx,
+                        sample_cols,
+                        store,
+                        worksheet,
+                        limits,
+                        validation_ranges,
+                    )?;
+                    *row_idx += 1;
+                }
+                if row_repeat > repeat {
+                    *row_idx += row_repeat - repeat;
+                }
+            } else {
+                spreadsheet::skip_element(reader, start.name().as_ref())?;
+                *row_idx += row_repeat;
+            }
+        }
+        b"draw:frame" => {
+            spreadsheet::skip_element(reader, start.name().as_ref())?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_table_empty_fast(
+    empty: &BytesStart<'_>,
+    limits: &dyn OdfLimitCounter,
+    row_idx: &mut u32,
+) -> Result<(), ParseError> {
+    if empty.name().as_ref() == b"table:table-row" {
+        let row_repeat = row_repeat_from(empty);
+        limits.bump_rows(row_repeat as u64)?;
+        *row_idx += row_repeat;
+    }
+    Ok(())
 }
 
 fn row_repeat_from(start: &BytesStart<'_>) -> u32 {
