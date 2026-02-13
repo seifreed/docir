@@ -38,9 +38,8 @@ pub fn build_app(config: &ParserConfig) -> DocirApp {
 }
 
 pub fn parse_document(input: &PathBuf, parser_config: &ParserConfig) -> Result<ParsedDocument> {
-    let app = build_app(parser_config);
-    app.parse_file(input)
-        .with_context(|| format!("Failed to parse {}", input.display()))
+    let (_, parsed) = build_app_and_parse(input, parser_config)?;
+    Ok(parsed)
 }
 
 pub fn build_app_and_parse(
@@ -48,10 +47,13 @@ pub fn build_app_and_parse(
     parser_config: &ParserConfig,
 ) -> Result<(DocirApp, ParsedDocument)> {
     let app = build_app(parser_config);
-    let parsed = app
-        .parse_file(input)
-        .with_context(|| format!("Failed to parse {}", input.display()))?;
+    let parsed = parse_with_context(&app, input)?;
     Ok((app, parsed))
+}
+
+fn parse_with_context(app: &DocirApp, input: &PathBuf) -> Result<ParsedDocument> {
+    app.parse_file(input)
+        .with_context(|| format!("Failed to parse {}", input.display()))
 }
 
 pub fn write_json_output<T: Serialize>(

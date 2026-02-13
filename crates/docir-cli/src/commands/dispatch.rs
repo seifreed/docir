@@ -90,18 +90,16 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             pretty,
             output,
         } => run_query_like(
-            QueryLikeCommand {
+            build_query_like_command(
                 input,
-                filters: super::query::QueryFilters {
-                    node_type,
-                    contains,
-                    format,
-                    has_external_refs,
-                    has_macros,
-                },
+                node_type,
+                contains,
+                format,
+                has_external_refs,
+                has_macros,
                 pretty,
                 output,
-            },
+            ),
             parser_config,
         ),
         Commands::Select {
@@ -114,18 +112,16 @@ fn run_query_extract_commands(command: Commands, parser_config: &ParserConfig) -
             pretty,
             output,
         } => run_query_like(
-            QueryLikeCommand {
+            build_query_like_command(
                 input,
-                filters: super::query::QueryFilters {
-                    node_type,
-                    contains,
-                    format,
-                    has_external_refs,
-                    has_macros,
-                },
+                node_type,
+                contains,
+                format,
+                has_external_refs,
+                has_macros,
                 pretty,
                 output,
-            },
+            ),
             parser_config,
         ),
         Commands::Grep {
@@ -167,4 +163,29 @@ fn run_query_like(command: QueryLikeCommand, parser_config: &ParserConfig) -> Re
         command.output,
         parser_config,
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_query_like_command(
+    input: PathBuf,
+    node_type: Option<String>,
+    contains: Option<String>,
+    format: Option<String>,
+    has_external_refs: Option<bool>,
+    has_macros: Option<bool>,
+    pretty: bool,
+    output: Option<PathBuf>,
+) -> QueryLikeCommand {
+    QueryLikeCommand {
+        input,
+        filters: super::query::QueryFilters {
+            node_type,
+            contains,
+            format,
+            has_external_refs,
+            has_macros,
+        },
+        pretty,
+        output,
+    }
 }
