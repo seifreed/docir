@@ -33,6 +33,7 @@ mod tables;
 mod workbook;
 mod workbook_parts;
 mod worksheet;
+mod worksheet_parts;
 mod xlm;
 
 pub use parser::*;
