@@ -5,7 +5,7 @@ use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document,
 use docir_core::security::{DdeField, ExternalRefType, ExternalReference, OleObject};
 use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
 pub(crate) struct OdfFormulaScan {
@@ -24,24 +24,15 @@ impl Default for OdfFormulaScan {
     }
 }
 
-pub(crate) fn scan_external_links(xml: &str, location: &str) -> Vec<ExternalReference> {
-    let mut refs = Vec::new();
+fn visit_start_or_empty(xml: &str, mut on_element: impl FnMut(&BytesStart<'_>) -> bool) {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if let Some(href) = super::attr_value(&e, b"xlink:href") {
-                    let ref_type = match e.name().as_ref() {
-                        b"draw:image" => ExternalRefType::Image,
-                        b"text:a" => ExternalRefType::Hyperlink,
-                        b"draw:object" | b"draw:object-ole" => ExternalRefType::OleLink,
-                        _ => ExternalRefType::Other,
-                    };
-                    let mut ext = ExternalReference::new(ref_type, href);
-                    ext.span = Some(SourceSpan::new(location));
-                    refs.push(ext);
+                if on_element(&e) {
+                    break;
                 }
             }
             Ok(Event::Eof) => break,
@@ -50,38 +41,48 @@ pub(crate) fn scan_external_links(xml: &str, location: &str) -> Vec<ExternalRefe
         }
         buf.clear();
     }
+}
+
+pub(crate) fn scan_external_links(xml: &str, location: &str) -> Vec<ExternalReference> {
+    let mut refs = Vec::new();
+    visit_start_or_empty(xml, |e| {
+        if let Some(href) = super::attr_value(e, b"xlink:href") {
+            let ref_type = match e.name().as_ref() {
+                b"draw:image" => ExternalRefType::Image,
+                b"text:a" => ExternalRefType::Hyperlink,
+                b"draw:object" | b"draw:object-ole" => ExternalRefType::OleLink,
+                _ => ExternalRefType::Other,
+            };
+            let mut ext = ExternalReference::new(ref_type, href);
+            ext.span = Some(SourceSpan::new(location));
+            refs.push(ext);
+        }
+        false
+    });
     refs
 }
 
 pub(crate) fn scan_odf_objects(xml: &str) -> (Vec<OleObject>, Vec<ExternalReference>) {
     let mut oles = Vec::new();
     let mut refs = Vec::new();
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"draw:object" | b"draw:object-ole" => {
-                    if let Some(href) = super::attr_value(&e, b"xlink:href") {
-                        let mut ole = OleObject::new();
-                        ole.is_linked = href.starts_with("http://") || href.starts_with("https://");
-                        ole.link_target = Some(href.clone());
-                        ole.size_bytes = 0;
-                        oles.push(ole);
-                        let mut ext = ExternalReference::new(ExternalRefType::OleLink, href);
-                        ext.span = Some(SourceSpan::new("content.xml"));
-                        refs.push(ext);
-                    }
+    visit_start_or_empty(xml, |e| {
+        match e.name().as_ref() {
+            b"draw:object" | b"draw:object-ole" => {
+                if let Some(href) = super::attr_value(e, b"xlink:href") {
+                    let mut ole = OleObject::new();
+                    ole.is_linked = href.starts_with("http://") || href.starts_with("https://");
+                    ole.link_target = Some(href.clone());
+                    ole.size_bytes = 0;
+                    oles.push(ole);
+                    let mut ext = ExternalReference::new(ExternalRefType::OleLink, href);
+                    ext.span = Some(SourceSpan::new("content.xml"));
+                    refs.push(ext);
                 }
-                _ => {}
-            },
-            Ok(Event::Eof) => break,
-            Err(_) => break,
+            }
             _ => {}
         }
-        buf.clear();
-    }
+        false
+    });
     (oles, refs)
 }
 
@@ -107,26 +108,16 @@ pub(crate) fn scan_embedded_objects(
 }
 
 pub(crate) fn scan_odf_filters(xml: &str) -> Vec<String> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
     let mut out = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref().starts_with(b"table:filter") {
-                    let target = super::attr_value(&e, b"table:target-range-address")
-                        .or_else(|| super::attr_value(&e, b"table:condition"))
-                        .unwrap_or_else(|| "unknown".to_string());
-                    out.push(target);
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
+    visit_start_or_empty(xml, |e| {
+        if e.name().as_ref().starts_with(b"table:filter") {
+            let target = super::attr_value(e, b"table:target-range-address")
+                .or_else(|| super::attr_value(e, b"table:condition"))
+                .unwrap_or_else(|| "unknown".to_string());
+            out.push(target);
         }
-        buf.clear();
-    }
+        false
+    });
     out
 }
 
@@ -238,14 +229,14 @@ pub(crate) fn scan_odf_security(
     }
 
     let mut external_refs = Vec::new();
-    if let Some(xml) = content_xml {
-        external_refs.extend(scan_external_links(xml, "content.xml"));
-    }
-    if let Some(xml) = styles_xml {
-        external_refs.extend(scan_external_links(xml, "styles.xml"));
-    }
-    if let Some(xml) = settings_xml {
-        external_refs.extend(scan_external_links(xml, "settings.xml"));
+    for (xml, location) in [
+        (content_xml, "content.xml"),
+        (styles_xml, "styles.xml"),
+        (settings_xml, "settings.xml"),
+    ] {
+        if let Some(xml) = xml {
+            external_refs.extend(scan_external_links(xml, location));
+        }
     }
     external_refs.extend(formula_scan.external_refs.drain(..));
 
@@ -270,28 +261,18 @@ pub(crate) fn scan_odf_security(
 
 pub(crate) fn scan_odf_protection(xml: &str) -> Vec<DiagnosticEntry> {
     let mut entries = Vec::new();
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
     let mut protected = false;
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if let Some(value) = super::attr_value(&e, b"table:protected")
-                    .or_else(|| super::attr_value(&e, b"text:protected"))
-                {
-                    if value == "true" {
-                        protected = true;
-                        break;
-                    }
-                }
+    visit_start_or_empty(xml, |e| {
+        if let Some(value) = super::attr_value(e, b"table:protected")
+            .or_else(|| super::attr_value(e, b"text:protected"))
+        {
+            if value == "true" {
+                protected = true;
+                return true;
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
         }
-        buf.clear();
-    }
+        false
+    });
     if protected {
         push_entry(
             &mut entries,
@@ -306,36 +287,28 @@ pub(crate) fn scan_odf_protection(xml: &str) -> Vec<DiagnosticEntry> {
 
 pub(crate) fn scan_odf_advanced_features(xml: &str) -> Vec<DiagnosticEntry> {
     let mut entries = Vec::new();
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
     let mut conditional_advanced = false;
     let mut pivot_advanced = false;
     let mut odp_advanced = false;
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"table:conditional-format" => {
-                    if let Some(condition) = super::attr_value(&e, b"table:condition") {
-                        if super::parse_odf_condition_operator(&condition).is_none() {
-                            conditional_advanced = true;
-                        }
+    visit_start_or_empty(xml, |e| {
+        match e.name().as_ref() {
+            b"table:conditional-format" => {
+                if let Some(condition) = super::attr_value(e, b"table:condition") {
+                    if super::parse_odf_condition_operator(&condition).is_none() {
+                        conditional_advanced = true;
                     }
                 }
-                b"table:pivot-table" | b"table:data-pilot-table" => {
-                    if super::attr_value(&e, b"table:target-range-address").is_some() {
-                        pivot_advanced = true;
-                    }
+            }
+            b"table:pivot-table" | b"table:data-pilot-table" => {
+                if super::attr_value(e, b"table:target-range-address").is_some() {
+                    pivot_advanced = true;
                 }
-                b"draw:object" | b"draw:object-ole" => odp_advanced = true,
-                _ => {}
-            },
-            Ok(Event::Eof) => break,
-            Err(_) => break,
+            }
+            b"draw:object" | b"draw:object-ole" => odp_advanced = true,
             _ => {}
         }
-        buf.clear();
-    }
+        false
+    });
     if conditional_advanced {
         push_entry(
             &mut entries,
