@@ -431,127 +431,39 @@ impl PptxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => {
                     let name = e.name().as_ref().to_vec();
-                    if matches!(
-                        name.as_slice(),
-                        b"p:anim"
-                            | b"p:animEffect"
-                            | b"p:animMotion"
-                            | b"p:animRot"
-                            | b"p:animScale"
-                            | b"p:seq"
-                    ) {
-                        let mut anim = SlideAnimation {
-                            animation_type: String::from_utf8_lossy(&name).to_string(),
-                            target: None,
-                            duration_ms: None,
-                            preset_id: None,
-                            preset_class: None,
-                            media_asset: None,
-                        };
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"dur" => {
-                                    anim.duration_ms =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
-                                }
-                                b"presetID" => {
-                                    anim.preset_id =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                b"presetClass" => {
-                                    anim.preset_class =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                _ => {}
-                            }
-                        }
+                    if is_standard_animation(&name) {
+                        let anim = build_animation_from_event(
+                            &name,
+                            e.attributes().flatten(),
+                            slide_path,
+                            relationships,
+                        );
                         animations.push(anim);
                         current_index = Some(animations.len() - 1);
-                    } else if name.as_slice().ends_with(b":audio")
-                        || name.as_slice().ends_with(b":video")
-                    {
-                        let mut anim = SlideAnimation {
-                            animation_type: String::from_utf8_lossy(&name).to_string(),
-                            target: None,
-                            duration_ms: None,
-                            preset_id: None,
-                            preset_class: None,
-                            media_asset: None,
-                        };
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"r:link" | b"r:embed" => {
-                                    let rel_id = String::from_utf8_lossy(&attr.value).to_string();
-                                    if let Some(rel) = relationships.get(&rel_id) {
-                                        anim.target = Some(Relationships::resolve_target(
-                                            slide_path,
-                                            &rel.target,
-                                        ));
-                                    } else {
-                                        anim.target = Some(rel_id);
-                                    }
-                                }
-                                b"dur" => {
-                                    anim.duration_ms =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
-                                }
-                                _ => {}
-                            }
-                        }
+                    } else if is_media_animation(&name) {
+                        let anim = build_animation_from_event(
+                            &name,
+                            e.attributes().flatten(),
+                            slide_path,
+                            relationships,
+                        );
                         animations.push(anim);
                         current_index = Some(animations.len() - 1);
                     } else if name.as_slice() == b"p:spTgt" {
-                        if let Some(idx) = current_index {
-                            for attr in e.attributes().flatten() {
-                                if attr.key.as_ref() == b"spid" {
-                                    animations[idx].target =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                            }
-                        }
+                        apply_sp_target(&mut animations, current_index, e.attributes().flatten());
                     }
                 }
                 Ok(Event::Empty(e)) => {
-                    if e.name().as_ref() == b"p:spTgt" {
-                        if let Some(idx) = current_index {
-                            for attr in e.attributes().flatten() {
-                                if attr.key.as_ref() == b"spid" {
-                                    animations[idx].target =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                            }
-                        }
-                    } else if e.name().as_ref().ends_with(b":audio")
-                        || e.name().as_ref().ends_with(b":video")
-                    {
-                        let mut anim = SlideAnimation {
-                            animation_type: String::from_utf8_lossy(e.name().as_ref()).to_string(),
-                            target: None,
-                            duration_ms: None,
-                            preset_id: None,
-                            preset_class: None,
-                            media_asset: None,
-                        };
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"r:link" | b"r:embed" => {
-                                    let rel_id = String::from_utf8_lossy(&attr.value).to_string();
-                                    if let Some(rel) = relationships.get(&rel_id) {
-                                        anim.target = Some(Relationships::resolve_target(
-                                            slide_path,
-                                            &rel.target,
-                                        ));
-                                    } else {
-                                        anim.target = Some(rel_id);
-                                    }
-                                }
-                                b"dur" => {
-                                    anim.duration_ms =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
-                                }
-                                _ => {}
-                            }
-                        }
+                    let name = e.name().as_ref().to_vec();
+                    if name.as_slice() == b"p:spTgt" {
+                        apply_sp_target(&mut animations, current_index, e.attributes().flatten());
+                    } else if is_media_animation(&name) {
+                        let anim = build_animation_from_event(
+                            &name,
+                            e.attributes().flatten(),
+                            slide_path,
+                            relationships,
+                        );
                         animations.push(anim);
                     }
                 }
@@ -573,5 +485,82 @@ impl PptxParser {
         }
 
         Ok(animations)
+    }
+}
+
+fn is_standard_animation(name: &[u8]) -> bool {
+    matches!(
+        name,
+        b"p:anim" | b"p:animEffect" | b"p:animMotion" | b"p:animRot" | b"p:animScale" | b"p:seq"
+    )
+}
+
+fn is_media_animation(name: &[u8]) -> bool {
+    name.ends_with(b":audio") || name.ends_with(b":video")
+}
+
+fn build_animation_from_event<'a, I>(
+    name: &[u8],
+    attrs: I,
+    slide_path: &str,
+    relationships: &Relationships,
+) -> SlideAnimation
+where
+    I: Iterator<Item = quick_xml::events::attributes::Attribute<'a>>,
+{
+    let mut anim = SlideAnimation {
+        animation_type: String::from_utf8_lossy(name).to_string(),
+        target: None,
+        duration_ms: None,
+        preset_id: None,
+        preset_class: None,
+        media_asset: None,
+    };
+
+    for attr in attrs {
+        match attr.key.as_ref() {
+            b"dur" => {
+                anim.duration_ms = String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+            }
+            b"presetID" => {
+                anim.preset_id = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"presetClass" => {
+                anim.preset_class = Some(String::from_utf8_lossy(&attr.value).to_string());
+            }
+            b"r:link" | b"r:embed" => {
+                let rel_id = String::from_utf8_lossy(&attr.value).to_string();
+                anim.target = Some(resolve_animation_target(slide_path, relationships, rel_id));
+            }
+            _ => {}
+        }
+    }
+
+    anim
+}
+
+fn resolve_animation_target(
+    slide_path: &str,
+    relationships: &Relationships,
+    rel_id: String,
+) -> String {
+    if let Some(rel) = relationships.get(&rel_id) {
+        Relationships::resolve_target(slide_path, &rel.target)
+    } else {
+        rel_id
+    }
+}
+
+fn apply_sp_target<'a, I>(animations: &mut [SlideAnimation], current_index: Option<usize>, attrs: I)
+where
+    I: Iterator<Item = quick_xml::events::attributes::Attribute<'a>>,
+{
+    let Some(idx) = current_index else {
+        return;
+    };
+    for attr in attrs {
+        if attr.key.as_ref() == b"spid" {
+            animations[idx].target = Some(String::from_utf8_lossy(&attr.value).to_string());
+        }
     }
 }
