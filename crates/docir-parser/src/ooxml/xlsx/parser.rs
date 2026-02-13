@@ -453,38 +453,7 @@ pub(super) fn parse_formula(
     start: &BytesStart,
     sheet_path: &str,
 ) -> Result<CellFormula, ParseError> {
-    let mut formula_type = FormulaType::Normal;
-    let mut shared_index = None;
-    let mut shared_ref = None;
-    let mut array_ref = None;
-    let mut is_array = false;
-
-    for attr in start.attributes().flatten() {
-        match attr.key.as_ref() {
-            b"t" => {
-                let v = String::from_utf8_lossy(&attr.value);
-                match v.as_ref() {
-                    "shared" => formula_type = FormulaType::Shared,
-                    "array" => {
-                        formula_type = FormulaType::Array;
-                        is_array = true;
-                    }
-                    "dataTable" => formula_type = FormulaType::DataTable,
-                    _ => {}
-                }
-            }
-            b"si" => shared_index = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
-            b"ref" => {
-                let r = String::from_utf8_lossy(&attr.value).to_string();
-                if formula_type == FormulaType::Shared {
-                    shared_ref = Some(r);
-                } else {
-                    array_ref = Some(r);
-                }
-            }
-            _ => {}
-        }
-    }
+    let (formula_type, shared_index, shared_ref, is_array, array_ref) = parse_formula_attrs(start);
 
     let text = reader
         .read_text(start.name())
@@ -521,6 +490,27 @@ pub(super) fn parse_formula_args_text(formula: &str) -> Option<String> {
 }
 
 pub(super) fn parse_formula_empty(start: &BytesStart) -> CellFormula {
+    let (formula_type, shared_index, shared_ref, is_array, array_ref) = parse_formula_attrs(start);
+
+    CellFormula {
+        text: String::new(),
+        formula_type,
+        shared_index,
+        shared_ref,
+        is_array,
+        array_ref,
+    }
+}
+
+fn parse_formula_attrs(
+    start: &BytesStart,
+) -> (
+    FormulaType,
+    Option<u32>,
+    Option<String>,
+    bool,
+    Option<String>,
+) {
     let mut formula_type = FormulaType::Normal;
     let mut shared_index = None;
     let mut shared_ref = None;
@@ -554,14 +544,7 @@ pub(super) fn parse_formula_empty(start: &BytesStart) -> CellFormula {
         }
     }
 
-    CellFormula {
-        text: String::new(),
-        formula_type,
-        shared_index,
-        shared_ref,
-        is_array,
-        array_ref,
-    }
+    (formula_type, shared_index, shared_ref, is_array, array_ref)
 }
 
 pub(super) fn parse_inline_string(
