@@ -53,12 +53,8 @@ fn count_activex_controls(ctx: &RuleContext) -> usize {
 
 fn count_external_links(ctx: &RuleContext) -> usize {
     let mut count = 0usize;
-    visit_nodes(ctx, |node| {
-        if let IRNode::Hyperlink(link) = node {
-            if link.is_external {
-                count += 1;
-            }
-        }
+    for_each_external_hyperlink(ctx, |_, _| {
+        count += 1;
     });
     count
 }
@@ -78,6 +74,19 @@ fn add_security_node_findings(
             .unwrap_or_else(|| fallback_message.to_string());
         add_finding(findings, rule, message, node, ctx);
     }
+}
+
+fn for_each_external_hyperlink(
+    ctx: &RuleContext,
+    mut f: impl FnMut(&IRNode, &docir_core::ir::Hyperlink),
+) {
+    visit_nodes(ctx, |node| {
+        if let IRNode::Hyperlink(link) = node {
+            if link.is_external {
+                f(node, link);
+            }
+        }
+    });
 }
 
 /// Rule: Macro project present.
@@ -461,18 +470,14 @@ impl Rule for ExternalHyperlinkRule {
     }
 
     fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        visit_nodes(ctx, |node| {
-            if let IRNode::Hyperlink(link) = node {
-                if link.is_external {
-                    add_finding(
-                        findings,
-                        self,
-                        format!("External hyperlink: {}", link.target),
-                        Some(node),
-                        ctx,
-                    );
-                }
-            }
+        for_each_external_hyperlink(ctx, |node, link| {
+            add_finding(
+                findings,
+                self,
+                format!("External hyperlink: {}", link.target),
+                Some(node),
+                ctx,
+            );
         });
     }
 }
