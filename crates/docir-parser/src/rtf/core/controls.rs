@@ -197,6 +197,12 @@ pub(super) fn handle_table_controls(
     ctx: &mut RtfParseContext,
     store: &mut IrStore,
 ) -> Result<bool, ParseError> {
+    if handle_table_border_controls(word, param, ctx) {
+        return Ok(true);
+    }
+    if handle_table_cell_property_controls(word, param, ctx) {
+        return Ok(true);
+    }
     match word {
         "trowd" => {
             flush_text(ctx, store, None)?;
@@ -216,6 +222,27 @@ pub(super) fn handle_table_controls(
                 ctx.row_cellx.push(value);
             }
         }
+        "cell" => {
+            flush_text(ctx, store, None)?;
+            finalize_cell(ctx, store);
+            ctx.current_cell = Some(TableCell::new());
+        }
+        "row" => {
+            flush_text(ctx, store, None)?;
+            finalize_cell(ctx, store);
+            finalize_row(ctx, store);
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn handle_table_cell_property_controls(
+    word: &str,
+    param: Option<i32>,
+    ctx: &mut RtfParseContext,
+) -> bool {
+    match word {
         "clvmgf" => {
             ctx.pending_cell_props
                 .get_or_insert_with(TableCellProperties::default)
@@ -242,15 +269,16 @@ pub(super) fn handle_table_controls(
                 }
             }
         }
-        "clvertalt" => {
-            set_pending_cell_vertical_align(ctx, CellVerticalAlignment::Top);
-        }
-        "clvertalc" => {
-            set_pending_cell_vertical_align(ctx, CellVerticalAlignment::Center);
-        }
-        "clvertalb" => {
-            set_pending_cell_vertical_align(ctx, CellVerticalAlignment::Bottom);
-        }
+        "clvertalt" => set_pending_cell_vertical_align(ctx, CellVerticalAlignment::Top),
+        "clvertalc" => set_pending_cell_vertical_align(ctx, CellVerticalAlignment::Center),
+        "clvertalb" => set_pending_cell_vertical_align(ctx, CellVerticalAlignment::Bottom),
+        _ => return false,
+    }
+    true
+}
+
+fn handle_table_border_controls(word: &str, param: Option<i32>, ctx: &mut RtfParseContext) -> bool {
+    match word {
         "clbrdrt" => set_border_target(ctx, BorderTarget::Top),
         "clbrdrb" => set_border_target(ctx, BorderTarget::Bottom),
         "clbrdrl" => set_border_target(ctx, BorderTarget::Left),
@@ -293,19 +321,9 @@ pub(super) fn handle_table_controls(
             ctx.pending_para_border_target = Some(BorderTarget::Right);
             apply_paragraph_border(ctx);
         }
-        "cell" => {
-            flush_text(ctx, store, None)?;
-            finalize_cell(ctx, store);
-            ctx.current_cell = Some(TableCell::new());
-        }
-        "row" => {
-            flush_text(ctx, store, None)?;
-            finalize_cell(ctx, store);
-            finalize_row(ctx, store);
-        }
-        _ => return Ok(false),
+        _ => return false,
     }
-    Ok(true)
+    true
 }
 
 pub(super) fn handle_object_controls(
