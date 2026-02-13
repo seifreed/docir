@@ -552,51 +552,34 @@ fn handle_paragraph_controls(
         }
         "li" => {
             if let Some(value) = param {
-                ctx.pending_indent.left = Some(value);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.indentation = Some(ctx.pending_indent.clone());
-                }
+                apply_pending_indent(ctx, value, |indent, v| indent.left = Some(v));
             }
         }
         "ri" => {
             if let Some(value) = param {
-                ctx.pending_indent.right = Some(value);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.indentation = Some(ctx.pending_indent.clone());
-                }
+                apply_pending_indent(ctx, value, |indent, v| indent.right = Some(v));
             }
         }
         "fi" => {
             if let Some(value) = param {
-                ctx.pending_indent.first_line = Some(value);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.indentation = Some(ctx.pending_indent.clone());
-                }
+                apply_pending_indent(ctx, value, |indent, v| indent.first_line = Some(v));
             }
         }
         "sb" => {
             if let Some(value) = param {
-                ctx.pending_spacing.before = Some(value.max(0) as u32);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.spacing = Some(ctx.pending_spacing.clone());
-                }
+                apply_pending_spacing(ctx, |spacing| spacing.before = Some(value.max(0) as u32));
             }
         }
         "sa" => {
             if let Some(value) = param {
-                ctx.pending_spacing.after = Some(value.max(0) as u32);
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.spacing = Some(ctx.pending_spacing.clone());
-                }
+                apply_pending_spacing(ctx, |spacing| spacing.after = Some(value.max(0) as u32));
             }
         }
         "sl" => {
             if let Some(value) = param {
                 ctx.pending_spacing.line = Some(value.abs() as u32);
                 ctx.pending_spacing.line_rule = ctx.pending_line_rule;
-                if let Some(para) = ctx.current_paragraph.as_mut() {
-                    para.properties.spacing = Some(ctx.pending_spacing.clone());
-                }
+                sync_current_paragraph_spacing(ctx);
             }
         }
         "slmult" => {
@@ -613,6 +596,28 @@ fn handle_paragraph_controls(
         _ => return Ok(false),
     }
     Ok(true)
+}
+
+fn apply_pending_indent(
+    ctx: &mut RtfParseContext,
+    value: i32,
+    update: impl FnOnce(&mut Indentation, i32),
+) {
+    update(&mut ctx.pending_indent, value);
+    if let Some(para) = ctx.current_paragraph.as_mut() {
+        para.properties.indentation = Some(ctx.pending_indent.clone());
+    }
+}
+
+fn apply_pending_spacing(ctx: &mut RtfParseContext, update: impl FnOnce(&mut Spacing)) {
+    update(&mut ctx.pending_spacing);
+    sync_current_paragraph_spacing(ctx);
+}
+
+fn sync_current_paragraph_spacing(ctx: &mut RtfParseContext) {
+    if let Some(para) = ctx.current_paragraph.as_mut() {
+        para.properties.spacing = Some(ctx.pending_spacing.clone());
+    }
 }
 
 fn apply_paragraph_alignment(ctx: &mut RtfParseContext, alignment: TextAlignment) {
