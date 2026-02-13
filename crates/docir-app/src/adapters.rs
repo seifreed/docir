@@ -1,18 +1,65 @@
 //! Infrastructure adapters for application ports.
 
 use crate::{
-    AppParseError, AppResult, ParsedDocument, ParserConfig, ParserPort, SecurityScannerPort,
+    AppParseError, AppResult, ParsedDocument, ParserConfig, ParserPort, RuleProfile, RuleReport,
+    RulesEnginePort, SecurityEnricherPort, SecurityScannerPort, SerializerPort,
 };
 use docir_core::visitor::IrStore;
 use docir_parser::parser::ParsedDocument as ParserParsedDocument;
 use docir_parser::{scan_security_bytes as scan_parser_bytes, DocumentParser, ParseError};
+use docir_rules::RuleEngine;
+use docir_security::populate_security_indicators;
 use std::io::{Read, Seek};
 use std::path::Path;
+
+use crate::use_cases::SerializeDocument;
 
 /// Parser adapter that bundles a configured parser with its config.
 pub struct AppParser {
     parser: DocumentParser,
     config: docir_parser::ParserConfig,
+}
+
+struct DefaultSecurityEnricher;
+
+impl SecurityEnricherPort for DefaultSecurityEnricher {
+    fn enrich(&self, store: &mut IrStore, root_id: docir_core::types::NodeId) {
+        populate_security_indicators(store, root_id);
+    }
+}
+
+struct DefaultRulesEngine;
+
+impl RulesEnginePort for DefaultRulesEngine {
+    fn run_with_profile(
+        &self,
+        store: &IrStore,
+        root_id: docir_core::types::NodeId,
+        profile: &RuleProfile,
+    ) -> RuleReport {
+        let engine = RuleEngine::with_default_rules();
+        engine.run_with_profile(store, root_id, profile)
+    }
+}
+
+struct DefaultJsonSerializer;
+
+impl SerializerPort for DefaultJsonSerializer {
+    fn to_json(&self, parsed: &ParsedDocument, pretty: bool) -> AppResult<String> {
+        SerializeDocument::to_json(parsed, pretty)
+    }
+}
+
+pub(crate) fn default_security_enricher() -> Box<dyn SecurityEnricherPort> {
+    Box::new(DefaultSecurityEnricher)
+}
+
+pub(crate) fn default_rules_engine_factory() -> impl Fn() -> Box<dyn RulesEnginePort> {
+    || Box::new(DefaultRulesEngine)
+}
+
+pub(crate) fn default_json_serializer() -> Box<dyn SerializerPort> {
+    Box::new(DefaultJsonSerializer)
 }
 
 impl AppParser {

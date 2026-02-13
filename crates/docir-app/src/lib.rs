@@ -8,9 +8,8 @@ use docir_diff::DiffResult;
 use docir_parser::parser::ParsedDocument as ParserParsedDocument;
 use docir_parser::ParseError as ParserParseError;
 pub use docir_rules::RuleProfile;
-use docir_rules::{RuleEngine, RuleReport};
+use docir_rules::RuleReport;
 use docir_security::analyzer::AnalysisResult;
-use docir_security::populate_security_indicators;
 use docir_security::SecurityAnalyzer;
 use docir_serialization::SerializationError;
 use std::io::{Read, Seek};
@@ -31,7 +30,6 @@ pub use summary::{
 
 use use_cases::{
     AnalyzeSecurity, DefaultSecurityAnalyzerFactory, DiffDocuments, ParseDocument, RunRules,
-    SerializeDocument,
 };
 
 pub type AppResult<T> = Result<T, AppError>;
@@ -139,14 +137,6 @@ pub trait SecurityEnricherPort {
     fn enrich(&self, store: &mut IrStore, root_id: NodeId);
 }
 
-struct DefaultSecurityEnricher;
-
-impl SecurityEnricherPort for DefaultSecurityEnricher {
-    fn enrich(&self, store: &mut IrStore, root_id: NodeId) {
-        populate_security_indicators(store, root_id);
-    }
-}
-
 /// Rules engine port for application workflows.
 pub trait RulesEnginePort {
     fn run_with_profile(
@@ -157,31 +147,9 @@ pub trait RulesEnginePort {
     ) -> RuleReport;
 }
 
-struct DefaultRulesEngine;
-
-impl RulesEnginePort for DefaultRulesEngine {
-    fn run_with_profile(
-        &self,
-        store: &IrStore,
-        root_id: NodeId,
-        profile: &RuleProfile,
-    ) -> RuleReport {
-        let engine = RuleEngine::with_default_rules();
-        engine.run_with_profile(store, root_id, profile)
-    }
-}
-
 /// Serialization port for application workflows.
 pub trait SerializerPort {
     fn to_json(&self, parsed: &ParsedDocument, pretty: bool) -> AppResult<String>;
-}
-
-struct DefaultJsonSerializer;
-
-impl SerializerPort for DefaultJsonSerializer {
-    fn to_json(&self, parsed: &ParsedDocument, pretty: bool) -> AppResult<String> {
-        SerializeDocument::to_json(parsed, pretty)
-    }
 }
 
 /// Application facade for docir workflows.
@@ -208,8 +176,8 @@ impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
         Self::with_parser_and_ports(
             parser,
             DefaultSecurityAnalyzerFactory::build,
-            || Box::new(DefaultRulesEngine),
-            Box::new(DefaultJsonSerializer),
+            adapters::default_rules_engine_factory(),
+            adapters::default_json_serializer(),
         )
     }
 
@@ -221,8 +189,8 @@ impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
         Self::with_parser_and_ports(
             parser,
             security_analyzer_factory,
-            || Box::new(DefaultRulesEngine),
-            Box::new(DefaultJsonSerializer),
+            adapters::default_rules_engine_factory(),
+            adapters::default_json_serializer(),
         )
     }
 
@@ -240,7 +208,7 @@ impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
         Self::with_parser_and_ports_and_enricher(
             parser,
             security_analyzer_factory,
-            Box::new(DefaultSecurityEnricher),
+            adapters::default_security_enricher(),
             rules_engine_factory,
             serializer,
         )
