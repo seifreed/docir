@@ -1,8 +1,9 @@
+use super::state::{BorderTarget, GroupKind, RtfParseContext, StyleEntryContext};
 use super::{
     apply_border, apply_paragraph_border, color_from_index, ensure_section, finalize_cell,
-    finalize_row, flush_text, pending_numbering, set_border_target, BorderStyle, BorderTarget,
-    CellVerticalAlignment, GroupKind, MergeType, ObjectContext, ObjectTextTarget, RtfParseContext,
-    StyleEntryContext, StyleSet, StyleType, Table, TableCell, TableCellProperties, TableRow,
+    finalize_row, flush_text, pending_numbering, set_border_target, BorderStyle,
+    CellVerticalAlignment, MergeType, ObjectContext, ObjectTextTarget, StyleSet, StyleType, Table,
+    TableCell, TableCellProperties, TableRow,
 };
 use crate::error::ParseError;
 use docir_core::visitor::IrStore;
