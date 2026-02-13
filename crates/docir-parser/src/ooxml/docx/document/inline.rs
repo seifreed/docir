@@ -148,50 +148,14 @@ pub(super) fn parse_revision_inline(
     start: &BytesStart,
     change_type: RevisionType,
 ) -> Result<NodeId, ParseError> {
-    let mut revision = Revision::new(change_type);
-    revision.revision_id = attr_value(start, b"w:id");
-    revision.author = attr_value(start, b"w:author");
-    revision.date = attr_value(start, b"w:date");
-    revision.span = Some(SourceSpan::new(DOC_XML_PATH));
-
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"w:r" => {
-                    let run = parse_run(parser, reader, rels)?;
-                    revision.content.push(run.run_id);
-                    revision.content.extend(run.embedded);
-                }
-                _ => {}
-            },
-            Ok(Event::End(e)) => {
-                if matches!(
-                    e.name().as_ref(),
-                    b"w:ins"
-                        | b"w:del"
-                        | b"w:moveFrom"
-                        | b"w:moveTo"
-                        | b"w:pPrChange"
-                        | b"w:rPrChange"
-                ) {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(DOC_XML_PATH, e));
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    let id = revision.id;
-    parser
-        .store
-        .insert(docir_core::ir::IRNode::Revision(revision));
-    Ok(id)
+    parse_revision(
+        parser,
+        reader,
+        rels,
+        start,
+        change_type,
+        RevisionParseMode::Inline,
+    )
 }
 
 pub(super) fn parse_revision_block(
@@ -200,6 +164,29 @@ pub(super) fn parse_revision_block(
     rels: &Relationships,
     start: &BytesStart,
     change_type: RevisionType,
+) -> Result<NodeId, ParseError> {
+    parse_revision(
+        parser,
+        reader,
+        rels,
+        start,
+        change_type,
+        RevisionParseMode::Block,
+    )
+}
+
+enum RevisionParseMode {
+    Inline,
+    Block,
+}
+
+fn parse_revision(
+    parser: &mut DocxParser,
+    reader: &mut Reader<&[u8]>,
+    rels: &Relationships,
+    start: &BytesStart,
+    change_type: RevisionType,
+    mode: RevisionParseMode,
 ) -> Result<NodeId, ParseError> {
     let mut revision = Revision::new(change_type);
     revision.revision_id = attr_value(start, b"w:id");
@@ -210,21 +197,30 @@ pub(super) fn parse_revision_block(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"w:p" => {
-                    let para_id = parse_paragraph_simple(parser, reader, rels)?;
-                    revision.content.push(para_id);
+            Ok(Event::Start(e)) => match mode {
+                RevisionParseMode::Inline => {
+                    if e.name().as_ref() == b"w:r" {
+                        let run = parse_run(parser, reader, rels)?;
+                        revision.content.push(run.run_id);
+                        revision.content.extend(run.embedded);
+                    }
                 }
-                b"w:tbl" => {
-                    let table_id = parse_table(parser, reader, rels)?;
-                    revision.content.push(table_id);
-                }
-                b"w:r" => {
-                    let run = parse_run(parser, reader, rels)?;
-                    revision.content.push(run.run_id);
-                    revision.content.extend(run.embedded);
-                }
-                _ => {}
+                RevisionParseMode::Block => match e.name().as_ref() {
+                    b"w:p" => {
+                        let para_id = parse_paragraph_simple(parser, reader, rels)?;
+                        revision.content.push(para_id);
+                    }
+                    b"w:tbl" => {
+                        let table_id = parse_table(parser, reader, rels)?;
+                        revision.content.push(table_id);
+                    }
+                    b"w:r" => {
+                        let run = parse_run(parser, reader, rels)?;
+                        revision.content.push(run.run_id);
+                        revision.content.extend(run.embedded);
+                    }
+                    _ => {}
+                },
             },
             Ok(Event::End(e)) => {
                 if matches!(
