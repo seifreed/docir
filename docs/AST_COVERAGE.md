@@ -5,7 +5,7 @@ The goal is deterministic, semantic IR coverage of all meaningful parts, with se
 content modeled explicitly.
 
 ## Legend
-- Status: DONE, PARTIAL, TODO
+- Status: DONE, PARTIAL, TODO(issue-id, owner, rationale)
 - Coverage: structural coverage in IR (not 1:1 XML)
 - Tests: concrete fixtures and validation rules
 
@@ -23,7 +23,7 @@ content modeled explicitly.
   - charts/smartart -> ChartData/SmartArtPart (DONE)
   - macros/ActiveX/OLE -> MacroProject/ActiveXControl/OleObject (DONE)
 - Tests
-  - fixtures/OOXML: full round-trip coverage + security scan (TODO)
+  - fixtures/OOXML: full round-trip coverage + security scan (TODO DOCIR-201, owner: @maintainers, rationale: missing deterministic fixture set for security regression)
 
 ## OOXML (XLSX)
 - Parts
@@ -36,7 +36,7 @@ content modeled explicitly.
   - external links, connections, query tables -> ExternalLinkPart/ConnectionPart/QueryTablePart (DONE)
   - macros/XLM -> MacroProject/XlmMacro (DONE)
 - Tests
-  - fixtures/OOXML: calc, pivot, formulas, macros (TODO)
+  - fixtures/OOXML: calc, pivot, formulas, macros (TODO DOCIR-202, owner: @maintainers, rationale: pending macro-enabled fixture curation and expected-output baselines)
 
 ## OOXML (PPTX)
 - Parts
@@ -47,7 +47,7 @@ content modeled explicitly.
   - media, animations, transitions -> MediaAsset/SlideAnimation/SlideTransition (DONE)
   - comments/people/tags -> PptxComment/PptxCommentAuthor/PresentationTag (DONE)
 - Tests
-  - fixtures/OOXML: media + animations + OLE (TODO)
+  - fixtures/OOXML: media + animations + OLE (TODO DOCIR-203, owner: @maintainers, rationale: requires large fixture normalization and stable media hashing)
 
 ## ODF (ODT/ODS/ODP)
 - Parts
@@ -57,7 +57,7 @@ content modeled explicitly.
   - settings.xml -> ExtensionPart + diagnostics (DONE)
   - scripts/objects -> MacroProject/OleObject (DONE)
 - Tests
-  - fixtures/ODF: text, calc, draw, external links (TODO)
+  - fixtures/ODF: text, calc, draw, external links (TODO DOCIR-204, owner: @maintainers, rationale: parser edge-case corpus still incomplete for draw/external-link combinations)
 
 ## HWP (legacy)
 - Parts
@@ -65,7 +65,7 @@ content modeled explicitly.
   - BinData -> MediaAsset (DONE)
   - Scripts -> MacroProject (PARTIAL)
 - Tests
-  - fixtures/HWP: encrypted + content streams (TODO)
+  - fixtures/HWP: encrypted + content streams (TODO DOCIR-205, owner: @maintainers, rationale: encrypted sample licensing and redaction workflow not finalized)
 
 ## HWPX
 - Parts
@@ -76,7 +76,7 @@ content modeled explicitly.
   - BinData -> MediaAsset (DONE)
   - External links/OLE -> ExternalReference/OleObject (PARTIAL)
 - Tests
-  - fixtures/HWPX: headers, tables, styles, objects (TODO)
+  - fixtures/HWPX: headers, tables, styles, objects (TODO DOCIR-206, owner: @maintainers, rationale: fixture generator for consistent HWPX object IDs still pending)
 
 ## RTF
 - Parts
@@ -95,4 +95,3 @@ content modeled explicitly.
 - Deterministic ordering in IR store
 - Coverage: no unclassified parts for OOXML/ODF/HWPX
 - Security nodes: external refs, OLE, macros explicitly mapped
-
