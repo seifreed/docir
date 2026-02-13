@@ -510,15 +510,31 @@ fn parse_u64_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<u64> {
         .and_then(|attr| String::from_utf8_lossy(&attr.value).parse::<u64>().ok())
 }
 
-fn parse_bool_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<bool> {
+fn parse_bool_value(value: &str) -> bool {
+    value == "1" || value.eq_ignore_ascii_case("true")
+}
+
+fn parse_size_type_attr(start: &BytesStart<'_>) -> Option<String> {
     start
         .attributes()
         .flatten()
-        .find(|attr| attr.key.as_ref() == key_name)
-        .map(|attr| {
-            let val = String::from_utf8_lossy(&attr.value);
-            val == "1" || val.eq_ignore_ascii_case("true")
-        })
+        .find(|attr| attr.key.as_ref() == b"type")
+        .map(|attr| String::from_utf8_lossy(&attr.value).to_string())
+}
+
+fn apply_show_properties(start: &BytesStart<'_>, info: &mut PresentationInfo) {
+    for attr in start.attributes().flatten() {
+        let key = attr.key.as_ref();
+        let val = String::from_utf8_lossy(&attr.value);
+        match key {
+            b"showType" => info.show_type = Some(val.to_string()),
+            b"loop" => info.show_loop = Some(parse_bool_value(&val)),
+            b"showNarration" => info.show_narration = Some(parse_bool_value(&val)),
+            b"showAnimation" => info.show_animation = Some(parse_bool_value(&val)),
+            b"useTimings" => info.use_timings = Some(parse_bool_value(&val)),
+            _ => {}
+        }
+    }
 }
 
 fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationInfo>, ParseError> {
@@ -537,15 +553,7 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                 if name == b"p:sldSz" {
                     let cx = parse_u64_attr(&e, b"cx");
                     let cy = parse_u64_attr(&e, b"cy");
-                    let mut size_type = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"type" => {
-                                size_type = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            _ => {}
-                        }
-                    }
+                    let size_type = parse_size_type_attr(&e);
                     if let (Some(cx), Some(cy)) = (cx, cy) {
                         info.slide_size = Some(SlideSize { cx, cy, size_type });
                         found = true;
@@ -562,22 +570,7 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                         found = true;
                     }
                 } else if name == b"p:showPr" {
-                    for attr in e.attributes().flatten() {
-                        let key = attr.key.as_ref();
-                        let val = String::from_utf8_lossy(&attr.value);
-                        match key {
-                            b"showType" => info.show_type = Some(val.to_string()),
-                            b"loop" => info.show_loop = parse_bool_attr(&e, b"loop"),
-                            b"showNarration" => {
-                                info.show_narration = parse_bool_attr(&e, b"showNarration")
-                            }
-                            b"showAnimation" => {
-                                info.show_animation = parse_bool_attr(&e, b"showAnimation")
-                            }
-                            b"useTimings" => info.use_timings = parse_bool_attr(&e, b"useTimings"),
-                            _ => {}
-                        }
-                    }
+                    apply_show_properties(&e, &mut info);
                     found = true;
                 } else if name == b"p:presentation" {
                     for attr in e.attributes().flatten() {

@@ -163,51 +163,54 @@ fn parse_control(
     }
 
     if next.is_ascii_alphabetic() {
-        let mut word = Vec::new();
-        word.push(next);
-        while let Some(b) = cursor.peek() {
-            if b.is_ascii_alphabetic() {
-                word.push(b);
-                cursor.next();
-            } else {
-                break;
-            }
-        }
-
-        let mut sign = 1i32;
-        let mut param: Option<i32> = None;
-        if let Some(b) = cursor.peek() {
-            if b == b'-' {
-                sign = -1;
-                cursor.next();
-            }
-        }
-        let mut digits = Vec::new();
-        while let Some(b) = cursor.peek() {
-            if b.is_ascii_digit() {
-                digits.push(b);
-                cursor.next();
-            } else {
-                break;
-            }
-        }
-        if !digits.is_empty() {
-            if let Ok(num) = std::str::from_utf8(&digits).unwrap_or("0").parse::<i32>() {
-                param = Some(num * sign);
-            }
-        }
-
-        if let Some(b) = cursor.peek() {
-            if b == b' ' {
-                cursor.next();
-            }
-        }
-
-        let word = String::from_utf8_lossy(&word).to_ascii_lowercase();
+        let (word, param) = parse_control_word_and_param(cursor, next);
         handle_control_word(&word, param, ctx, store)?;
     }
 
     Ok(())
+}
+
+fn parse_control_word_and_param(cursor: &mut RtfCursor<'_>, first: u8) -> (String, Option<i32>) {
+    let mut word = vec![first];
+    while let Some(b) = cursor.peek() {
+        if b.is_ascii_alphabetic() {
+            word.push(b);
+            cursor.next();
+        } else {
+            break;
+        }
+    }
+
+    let mut sign = 1i32;
+    if cursor.peek() == Some(b'-') {
+        sign = -1;
+        cursor.next();
+    }
+
+    let mut digits = Vec::new();
+    while let Some(b) = cursor.peek() {
+        if b.is_ascii_digit() {
+            digits.push(b);
+            cursor.next();
+        } else {
+            break;
+        }
+    }
+
+    let param = if digits.is_empty() {
+        None
+    } else {
+        std::str::from_utf8(&digits)
+            .ok()
+            .and_then(|raw| raw.parse::<i32>().ok())
+            .map(|num| num * sign)
+    };
+
+    if cursor.peek() == Some(b' ') {
+        cursor.next();
+    }
+
+    (String::from_utf8_lossy(&word).to_ascii_lowercase(), param)
 }
 
 fn handle_control_word(
