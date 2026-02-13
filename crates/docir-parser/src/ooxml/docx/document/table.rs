@@ -240,78 +240,25 @@ pub(super) fn parse_table_properties(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"w:tblW" => {
-                    if let Some(val) = attr_value(&e, b"w:w").and_then(|v| v.parse().ok()) {
-                        let width_type = match attr_value(&e, b"w:type").as_deref() {
-                            Some("dxa") => TableWidthType::Dxa,
-                            Some("pct") => TableWidthType::Pct,
-                            Some("auto") => TableWidthType::Auto,
-                            _ => TableWidthType::Nil,
-                        };
-                        props.width = Some(TableWidth {
-                            value: val,
-                            width_type,
-                        });
+            Ok(Event::Start(e)) => {
+                apply_table_property_attrs(&e, props);
+                match e.name().as_ref() {
+                    b"w:tblBorders" => {
+                        if let Some(borders) = parse_table_borders(reader, b"w:tblBorders")? {
+                            props.borders = Some(borders);
+                        }
                     }
-                }
-                b"w:jc" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
-                        props.alignment = match val.as_str() {
-                            "center" => Some(TableAlignment::Center),
-                            "right" => Some(TableAlignment::Right),
-                            _ => Some(TableAlignment::Left),
-                        };
+                    b"w:tblCellMar" => {
+                        if let Some(margins) = parse_cell_margins(reader)? {
+                            props.cell_margins = Some(margins);
+                        }
                     }
+                    _ => {}
                 }
-                b"w:tblStyle" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
-                        props.style_id = Some(val);
-                    }
-                }
-                b"w:tblBorders" => {
-                    if let Some(borders) = parse_table_borders(reader, b"w:tblBorders")? {
-                        props.borders = Some(borders);
-                    }
-                }
-                b"w:tblCellMar" => {
-                    if let Some(margins) = parse_cell_margins(reader)? {
-                        props.cell_margins = Some(margins);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"w:tblW" => {
-                    if let Some(val) = attr_value(&e, b"w:w").and_then(|v| v.parse().ok()) {
-                        let width_type = match attr_value(&e, b"w:type").as_deref() {
-                            Some("dxa") => TableWidthType::Dxa,
-                            Some("pct") => TableWidthType::Pct,
-                            Some("auto") => TableWidthType::Auto,
-                            _ => TableWidthType::Nil,
-                        };
-                        props.width = Some(TableWidth {
-                            value: val,
-                            width_type,
-                        });
-                    }
-                }
-                b"w:jc" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
-                        props.alignment = match val.as_str() {
-                            "center" => Some(TableAlignment::Center),
-                            "right" => Some(TableAlignment::Right),
-                            _ => Some(TableAlignment::Left),
-                        };
-                    }
-                }
-                b"w:tblStyle" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
-                        props.style_id = Some(val);
-                    }
-                }
-                _ => {}
-            },
+            }
+            Ok(Event::Empty(e)) => {
+                apply_table_property_attrs(&e, props);
+            }
             Ok(Event::End(e)) => {
                 if e.name().as_ref() == b"w:tblPr" {
                     break;
@@ -329,6 +276,40 @@ pub(super) fn parse_table_properties(
         buf.clear();
     }
     Ok(())
+}
+
+fn apply_table_property_attrs(event: &BytesStart<'_>, props: &mut docir_core::ir::TableProperties) {
+    match event.name().as_ref() {
+        b"w:tblW" => {
+            if let Some(val) = attr_value(event, b"w:w").and_then(|v| v.parse().ok()) {
+                let width_type = match attr_value(event, b"w:type").as_deref() {
+                    Some("dxa") => TableWidthType::Dxa,
+                    Some("pct") => TableWidthType::Pct,
+                    Some("auto") => TableWidthType::Auto,
+                    _ => TableWidthType::Nil,
+                };
+                props.width = Some(TableWidth {
+                    value: val,
+                    width_type,
+                });
+            }
+        }
+        b"w:jc" => {
+            if let Some(val) = attr_value(event, b"w:val") {
+                props.alignment = match val.as_str() {
+                    "center" => Some(TableAlignment::Center),
+                    "right" => Some(TableAlignment::Right),
+                    _ => Some(TableAlignment::Left),
+                };
+            }
+        }
+        b"w:tblStyle" => {
+            if let Some(val) = attr_value(event, b"w:val") {
+                props.style_id = Some(val);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn parse_table_grid(

@@ -171,70 +171,29 @@ impl PptxParser {
         let mut link_rel: Option<String> = None;
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"p:cNvPr" => {
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"name" => {
-                                    shape.name =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                b"descr" => {
-                                    shape.alt_text =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    b"a:hlinkClick" => {
-                        self.attach_hyperlink(&mut shape, &e, relationships, slide_path);
-                    }
-                    b"a:blip" => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"r:embed" {
-                                embed_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            } else if attr.key.as_ref() == b"r:link" {
-                                link_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
-                    }
-                    b"p:spPr" => {
+                Ok(Event::Start(e)) => {
+                    self.apply_picture_common_event(
+                        &e,
+                        &mut shape,
+                        relationships,
+                        slide_path,
+                        &mut embed_rel,
+                        &mut link_rel,
+                    );
+                    if e.name().as_ref() == b"p:spPr" {
                         parse_shape_properties(reader, &mut shape, slide_path)?;
                     }
-                    _ => {}
-                },
-                Ok(Event::Empty(e)) => match e.name().as_ref() {
-                    b"p:cNvPr" => {
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"name" => {
-                                    shape.name =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                b"descr" => {
-                                    shape.alt_text =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    b"a:hlinkClick" => {
-                        self.attach_hyperlink(&mut shape, &e, relationships, slide_path);
-                    }
-                    b"a:blip" => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"r:embed" {
-                                embed_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            } else if attr.key.as_ref() == b"r:link" {
-                                link_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
-                    }
-                    b"p:spPr" => {}
-                    _ => {}
-                },
+                }
+                Ok(Event::Empty(e)) => {
+                    self.apply_picture_common_event(
+                        &e,
+                        &mut shape,
+                        relationships,
+                        slide_path,
+                        &mut embed_rel,
+                        &mut link_rel,
+                    );
+                }
                 Ok(Event::End(e)) => {
                     if e.name().as_ref() == b"p:pic" {
                         break;
@@ -296,6 +255,45 @@ impl PptxParser {
         }
 
         Ok(shape)
+    }
+
+    fn apply_picture_common_event(
+        &mut self,
+        event: &BytesStart<'_>,
+        shape: &mut Shape,
+        relationships: &Relationships,
+        slide_path: &str,
+        embed_rel: &mut Option<String>,
+        link_rel: &mut Option<String>,
+    ) {
+        match event.name().as_ref() {
+            b"p:cNvPr" => {
+                for attr in event.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"name" => {
+                            shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
+                        }
+                        b"descr" => {
+                            shape.alt_text = Some(String::from_utf8_lossy(&attr.value).to_string());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            b"a:hlinkClick" => {
+                self.attach_hyperlink(shape, event, relationships, slide_path);
+            }
+            b"a:blip" => {
+                for attr in event.attributes().flatten() {
+                    if attr.key.as_ref() == b"r:embed" {
+                        *embed_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
+                    } else if attr.key.as_ref() == b"r:link" {
+                        *link_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     pub(super) fn parse_shape_graphic_frame(
