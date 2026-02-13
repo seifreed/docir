@@ -19,74 +19,92 @@ pub(crate) fn summarize(node: &IRNode, store: &IrStore) -> String {
     if let Some(summary) = presentation::summarize(node, store) {
         return summary;
     }
+    summarize_with_fallback(node, store)
+}
+
+fn summarize_with_fallback(node: &IRNode, store: &IrStore) -> String {
+    summarize_primary(node, store).unwrap_or_else(|| summarize_secondary(node))
+}
+
+fn summarize_primary(node: &IRNode, store: &IrStore) -> Option<String> {
     match node {
-        IRNode::Document(doc) => summarize_document(doc),
-        IRNode::Section(section) => summarize_section(section),
-        IRNode::Paragraph(para) => summarize_paragraph(para, store),
-        IRNode::Run(run) => summarize_run(run),
-        IRNode::Hyperlink(link) => summarize_hyperlink(link, store),
-        IRNode::Table(table) => summarize_table(table),
-        IRNode::TableRow(row) => summarize_table_row(row),
-        IRNode::TableCell(cell) => summarize_table_cell(cell),
-        IRNode::MacroProject(project) => summarize_macro_project(project),
-        IRNode::MacroModule(module) => summarize_macro_module(module),
-        IRNode::OleObject(ole) => summarize_ole(ole),
-        IRNode::ExternalReference(ext) => summarize_external_ref(ext),
-        IRNode::ActiveXControl(ctrl) => format!(
+        IRNode::Document(doc) => Some(summarize_document(doc)),
+        IRNode::Section(section) => Some(summarize_section(section)),
+        IRNode::Paragraph(para) => Some(summarize_paragraph(para, store)),
+        IRNode::Run(run) => Some(summarize_run(run)),
+        IRNode::Hyperlink(link) => Some(summarize_hyperlink(link, store)),
+        IRNode::Table(table) => Some(summarize_table(table)),
+        IRNode::TableRow(row) => Some(summarize_table_row(row)),
+        IRNode::TableCell(cell) => Some(summarize_table_cell(cell)),
+        IRNode::MacroProject(project) => Some(summarize_macro_project(project)),
+        IRNode::MacroModule(module) => Some(summarize_macro_module(module)),
+        IRNode::OleObject(ole) => Some(summarize_ole(ole)),
+        IRNode::ExternalReference(ext) => Some(summarize_external_ref(ext)),
+        IRNode::ActiveXControl(ctrl) => Some(format!(
             "name={} clsid={} prog_id={}",
             opt_str(&ctrl.name),
             opt_str(&ctrl.clsid),
             opt_str(&ctrl.prog_id)
-        ),
-        IRNode::Metadata(meta) => format!(
+        )),
+        IRNode::Metadata(meta) => Some(format!(
             "title={} author={}",
             opt_str(&meta.title),
             opt_str(&meta.creator)
-        ),
-        IRNode::Theme(theme) => format!(
+        )),
+        IRNode::Theme(theme) => Some(format!(
             "name={} colors={} fonts={}",
             opt_str(&theme.name),
             theme.colors.len(),
             theme.fonts.major.as_deref().unwrap_or("-")
-        ),
-        IRNode::MediaAsset(media) => format!(
+        )),
+        IRNode::MediaAsset(media) => Some(format!(
             "path={} type={:?} size={}",
             media.path, media.media_type, media.size_bytes
-        ),
-        IRNode::CustomXmlPart(part) => {
-            format!("path={} root={}", part.path, opt_str(&part.root_element))
-        }
-        IRNode::RelationshipGraph(graph) => {
-            format!("source={} rels={}", graph.source, graph.relationships.len())
-        }
-        IRNode::DigitalSignature(sig) => format!(
+        )),
+        IRNode::CustomXmlPart(part) => Some(format!(
+            "path={} root={}",
+            part.path,
+            opt_str(&part.root_element)
+        )),
+        IRNode::RelationshipGraph(graph) => Some(format!(
+            "source={} rels={}",
+            graph.source,
+            graph.relationships.len()
+        )),
+        IRNode::DigitalSignature(sig) => Some(format!(
             "id={} method={}",
             opt_str(&sig.signature_id),
             opt_str(&sig.signature_method)
-        ),
-        IRNode::ExtensionPart(part) => format!(
+        )),
+        IRNode::ExtensionPart(part) => Some(format!(
             "path={} kind={:?} size={}",
             part.path, part.kind, part.size_bytes
-        ),
-        IRNode::StyleSet(styles) => format!("styles={}", styles.styles.len()),
-        IRNode::NumberingSet(nums) => format!(
+        )),
+        IRNode::StyleSet(styles) => Some(format!("styles={}", styles.styles.len())),
+        IRNode::NumberingSet(nums) => Some(format!(
             "abstracts={} nums={}",
             nums.abstract_nums.len(),
             nums.nums.len()
-        ),
-        IRNode::Comment(comment) => summarize_comment(comment),
-        IRNode::Footnote(note) => summarize_footnote(note),
-        IRNode::Endnote(note) => summarize_endnote(note),
-        IRNode::Header(header) => summarize_header_footer(header.content.len()),
-        IRNode::Footer(footer) => summarize_header_footer(footer.content.len()),
-        IRNode::WordSettings(settings) => format!("entries={}", settings.entries.len()),
-        IRNode::WebSettings(settings) => format!("entries={}", settings.entries.len()),
-        IRNode::FontTable(table) => format!("fonts={}", table.fonts.len()),
-        IRNode::ContentControl(control) => summarize_content_control(control),
-        IRNode::BookmarkStart(start) => summarize_bookmark_start(start),
-        IRNode::BookmarkEnd(end) => summarize_bookmark_end(end),
-        IRNode::Field(field) => summarize_field(field),
-        IRNode::Revision(rev) => summarize_revision(rev),
+        )),
+        IRNode::Comment(comment) => Some(summarize_comment(comment)),
+        IRNode::Footnote(note) => Some(summarize_footnote(note)),
+        IRNode::Endnote(note) => Some(summarize_endnote(note)),
+        IRNode::Header(header) => Some(summarize_header_footer(header.content.len())),
+        IRNode::Footer(footer) => Some(summarize_header_footer(footer.content.len())),
+        IRNode::WordSettings(settings) => Some(format!("entries={}", settings.entries.len())),
+        IRNode::WebSettings(settings) => Some(format!("entries={}", settings.entries.len())),
+        IRNode::FontTable(table) => Some(format!("fonts={}", table.fonts.len())),
+        IRNode::ContentControl(control) => Some(summarize_content_control(control)),
+        IRNode::BookmarkStart(start) => Some(summarize_bookmark_start(start)),
+        IRNode::BookmarkEnd(end) => Some(summarize_bookmark_end(end)),
+        IRNode::Field(field) => Some(summarize_field(field)),
+        IRNode::Revision(rev) => Some(summarize_revision(rev)),
+        _ => None,
+    }
+}
+
+fn summarize_secondary(node: &IRNode) -> String {
+    match node {
         IRNode::CommentExtensionSet(set) => format!("entries={}", set.entries.len()),
         IRNode::CommentIdMap(map) => format!("mappings={}", map.mappings.len()),
         IRNode::CommentRangeStart(start) => format!("comment_id={}", start.comment_id),
