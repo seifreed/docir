@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 docir-core = { workspace = true }
 docir-app = { workspace = true }
+docir-security = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 env_logger = { workspace = true }

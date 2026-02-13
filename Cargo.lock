@@ -391,6 +391,7 @@ dependencies = [
  "clap",
  "docir-app",
  "docir-core",
+ "docir-security",
  "env_logger",
  "log",
  "serde",
