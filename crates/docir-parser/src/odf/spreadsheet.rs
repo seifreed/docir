@@ -27,61 +27,32 @@ pub(super) fn parse_content_spreadsheet(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"office:spreadsheet" => in_spreadsheet = true,
-                b"table:content-validation" if in_spreadsheet => {
-                    if let Some((name, def)) = parse_validation_definition(&e) {
-                        validations.insert(name, def);
-                    }
-                }
-                b"table:table" if in_spreadsheet => {
-                    let worksheet =
-                        parse_ods_table(&mut reader, &e, sheet_id, store, &validations, limits)?;
-                    let node_id = worksheet.id;
-                    sheet_index.insert(worksheet.name.clone(), node_id);
-                    store.insert(IRNode::Worksheet(worksheet));
-                    sheets.push(node_id);
-                    sheet_id += 1;
-                }
-                b"table:data-pilot-table" if in_spreadsheet => {
-                    let cache_id = next_cache_id;
-                    let parsed = parse_ods_pivot_table_full(&mut reader, &e, cache_id)?;
-                    record_pivot_parse(
-                        store,
-                        &mut pivot_links,
-                        &mut pivot_caches,
-                        &mut next_cache_id,
-                        parsed,
-                    );
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"table:table" if in_spreadsheet => {
-                    let (sheet, node_id) = build_empty_sheet(&e, sheet_id);
-                    sheet_index.insert(sheet.name.clone(), node_id);
-                    store.insert(IRNode::Worksheet(sheet));
-                    sheets.push(node_id);
-                    sheet_id += 1;
-                }
-                b"table:content-validation" if in_spreadsheet => {
-                    if let Some((name, def)) = parse_validation_definition(&e) {
-                        validations.insert(name, def);
-                    }
-                }
-                b"table:data-pilot-table" if in_spreadsheet => {
-                    let cache_id = next_cache_id;
-                    let parsed = parse_ods_pivot_table_empty(&e, cache_id);
-                    record_pivot_parse(
-                        store,
-                        &mut pivot_links,
-                        &mut pivot_caches,
-                        &mut next_cache_id,
-                        parsed,
-                    );
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => handle_spreadsheet_start_full(
+                &mut reader,
+                &e,
+                &mut in_spreadsheet,
+                &mut sheet_id,
+                store,
+                limits,
+                &mut validations,
+                &mut sheets,
+                &mut sheet_index,
+                &mut pivot_links,
+                &mut pivot_caches,
+                &mut next_cache_id,
+            )?,
+            Ok(Event::Empty(e)) => handle_spreadsheet_empty_full(
+                &e,
+                in_spreadsheet,
+                &mut sheet_id,
+                store,
+                &mut validations,
+                &mut sheets,
+                &mut sheet_index,
+                &mut pivot_links,
+                &mut pivot_caches,
+                &mut next_cache_id,
+            ),
             Ok(Event::End(e)) => {
                 if e.name().as_ref() == b"office:spreadsheet" {
                     in_spreadsheet = false;
@@ -99,15 +70,7 @@ pub(super) fn parse_content_spreadsheet(
     let mut result = OdfContentResult::default();
     result.content = sheets;
     result.pivot_caches = pivot_caches;
-    for (sheet_name, pivot_id) in pivot_links {
-        if let Some(name) = sheet_name {
-            if let Some(sheet_id) = sheet_index.get(&name).copied() {
-                if let Some(IRNode::Worksheet(sheet)) = store.get_mut(sheet_id) {
-                    sheet.pivot_tables.push(pivot_id);
-                }
-            }
-        }
-    }
+    apply_pivot_links(store, &sheet_index, pivot_links);
     Ok(result)
 }
 
@@ -166,33 +129,19 @@ pub(super) fn parse_content_spreadsheet_fast(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"office:spreadsheet" => in_spreadsheet = true,
-                b"table:table" if in_spreadsheet => {
-                    let worksheet = parse_ods_table_fast(
-                        &mut reader,
-                        &e,
-                        sheet_id,
-                        store,
-                        &validations,
-                        limits,
-                    )?;
-                    let node_id = worksheet.id;
-                    store.insert(IRNode::Worksheet(worksheet));
-                    sheets.push(node_id);
-                    sheet_id += 1;
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"table:table" if in_spreadsheet => {
-                    let (sheet, node_id) = build_empty_sheet(&e, sheet_id);
-                    store.insert(IRNode::Worksheet(sheet));
-                    sheets.push(node_id);
-                    sheet_id += 1;
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => handle_spreadsheet_start_fast(
+                &mut reader,
+                &e,
+                &mut in_spreadsheet,
+                &mut sheet_id,
+                store,
+                &validations,
+                limits,
+                &mut sheets,
+            )?,
+            Ok(Event::Empty(e)) => {
+                handle_spreadsheet_empty_fast(&e, in_spreadsheet, &mut sheet_id, store, &mut sheets)
+            }
             Ok(Event::End(e)) => {
                 if e.name().as_ref() == b"office:spreadsheet" {
                     in_spreadsheet = false;
@@ -217,6 +166,150 @@ fn build_empty_sheet(start: &BytesStart<'_>, sheet_id: u32) -> (Worksheet, NodeI
     let sheet = Worksheet::new(name, sheet_id);
     let node_id = sheet.id;
     (sheet, node_id)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_spreadsheet_start_full(
+    reader: &mut OdfReader<'_>,
+    start: &BytesStart<'_>,
+    in_spreadsheet: &mut bool,
+    sheet_id: &mut u32,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    validations: &mut HashMap<String, ValidationDef>,
+    sheets: &mut Vec<NodeId>,
+    sheet_index: &mut HashMap<String, NodeId>,
+    pivot_links: &mut Vec<(Option<String>, NodeId)>,
+    pivot_caches: &mut Vec<NodeId>,
+    next_cache_id: &mut u32,
+) -> Result<(), ParseError> {
+    match start.name().as_ref() {
+        b"office:spreadsheet" => *in_spreadsheet = true,
+        b"table:content-validation" if *in_spreadsheet => {
+            insert_validation_definition(validations, start);
+        }
+        b"table:table" if *in_spreadsheet => {
+            let worksheet = parse_ods_table(reader, start, *sheet_id, store, validations, limits)?;
+            insert_worksheet(store, sheets, sheet_index, worksheet);
+            *sheet_id += 1;
+        }
+        b"table:data-pilot-table" if *in_spreadsheet => {
+            let parsed = parse_ods_pivot_table_full(reader, start, *next_cache_id)?;
+            record_pivot_parse(store, pivot_links, pivot_caches, next_cache_id, parsed);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_spreadsheet_empty_full(
+    empty: &BytesStart<'_>,
+    in_spreadsheet: bool,
+    sheet_id: &mut u32,
+    store: &mut IrStore,
+    validations: &mut HashMap<String, ValidationDef>,
+    sheets: &mut Vec<NodeId>,
+    sheet_index: &mut HashMap<String, NodeId>,
+    pivot_links: &mut Vec<(Option<String>, NodeId)>,
+    pivot_caches: &mut Vec<NodeId>,
+    next_cache_id: &mut u32,
+) {
+    match empty.name().as_ref() {
+        b"table:table" if in_spreadsheet => {
+            let (sheet, _) = build_empty_sheet(empty, *sheet_id);
+            insert_worksheet(store, sheets, sheet_index, sheet);
+            *sheet_id += 1;
+        }
+        b"table:content-validation" if in_spreadsheet => {
+            insert_validation_definition(validations, empty);
+        }
+        b"table:data-pilot-table" if in_spreadsheet => {
+            let parsed = parse_ods_pivot_table_empty(empty, *next_cache_id);
+            record_pivot_parse(store, pivot_links, pivot_caches, next_cache_id, parsed);
+        }
+        _ => {}
+    }
+}
+
+fn handle_spreadsheet_start_fast(
+    reader: &mut OdfReader<'_>,
+    start: &BytesStart<'_>,
+    in_spreadsheet: &mut bool,
+    sheet_id: &mut u32,
+    store: &mut IrStore,
+    validations: &HashMap<String, ValidationDef>,
+    limits: &dyn OdfLimitCounter,
+    sheets: &mut Vec<NodeId>,
+) -> Result<(), ParseError> {
+    match start.name().as_ref() {
+        b"office:spreadsheet" => *in_spreadsheet = true,
+        b"table:table" if *in_spreadsheet => {
+            let worksheet =
+                parse_ods_table_fast(reader, start, *sheet_id, store, validations, limits)?;
+            insert_worksheet_no_index(store, sheets, worksheet);
+            *sheet_id += 1;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_spreadsheet_empty_fast(
+    empty: &BytesStart<'_>,
+    in_spreadsheet: bool,
+    sheet_id: &mut u32,
+    store: &mut IrStore,
+    sheets: &mut Vec<NodeId>,
+) {
+    if empty.name().as_ref() == b"table:table" && in_spreadsheet {
+        let (sheet, _) = build_empty_sheet(empty, *sheet_id);
+        insert_worksheet_no_index(store, sheets, sheet);
+        *sheet_id += 1;
+    }
+}
+
+fn insert_validation_definition(
+    validations: &mut HashMap<String, ValidationDef>,
+    element: &BytesStart<'_>,
+) {
+    if let Some((name, def)) = parse_validation_definition(element) {
+        validations.insert(name, def);
+    }
+}
+
+fn insert_worksheet(
+    store: &mut IrStore,
+    sheets: &mut Vec<NodeId>,
+    sheet_index: &mut HashMap<String, NodeId>,
+    worksheet: Worksheet,
+) {
+    let node_id = worksheet.id;
+    sheet_index.insert(worksheet.name.clone(), node_id);
+    store.insert(IRNode::Worksheet(worksheet));
+    sheets.push(node_id);
+}
+
+fn insert_worksheet_no_index(store: &mut IrStore, sheets: &mut Vec<NodeId>, worksheet: Worksheet) {
+    let node_id = worksheet.id;
+    store.insert(IRNode::Worksheet(worksheet));
+    sheets.push(node_id);
+}
+
+fn apply_pivot_links(
+    store: &mut IrStore,
+    sheet_index: &HashMap<String, NodeId>,
+    pivot_links: Vec<(Option<String>, NodeId)>,
+) {
+    for (sheet_name, pivot_id) in pivot_links {
+        if let Some(name) = sheet_name {
+            if let Some(sheet_id) = sheet_index.get(&name).copied() {
+                if let Some(IRNode::Worksheet(sheet)) = store.get_mut(sheet_id) {
+                    sheet.pivot_tables.push(pivot_id);
+                }
+            }
+        }
+    }
 }
 
 fn content_xml_error(err: quick_xml::Error) -> ParseError {
