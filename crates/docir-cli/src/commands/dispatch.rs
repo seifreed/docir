@@ -20,17 +20,15 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             export,
             export_format,
             export_mode,
-        } => super::coverage::run(
+        } => run_coverage(
             input,
-            super::coverage::CoverageOptions {
-                json,
-                details,
-                inventory,
-                unknown,
-                export,
-                export_format,
-                export_mode,
-            },
+            json,
+            details,
+            inventory,
+            unknown,
+            export,
+            export_format,
+            export_mode,
             parser_config,
         ),
         Commands::Security {
@@ -64,7 +62,7 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             has_macros,
             pretty,
             output,
-        } => super::query::run(
+        } => run_query_like(
             input,
             node_type,
             contains,
@@ -74,6 +72,7 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             pretty,
             output,
             parser_config,
+            false,
         ),
         Commands::Select {
             input,
@@ -84,7 +83,7 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             has_macros,
             pretty,
             output,
-        } => super::select::run(
+        } => run_query_like(
             input,
             node_type,
             contains,
@@ -94,6 +93,7 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             pretty,
             output,
             parser_config,
+            true,
         ),
         Commands::Grep {
             input,
@@ -118,5 +118,72 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
             pretty,
             output,
         } => super::extract::run(input, node_id, node_type, pretty, output, parser_config),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_coverage(
+    input: std::path::PathBuf,
+    json: bool,
+    details: bool,
+    inventory: bool,
+    unknown: bool,
+    export: Option<std::path::PathBuf>,
+    export_format: crate::CoverageExportFormat,
+    export_mode: crate::CoverageExportMode,
+    parser_config: &ParserConfig,
+) -> Result<()> {
+    super::coverage::run(
+        input,
+        super::coverage::CoverageOptions {
+            json,
+            details,
+            inventory,
+            unknown,
+            export,
+            export_format,
+            export_mode,
+        },
+        parser_config,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_query_like(
+    input: std::path::PathBuf,
+    node_type: Option<String>,
+    contains: Option<String>,
+    format: Option<String>,
+    has_external_refs: Option<bool>,
+    has_macros: Option<bool>,
+    pretty: bool,
+    output: Option<std::path::PathBuf>,
+    parser_config: &ParserConfig,
+    select_mode: bool,
+) -> Result<()> {
+    if select_mode {
+        super::select::run(
+            input,
+            node_type,
+            contains,
+            format,
+            has_external_refs,
+            has_macros,
+            pretty,
+            output,
+            parser_config,
+        )
+    } else {
+        super::query::run(
+            input,
+            node_type,
+            contains,
+            format,
+            has_external_refs,
+            has_macros,
+            pretty,
+            output,
+            parser_config,
+        )
     }
 }
