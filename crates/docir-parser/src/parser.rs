@@ -29,6 +29,7 @@ use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
+mod analysis;
 mod coverage;
 mod formats;
 mod metadata;
@@ -45,8 +46,8 @@ mod document;
 mod ooxml;
 mod types;
 
+use analysis::{hex, map_calamine_error, parse_activex_xml, parse_chart_data, parse_smartart_part};
 pub use document::DocumentParser;
-use document::{hex, map_calamine_error, parse_activex_xml, parse_chart_data, parse_smartart_part};
 pub use ooxml::OoxmlParser;
 pub use types::ParsedDocument;
 
