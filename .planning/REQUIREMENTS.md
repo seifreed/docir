@@ -74,46 +74,46 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GATE-01 | TBD | Pending |
-| GATE-02 | TBD | Pending |
-| GATE-03 | TBD | Pending |
-| GATE-04 | TBD | Pending |
-| GATE-05 | TBD | Pending |
-| GATE-06 | TBD | Pending |
-| CC-01 | TBD | Pending |
-| CC-02 | TBD | Pending |
-| CC-03 | TBD | Pending |
-| CC-04 | TBD | Pending |
-| CC-05 | TBD | Pending |
-| CC-06 | TBD | Pending |
-| CC-07 | TBD | Pending |
-| CC-08 | TBD | Pending |
-| CC-09 | TBD | Pending |
-| CC-10 | TBD | Pending |
-| CC-11 | TBD | Pending |
-| CC-12 | TBD | Pending |
-| CC-13 | TBD | Pending |
-| ARCH-01 | TBD | Pending |
-| ARCH-02 | TBD | Pending |
-| ARCH-03 | TBD | Pending |
-| ARCH-04 | TBD | Pending |
-| ARCH-05 | TBD | Pending |
-| ARCH-06 | TBD | Pending |
-| ARCH-07 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
-| FLOW-01 | TBD | Pending |
-| FLOW-02 | TBD | Pending |
-| FLOW-03 | TBD | Pending |
-| FLOW-04 | TBD | Pending |
-| FLOW-05 | TBD | Pending |
+| GATE-01 | Phase 1 | Pending |
+| GATE-02 | Phase 1 | Pending |
+| GATE-03 | Phase 2 | Pending |
+| GATE-04 | Phase 2 | Pending |
+| GATE-05 | Phase 2 | Pending |
+| GATE-06 | Phase 1 | Pending |
+| CC-01 | Phase 3 | Pending |
+| CC-02 | Phase 3 | Pending |
+| CC-03 | Phase 3 | Pending |
+| CC-04 | Phase 4 | Pending |
+| CC-05 | Phase 5 | Pending |
+| CC-06 | Phase 5 | Pending |
+| CC-07 | Phase 5 | Pending |
+| CC-08 | Phase 5 | Pending |
+| CC-09 | Phase 5 | Pending |
+| CC-10 | Phase 6 | Pending |
+| CC-11 | Phase 6 | Pending |
+| CC-12 | Phase 6 | Pending |
+| CC-13 | Phase 6 | Pending |
+| ARCH-01 | Phase 7 | Pending |
+| ARCH-02 | Phase 8 | Pending |
+| ARCH-03 | Phase 8 | Pending |
+| ARCH-04 | Phase 8 | Pending |
+| ARCH-05 | Phase 8 | Pending |
+| ARCH-06 | Phase 7 | Pending |
+| ARCH-07 | Phase 7 | Pending |
+| TEST-01 | Phase 4 | Pending |
+| TEST-02 | Phase 4 | Pending |
+| TEST-03 | Phase 3 | Pending |
+| FLOW-01 | Phase 9 | Pending |
+| FLOW-02 | Phase 9 | Pending |
+| FLOW-03 | Phase 9 | Pending |
+| FLOW-04 | Phase 2 | Pending |
+| FLOW-05 | Phase 9 | Pending |
 
 **Coverage:**
 - v1 requirements: 34 total
-- Mapped to phases: 0
-- Unmapped: 34 ⚠️
+- Mapped to phases: 34
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-02-28 after initial definition*
+*Last updated: 2026-02-28 after roadmap traceability mapping*
