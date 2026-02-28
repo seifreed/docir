@@ -65,6 +65,9 @@ impl JsonSerializer {
 impl IrSerializer for JsonSerializer {
     fn serialize_node(&self, node: &IRNode) -> Result<Vec<u8>, SerializationError> {
         let mut value = serde_json::to_value(node)?;
+        if !self.include_spans {
+            strip_spans(&mut value);
+        }
         if self.sort_keys {
             sort_json_value(&mut value);
         }
@@ -82,6 +85,9 @@ impl IrSerializer for JsonSerializer {
     ) -> Result<Vec<u8>, SerializationError> {
         let tree = self.build_tree(store, root_id)?;
         let mut value = serde_json::to_value(tree)?;
+        if !self.include_spans {
+            strip_spans(&mut value);
+        }
         if self.sort_keys {
             sort_json_value(&mut value);
         }
@@ -99,6 +105,9 @@ impl IrSerializer for JsonSerializer {
     ) -> Result<String, SerializationError> {
         let tree = self.build_tree(store, root_id)?;
         let mut value = serde_json::to_value(tree)?;
+        if !self.include_spans {
+            strip_spans(&mut value);
+        }
         if self.sort_keys {
             sort_json_value(&mut value);
         }
@@ -126,6 +135,23 @@ fn sort_json_value(value: &mut Value) {
         Value::Array(items) => {
             for item in items {
                 sort_json_value(item);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn strip_spans(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            map.remove("span");
+            for nested in map.values_mut() {
+                strip_spans(nested);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                strip_spans(item);
             }
         }
         _ => {}
@@ -168,5 +194,97 @@ pub fn store_to_json(store: &IrStore, pretty: bool) -> Result<String, Serializat
         Ok(serde_json::to_string_pretty(&nodes)?)
     } else {
         Ok(serde_json::to_string(&nodes)?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::ir::{Document, IRNode};
+    use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
+    use docir_core::visitor::IrStore;
+
+    fn sample_store_with_root() -> (IrStore, NodeId) {
+        let mut store = IrStore::new();
+        let mut doc = Document::new(DocumentFormat::WordProcessing);
+        doc.id = NodeId::from_raw(42);
+        doc.span = Some(SourceSpan::new("word/document.xml"));
+        let root = doc.id;
+        store.insert(IRNode::Document(doc));
+        (store, root)
+    }
+
+    #[test]
+    fn to_json_pretty_and_compact_are_semantically_equal() {
+        let (store, root) = sample_store_with_root();
+
+        let compact = to_json(&store, root, false).expect("compact JSON");
+        let pretty = to_json(&store, root, true).expect("pretty JSON");
+
+        assert!(!compact.contains('\n'));
+        assert!(pretty.contains('\n'));
+        let compact_val: Value = serde_json::from_str(&compact).expect("valid compact JSON");
+        let pretty_val: Value = serde_json::from_str(&pretty).expect("valid pretty JSON");
+        assert_eq!(compact_val, pretty_val);
+    }
+
+    #[test]
+    fn serializer_can_include_or_exclude_spans() {
+        let (store, root) = sample_store_with_root();
+
+        let include = JsonSerializer::new()
+            .serialize_to_string(&store, root)
+            .expect("serialization with spans");
+        assert!(include.contains("\"span\""));
+
+        let serializer = JsonSerializer {
+            include_spans: false,
+            ..JsonSerializer::new()
+        };
+        let exclude = serializer
+            .serialize_to_string(&store, root)
+            .expect("serialization without spans");
+        assert!(!exclude.contains("\"span\""));
+    }
+
+    #[test]
+    fn serializer_orders_keys_deterministically() {
+        let mut doc = Document::new(DocumentFormat::WordProcessing);
+        doc.id = NodeId::from_raw(11);
+        let node = IRNode::Document(doc);
+        let bytes = JsonSerializer::new()
+            .serialize_node(&node)
+            .expect("node serialization");
+        let json = String::from_utf8(bytes).expect("utf-8 JSON");
+
+        let comments = json.find("\"comments\"").expect("comments key");
+        let content = json.find("\"content\"").expect("content key");
+        let id = json.find("\"id\"").expect("id key");
+        let security = json.find("\"security\"").expect("security key");
+        assert!(comments < content);
+        assert!(id < security);
+    }
+
+    #[test]
+    fn to_json_returns_node_not_found_for_unknown_root() {
+        let store = IrStore::new();
+        let err = to_json(&store, NodeId::from_raw(999_999), false).expect_err("missing root");
+        match err {
+            SerializationError::NodeNotFound(id) => assert!(id.contains("node_")),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn store_to_json_is_deterministic_and_parses() {
+        let (store, _) = sample_store_with_root();
+        let compact = store_to_json(&store, false).expect("store compact JSON");
+        let pretty = store_to_json(&store, true).expect("store pretty JSON");
+        assert!(!compact.is_empty());
+        assert!(pretty.contains('\n'));
+
+        let compact_val: Value = serde_json::from_str(&compact).expect("valid compact JSON");
+        let pretty_val: Value = serde_json::from_str(&pretty).expect("valid pretty JSON");
+        assert_eq!(compact_val, pretty_val);
     }
 }
