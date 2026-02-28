@@ -741,3 +741,79 @@ pub(super) fn skip_element(reader: &mut OdfReader<'_>, end: &[u8]) -> Result<(),
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn default_limits() -> OdfLimits {
+        OdfLimits::new(&ParserConfig::default(), false)
+    }
+
+    #[test]
+    fn parse_content_spreadsheet_links_pivots_and_validations() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <office:body>
+    <table:table table:name="OutsideSpreadsheet"/>
+    <office:spreadsheet>
+      <table:content-validations>
+        <table:content-validation table:name="val1" table:condition="cell-content-is-between(1,10)" />
+      </table:content-validations>
+      <table:table table:name="Sheet1">
+        <table:table-row>
+          <table:table-cell table:cell-value-type="float" table:cell-value="1" table:content-validation-name="val1" />
+        </table:table-row>
+      </table:table>
+      <table:table table:name="Sheet2"/>
+      <table:data-pilot-table table:name="Pivot1"
+        table:source-range-address="'Sheet1'.A1:'Sheet1'.A1"
+        table:target-range-address="'Sheet1'.D1:'Sheet1'.D1">
+        <table:data-pilot-field table:source-field-name="Field1"/>
+      </table:data-pilot-table>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>
+"#;
+
+        let mut store = IrStore::new();
+        let result = parse_content_spreadsheet(xml, &mut store, &default_limits()).unwrap();
+
+        assert_eq!(result.content.len(), 2);
+        assert_eq!(result.pivot_caches.len(), 1);
+
+        let sheet1 = result.content[0];
+        let sheet2 = result.content[1];
+        let Some(IRNode::Worksheet(sheet1_node)) = store.get(sheet1) else {
+            panic!("expected first content node to be worksheet");
+        };
+        let Some(IRNode::Worksheet(sheet2_node)) = store.get(sheet2) else {
+            panic!("expected second content node to be worksheet");
+        };
+
+        assert_eq!(sheet1_node.name, "Sheet1");
+        assert_eq!(sheet2_node.name, "Sheet2");
+        assert_eq!(sheet1_node.pivot_tables.len(), 1);
+        assert!(sheet2_node.pivot_tables.is_empty());
+
+        let validation_count = store
+            .values()
+            .filter(|node| matches!(node, IRNode::DataValidation(_)))
+            .count();
+        assert_eq!(validation_count, 1);
+    }
+
+    #[test]
+    fn parse_content_spreadsheet_reports_xml_errors() {
+        let malformed = br#"<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:body><office:spreadsheet><table:table xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"></office:spreadsheet></office:body></office:document-content>"#;
+
+        let mut store = IrStore::new();
+        let err = parse_content_spreadsheet(malformed, &mut store, &default_limits()).unwrap_err();
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+            other => panic!("expected xml error, got {:?}", other),
+        }
+    }
+}

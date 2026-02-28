@@ -694,3 +694,115 @@ fn parse_cell_value_empty(value_type: Option<&str>, value_attr: Option<&str>) ->
         _ => CellValue::Empty,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn default_limits() -> OdfLimits {
+        OdfLimits::new(&ParserConfig::default(), false)
+    }
+
+    #[test]
+    fn parse_ods_table_evaluates_formula_and_flushes_validations() {
+        let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <table:table table:name="SheetCalc">
+    <table:table-row>
+      <table:table-cell table:cell-value-type="float" table:cell-value="1" />
+      <table:table-cell table:cell-value-type="float" table:cell-value="2" />
+      <table:table-cell table:formula="of:=SUM([.A1:.B1])" table:content-validation-name="val1" />
+    </table:table-row>
+  </table:table>
+</office:spreadsheet>
+"#;
+
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let table_start = loop {
+            match reader.read_event_into(&mut buf).unwrap() {
+                Event::Start(e) if e.name().as_ref() == b"table:table" => break e.into_owned(),
+                Event::Eof => panic!("missing table start"),
+                _ => {}
+            }
+            buf.clear();
+        };
+        let mut store = IrStore::new();
+        let mut validations = HashMap::new();
+        validations.insert(
+            "val1".to_string(),
+            ValidationDef {
+                validation_type: Some("between".to_string()),
+                operator: None,
+                allow_blank: false,
+                show_input_message: false,
+                show_error_message: false,
+                error_title: None,
+                error: None,
+                prompt_title: None,
+                prompt: None,
+                formula1: Some("1".to_string()),
+                formula2: Some("10".to_string()),
+            },
+        );
+
+        let worksheet = parse_ods_table(
+            &mut reader,
+            &table_start,
+            1,
+            &mut store,
+            &validations,
+            &default_limits(),
+        )
+        .unwrap();
+
+        assert_eq!(worksheet.name, "SheetCalc");
+        assert_eq!(worksheet.cells.len(), 3);
+        assert_eq!(worksheet.data_validations.len(), 1);
+
+        let formula_cell_id = worksheet
+            .cells
+            .iter()
+            .find(|id| {
+                matches!(
+                    store.get(**id),
+                    Some(IRNode::Cell(Cell {
+                        reference,
+                        formula: Some(_),
+                        ..
+                    })) if reference == "C1"
+                )
+            })
+            .copied()
+            .expect("expected formula cell at C1");
+        let Some(IRNode::Cell(cell)) = store.get(formula_cell_id) else {
+            panic!("formula cell missing");
+        };
+        match cell.value {
+            CellValue::Number(value) => assert!((value - 3.0).abs() < f64::EPSILON),
+            _ => panic!("expected numeric formula result"),
+        }
+    }
+
+    #[test]
+    fn parse_ods_cell_empty_handles_type_and_formula_prefix() {
+        let mut cell = BytesStart::new("table:table-cell");
+        cell.push_attribute(("table:cell-value-type", "boolean"));
+        cell.push_attribute(("table:cell-value", "true"));
+        cell.push_attribute(("table:formula", "of:=SUM([.A1];[.A2])"));
+        let mut style_map = HashMap::new();
+        let mut next_style_id = 1;
+        let parsed = parse_ods_cell_empty(&cell, &mut style_map, &mut next_style_id).unwrap();
+
+        match parsed.value {
+            CellValue::Boolean(value) => assert!(value),
+            _ => panic!("expected boolean value"),
+        }
+        assert_eq!(
+            parsed.formula.as_ref().map(|f| f.text.as_str()),
+            Some("SUM([.A1];[.A2])")
+        );
+    }
+}
