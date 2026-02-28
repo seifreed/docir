@@ -154,7 +154,7 @@ Final quality acceptance is authorized only through the canonical command:
 ./scripts/quality_gate.sh
 ```
 
-Direct invocations such as `cargo fmt`, `cargo clippy`, or `cargo test` are non-authoritative for acceptance, even when they pass locally.
+Direct invocations such as `cargo fmt`, `cargo clippy`, or `cargo test` are diagnostic-only and non-authoritative for acceptance, even when they pass locally.
 
 Policy details: [Quality Gate Non-Bypass Policy](docs/quality-gate-policy.md)
 
