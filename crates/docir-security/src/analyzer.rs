@@ -278,3 +278,150 @@ impl AnalysisResult {
         report
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::ir::{Document, IRNode};
+    use docir_core::security::{
+        ActiveXControl, ExternalRefType, ExternalReference, MacroModule, MacroModuleType,
+        MacroProject, OleObject, SuspiciousCall, SuspiciousCallCategory, ThreatIndicatorType,
+        ThreatLevel,
+    };
+    use docir_core::types::{DocumentFormat, SourceSpan};
+    use docir_core::visitor::IrStore;
+
+    #[test]
+    fn analyze_collects_findings_and_escalates_to_critical() {
+        let mut store = IrStore::new();
+        let mut doc = Document::new(DocumentFormat::WordProcessing);
+        doc.security.threat_level = ThreatLevel::Low;
+
+        let mut project = MacroProject::new();
+        project.has_auto_exec = true;
+        project.auto_exec_procedures = vec!["AutoOpen".to_string()];
+        project.span = Some(SourceSpan::new("vba/project.bin"));
+
+        let mut module = MacroModule::new("Module1", MacroModuleType::Standard);
+        module.suspicious_calls.push(SuspiciousCall {
+            name: "Shell".to_string(),
+            category: SuspiciousCallCategory::ShellExecution,
+            line: Some(8),
+        });
+        module.span = Some(SourceSpan::new("vba/module1.bas"));
+        project.modules.push(module.id);
+
+        let mut ole = OleObject::new();
+        ole.is_linked = true;
+        ole.prog_id = Some("Package".to_string());
+        ole.size_bytes = 2048;
+        ole.span = Some(SourceSpan::new("word/embeddings/ole1.bin"));
+
+        let mut ext_template = ExternalReference::new(
+            ExternalRefType::AttachedTemplate,
+            "http://evil/template.dotm",
+        );
+        ext_template.span = Some(SourceSpan::new("word/_rels/document.xml.rels"));
+        let ext_hyperlink =
+            ExternalReference::new(ExternalRefType::Hyperlink, "https://example.test/phish");
+        let ext_local_link =
+            ExternalReference::new(ExternalRefType::Hyperlink, "file:///tmp/report");
+        let ext_remote_image =
+            ExternalReference::new(ExternalRefType::Image, "https://cdn.example.test/a.png");
+        let ext_ole_link =
+            ExternalReference::new(ExternalRefType::OleLink, "file:///tmp/linked.ole");
+
+        let mut activex = ActiveXControl::new();
+        activex.name = Some("CommandButton1".to_string());
+        activex.clsid = Some("{ABC}".to_string());
+        activex.span = Some(SourceSpan::new("word/activeX/activeX1.xml"));
+
+        doc.security.macro_project = Some(project.id);
+        doc.security.ole_objects.push(ole.id);
+        doc.security.external_refs.extend([
+            ext_template.id,
+            ext_hyperlink.id,
+            ext_local_link.id,
+            ext_remote_image.id,
+            ext_ole_link.id,
+        ]);
+        doc.security.activex_controls.push(activex.id);
+
+        let root_id = doc.id;
+        store.insert(IRNode::Document(doc));
+        store.insert(IRNode::MacroProject(project));
+        store.insert(IRNode::MacroModule(module));
+        store.insert(IRNode::OleObject(ole));
+        store.insert(IRNode::ExternalReference(ext_template));
+        store.insert(IRNode::ExternalReference(ext_hyperlink));
+        store.insert(IRNode::ExternalReference(ext_local_link));
+        store.insert(IRNode::ExternalReference(ext_remote_image));
+        store.insert(IRNode::ExternalReference(ext_ole_link));
+        store.insert(IRNode::ActiveXControl(activex));
+
+        let mut analyzer = SecurityAnalyzer::new();
+        let result = analyzer.analyze(&store, root_id);
+
+        assert_eq!(result.threat_level, ThreatLevel::Critical);
+        assert!(result.has_concerns());
+        assert!(result.has_macros);
+        assert!(result.has_ole_objects);
+        assert!(result.has_external_refs);
+        assert!(!result.has_dde);
+        assert!(!result.has_xlm_macros);
+        assert_eq!(result.findings.len(), 8);
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.indicator_type == ThreatIndicatorType::AutoExecMacro));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.indicator_type == ThreatIndicatorType::SuspiciousApiCall));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.indicator_type == ThreatIndicatorType::ExternalTemplate));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.indicator_type == ThreatIndicatorType::SuspiciousLink));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.indicator_type == ThreatIndicatorType::RemoteResource));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.indicator_type == ThreatIndicatorType::ActiveXControl));
+
+        let report = result.format_report();
+        assert!(report.contains("Threat Level: CRITICAL"));
+        assert!(report.contains("VBA Macros: YES"));
+        assert!(report.contains("OLE Objects: YES"));
+        assert!(report.contains("External References: YES"));
+        assert!(report.contains("Findings (8):"));
+        assert!(report.contains("Location: vba/project.bin"));
+    }
+
+    #[test]
+    fn analyze_non_document_root_uses_findings_without_security_flags() {
+        let mut store = IrStore::new();
+        let mut ole = OleObject::new();
+        ole.is_linked = false;
+        ole.size_bytes = 64;
+        let root_id = ole.id;
+        store.insert(IRNode::OleObject(ole));
+
+        let mut analyzer = SecurityAnalyzer::new();
+        let result = analyzer.analyze(&store, root_id);
+
+        assert_eq!(result.threat_level, ThreatLevel::Medium);
+        assert_eq!(result.findings.len(), 1);
+        assert!(!result.has_macros);
+        assert!(!result.has_ole_objects);
+        assert!(!result.has_external_refs);
+        assert!(!result.has_dde);
+        assert!(!result.has_xlm_macros);
+    }
+}
