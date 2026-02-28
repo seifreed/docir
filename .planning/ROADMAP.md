@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**:
 - [x] `01-01-PLAN.md` - Canonical gate entrypoint scaffold and contract smoke test
 - [ ] `01-02-PLAN.md` - Exit code class semantics and scenario verification
-- [ ] `01-03-PLAN.md` - Canonical-only policy documentation and non-bypass inventory
+- [x] `01-03-PLAN.md` - Canonical-only policy documentation and non-bypass inventory
 
 ### Phase 2: Workflow Routing
 **Goal**: All routine quality workflows consistently execute the canonical gate.
@@ -128,7 +128,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Canonical Gate Surface | 1/3 | In progress | - |
+| 1. Canonical Gate Surface | 2/3 | In progress | - |
 | 2. Workflow Routing | 0/TBD | Not started | - |
 | 3. Baseline Clean Code Commands | 0/TBD | Not started | - |
 | 4. Coverage Integrity Enforcement | 0/TBD | Not started | - |
