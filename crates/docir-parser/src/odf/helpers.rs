@@ -761,7 +761,10 @@ mod tests {
         assert!(def.allow_blank);
         assert!(def.show_input_message);
         assert!(def.show_error_message);
-        assert_eq!(def.formula1.as_deref(), Some("cell-content-is-between(1,10)"));
+        assert_eq!(
+            def.formula1.as_deref(),
+            Some("cell-content-is-between(1,10)")
+        );
     }
 
     #[test]

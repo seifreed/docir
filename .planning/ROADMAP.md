@@ -75,6 +75,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**:
 - [x] `04-01-PLAN.md` - Canonical coverage stage, threshold contract, and CI non-skip enforcement.
 - [x] `04-02-PLAN.md` - Coverage integrity behavior tests and anti-inflation policy alignment.
+- [x] `04-03-PLAN.md` - Gap closure with targeted parser/security hotspot behavior tests.
+- [x] `04-04-PLAN.md` - Additional hotspot behavior validation and canonical re-measure.
+- [x] `04-05-PLAN.md` - ODF hotspot behavior tests and refreshed residual coverage inventory.
 
 ### Phase 5: Forbidden Construct Policy
 **Goal**: Canonical runs reject prohibited constructs that undermine reliability and maintainability.
@@ -139,7 +142,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | 1. Canonical Gate Surface | 3/3 | Complete | 2026-02-28 |
 | 2. Workflow Routing | 4/4 | Complete | 2026-02-28 |
 | 3. Baseline Clean Code Commands | 2/2 | Complete | 2026-02-28 |
-| 4. Coverage Integrity Enforcement | 2/2 | Verification gaps | 2026-02-28 |
+| 4. Coverage Integrity Enforcement | 5/5 | Verification gaps | 2026-02-28 |
 | 5. Forbidden Construct Policy | 0/TBD | Not started | - |
 | 6. Code Hygiene and Complexity Policy | 0/TBD | Not started | - |
 | 7. Architecture Policy Definition | 0/TBD | Not started | - |
