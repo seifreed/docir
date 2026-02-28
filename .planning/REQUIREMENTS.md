@@ -21,7 +21,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **CC-01**: Gate enforces `cargo fmt --all --check`.
 - [x] **CC-02**: Gate enforces `cargo clippy --all-targets --all-features -- -D warnings`.
 - [x] **CC-03**: Gate enforces `cargo test`.
-- [ ] **CC-04**: Gate enforces test coverage of at least 95% using `cargo llvm-cov`.
+- [x] **CC-04**: Gate enforces test coverage of at least 95% using `cargo llvm-cov`.
 - [ ] **CC-05**: Gate fails if `unwrap()` appears in non-test code.
 - [ ] **CC-06**: Gate fails if `expect()` appears in non-test code.
 - [ ] **CC-07**: Gate fails if `panic!()` appears in production code.
@@ -45,7 +45,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Testing and Integrity
 
 - [ ] **TEST-01**: Coverage target (>=95%) is measured in the canonical run and cannot be skipped in CI.
-- [ ] **TEST-02**: Tests used to satisfy gate requirements validate real behavior and are not trivial assertion-only inflation.
+- [x] **TEST-02**: Tests used to satisfy gate requirements validate real behavior and are not trivial assertion-only inflation.
 - [x] **TEST-03**: Warnings and lint checks remain fully enabled; warning suppression is not used to pass the gate.
 
 ### Iterative Enforcement and CI Completion
@@ -83,7 +83,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CC-01 | Phase 3 | Complete |
 | CC-02 | Phase 3 | Complete |
 | CC-03 | Phase 3 | Complete |
-| CC-04 | Phase 4 | Pending |
+| CC-04 | Phase 4 | Complete |
 | CC-05 | Phase 5 | Pending |
 | CC-06 | Phase 5 | Pending |
 | CC-07 | Phase 5 | Pending |
@@ -101,7 +101,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARCH-06 | Phase 7 | Pending |
 | ARCH-07 | Phase 7 | Pending |
 | TEST-01 | Phase 4 | Pending |
-| TEST-02 | Phase 4 | Pending |
+| TEST-02 | Phase 4 | Complete |
 | TEST-03 | Phase 3 | Complete |
 | FLOW-01 | Phase 9 | Pending |
 | FLOW-02 | Phase 9 | Pending |
