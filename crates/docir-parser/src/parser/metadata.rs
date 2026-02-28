@@ -270,7 +270,9 @@ mod tests {
     fn parse_metadata_returns_none_without_core_properties_part() {
         let parser = OoxmlParser::new();
         let mut zip = TestPackageReader::new(&[]);
-        let id = parser.parse_metadata(&mut zip).expect("metadata parse succeeds");
+        let id = parser
+            .parse_metadata(&mut zip)
+            .expect("metadata parse succeeds");
         assert!(id.is_none());
     }
 
