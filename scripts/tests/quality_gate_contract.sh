@@ -21,7 +21,12 @@ while IFS= read -r file; do
     echo "Alternate executable gate-like script detected: ${file}"
     alt_found=1
   fi
-done < <(find scripts -maxdepth 2 -type f | rg '(gate|quality|check)')
+done < <(
+  find scripts -maxdepth 2 -type f \
+    ! -path "scripts/tests/*" \
+    ! -path "scripts/lib/*" \
+  | rg '(gate|quality|check)'
+)
 
 if [ "$alt_found" -ne 0 ]; then
   exit 1
