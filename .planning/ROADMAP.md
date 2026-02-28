@@ -142,7 +142,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | 1. Canonical Gate Surface | 3/3 | Complete | 2026-02-28 |
 | 2. Workflow Routing | 4/4 | Complete | 2026-02-28 |
 | 3. Baseline Clean Code Commands | 2/2 | Complete | 2026-02-28 |
-| 4. Coverage Integrity Enforcement | 5/5 | Verification gaps | 2026-02-28 |
+| 4. Coverage Integrity Enforcement | 6/6 | Verification gaps | 2026-02-28 |
 | 5. Forbidden Construct Policy | 0/TBD | Not started | - |
 | 6. Code Hygiene and Complexity Policy | 0/TBD | Not started | - |
 | 7. Architecture Policy Definition | 0/TBD | Not started | - |
