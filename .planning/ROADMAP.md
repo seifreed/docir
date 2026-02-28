@@ -13,7 +13,7 @@ This roadmap delivers deterministic, non-bypassable quality enforcement for `doc
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Canonical Gate Surface** - Establish the single accepted quality entrypoint and strict pass/fail contract.
-- [ ] **Phase 2: Workflow Routing** - Route local, pre-commit, and CI execution through the canonical gate.
+- [x] **Phase 2: Workflow Routing** - Route local, pre-commit, and CI execution through the canonical gate.
 - [ ] **Phase 3: Baseline Clean Code Commands** - Enforce formatting, linting, tests, and warning posture in canonical runs.
 - [ ] **Phase 4: Coverage Integrity Enforcement** - Enforce >=95% coverage and anti-inflation test integrity in canonical runs.
 - [ ] **Phase 5: Forbidden Construct Policy** - Block prohibited runtime constructs through hard gate failures.
@@ -49,7 +49,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] `02-01-PLAN.md` - Local workflow documentation routed to canonical gate
 - [x] `02-02-PLAN.md` - Pre-commit workflow routing and hook installer alignment
 - [x] `02-03-PLAN.md` - Canonical CI job plus required-check runbook baseline
-- [x] `02-04-PLAN.md` - Gap-closure attempt with live GitHub API verification (blocked by repository tier)
+- [x] `02-04-PLAN.md` - Gap-closure with live GitHub API verification and required-check enforcement
 
 ### Phase 3: Baseline Clean Code Commands
 **Goal**: Canonical runs always execute baseline formatting, linting, testing, and warning-strict checks.
@@ -133,7 +133,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Canonical Gate Surface | 3/3 | Complete | 2026-02-28 |
-| 2. Workflow Routing | 4/4 | In progress (blocked external) | - |
+| 2. Workflow Routing | 4/4 | Complete | 2026-02-28 |
 | 3. Baseline Clean Code Commands | 0/TBD | Not started | - |
 | 4. Coverage Integrity Enforcement | 0/TBD | Not started | - |
 | 5. Forbidden Construct Policy | 0/TBD | Not started | - |

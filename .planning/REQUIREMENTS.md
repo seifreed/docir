@@ -106,7 +106,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FLOW-01 | Phase 9 | Pending |
 | FLOW-02 | Phase 9 | Pending |
 | FLOW-03 | Phase 9 | Pending |
-| FLOW-04 | Phase 2 | Blocked (GitHub tier/API 403) |
+| FLOW-04 | Phase 2 | Complete |
 | FLOW-05 | Phase 9 | Pending |
 
 **Coverage:**
@@ -116,4 +116,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-02-28 after Phase 02-04 gap-closure verification*
+*Last updated: 2026-02-28 after FLOW-04 enforcement on main*

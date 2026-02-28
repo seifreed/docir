@@ -18,6 +18,7 @@ Quality and architecture compliance are deterministic, enforceable, and impossib
 - ✓ Existing codebase mapping artifacts in `.planning/codebase/` for architectural context — existing
 - ✓ Canonical quality-gate entrypoint exists only at `./scripts/quality_gate.sh` with deterministic exit behavior — Phase 1
 - ✓ Canonical-only non-bypass policy is documented with inventory evidence — Phase 1
+- ✓ Local, pre-commit, and CI workflows are routed through canonical gate with required check `quality-gate` on `main` — Phase 2
 
 ### Active
 
@@ -54,6 +55,7 @@ Quality and architecture compliance are deterministic, enforceable, and impossib
 | Treat gate failure as project-incomplete state | Enforces deterministic quality bar and prevents soft completion | — Pending |
 | Enforce Clean Architecture layering as hard checks | Prevents architectural drift as workspace grows | — Pending |
 | Scope enforcement to this repository only | User-selected scope prioritizes immediate reliability over framework generalization | — Pending |
+| Enforce merge gating with required check `quality-gate` | Converts routing policy into platform-enforced merge control | ✓ Good |
 
 ---
-*Last updated: 2026-02-28 after Phase 1*
+*Last updated: 2026-02-28 after Phase 2*
