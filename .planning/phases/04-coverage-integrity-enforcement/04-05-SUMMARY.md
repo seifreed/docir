@@ -59,7 +59,7 @@ Each task was committed atomically:
 2. **Task 2: Add helper/formula behavior tests for ODF coercion and expression handling** - `2a8d214` (test)
 3. **Task 3: Re-run canonical coverage and capture residual gap inventory** - `02d7992` (docs)
 
-**Plan metadata:** pending (created after STATE/ROADMAP updates)
+**Plan metadata:** `a51f0cc` (chore/docs: formatting fix plus STATE/ROADMAP/REQUIREMENTS/SUMMARY updates)
 
 ## Files Created/Modified
 
@@ -76,7 +76,20 @@ Each task was committed atomically:
 
 ## Deviations from Plan
 
-None - plan executed as written.
+### Auto-fixed Issues
+
+**1. [Rule 3 - Blocking] Resolved fmt-check failure before metadata commit**
+- **Found during:** Post-task metadata commit
+- **Issue:** `fmt_check` failed on new helper test assertion formatting.
+- **Fix:** Applied `rustfmt` to `crates/docir-parser/src/odf/helpers.rs` and re-verified helper tests.
+- **Files modified:** `crates/docir-parser/src/odf/helpers.rs`
+- **Verification:** `cargo test -p docir-parser odf::helpers --all-features`
+- **Committed in:** `a51f0cc`
+
+---
+
+**Total deviations:** 1 auto-fixed (1 blocking)
+**Impact on plan:** No scope expansion; only formatting correction required for gate compatibility.
 
 ## Issues Encountered
 
