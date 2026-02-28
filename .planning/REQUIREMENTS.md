@@ -18,9 +18,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Clean Code Hard Gates
 
-- [ ] **CC-01**: Gate enforces `cargo fmt --all --check`.
-- [ ] **CC-02**: Gate enforces `cargo clippy --all-targets --all-features -- -D warnings`.
-- [ ] **CC-03**: Gate enforces `cargo test`.
+- [x] **CC-01**: Gate enforces `cargo fmt --all --check`.
+- [x] **CC-02**: Gate enforces `cargo clippy --all-targets --all-features -- -D warnings`.
+- [x] **CC-03**: Gate enforces `cargo test`.
 - [ ] **CC-04**: Gate enforces test coverage of at least 95% using `cargo llvm-cov`.
 - [ ] **CC-05**: Gate fails if `unwrap()` appears in non-test code.
 - [ ] **CC-06**: Gate fails if `expect()` appears in non-test code.
@@ -80,9 +80,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GATE-04 | Phase 2 | Complete |
 | GATE-05 | Phase 2 | Complete |
 | GATE-06 | Phase 1 | Complete |
-| CC-01 | Phase 3 | Pending |
-| CC-02 | Phase 3 | Pending |
-| CC-03 | Phase 3 | Pending |
+| CC-01 | Phase 3 | Complete |
+| CC-02 | Phase 3 | Complete |
+| CC-03 | Phase 3 | Complete |
 | CC-04 | Phase 4 | Pending |
 | CC-05 | Phase 5 | Pending |
 | CC-06 | Phase 5 | Pending |

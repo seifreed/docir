@@ -60,7 +60,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Canonical gate fails on Clippy warnings because warnings are denied.
   3. Canonical gate fails when tests fail and passes when the test suite passes.
   4. No warning suppression path is used to force a pass.
-**Plans**: TBD
+**Plans**:
+- [x] `03-01-PLAN.md` - Baseline command execution in canonical gate with deterministic failure classification.
+- [ ] `03-02-PLAN.md` - Baseline command contract harness and strict warning posture documentation.
 
 ### Phase 4: Coverage Integrity Enforcement
 **Goal**: Coverage threshold and test integrity are enforced as non-optional gate requirements.
@@ -134,7 +136,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 |-------|----------------|--------|-----------|
 | 1. Canonical Gate Surface | 3/3 | Complete | 2026-02-28 |
 | 2. Workflow Routing | 4/4 | Complete | 2026-02-28 |
-| 3. Baseline Clean Code Commands | 0/TBD | Not started | - |
+| 3. Baseline Clean Code Commands | 1/2 | In Progress | - |
 | 4. Coverage Integrity Enforcement | 0/TBD | Not started | - |
 | 5. Forbidden Construct Policy | 0/TBD | Not started | - |
 | 6. Code Hygiene and Complexity Policy | 0/TBD | Not started | - |
