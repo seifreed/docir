@@ -68,6 +68,23 @@ fn test_parse_slide_list() {
 }
 
 #[test]
+fn test_parse_slide_list_returns_xml_error_for_malformed_input() {
+    let xml = r#"
+        <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <p:sldIdLst>
+            <p:sldId r:id="rId1">
+          </p:sldIdLst>
+        </p:presentation>
+        "#;
+    let err = parse_slide_list(xml).expect_err("expected malformed slide list error");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/presentation.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_presentation_info() {
     let xml = r#"
         <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -88,6 +105,21 @@ fn test_parse_presentation_info() {
     assert_eq!(info.show_narration, Some(false));
     assert_eq!(info.show_animation, Some(true));
     assert_eq!(info.use_timings, Some(true));
+}
+
+#[test]
+fn test_parse_presentation_info_returns_xml_error_for_malformed_show_properties() {
+    let xml = r#"
+        <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:showPr showType="speaker">
+        </p:presentation>
+        "#;
+    let err =
+        parse_presentation_info(xml, "ppt/presentation.xml").expect_err("expected malformed xml");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/presentation.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]

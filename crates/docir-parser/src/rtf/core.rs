@@ -826,4 +826,31 @@ mod tests {
         });
         assert!(has_external_ref);
     }
+
+    #[test]
+    fn parse_rtf_handles_special_control_symbols_and_optional_hyphen() {
+        let data = br"{\rtf1 A\~B\_C\-D\\E\{F\}}";
+        let mut cursor = RtfCursor::new(data);
+        let mut ctx = RtfParseContext::new(256, 1024);
+        let mut store = IrStore::new();
+
+        parse_rtf(&mut cursor, &mut ctx, &mut store).expect("parse rtf");
+
+        let mut collected = String::new();
+        for node in store.values() {
+            if let IRNode::Run(run) = node {
+                collected.push_str(&run.text);
+            }
+        }
+        assert!(collected.contains("A B-CD\\E{F}"));
+    }
+
+    #[test]
+    fn parse_control_word_with_missing_numeric_suffix_keeps_param_none() {
+        let mut cursor = RtfCursor::new(b"- ");
+        let (word, param) = parse_control_word_and_param(&mut cursor, b'f');
+        assert_eq!(word, "f");
+        assert_eq!(param, None);
+        assert_eq!(cursor.peek(), None);
+    }
 }

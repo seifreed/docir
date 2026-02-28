@@ -819,4 +819,19 @@ mod tests {
         assert_eq!(merge.end_row, 5);
         assert_eq!(merge.end_col, 6);
     }
+
+    #[test]
+    fn parse_validation_definition_requires_name_attribute() {
+        let mut start = BytesStart::new("table:content-validation");
+        start.push_attribute(("table:condition", "cell-content-is-between(1,10)"));
+        assert!(parse_validation_definition(&start).is_none());
+    }
+
+    #[test]
+    fn parse_ods_conditional_formatting_empty_without_ranges_returns_none() {
+        let start = BytesStart::new("table:conditional-formatting");
+        let parsed =
+            parse_ods_conditional_formatting_empty(&start).expect("parse empty formatting");
+        assert!(parsed.is_none());
+    }
 }
