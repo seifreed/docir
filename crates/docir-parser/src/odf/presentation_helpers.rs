@@ -439,3 +439,99 @@ pub(super) fn classify_media_shape(path: &str) -> ShapeType {
     }
     ShapeType::Unknown
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_page_start(xml: &[u8]) -> (Reader<std::io::Cursor<&[u8]>>, BytesStart<'static>) {
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let page_start = loop {
+            match reader.read_event_into(&mut buf).unwrap() {
+                Event::Start(e) if e.name().as_ref() == b"draw:page" => break e.into_owned(),
+                Event::Eof => panic!("missing draw:page"),
+                _ => {}
+            }
+            buf.clear();
+        };
+        (reader, page_start)
+    }
+
+    #[test]
+    fn parse_draw_page_extracts_metadata_transition_notes_and_shape_text() {
+        let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <draw:page draw:name="SlideA"
+    presentation:master-page-name="MasterA"
+    draw:style-name="LayoutFallback"
+    presentation:transition-type="fade"
+    presentation:transition-duration="2"
+    presentation:animation="click">
+    <draw:frame draw:name="TitleShape">
+      <draw:text-box>
+        <text:p>Hello ODP</text:p>
+      </draw:text-box>
+    </draw:frame>
+    <presentation:notes>
+      <text:p>Speaker notes</text:p>
+    </presentation:notes>
+  </draw:page>
+</office:document-content>
+"#;
+
+        let (mut reader, page_start) = parse_page_start(xml);
+        let mut store = IrStore::new();
+
+        let slide = parse_draw_page(&mut reader, &page_start, 3, &mut store).unwrap();
+        assert_eq!(slide.number, 3);
+        assert_eq!(slide.name.as_deref(), Some("SlideA"));
+        assert_eq!(slide.master_id.as_deref(), Some("MasterA"));
+        assert_eq!(slide.layout_id.as_deref(), Some("LayoutFallback"));
+        assert_eq!(slide.notes.as_deref(), Some("Speaker notes"));
+        assert_eq!(slide.shapes.len(), 1);
+
+        let transition = slide.transition.expect("expected transition");
+        assert_eq!(transition.transition_type.as_deref(), Some("fade"));
+        assert_eq!(transition.duration_ms, Some(2));
+        assert_eq!(transition.advance_on_click, Some(true));
+
+        let Some(IRNode::Shape(shape)) = store.get(slide.shapes[0]) else {
+            panic!("expected shape node");
+        };
+        assert_eq!(shape.name.as_deref(), Some("TitleShape"));
+        assert_eq!(shape.shape_type, ShapeType::TextBox);
+        let text = shape.text.as_ref().expect("expected shape text");
+        assert_eq!(text.paragraphs.len(), 1);
+        assert_eq!(text.paragraphs[0].runs[0].text, "Hello ODP");
+    }
+
+    #[test]
+    fn parse_draw_frame_presentation_returns_none_for_unrecognized_content() {
+        let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<draw:frame xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0">
+  <draw:unknown/>
+</draw:frame>
+"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let frame_start = loop {
+            match reader.read_event_into(&mut buf).unwrap() {
+                Event::Start(e) if e.name().as_ref() == b"draw:frame" => break e.into_owned(),
+                Event::Eof => panic!("missing draw:frame"),
+                _ => {}
+            }
+            buf.clear();
+        };
+        let mut store = IrStore::new();
+
+        let shape = parse_draw_frame_presentation(&mut reader, &frame_start, &mut store).unwrap();
+        assert!(shape.is_none());
+        assert_eq!(store.values().count(), 0);
+    }
+}

@@ -416,3 +416,71 @@ fn parse_header_footer_paragraph(
         limits,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_styles_supports_default_family_fallback_and_text_props() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+  xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0">
+  <style:default-style style:family="paragraph">
+    <style:text-properties fo:font-family="Fira Sans" fo:font-size="11pt"/>
+    <style:paragraph-properties fo:text-align="center"/>
+  </style:default-style>
+</office:document-styles>
+"#;
+
+        let styles = parse_styles(xml).expect("expected style set");
+        assert_eq!(styles.styles.len(), 1);
+
+        let style = &styles.styles[0];
+        assert_eq!(style.style_id, "default:paragraph");
+        assert_eq!(style.style_type, StyleType::Paragraph);
+        assert!(style.is_default);
+        assert_eq!(
+            style.run_props.as_ref().and_then(|p| p.font_family.as_deref()),
+            Some("Fira Sans")
+        );
+        assert_eq!(style.run_props.as_ref().and_then(|p| p.font_size), Some(11));
+        assert_eq!(
+            style
+                .paragraph_props
+                .as_ref()
+                .and_then(|p| p.alignment)
+                .map(|alignment| format!("{alignment:?}")),
+            Some("Center".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_styles_returns_none_for_malformed_xml() {
+        let malformed = r#"<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><style:style xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0">"#;
+        assert!(parse_styles(malformed).is_none());
+    }
+
+    #[test]
+    fn parse_odf_headers_footers_reports_styles_xml_errors() {
+        let malformed = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0">
+  <style:header>
+    <text:p xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">broken
+</office:document-styles>
+"#;
+        let mut store = IrStore::new();
+        let err =
+            parse_odf_headers_footers(malformed, &mut store, &ParserConfig::default()).unwrap_err();
+
+        match err {
+            ParseError::Xml { file, message } => {
+                assert!(file == "styles.xml" || file == "content.xml");
+                assert!(!message.is_empty());
+            }
+            other => panic!("expected styles.xml parse error, got {:?}", other),
+        }
+    }
+}
