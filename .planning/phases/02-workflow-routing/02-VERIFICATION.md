@@ -1,6 +1,6 @@
 # Phase 02 Goal-Backward Verification
 
-status: **gaps_found**
+status: gaps_found
 phase: `02-workflow-routing`
 date: `2026-02-28`
 commit: `1d8129b94e31bd8092addaf97000163bc4b910d8`
