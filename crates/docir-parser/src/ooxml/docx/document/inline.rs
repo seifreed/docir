@@ -732,6 +732,100 @@ mod tests {
         assert_eq!(run.text, "caption");
         assert!(run.embedded.is_empty());
     }
+
+    #[test]
+    fn parse_run_collects_deleted_text_and_ignores_note_without_id() {
+        let xml = r#"
+            <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:delText>gone</w:delText>
+              <w:footnoteReference/>
+              <w:endnoteReference w:id="7"/>
+            </w:r>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut buf = Vec::new();
+        let mut run = None;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:r" => {
+                    run = Some(parse_run(&mut parser, &mut reader, &rels).expect("parse run"));
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => panic!("xml error: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        let run = run.expect("run parsed");
+        assert_eq!(run.text, "gone");
+        assert_eq!(run.embedded.len(), 1);
+
+        let store = parser.into_store();
+        let field = match store.get(run.embedded[0]) {
+            Some(docir_core::ir::IRNode::Field(field)) => field,
+            _ => panic!("expected field node"),
+        };
+        let parsed = field.instruction_parsed.as_ref().expect("parsed field");
+        assert!(matches!(parsed.kind, docir_core::ir::FieldKind::EndnoteRef));
+        assert_eq!(parsed.args, vec!["7".to_string()]);
+    }
+
+    #[test]
+    fn parse_numbering_sets_numbering_only_when_numid_and_level_present() {
+        let xml = r#"
+            <w:numPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:numId w:val="12"/>
+              <w:ilvl w:val="2"/>
+            </w:numPr>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut buf = Vec::new();
+        let mut props = ParagraphProperties::default();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:numPr" => {
+                    parse_numbering(&mut reader, &mut props).expect("parse numbering");
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => panic!("xml error: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        let numbering = props.numbering.expect("numbering should be present");
+        assert_eq!(numbering.num_id, 12);
+        assert_eq!(numbering.level, 2);
+
+        let xml_missing_level = r#"
+            <w:numPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:numId w:val="12"/>
+            </w:numPr>
+        "#;
+        let mut reader = reader_from_str(xml_missing_level);
+        let mut buf = Vec::new();
+        let mut props = ParagraphProperties::default();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:numPr" => {
+                    parse_numbering(&mut reader, &mut props).expect("parse numbering");
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => panic!("xml error: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        }
+        assert!(props.numbering.is_none());
+    }
 }
 
 pub(super) fn parse_numbering(

@@ -799,6 +799,89 @@ mod tests {
         }
     }
 
+    #[test]
+    fn parse_worksheet_reads_data_validation_formulae_and_flags() {
+        let xml = r#"
+            <worksheet>
+              <sheetData/>
+              <dataValidations>
+                <dataValidation type="whole" operator="between" allowBlank="1" showInputMessage="true" showErrorMessage="1" errorTitle="Bad" error="Out of range" promptTitle="Hint" prompt="Use 1..10" sqref="A1 A3">
+                  <formula1>1</formula1>
+                  <formula2>10</formula2>
+                </dataValidation>
+              </dataValidations>
+            </worksheet>
+        "#;
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Sheet1", "rId1");
+        let mut zip = build_empty_zip();
+        let ws_id = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/worksheets/sheet1.xml",
+                &Relationships::default(),
+                SheetKind::Worksheet,
+            )
+            .expect("parse worksheet");
+        let store = parser.into_store();
+        let ws = match store.get(ws_id) {
+            Some(IRNode::Worksheet(ws)) => ws,
+            _ => panic!("missing worksheet"),
+        };
+        assert_eq!(ws.data_validations.len(), 1);
+
+        let validation = match store.get(ws.data_validations[0]) {
+            Some(IRNode::DataValidation(validation)) => validation,
+            _ => panic!("missing validation"),
+        };
+        assert_eq!(validation.validation_type.as_deref(), Some("whole"));
+        assert_eq!(validation.operator.as_deref(), Some("between"));
+        assert!(validation.allow_blank);
+        assert!(validation.show_input_message);
+        assert!(validation.show_error_message);
+        assert_eq!(validation.error_title.as_deref(), Some("Bad"));
+        assert_eq!(validation.error.as_deref(), Some("Out of range"));
+        assert_eq!(validation.prompt_title.as_deref(), Some("Hint"));
+        assert_eq!(validation.prompt.as_deref(), Some("Use 1..10"));
+        assert_eq!(validation.ranges, vec!["A1".to_string(), "A3".to_string()]);
+        assert_eq!(validation.formula1.as_deref(), Some("1"));
+        assert_eq!(validation.formula2.as_deref(), Some("10"));
+    }
+
+    #[test]
+    fn parse_worksheet_returns_xml_error_for_malformed_data_validation() {
+        let xml = r#"
+            <worksheet>
+              <sheetData/>
+              <dataValidations>
+                <dataValidation type="whole" sqref="A1">
+                  <formula1>1
+                </dataValidation>
+              </dataValidations>
+            </worksheet>
+        "#;
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Sheet1", "rId1");
+        let mut zip = build_empty_zip();
+        let err = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/worksheets/sheet1.xml",
+                &Relationships::default(),
+                SheetKind::Worksheet,
+            )
+            .expect_err("expected malformed xml error");
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/worksheets/sheet1.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
     fn sheet_info(name: &str, rel_id: &str) -> SheetInfo {
         SheetInfo {
             name: name.to_string(),
