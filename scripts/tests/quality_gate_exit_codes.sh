@@ -80,4 +80,6 @@ run_case \
   "QUALITY_GATE_RESULT=FAIL CLASS=precondition_failure EXIT_CODE=2" \
   env QUALITY_GATE_FORCE_PRECONDITION_FAIL=1 ./scripts/quality_gate.sh
 
+bash scripts/tests/quality_gate_baseline_commands.sh
+
 echo "quality_gate_exit_codes: OK"
