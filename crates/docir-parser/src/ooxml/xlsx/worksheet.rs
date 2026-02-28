@@ -677,6 +677,7 @@ fn parse_data_validation_empty(start: &BytesStart, sheet_path: &str) -> DataVali
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ooxml::relationships::{rel_type, Relationship, TargetMode};
     use crate::zip_handler::SecureZipReader;
     use docir_core::ir::IRNode;
 
@@ -880,6 +881,134 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, "xl/worksheets/sheet1.xml"),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_worksheet_tracks_external_hyperlinks_and_column_merge_metadata() {
+        let xml = r#"
+            <worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <cols>
+                <col min="2" max="3" width="12.5" hidden="1" customWidth="1"/>
+              </cols>
+              <mergeCells>
+                <mergeCell ref="B2:C4"/>
+              </mergeCells>
+              <hyperlinks>
+                <hyperlink ref="A1" r:id="rIdExternal"/>
+                <hyperlink ref="A2" r:id="rIdInternal"/>
+                <hyperlink ref="A3"/>
+              </hyperlinks>
+              <sheetData/>
+            </worksheet>
+        "#;
+
+        let mut rels = Relationships::default();
+        let ext = Relationship {
+            id: "rIdExternal".to_string(),
+            rel_type: rel_type::HYPERLINK.to_string(),
+            target: "https://example.test".to_string(),
+            target_mode: TargetMode::External,
+        };
+        rels.by_type
+            .entry(ext.rel_type.clone())
+            .or_default()
+            .push(ext.id.clone());
+        rels.by_id.insert(ext.id.clone(), ext);
+
+        let internal = Relationship {
+            id: "rIdInternal".to_string(),
+            rel_type: rel_type::HYPERLINK.to_string(),
+            target: "xl/worksheets/sheet2.xml".to_string(),
+            target_mode: TargetMode::Internal,
+        };
+        rels.by_type
+            .entry(internal.rel_type.clone())
+            .or_default()
+            .push(internal.id.clone());
+        rels.by_id.insert(internal.id.clone(), internal);
+
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Sheet1", "rId1");
+        let mut zip = build_empty_zip();
+        let ws_id = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/worksheets/sheet1.xml",
+                &rels,
+                SheetKind::Worksheet,
+            )
+            .expect("parse worksheet");
+
+        let store = parser.into_store();
+        let ws = match store.get(ws_id) {
+            Some(IRNode::Worksheet(ws)) => ws,
+            _ => panic!("missing worksheet"),
+        };
+
+        assert_eq!(ws.columns.len(), 2);
+        assert_eq!(ws.columns[0].index, 1);
+        assert_eq!(ws.columns[1].index, 2);
+        assert_eq!(ws.columns[0].width, Some(12.5));
+        assert!(ws.columns[0].hidden);
+        assert!(ws.columns[0].custom_width);
+        assert_eq!(ws.merged_cells.len(), 1);
+        assert_eq!(ws.merged_cells[0].start_col, 1);
+        assert_eq!(ws.merged_cells[0].start_row, 1);
+        assert_eq!(ws.merged_cells[0].end_col, 2);
+        assert_eq!(ws.merged_cells[0].end_row, 3);
+
+        let external_refs: Vec<_> = store
+            .values()
+            .filter_map(|node| match node {
+                IRNode::ExternalReference(ext) => Some(ext),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(external_refs.len(), 1);
+        assert_eq!(external_refs[0].target, "https://example.test");
+    }
+
+    #[test]
+    fn parse_chartsheet_without_chart_part_does_not_add_drawing() {
+        let xml = r#"
+            <chartsheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <chart r:id="rIdChart"/>
+            </chartsheet>
+        "#;
+        let mut rels = Relationships::default();
+        let rel = Relationship {
+            id: "rIdChart".to_string(),
+            rel_type: rel_type::CHART.to_string(),
+            target: "../charts/chart99.xml".to_string(),
+            target_mode: TargetMode::Internal,
+        };
+        rels.by_type
+            .entry(rel.rel_type.clone())
+            .or_default()
+            .push(rel.id.clone());
+        rels.by_id.insert(rel.id.clone(), rel);
+
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Chart1", "rId1");
+        let mut zip = build_empty_zip();
+        let ws_id = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/chartsheets/sheet1.xml",
+                &rels,
+                SheetKind::ChartSheet,
+            )
+            .expect("parse chartsheet");
+        let store = parser.into_store();
+        let ws = match store.get(ws_id) {
+            Some(IRNode::Worksheet(ws)) => ws,
+            _ => panic!("missing worksheet"),
+        };
+        assert!(ws.drawings.is_empty());
     }
 
     fn sheet_info(name: &str, rel_id: &str) -> SheetInfo {

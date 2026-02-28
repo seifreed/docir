@@ -826,6 +826,117 @@ mod tests {
         }
         assert!(props.numbering.is_none());
     }
+
+    #[test]
+    fn parse_sdt_inline_collects_supported_content_and_skips_missing_ids() {
+        let xml = r#"
+            <w:sdt xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:sdtPr>
+                <w:tag w:val="customer"/>
+                <w:alias w:val="Customer Field"/>
+                <w:id w:val="11"/>
+                <w:checkbox/>
+                <w:dataBinding w:xpath="/root/customer" w:storeItemID="{store}" w:prefixMappings="xmlns:x='urn:test'"/>
+              </w:sdtPr>
+              <w:sdtContent>
+                <w:commentRangeStart/>
+                <w:commentRangeStart w:id="5"/>
+                <w:bookmarkStart w:name="missing-id"/>
+                <w:bookmarkStart w:id="8" w:name="bm"/>
+                <w:fldSimple w:instr="DATE">
+                  <w:r><w:t>2024-01-01</w:t></w:r>
+                </w:fldSimple>
+                <w:ins w:id="1" w:author="Bot">
+                  <w:r><w:t>added</w:t></w:r>
+                </w:ins>
+              </w:sdtContent>
+            </w:sdt>
+        "#;
+
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut buf = Vec::new();
+        let mut sdt_id = None;
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:sdt" => {
+                    sdt_id =
+                        Some(parse_sdt(&mut parser, &mut reader, &rels, SdtMode::Inline).unwrap());
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => panic!("xml error: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        let store = parser.into_store();
+        let control = match store.get(sdt_id.expect("sdt node should parse")) {
+            Some(docir_core::ir::IRNode::ContentControl(control)) => control,
+            _ => panic!("expected content control"),
+        };
+        assert_eq!(control.tag.as_deref(), Some("customer"));
+        assert_eq!(control.alias.as_deref(), Some("Customer Field"));
+        assert_eq!(control.sdt_id.as_deref(), Some("11"));
+        assert_eq!(control.control_type.as_deref(), Some("checkbox"));
+        assert_eq!(
+            control.data_binding_xpath.as_deref(),
+            Some("/root/customer")
+        );
+        assert_eq!(control.content.len(), 2);
+
+        let mut has_field = false;
+        let mut has_revision = false;
+        for node_id in &control.content {
+            match store.get(*node_id) {
+                Some(docir_core::ir::IRNode::Field(field)) => {
+                    has_field = true;
+                    assert_eq!(field.runs.len(), 1);
+                }
+                Some(docir_core::ir::IRNode::Revision(rev)) => {
+                    has_revision = true;
+                    assert!(matches!(rev.change_type, RevisionType::Insert));
+                    assert_eq!(rev.content.len(), 1);
+                }
+                _ => {}
+            }
+        }
+        assert!(has_field);
+        assert!(has_revision);
+    }
+
+    #[test]
+    fn parse_sdt_reports_xml_error_for_malformed_input() {
+        let xml = r#"
+            <w:sdt xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:sdtContent>
+                <w:r><w:t>unterminated</w:t></w:r>
+            </w:sdt>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut buf = Vec::new();
+        let mut err = None;
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:sdt" => {
+                    err = parse_sdt(&mut parser, &mut reader, &rels, SdtMode::Inline).err();
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        match err.expect("expected parse error") {
+            ParseError::Xml { file, .. } => assert_eq!(file, DOC_XML_PATH),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
 }
 
 pub(super) fn parse_numbering(
