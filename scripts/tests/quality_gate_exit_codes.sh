@@ -9,6 +9,15 @@ if [ ! -x "./scripts/quality_gate.sh" ]; then
   exit 1
 fi
 
+fake_bin="$(mktemp -d)"
+cat >"${fake_bin}/cargo" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 0
+SH
+chmod +x "${fake_bin}/cargo"
+trap 'rm -rf "${fake_bin}"' EXIT
+
 run_case() {
   local name="$1"
   local expected_exit="$2"
@@ -19,7 +28,7 @@ run_case() {
   output_file="$(mktemp)"
 
   set +e
-  "$@" >"${output_file}" 2>&1
+  env PATH="${fake_bin}:${PATH}" "$@" >"${output_file}" 2>&1
   local actual_exit=$?
   set -e
 

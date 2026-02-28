@@ -14,6 +14,10 @@ gate_require_tool() {
   return 2
 }
 
+gate_run_command() {
+  "$@"
+}
+
 run_stage() {
   local stage="$1"
   shift
