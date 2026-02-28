@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use docir_core::ir::{DiagnosticSeverity, IRNode};
+use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, IRNode};
 use docir_core::types::DocumentFormat;
 use docir_core::types::NodeType;
 use docir_parser::DocumentParser;
@@ -104,6 +104,62 @@ fn assert_no_pending_ooxml_parts(parsed: &docir_parser::parser::ParsedDocument, 
     );
 }
 
+fn collect_diagnostic_entries(
+    parsed: &docir_parser::parser::ParsedDocument,
+) -> Vec<DiagnosticEntry> {
+    let Some(doc) = parsed.document() else {
+        return Vec::new();
+    };
+
+    let mut entries = Vec::new();
+    for diag_id in &doc.diagnostics {
+        if let Some(IRNode::Diagnostics(diag)) = parsed.store.get(*diag_id) {
+            entries.extend(diag.entries.clone());
+        }
+    }
+    entries
+}
+
+fn assert_core_fixture_behavior(
+    parsed: &docir_parser::parser::ParsedDocument,
+    expected: DocumentFormat,
+    path: &PathBuf,
+) {
+    let doc = parsed
+        .document()
+        .expect("document node should exist for parsed fixture");
+    assert!(
+        !doc.content.is_empty(),
+        "fixture should produce at least one top-level content node: {:?}",
+        path
+    );
+
+    let diagnostics = collect_diagnostic_entries(parsed);
+    if matches!(
+        expected,
+        DocumentFormat::WordProcessing | DocumentFormat::Spreadsheet | DocumentFormat::Presentation
+    ) {
+        assert!(
+            diagnostics.iter().any(|entry| entry.code == "COVERAGE_SUMMARY"),
+            "OOXML fixture should emit COVERAGE_SUMMARY diagnostics: {:?}",
+            path
+        );
+        assert!(
+            diagnostics.iter().any(|entry| entry.code == "COVERAGE_COUNTS"),
+            "OOXML fixture should emit COVERAGE_COUNTS diagnostics: {:?}",
+            path
+        );
+        assert!(
+            diagnostics.iter().any(|entry| {
+                entry.code == "COVERAGE_PART"
+                    && matches!(entry.severity, DiagnosticSeverity::Info | DiagnosticSeverity::Warning)
+            }),
+            "OOXML fixture should emit COVERAGE_PART diagnostics: {:?}",
+            path
+        );
+    }
+}
+
 #[test]
 fn parse_all_fixtures() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -127,11 +183,23 @@ fn parse_all_fixtures() {
             "missing document node for {:?}",
             path
         );
+        assert_core_fixture_behavior(&parsed, expected, &path);
 
         // Rich fixtures: assert presence of key nodes (semantic coverage).
         let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
         if file_name.starts_with("rich.") || file_name == "rich.rtf" || file_name == "rich.hwpx" {
             assert_rich_fixture_nodes(&parsed, expected);
+        }
+
+        if file_name == "object_fields.rtf" {
+            assert!(
+                has_node_type(&parsed, NodeType::OleObject),
+                "object_fields.rtf should surface OLE object nodes"
+            );
+            assert!(
+                has_node_type(&parsed, NodeType::Hyperlink),
+                "object_fields.rtf should surface hyperlink field nodes"
+            );
         }
 
         // For OOXML packages, ensure there are no pending matched parts in coverage diagnostics.
