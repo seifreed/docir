@@ -3,42 +3,50 @@
 status: gaps_found
 phase: `04-coverage-integrity-enforcement`
 date: `2026-02-28`
-commit: `655d912`
+commit: `e583c211a2e65b06d3e0ff301c4dc0f15a99303e`
 
 ## Goal-Backward Verdict
 
 Phase 04 goal from [`ROADMAP.md`](../../ROADMAP.md): coverage threshold and test integrity are enforced as non-optional gate requirements.
 
-Verdict: **Partially satisfied**. Canonical coverage enforcement and anti-inflation test integrity controls are implemented, but the enforced `>=95%` workspace line threshold is currently unmet (`cargo llvm-cov` reports ~63.19%), so phase acceptance cannot be marked complete.
+Verdict: **Partially satisfied**. Non-optional coverage enforcement is wired into the canonical gate and CI path, and behavior-oriented test integrity evidence exists. However, the enforced numeric threshold (`>=95%`) is still not met in current canonical coverage runs (~67.10-67.11% line coverage). Therefore Phase 04 cannot be marked complete.
 
 ## Inputs Reviewed
 
-- `.planning/phases/04-coverage-integrity-enforcement/04-01-PLAN.md`
-- `.planning/phases/04-coverage-integrity-enforcement/04-02-PLAN.md`
-- `.planning/phases/04-coverage-integrity-enforcement/04-01-SUMMARY.md`
-- `.planning/phases/04-coverage-integrity-enforcement/04-02-SUMMARY.md`
 - `.planning/REQUIREMENTS.md`
 - `.planning/ROADMAP.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-01-PLAN.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-01-SUMMARY.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-02-PLAN.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-02-SUMMARY.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-03-SUMMARY.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-04-PLAN.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-04-SUMMARY.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-04-COVERAGE.md`
 - `scripts/quality_gate.sh`
 - `scripts/tests/quality_gate_coverage_commands.sh`
-- `scripts/tests/quality_gate_baseline_commands.sh`
-- `scripts/tests/quality_gate_exit_codes.sh`
 - `.github/workflows/quality-gate.yml`
-- `crates/docir-parser/tests/fixtures.rs`
-- `crates/docir-cli/tests/coverage_export.rs`
 - `README.md`
 - `docs/quality-gate-policy.md`
+- `crates/docir-parser/src/parser/security.rs`
+- `crates/docir-parser/src/parser/metadata.rs`
+- `crates/docir-security/src/enrich.rs`
+- `crates/docir-security/src/enrich/dde.rs`
+- `crates/docir-security/src/enrich/helpers.rs`
+- `crates/docir-security/src/enrich/xlm.rs`
 
 ## Commands Executed
 
 - `bash scripts/tests/quality_gate_coverage_commands.sh`
-- `bash scripts/tests/quality_gate_baseline_commands.sh`
-- `bash scripts/tests/quality_gate_exit_codes.sh`
-- `bash scripts/tests/quality_gate_contract.sh`
-- `cargo test -p docir-parser --test fixtures -- --nocapture`
-- `cargo test -p docir-cli --test coverage_export -- --nocapture`
+  - Result: PASS (`coverage-command-contract: OK`, `coverage-threshold-fail: OK`)
 - `cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines 95`
-- `rg -n "coverage|inflation|synthetic|behavior-oriented|diagnostic-only|canonical" README.md docs/quality-gate-policy.md`
+  - Result: FAIL (`EXIT:1`)
+  - Observed total: `67.10%` lines
+- `cargo llvm-cov --workspace --all-features --summary-only`
+  - Result: PASS (`EXIT:0`)
+  - Observed total: `67.11%` lines
+- `rg -n "anti-inflation|behavior-oriented|synthetic|coverage integrity|coverage" README.md docs/quality-gate-policy.md`
+- `rg -n "#\[test\]|assert!\(|assert_eq!\(|assert_ne!\(" crates/docir-parser/src/parser/security.rs crates/docir-parser/src/parser/metadata.rs crates/docir-security/src/enrich.rs crates/docir-security/src/enrich/dde.rs crates/docir-security/src/enrich/helpers.rs crates/docir-security/src/enrich/xlm.rs`
 
 ## Requirement Validation
 
@@ -47,46 +55,48 @@ Verdict: **Partially satisfied**. Canonical coverage enforcement and anti-inflat
 Requirement: gate enforces test coverage of at least 95% using `cargo llvm-cov`.
 
 Evidence:
-- `scripts/quality_gate.sh` adds `coverage_check` stage invoking `cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines 95`.
-- Coverage stage is in canonical order after tests and classifies failure as `CLASS=quality_failure`.
-- Current workspace coverage run fails threshold (~63.19% lines), so the numeric target is not yet achieved.
+- `scripts/quality_gate.sh` defines `COVERAGE_THRESHOLD=95` and executes `cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines "${COVERAGE_THRESHOLD}"` as canonical `coverage_check` stage.
+- 04-04 canonical artifact reports total `67.10%` and fail-under `EXIT:1`.
+- Fresh sequential run confirms fail-under remains non-zero at ~`67.10%`.
 
-Verdict: **Fail (enforcement implemented, target not met)**.
+Verdict: **Fail (enforcement present, threshold unmet)**.
 
 ### TEST-01
 
-Requirement: coverage target is measured in canonical run and cannot be skipped in CI.
+Requirement: coverage target (>=95%) is measured in canonical run and cannot be skipped in CI.
 
 Evidence:
-- `.github/workflows/quality-gate.yml` installs `cargo-llvm-cov`, verifies tool presence, and runs only `./scripts/quality_gate.sh`.
-- Shell harnesses validate coverage stage command contract and fail semantics.
+- `.github/workflows/quality-gate.yml` installs `cargo-llvm-cov` and runs only `./scripts/quality_gate.sh` for the quality-gate job.
+- `scripts/tests/quality_gate_coverage_commands.sh` passes and verifies coverage command contract + threshold-failure semantics.
 
 Verdict: **Pass**.
 
 ### TEST-02
 
-Requirement: tests used for gate compliance validate real behavior, not trivial inflation.
+Requirement: tests used to satisfy gate requirements validate real behavior and are not trivial assertion-only inflation.
 
 Evidence:
-- `crates/docir-parser/tests/fixtures.rs` asserts semantic content and security-relevant outcomes across real fixtures.
-- `crates/docir-cli/tests/coverage_export.rs` validates export content contracts (summary/counts/rows/invariants) for fixture classes.
-- `README.md` and `docs/quality-gate-policy.md` explicitly forbid synthetic coverage-inflation evidence.
+- 04-04 scope tests assert concrete parser/enrichment semantics (external ref typing, metadata typed coercions/fallbacks, DDE parsing, XLM auto-open targeting, indicator type/level/location/description).
+- `README.md` and `docs/quality-gate-policy.md` explicitly require behavior-oriented evidence and reject synthetic coverage inflation.
 
 Verdict: **Pass**.
 
 ## Must-Have Validation Summary
 
-- 04-01 must-haves: satisfied for canonical coverage stage behavior and CI non-skip enforcement.
-- 04-02 must-haves: satisfied for behavior-oriented test integrity and anti-inflation policy controls.
-- Phase acceptance blocker: workspace coverage remains below enforced threshold.
+- Coverage enforcement is non-optional in canonical gate and CI execution path.
+- Behavior-oriented anti-inflation evidence exists and is documented/policy-backed.
+- Blocking condition remains numeric CC-04 threshold failure at current workspace scale.
 
-## Gap List (Actionable)
+## Gap Summary
 
-1. **Coverage threshold gap (blocking phase completion)**
-   - Current measured workspace line coverage is ~63.19%, below required 95%.
-   - Canonical gate now fails correctly; additional behavior-oriented tests are required across low-coverage crates/modules before phase can pass.
+1. **CC-04 threshold gap (blocking)**
+- Current canonical workspace coverage is ~`67.10-67.11%`, below required `95%`.
+- Phase 04 goal cannot be accepted while this quantitative requirement remains unmet.
 
-## Risks / Notes
+## Next Action Path
 
-- The quality gate now correctly blocks low-coverage merges. This improves enforcement integrity but will keep CI red until coverage debt is reduced.
-
+1. Execute next Phase 04 gap-closure plan using the residual high-missed-line candidates captured in `04-04-COVERAGE.md` (ODF/RTF-heavy untouched modules).
+2. Re-run canonical evidence commands:
+- `cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines 95`
+- `cargo llvm-cov --workspace --all-features --summary-only`
+3. Update this verification only when fail-under reaches `EXIT:0` under canonical conditions.
