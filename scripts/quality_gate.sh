@@ -42,13 +42,21 @@ stage_validate_tooling() {
   gate_require_tool cargo
 }
 
-stage_contract_scaffold() {
+stage_fmt_check() {
   if [ "${QUALITY_GATE_FORCE_FAIL:-0}" = "1" ]; then
     gate_log "ERROR" "Forced quality failure requested via QUALITY_GATE_FORCE_FAIL=1"
     return 1
   fi
 
-  return 0
+  gate_run_command cargo fmt --all --check
+}
+
+stage_clippy_strict() {
+  gate_run_command cargo clippy --all-targets --all-features -- -D warnings
+}
+
+stage_test_workspace() {
+  gate_run_command cargo test
 }
 
 dispatch_stage() {
@@ -60,8 +68,14 @@ dispatch_stage() {
     validate_tooling)
       stage_validate_tooling
       ;;
-    contract_scaffold)
-      stage_contract_scaffold
+    fmt_check)
+      stage_fmt_check
+      ;;
+    clippy_strict)
+      stage_clippy_strict
+      ;;
+    test_workspace)
+      stage_test_workspace
       ;;
     *)
       gate_log "ERROR" "Unknown stage: ${stage}"
@@ -75,7 +89,7 @@ run_default_stages() {
   local stage_exit=0
   local gate_exit=0
 
-  for stage in validate_repo_root validate_tooling contract_scaffold; do
+  for stage in validate_repo_root validate_tooling fmt_check clippy_strict test_workspace; do
     set +e
     run_stage "${stage}" dispatch_stage "${stage}"
     stage_exit=$?
