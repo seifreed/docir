@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-02-28T22:59:14.559Z"
+last_updated: "2026-02-28T23:20:47.735Z"
 progress:
   total_phases: 4
   completed_phases: 4
-  total_plans: 16
-  completed_plans: 16
+  total_plans: 17
+  completed_plans: 17
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 4 of 9 (Coverage Integrity Enforcement)
-Plan: Completed 04-07 ODF hotspot closure and canonical re-measure
-Status: Gaps found (coverage threshold still unmet at 69.78% < 95%)
-Last activity: 2026-02-28 - Executed 04-07 with atomic commits, ODF behavior-first tests, and refreshed residual shortlist.
+Plan: Completed 04-08 residual hotspot continuation and canonical re-measure
+Status: Gaps found (coverage threshold still unmet at 70.19% < 95%)
+Last activity: 2026-03-01 - Executed 04-08 with atomic commits, expanded OOXML/ODF/RTF behavior tests, and refreshed residual shortlist.
 
 Progress: [█████████░░░░░░░░░░░] 4/9 phases (44%)
 
@@ -56,6 +56,7 @@ Progress: [█████████░░░░░░░░░░░] 4/9 pha
 | Phase 04-coverage-integrity-enforcement P05 | 5 min | 3 tasks | 5 files |
 | Phase 04-coverage-integrity-enforcement P06 | 7m | 3 tasks | 5 files |
 | Phase 04-coverage-integrity-enforcement P07 | 9m | 3 tasks | 5 files |
+| Phase 04-coverage-integrity-enforcement P08 | 3m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -80,10 +81,13 @@ Recent decisions affecting current work:
 - [Phase 04-coverage-integrity-enforcement]: Keep CC-04 truth anchored to canonical cargo llvm-cov --fail-under-lines 95 exit semantics.
 - [Phase 04-coverage-integrity-enforcement]: Use behavior assertions on parsed IR outputs and malformed fallback classification to satisfy TEST-02 anti-inflation requirements.
 - [Phase 04-coverage-integrity-enforcement]: Publish residual coverage shortlist from current missed-line data to drive scoped 04-08 planning.
+- [Phase 04-coverage-integrity-enforcement]: Preserve canonical CC-04 truth on cargo llvm-cov --fail-under-lines 95 exit semantics while recording summary-only movement separately.
+- [Phase 04-coverage-integrity-enforcement]: Keep hotspot tests behavior-first with malformed-input/fallback and structured-output assertions, not execution-only inflation.
+- [Phase 04-coverage-integrity-enforcement]: Rank next residual candidates by current missed-line counts to keep 04-09 scope data-driven and incremental.
 
 ### Pending Todos
 
-- Phase 4 gap closure required: workspace coverage is 69.78%, below enforced >=95% canonical threshold.
+- Phase 4 gap closure required: workspace coverage is 70.19%, below enforced >=95% canonical threshold.
 
 ### Blockers/Concerns
 
@@ -91,6 +95,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-28 23:59
-Stopped at: Completed 04-07-PLAN.md
+Last session: 2026-03-01 00:20
+Stopped at: Completed 04-08-PLAN.md
 Resume file: None
