@@ -17,5 +17,11 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install coverage tooling
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Verify coverage tooling
+        run: cargo llvm-cov --version
+
       - name: Run canonical quality gate
         run: ./scripts/quality_gate.sh
