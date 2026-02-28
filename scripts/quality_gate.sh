@@ -14,6 +14,8 @@ fi
 # shellcheck source=/dev/null
 source "${LIB_PATH}"
 
+COVERAGE_THRESHOLD=95
+
 print_help() {
   cat <<'USAGE'
 Usage: ./scripts/quality_gate.sh [--help]
@@ -59,6 +61,10 @@ stage_test_workspace() {
   gate_run_command cargo test
 }
 
+stage_coverage_check() {
+  gate_run_command cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines "${COVERAGE_THRESHOLD}"
+}
+
 dispatch_stage() {
   local stage="$1"
   case "$stage" in
@@ -77,6 +83,9 @@ dispatch_stage() {
     test_workspace)
       stage_test_workspace
       ;;
+    coverage_check)
+      stage_coverage_check
+      ;;
     *)
       gate_log "ERROR" "Unknown stage: ${stage}"
       return 2
@@ -89,7 +98,7 @@ run_default_stages() {
   local stage_exit=0
   local gate_exit=0
 
-  for stage in validate_repo_root validate_tooling fmt_check clippy_strict test_workspace; do
+  for stage in validate_repo_root validate_tooling fmt_check clippy_strict test_workspace coverage_check; do
     set +e
     run_stage "${stage}" dispatch_stage "${stage}"
     stage_exit=$?
