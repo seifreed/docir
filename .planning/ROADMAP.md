@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Canonical Gate Surface** - Establish the single accepted quality entrypoint and strict pass/fail contract.
 - [x] **Phase 2: Workflow Routing** - Route local, pre-commit, and CI execution through the canonical gate.
-- [ ] **Phase 3: Baseline Clean Code Commands** - Enforce formatting, linting, tests, and warning posture in canonical runs.
+- [x] **Phase 3: Baseline Clean Code Commands** - Enforce formatting, linting, tests, and warning posture in canonical runs.
 - [ ] **Phase 4: Coverage Integrity Enforcement** - Enforce >=95% coverage and anti-inflation test integrity in canonical runs.
 - [ ] **Phase 5: Forbidden Construct Policy** - Block prohibited runtime constructs through hard gate failures.
 - [ ] **Phase 6: Code Hygiene and Complexity Policy** - Enforce dead-code, imports, documentation, and complexity thresholds.
@@ -62,7 +62,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. No warning suppression path is used to force a pass.
 **Plans**:
 - [x] `03-01-PLAN.md` - Baseline command execution in canonical gate with deterministic failure classification.
-- [ ] `03-02-PLAN.md` - Baseline command contract harness and strict warning posture documentation.
+- [x] `03-02-PLAN.md` - Baseline command contract harness and strict warning posture documentation.
 
 ### Phase 4: Coverage Integrity Enforcement
 **Goal**: Coverage threshold and test integrity are enforced as non-optional gate requirements.
@@ -136,7 +136,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 |-------|----------------|--------|-----------|
 | 1. Canonical Gate Surface | 3/3 | Complete | 2026-02-28 |
 | 2. Workflow Routing | 4/4 | Complete | 2026-02-28 |
-| 3. Baseline Clean Code Commands | 1/2 | In Progress | - |
+| 3. Baseline Clean Code Commands | 2/2 | Complete | 2026-02-28 |
 | 4. Coverage Integrity Enforcement | 0/TBD | Not started | - |
 | 5. Forbidden Construct Policy | 0/TBD | Not started | - |
 | 6. Code Hygiene and Complexity Policy | 0/TBD | Not started | - |
