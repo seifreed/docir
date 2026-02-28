@@ -12,7 +12,7 @@ This roadmap delivers deterministic, non-bypassable quality enforcement for `doc
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Canonical Gate Surface** - Establish the single accepted quality entrypoint and strict pass/fail contract.
+- [x] **Phase 1: Canonical Gate Surface** - Establish the single accepted quality entrypoint and strict pass/fail contract.
 - [ ] **Phase 2: Workflow Routing** - Route local, pre-commit, and CI execution through the canonical gate.
 - [ ] **Phase 3: Baseline Clean Code Commands** - Enforce formatting, linting, tests, and warning posture in canonical runs.
 - [ ] **Phase 4: Coverage Integrity Enforcement** - Enforce >=95% coverage and anti-inflation test integrity in canonical runs.
@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. No alternate script can be used as a substitute quality gate entrypoint.
 **Plans**:
 - [x] `01-01-PLAN.md` - Canonical gate entrypoint scaffold and contract smoke test
-- [ ] `01-02-PLAN.md` - Exit code class semantics and scenario verification
+- [x] `01-02-PLAN.md` - Exit code class semantics and scenario verification
 - [x] `01-03-PLAN.md` - Canonical-only policy documentation and non-bypass inventory
 
 ### Phase 2: Workflow Routing
@@ -128,7 +128,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Canonical Gate Surface | 2/3 | In progress | - |
+| 1. Canonical Gate Surface | 3/3 | Complete | 2026-02-28 |
 | 2. Workflow Routing | 0/TBD | Not started | - |
 | 3. Baseline Clean Code Commands | 0/TBD | Not started | - |
 | 4. Coverage Integrity Enforcement | 0/TBD | Not started | - |
