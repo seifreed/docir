@@ -23,6 +23,11 @@ USAGE
 }
 
 stage_validate_repo_root() {
+  if [ "${QUALITY_GATE_FORCE_PRECONDITION_FAIL:-0}" = "1" ]; then
+    gate_log "ERROR" "Forced precondition failure requested via QUALITY_GATE_FORCE_PRECONDITION_FAIL=1"
+    return 2
+  fi
+
   local cwd
   cwd="$(pwd)"
   if [ "${cwd}" != "${REPO_ROOT}" ]; then
@@ -38,6 +43,11 @@ stage_validate_tooling() {
 }
 
 stage_contract_scaffold() {
+  if [ "${QUALITY_GATE_FORCE_FAIL:-0}" = "1" ]; then
+    gate_log "ERROR" "Forced quality failure requested via QUALITY_GATE_FORCE_FAIL=1"
+    return 1
+  fi
+
   return 0
 }
 
@@ -66,11 +76,15 @@ run_default_stages() {
   local gate_exit=0
 
   for stage in validate_repo_root validate_tooling contract_scaffold; do
-    if run_stage "${stage}" dispatch_stage "${stage}"; then
+    set +e
+    run_stage "${stage}" dispatch_stage "${stage}"
+    stage_exit=$?
+    set -e
+
+    if [ "$stage_exit" -eq 0 ]; then
       continue
     fi
 
-    stage_exit=$?
     gate_exit="$(classify_failure "${stage_exit}")"
     break
   done
@@ -78,10 +92,38 @@ run_default_stages() {
   return "${gate_exit}"
 }
 
+emit_final_result() {
+  local gate_exit="$1"
+  local status
+  local class
+
+  case "$gate_exit" in
+    0)
+      status="PASS"
+      class="pass"
+      ;;
+    1)
+      status="FAIL"
+      class="quality_failure"
+      ;;
+    2)
+      status="FAIL"
+      class="precondition_failure"
+      ;;
+    *)
+      status="FAIL"
+      class="quality_failure"
+      gate_exit=1
+      ;;
+  esac
+
+  printf 'QUALITY_GATE_RESULT=%s CLASS=%s EXIT_CODE=%s\n' "$status" "$class" "$gate_exit"
+}
+
 main() {
   if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     print_help
-    emit_result "PASS"
+    emit_final_result 0
     return 0
   fi
 
@@ -92,11 +134,7 @@ main() {
     gate_exit=$?
   fi
 
-  if [ "$gate_exit" -eq 0 ]; then
-    emit_result "PASS"
-  else
-    emit_result "FAIL"
-  fi
+  emit_final_result "$gate_exit"
 
   return "$gate_exit"
 }
