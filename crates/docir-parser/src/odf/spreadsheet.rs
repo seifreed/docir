@@ -860,4 +860,69 @@ mod tests {
             other => panic!("expected xml error, got {:?}", other),
         }
     }
+
+    #[test]
+    fn parse_content_spreadsheet_assigns_default_names_for_empty_tables() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:spreadsheet>
+      <table:table/>
+      <table:table table:name="Named"/>
+      <table:table/>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let mut store = IrStore::new();
+        let result = parse_content_spreadsheet(xml, &mut store, &default_limits()).unwrap();
+        assert_eq!(result.content.len(), 3);
+
+        let Some(IRNode::Worksheet(first)) = store.get(result.content[0]) else {
+            panic!("expected first worksheet");
+        };
+        let Some(IRNode::Worksheet(second)) = store.get(result.content[1]) else {
+            panic!("expected second worksheet");
+        };
+        let Some(IRNode::Worksheet(third)) = store.get(result.content[2]) else {
+            panic!("expected third worksheet");
+        };
+        assert_eq!(first.name, "Sheet1");
+        assert_eq!(second.name, "Named");
+        assert_eq!(third.name, "Sheet3");
+    }
+
+    #[test]
+    fn parse_draw_frame_spreadsheet_emits_shape_for_plugin_media() {
+        let xml = br#"<draw:frame xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+                xmlns:xlink="http://www.w3.org/1999/xlink"
+                draw:name="MediaFrame">
+            <draw:plugin xlink:href="media/movie.mp4"/>
+        </draw:frame>"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let frame_start = loop {
+            match reader.read_event_into(&mut buf).unwrap() {
+                Event::Start(e) if e.name().as_ref() == b"draw:frame" => break e.into_owned(),
+                Event::Eof => panic!("missing draw:frame"),
+                _ => {}
+            }
+            buf.clear();
+        };
+        let mut store = IrStore::new();
+
+        let shape_id =
+            parse_draw_frame_spreadsheet(&mut reader, &frame_start, &mut store).unwrap();
+        let Some(shape_id) = shape_id else {
+            panic!("expected shape");
+        };
+        let Some(IRNode::Shape(shape)) = store.get(shape_id) else {
+            panic!("expected shape node");
+        };
+        assert_eq!(shape.name.as_deref(), Some("MediaFrame"));
+        assert_eq!(shape.media_target.as_deref(), Some("media/movie.mp4"));
+        assert_eq!(shape.shape_type, ShapeType::Video);
+    }
 }

@@ -534,4 +534,80 @@ mod tests {
         assert!(shape.is_none());
         assert_eq!(store.values().count(), 0);
     }
+
+    #[test]
+    fn parse_draw_frame_presentation_classifies_plugin_media() {
+        let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<draw:frame xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  draw:name="ClipFrame">
+  <draw:plugin xlink:href="media/clip.mp4"/>
+</draw:frame>
+"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let frame_start = loop {
+            match reader.read_event_into(&mut buf).unwrap() {
+                Event::Start(e) if e.name().as_ref() == b"draw:frame" => break e.into_owned(),
+                Event::Eof => panic!("missing draw:frame"),
+                _ => {}
+            }
+            buf.clear();
+        };
+        let mut store = IrStore::new();
+
+        let shape_id =
+            parse_draw_frame_presentation(&mut reader, &frame_start, &mut store).unwrap();
+        let Some(shape_id) = shape_id else {
+            panic!("expected shape");
+        };
+        let Some(IRNode::Shape(shape)) = store.get(shape_id) else {
+            panic!("expected shape node");
+        };
+        assert_eq!(shape.name.as_deref(), Some("ClipFrame"));
+        assert_eq!(shape.media_target.as_deref(), Some("media/clip.mp4"));
+        assert_eq!(shape.shape_type, ShapeType::Video);
+    }
+
+    #[test]
+    fn parse_custom_shape_presentation_preserves_text_runs() {
+        let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<draw:custom-shape xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  draw:name="Badge">
+  <text:p>First line</text:p>
+  <text:p>Second line</text:p>
+</draw:custom-shape>
+"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let shape_start = loop {
+            match reader.read_event_into(&mut buf).unwrap() {
+                Event::Start(e) if e.name().as_ref() == b"draw:custom-shape" => {
+                    break e.into_owned();
+                }
+                Event::Eof => panic!("missing draw:custom-shape"),
+                _ => {}
+            }
+            buf.clear();
+        };
+        let mut store = IrStore::new();
+
+        let shape_id =
+            parse_custom_shape_presentation(&mut reader, &shape_start, &mut store).unwrap();
+        let Some(shape_id) = shape_id else {
+            panic!("expected custom shape");
+        };
+        let Some(IRNode::Shape(shape)) = store.get(shape_id) else {
+            panic!("expected shape node");
+        };
+        assert_eq!(shape.name.as_deref(), Some("Badge"));
+        assert_eq!(shape.shape_type, ShapeType::Custom);
+        let text = shape.text.as_ref().expect("shape text");
+        assert_eq!(text.paragraphs.len(), 2);
+        assert_eq!(text.paragraphs[0].runs[0].text, "First line");
+        assert_eq!(text.paragraphs[1].runs[0].text, "Second line");
+    }
 }

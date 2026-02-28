@@ -834,4 +834,87 @@ mod tests {
             parse_ods_conditional_formatting_empty(&start).expect("parse empty formatting");
         assert!(parsed.is_none());
     }
+
+    #[test]
+    fn parse_notes_combines_multiple_paragraphs_and_empty_notes_is_none() {
+        let xml = br#"<presentation:notes xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"
+            xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+            <text:p>Line one</text:p>
+            <text:p>Line two</text:p>
+        </presentation:notes>"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf).expect("read event") {
+                Event::Start(e) if e.name().as_ref() == b"presentation:notes" => {
+                    let notes = parse_notes(&mut reader).expect("parse notes");
+                    assert_eq!(notes.as_deref(), Some("Line one\nLine two"));
+                    break;
+                }
+                Event::Eof => panic!("missing notes start"),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        let empty_xml = br#"<presentation:notes xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"></presentation:notes>"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(empty_xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf).expect("read event") {
+                Event::Start(e) if e.name().as_ref() == b"presentation:notes" => {
+                    let notes = parse_notes(&mut reader).expect("parse empty notes");
+                    assert!(notes.is_none());
+                    break;
+                }
+                Event::Eof => panic!("missing empty notes"),
+                _ => {}
+            }
+            buf.clear();
+        }
+    }
+
+    #[test]
+    fn parse_ods_conditional_formatting_reads_ranges_and_rules() {
+        let xml = br#"<table:conditional-formatting xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+            table:target-range-address="Sheet1.A1 Sheet1.A2">
+            <table:conditional-format
+                table:priority="9"
+                table:condition="cell-content-is-greater-than(5)"
+                table:apply-style-name="warn"/>
+        </table:conditional-formatting>"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let start = loop {
+            match reader.read_event_into(&mut buf).expect("read event") {
+                Event::Start(e) if e.name().as_ref() == b"table:conditional-formatting" => {
+                    break e.into_owned();
+                }
+                Event::Eof => panic!("missing conditional formatting start"),
+                _ => {}
+            }
+            buf.clear();
+        };
+
+        let parsed = parse_ods_conditional_formatting(&mut reader, &start)
+            .expect("parse formatting")
+            .expect("expected conditional format");
+        assert_eq!(
+            parsed.ranges,
+            vec!["Sheet1.A1".to_string(), "Sheet1.A2".to_string()]
+        );
+        assert_eq!(parsed.rules.len(), 1);
+        assert_eq!(parsed.rules[0].priority, Some(9));
+        assert_eq!(parsed.rules[0].operator.as_deref(), Some("greater-than"));
+        assert_eq!(
+            parsed.rules[0].formulae,
+            vec![
+                "cell-content-is-greater-than(5)".to_string(),
+                "apply-style:warn".to_string(),
+            ]
+        );
+    }
 }
