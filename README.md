@@ -146,6 +146,18 @@ docir extract document.docx --node-type MacroModule
 | `extract` | Extract nodes by ID or type |
 | `dump-node` | Dump specific IR node by ID |
 
+### Quality Workflow (Canonical Gate)
+
+Final quality acceptance is authorized only through the canonical command:
+
+```bash
+./scripts/quality_gate.sh
+```
+
+Direct invocations such as `cargo fmt`, `cargo clippy`, or `cargo test` are non-authoritative for acceptance, even when they pass locally.
+
+Policy details: [Quality Gate Non-Bypass Policy](docs/quality-gate-policy.md)
+
 ### Security Options
 
 | Option | Description |
