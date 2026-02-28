@@ -16,10 +16,11 @@ Quality and architecture compliance are deterministic, enforceable, and impossib
 - ✓ Parsing and analysis pipeline for Office/ODF/HWP/RTF documents — existing
 - ✓ Existing test, lint, and build workflows via Cargo — existing
 - ✓ Existing codebase mapping artifacts in `.planning/codebase/` for architectural context — existing
+- ✓ Canonical quality-gate entrypoint exists only at `./scripts/quality_gate.sh` with deterministic exit behavior — Phase 1
+- ✓ Canonical-only non-bypass policy is documented with inventory evidence — Phase 1
 
 ### Active
 
-- [ ] Canonical gate exists only at `./scripts/quality_gate.sh` and is the single accepted gate for local, pre-commit, and CI.
 - [ ] Canonical gate enforces formatting, linting, tests, coverage threshold, and static policy checks in one run.
 - [ ] Clean Code policy violations (unwrap/expect/panic/todo/unimplemented/dead code/unused imports/missing docs/complexity breaches) fail the gate.
 - [ ] Clean Architecture dependency violations between domain/application/infrastructure/presentation fail the gate.
@@ -49,10 +50,10 @@ Quality and architecture compliance are deterministic, enforceable, and impossib
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Use `./scripts/quality_gate.sh` as sole quality gate surface | Eliminates ambiguity and bypass paths across local and CI workflows | — Pending |
+| Use `./scripts/quality_gate.sh` as sole quality gate surface | Eliminates ambiguity and bypass paths across local and CI workflows | ✓ Good |
 | Treat gate failure as project-incomplete state | Enforces deterministic quality bar and prevents soft completion | — Pending |
 | Enforce Clean Architecture layering as hard checks | Prevents architectural drift as workspace grows | — Pending |
 | Scope enforcement to this repository only | User-selected scope prioritizes immediate reliability over framework generalization | — Pending |
 
 ---
-*Last updated: 2026-02-28 after initialization*
+*Last updated: 2026-02-28 after Phase 1*
