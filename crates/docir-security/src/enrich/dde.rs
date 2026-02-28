@@ -45,3 +45,33 @@ fn extract_quoted_parts(input: &str) -> Vec<String> {
     }
     parts
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::security::DdeFieldType;
+
+    #[test]
+    fn parse_dde_instruction_extracts_parts_and_type() {
+        let parsed =
+            parse_dde_instruction(r#"DDEAUTO "cmd" "/c calc" "A1""#).expect("expected DDE parse");
+        assert_eq!(parsed.field_type, DdeFieldType::DdeAuto);
+        assert_eq!(parsed.application, "cmd");
+        assert_eq!(parsed.topic.as_deref(), Some("/c calc"));
+        assert_eq!(parsed.item.as_deref(), Some("A1"));
+    }
+
+    #[test]
+    fn parse_dde_instruction_handles_missing_quoted_parts() {
+        let parsed = parse_dde_instruction("DDE").expect("expected DDE parse");
+        assert_eq!(parsed.field_type, DdeFieldType::Dde);
+        assert_eq!(parsed.application, "");
+        assert_eq!(parsed.topic, None);
+        assert_eq!(parsed.item, None);
+    }
+
+    #[test]
+    fn parse_dde_instruction_ignores_non_dde_fields() {
+        assert!(parse_dde_instruction(r#"HYPERLINK "https://example.test""#).is_none());
+    }
+}

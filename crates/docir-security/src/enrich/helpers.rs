@@ -107,3 +107,76 @@ pub(super) fn is_activex_ole(ole: &OleObject) -> bool {
         .unwrap_or("");
     path.to_ascii_lowercase().contains("activex")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::ir::IRNode;
+    use docir_core::security::{
+        ExternalRefType, ExternalReference, OleObject, ThreatIndicatorType,
+    };
+    use docir_core::types::{NodeId, SourceSpan};
+    use docir_core::visitor::IrStore;
+
+    #[test]
+    fn push_remote_external_ref_indicators_filters_local_targets() {
+        let mut store = IrStore::new();
+        let mut remote = ExternalReference::new(ExternalRefType::Hyperlink, "https://evil.test");
+        remote.span = Some(SourceSpan::new("word/_rels/document.xml.rels"));
+        let local = ExternalReference::new(ExternalRefType::Hyperlink, "file:///tmp/report");
+        let missing = NodeId::new();
+        let refs = vec![remote.id, local.id, missing];
+        store.insert(IRNode::ExternalReference(remote));
+        store.insert(IRNode::ExternalReference(local));
+
+        let mut indicators = Vec::new();
+        push_remote_external_ref_indicators(&store, &refs, &mut indicators);
+        assert_eq!(indicators.len(), 1);
+        assert_eq!(
+            indicators[0].indicator_type,
+            ThreatIndicatorType::RemoteResource
+        );
+        assert_eq!(
+            indicators[0].location.as_deref(),
+            Some("word/_rels/document.xml.rels")
+        );
+        assert!(indicators[0].description.contains("https://evil.test"));
+    }
+
+    #[test]
+    fn ole_indicator_details_prefers_span_then_name_then_fallback() {
+        let mut with_span = OleObject::new();
+        with_span.span = Some(SourceSpan::new("word/embeddings/ole1.bin"));
+        let (loc, desc) =
+            ole_indicator_details("OLE object found at", "OLE object found", &with_span);
+        assert_eq!(loc.as_deref(), Some("word/embeddings/ole1.bin"));
+        assert!(desc.contains("word/embeddings/ole1.bin"));
+
+        let mut with_name = OleObject::new();
+        with_name.name = Some("ObjectName".to_string());
+        let (loc, desc) =
+            ole_indicator_details("OLE object found at", "OLE object found", &with_name);
+        assert_eq!(loc.as_deref(), Some("ObjectName"));
+        assert!(desc.contains("ObjectName"));
+
+        let without_loc = OleObject::new();
+        let (loc, desc) =
+            ole_indicator_details("OLE object found at", "OLE object found", &without_loc);
+        assert!(loc.is_none());
+        assert_eq!(desc, "OLE object found");
+    }
+
+    #[test]
+    fn is_activex_ole_matches_span_or_name_case_insensitively() {
+        let mut by_span = OleObject::new();
+        by_span.span = Some(SourceSpan::new("word/activeX/activeX1.bin"));
+        assert!(is_activex_ole(&by_span));
+
+        let mut by_name = OleObject::new();
+        by_name.name = Some("PPT/ACTIVEX/BINARY.BIN".to_string());
+        assert!(is_activex_ole(&by_name));
+
+        let other = OleObject::new();
+        assert!(!is_activex_ole(&other));
+    }
+}

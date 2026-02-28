@@ -268,3 +268,83 @@ fn build_rtf_indicators(
 
     indicators
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::ir::{Document, Field, IRNode};
+    use docir_core::security::{
+        ExternalRefType, ExternalReference, OleObject, ThreatIndicatorType,
+    };
+    use docir_core::types::{DocumentFormat, SourceSpan};
+
+    #[test]
+    fn populate_security_indicators_generates_dde_and_remote_ref_for_odf() {
+        let mut store = IrStore::new();
+        let doc = Document::new(DocumentFormat::OdfText);
+        let root_id = doc.id;
+
+        let mut remote = ExternalReference::new(ExternalRefType::Hyperlink, "https://evil.test");
+        remote.span = Some(SourceSpan::new("content.xml"));
+        let local = ExternalReference::new(ExternalRefType::Hyperlink, "file:///tmp/local");
+
+        let mut dde_field = Field::new(Some(r#"DDEAUTO "cmd" "/c calc" "A1""#.to_string()));
+        dde_field.span = Some(SourceSpan::new("content.xml"));
+
+        store.insert(IRNode::Document(doc));
+        store.insert(IRNode::ExternalReference(remote));
+        store.insert(IRNode::ExternalReference(local));
+        store.insert(IRNode::Field(dde_field));
+
+        populate_security_indicators(&mut store, root_id);
+
+        let Some(IRNode::Document(doc)) = store.get(root_id) else {
+            panic!("missing document");
+        };
+        let indicators = &doc.security.threat_indicators;
+        assert!(indicators
+            .iter()
+            .any(|i| i.indicator_type == ThreatIndicatorType::RemoteResource));
+        assert!(indicators.iter().any(|i| {
+            i.indicator_type == ThreatIndicatorType::DdeCommand
+                && i.description.contains("DDE formula")
+                && i.location.as_deref() == Some("content.xml")
+        }));
+        assert!(!indicators.iter().any(|i| {
+            i.indicator_type == ThreatIndicatorType::RemoteResource
+                && i.description.contains("file:///tmp/local")
+        }));
+    }
+
+    #[test]
+    fn populate_security_indicators_shapes_activex_and_ole_locations() {
+        let mut store = IrStore::new();
+        let doc = Document::new(DocumentFormat::WordProcessing);
+        let root_id = doc.id;
+
+        let mut activex_ole = OleObject::new();
+        activex_ole.span = Some(SourceSpan::new("word/activeX/activeX1.bin"));
+        let mut regular_ole = OleObject::new();
+        regular_ole.span = Some(SourceSpan::new("word/embeddings/object1.bin"));
+
+        store.insert(IRNode::Document(doc));
+        store.insert(IRNode::OleObject(activex_ole));
+        store.insert(IRNode::OleObject(regular_ole));
+
+        populate_security_indicators(&mut store, root_id);
+
+        let Some(IRNode::Document(doc)) = store.get(root_id) else {
+            panic!("missing document");
+        };
+        assert!(doc.security.threat_indicators.iter().any(|i| {
+            i.indicator_type == ThreatIndicatorType::ActiveXControl
+                && i.description.contains("ActiveX control binary found at")
+                && i.location.as_deref() == Some("word/activeX/activeX1.bin")
+        }));
+        assert!(doc.security.threat_indicators.iter().any(|i| {
+            i.indicator_type == ThreatIndicatorType::OleObject
+                && i.description.contains("OLE object found at")
+                && i.location.as_deref() == Some("word/embeddings/object1.bin")
+        }));
+    }
+}
