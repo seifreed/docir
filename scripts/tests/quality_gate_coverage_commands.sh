@@ -17,15 +17,14 @@ cat >"${fake_bin}/cargo" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${QUALITY_GATE_BASELINE_LOG:?QUALITY_GATE_BASELINE_LOG is required}"
+: "${QUALITY_GATE_COVERAGE_LOG:?QUALITY_GATE_COVERAGE_LOG is required}"
 
 subcmd="${1:-}"
 shift || true
 
-printf '%s %s\n' "${subcmd}" "$*" >> "${QUALITY_GATE_BASELINE_LOG}"
+printf '%s %s\n' "${subcmd}" "$*" >> "${QUALITY_GATE_COVERAGE_LOG}"
 
-fail_stage="${QUALITY_GATE_BASELINE_FAIL_STAGE:-}"
-if [ -n "${fail_stage}" ] && [ "${subcmd}" = "${fail_stage}" ]; then
+if [ "${subcmd}" = "llvm-cov" ] && [ "${QUALITY_GATE_COVERAGE_FAIL:-0}" = "1" ]; then
   exit 101
 fi
 
@@ -35,10 +34,9 @@ chmod +x "${fake_bin}/cargo"
 
 run_case() {
   local name="$1"
-  local fail_stage="$2"
-  local expected_exit="$3"
-  local expected_line_fragment="$4"
-  shift 4
+  local expected_exit="$2"
+  local expected_line_fragment="$3"
+  shift 3
   local -a expected_calls=("$@")
 
   : > "${log_file}"
@@ -48,8 +46,7 @@ run_case() {
   set +e
   env \
     PATH="${fake_bin}:${PATH}" \
-    QUALITY_GATE_BASELINE_LOG="${log_file}" \
-    QUALITY_GATE_BASELINE_FAIL_STAGE="${fail_stage}" \
+    QUALITY_GATE_COVERAGE_LOG="${log_file}" \
     ./scripts/quality_gate.sh >"${output_file}" 2>&1
   local actual_exit=$?
   set -e
@@ -109,8 +106,7 @@ run_case() {
 }
 
 run_case \
-  "baseline-pass" \
-  "" \
+  "coverage-command-contract" \
   0 \
   "QUALITY_GATE_RESULT=PASS CLASS=pass EXIT_CODE=0" \
   "fmt --all --check" \
@@ -118,38 +114,40 @@ run_case \
   "test " \
   "llvm-cov --workspace --all-features --summary-only --fail-under-lines 95"
 
-run_case \
-  "baseline-fail-fmt" \
-  "fmt" \
-  1 \
-  "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
-  "fmt --all --check"
+set +e
+output_file="$(mktemp)"
+: > "${log_file}"
+env \
+  PATH="${fake_bin}:${PATH}" \
+  QUALITY_GATE_COVERAGE_LOG="${log_file}" \
+  QUALITY_GATE_COVERAGE_FAIL=1 \
+  ./scripts/quality_gate.sh >"${output_file}" 2>&1
+actual_exit=$?
+set -e
 
-run_case \
-  "baseline-fail-clippy" \
-  "clippy" \
-  1 \
-  "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
-  "fmt --all --check" \
-  "clippy --all-targets --all-features -- -D warnings"
+result_line="$(tail -n 1 "${output_file}")"
+if [ "${actual_exit}" -ne 1 ]; then
+  echo "coverage-threshold-fail: expected exit 1, got ${actual_exit}"
+  cat "${output_file}"
+  rm -f "${output_file}"
+  exit 1
+fi
 
-run_case \
-  "baseline-fail-test" \
-  "test" \
-  1 \
-  "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
-  "fmt --all --check" \
-  "clippy --all-targets --all-features -- -D warnings" \
-  "test "
+if [[ "${result_line}" != *"QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1"* ]]; then
+  echo "coverage-threshold-fail: final status line mismatch"
+  echo "Actual line: ${result_line}"
+  cat "${output_file}"
+  rm -f "${output_file}"
+  exit 1
+fi
 
-run_case \
-  "baseline-fail-coverage" \
-  "llvm-cov" \
-  1 \
-  "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
-  "fmt --all --check" \
-  "clippy --all-targets --all-features -- -D warnings" \
-  "test " \
-  "llvm-cov --workspace --all-features --summary-only --fail-under-lines 95"
+if ! rg -q '^llvm-cov --workspace --all-features --summary-only --fail-under-lines 95$' "${log_file}"; then
+  echo "coverage-threshold-fail: missing expected llvm-cov command invocation"
+  cat "${log_file}"
+  rm -f "${output_file}"
+  exit 1
+fi
 
-echo "quality_gate_baseline_commands: OK"
+rm -f "${output_file}"
+echo "coverage-threshold-fail: OK"
+echo "quality_gate_coverage_commands: OK"
