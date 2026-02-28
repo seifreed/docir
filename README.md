@@ -156,6 +156,7 @@ Final quality acceptance is authorized only through the canonical command:
 
 Direct invocations such as `cargo fmt`, `cargo clippy`, or `cargo test` are diagnostic-only and non-authoritative for acceptance, even when they pass locally.
 Suppression tactics (for example `-A`, lint-allow overrides, or bypass env flags) are not valid for acceptance and must not be used to pass the canonical gate.
+Coverage acceptance is behavior-oriented: tests must assert parser/security/export outcomes from real fixtures, and synthetic execution-only tests are not valid evidence.
 
 Policy details: [Quality Gate Non-Bypass Policy](docs/quality-gate-policy.md)
 

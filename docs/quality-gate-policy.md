@@ -37,6 +37,13 @@ Examples of prohibited bypass patterns:
 - Suppression mechanisms are forbidden for acceptance, including `-A` CLI flags, acceptance-time lint allows, and env-based bypass toggles.
 - Raw Cargo commands remain diagnostic-only; only canonical gate output authorizes acceptance.
 
+## Coverage Integrity Policy
+
+- Coverage metrics are accepted only when tests validate behavior outcomes (parser nodes, diagnostics, security indicators, and exported coverage content contracts).
+- Synthetic or tautological tests that only execute lines without asserting meaningful outputs are forbidden as acceptance evidence.
+- Fixture-driven assertions over real sample documents are required for coverage-oriented changes.
+- Direct coverage commands are diagnostic-only; canonical gate output remains the sole acceptance authority.
+
 ## Compliance Record
 
 Current scan evidence is tracked in:
