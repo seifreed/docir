@@ -703,6 +703,21 @@ mod tests {
         OdfLimits::new(&ParserConfig::default(), false)
     }
 
+    fn parse_table_start(xml: &[u8]) -> (Reader<std::io::Cursor<&[u8]>>, BytesStart<'static>) {
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let table_start = loop {
+            match reader.read_event_into(&mut buf).unwrap() {
+                Event::Start(e) if e.name().as_ref() == b"table:table" => break e.into_owned(),
+                Event::Eof => panic!("missing table start"),
+                _ => {}
+            }
+            buf.clear();
+        };
+        (reader, table_start)
+    }
+
     #[test]
     fn parse_ods_table_evaluates_formula_and_flushes_validations() {
         let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -718,17 +733,7 @@ mod tests {
 </office:spreadsheet>
 "#;
 
-        let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
-        reader.config_mut().trim_text(false);
-        let mut buf = Vec::new();
-        let table_start = loop {
-            match reader.read_event_into(&mut buf).unwrap() {
-                Event::Start(e) if e.name().as_ref() == b"table:table" => break e.into_owned(),
-                Event::Eof => panic!("missing table start"),
-                _ => {}
-            }
-            buf.clear();
-        };
+        let (mut reader, table_start) = parse_table_start(xml);
         let mut store = IrStore::new();
         let mut validations = HashMap::new();
         validations.insert(
@@ -804,5 +809,105 @@ mod tests {
             parsed.formula.as_ref().map(|f| f.text.as_str()),
             Some("SUM([.A1];[.A2])")
         );
+    }
+
+    #[test]
+    fn parse_ods_table_fast_samples_rows_and_flushes_validation_span() {
+        let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <table:table table:name="Sampled">
+    <table:table-row>
+      <table:table-cell table:content-validation-name="rule1"><text:p>kept</text:p></table:table-cell>
+      <table:table-cell><text:p>trimmed</text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+      <table:table-cell><text:p>skipped-row</text:p></table:table-cell>
+    </table:table-row>
+  </table:table>
+</office:spreadsheet>
+"#;
+        let (mut reader, table_start) = parse_table_start(xml);
+        let mut store = IrStore::new();
+        let mut validations = HashMap::new();
+        validations.insert(
+            "rule1".to_string(),
+            ValidationDef {
+                validation_type: Some("list".to_string()),
+                operator: None,
+                allow_blank: false,
+                show_input_message: false,
+                show_error_message: false,
+                error_title: None,
+                error: None,
+                prompt_title: None,
+                prompt: None,
+                formula1: Some("\"A;B\"".to_string()),
+                formula2: None,
+            },
+        );
+        let mut config = ParserConfig::default();
+        config.odf.fast_sample_rows = 1;
+        config.odf.fast_sample_cols = 1;
+        let limits = OdfLimits::new(&config, true);
+
+        let worksheet = parse_ods_table_fast(
+            &mut reader,
+            &table_start,
+            1,
+            &mut store,
+            &validations,
+            &limits,
+        )
+        .unwrap();
+
+        assert_eq!(worksheet.name, "Sampled");
+        assert_eq!(worksheet.cells.len(), 1);
+        assert_eq!(worksheet.data_validations.len(), 1);
+
+        let Some(IRNode::Cell(cell)) = store.get(worksheet.cells[0]) else {
+            panic!("expected sampled cell");
+        };
+        assert_eq!(cell.reference, "A1");
+
+        let Some(IRNode::DataValidation(validation)) = store.get(worksheet.data_validations[0])
+        else {
+            panic!("expected validation node");
+        };
+        assert_eq!(validation.ranges, vec!["A1"]);
+        assert_eq!(
+            validation.span.as_ref().map(|span| span.file_path.as_str()),
+            Some("content.xml")
+        );
+    }
+
+    #[test]
+    fn parse_ods_table_reports_malformed_xml_as_content_error() {
+        let malformed: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <table:table table:name="Broken">
+    <table:table-row>
+      <table:table-cell table:cell-value-type="string"><text:p xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">oops</text:p>
+  </table:table>
+</office:spreadsheet>
+"#;
+        let (mut reader, table_start) = parse_table_start(malformed);
+        let mut store = IrStore::new();
+        let err = parse_ods_table(
+            &mut reader,
+            &table_start,
+            1,
+            &mut store,
+            &HashMap::new(),
+            &default_limits(),
+        )
+        .unwrap_err();
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+            other => panic!("expected content.xml parse error, got {:?}", other),
+        }
     }
 }

@@ -750,6 +750,10 @@ mod tests {
         OdfLimits::new(&ParserConfig::default(), false)
     }
 
+    fn fast_limits() -> OdfLimits {
+        OdfLimits::new(&ParserConfig::default(), true)
+    }
+
     #[test]
     fn parse_content_spreadsheet_links_pivots_and_validations() {
         let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -811,6 +815,46 @@ mod tests {
 
         let mut store = IrStore::new();
         let err = parse_content_spreadsheet(malformed, &mut store, &default_limits()).unwrap_err();
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+            other => panic!("expected xml error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_content_spreadsheet_fast_emits_default_sheet_without_pivot_cache() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:spreadsheet>
+      <table:table/>
+      <table:data-pilot-table table:name="PivotIgnored"
+        table:source-range-address="'Sheet1'.A1:'Sheet1'.A1"
+        table:target-range-address="'Sheet1'.D1:'Sheet1'.D1"/>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let mut store = IrStore::new();
+        let result = parse_content_spreadsheet(xml, &mut store, &fast_limits()).unwrap();
+
+        assert_eq!(result.content.len(), 1);
+        assert!(result.pivot_caches.is_empty());
+
+        let Some(IRNode::Worksheet(sheet)) = store.get(result.content[0]) else {
+            panic!("expected worksheet node");
+        };
+        assert_eq!(sheet.name, "Sheet1");
+        assert!(sheet.pivot_tables.is_empty());
+    }
+
+    #[test]
+    fn parse_content_spreadsheet_fast_reports_xml_errors() {
+        let malformed = br#"<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:body><office:spreadsheet><table:table xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"></office:spreadsheet></office:body></office:document-content>"#;
+
+        let mut store = IrStore::new();
+        let err = parse_content_spreadsheet(malformed, &mut store, &fast_limits()).unwrap_err();
         match err {
             ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
             other => panic!("expected xml error, got {:?}", other),
