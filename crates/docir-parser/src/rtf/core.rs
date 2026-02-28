@@ -747,3 +747,83 @@ fn run_properties_from_state(ctx: &RtfParseContext) -> RunProperties {
     }
     props
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::security::ExternalRefType;
+
+    #[test]
+    fn parse_control_word_supports_negative_parameter_and_space_delimiter() {
+        let mut cursor = RtfCursor::new(b"-45 ");
+        let (word, param) = parse_control_word_and_param(&mut cursor, b'u');
+        assert_eq!(word, "u");
+        assert_eq!(param, Some(-45));
+        assert_eq!(cursor.peek(), None);
+    }
+
+    #[test]
+    fn parse_rtf_ignores_malformed_hex_escape_and_preserves_remaining_text() {
+        let data = b"{\\rtf1\\ansi A\\'zzB\\par C}";
+        let mut cursor = RtfCursor::new(data);
+        let mut ctx = RtfParseContext::new(256, 1024);
+        let mut store = IrStore::new();
+
+        parse_rtf(&mut cursor, &mut ctx, &mut store).expect("parse rtf");
+
+        let mut has_ab = false;
+        let mut has_c = false;
+        for node in store.values() {
+            if let IRNode::Run(run) = node {
+                if run.text.contains("AB") {
+                    has_ab = true;
+                }
+                if run.text.contains('C') {
+                    has_c = true;
+                }
+            }
+        }
+        assert!(has_ab);
+        assert!(has_c);
+    }
+
+    #[test]
+    fn parse_rtf_recovers_at_eof_for_unclosed_group() {
+        let data = b"{\\rtf1\\ansi Unclosed stream";
+        let mut cursor = RtfCursor::new(data);
+        let mut ctx = RtfParseContext::new(256, 1024);
+        let mut store = IrStore::new();
+
+        parse_rtf(&mut cursor, &mut ctx, &mut store).expect("parse rtf");
+
+        let has_text = store.values().any(|node| match node {
+            IRNode::Run(run) => run.text.contains("Unclosed stream"),
+            _ => false,
+        });
+        assert!(has_text);
+    }
+
+    #[test]
+    fn parse_rtf_hyperlink_field_creates_hyperlink_and_external_reference() {
+        let data = br#"{\rtf1{\field{\fldinst HYPERLINK \"https://example.com\"}{\fldrslt Link}}}"#;
+        let mut cursor = RtfCursor::new(data);
+        let mut ctx = RtfParseContext::new(256, 1024);
+        let mut store = IrStore::new();
+
+        parse_rtf(&mut cursor, &mut ctx, &mut store).expect("parse rtf");
+
+        let has_hyperlink = store.values().any(|node| match node {
+            IRNode::Hyperlink(link) => link.target == "https://example.com",
+            _ => false,
+        });
+        assert!(has_hyperlink);
+
+        let has_external_ref = store.values().any(|node| match node {
+            IRNode::ExternalReference(ext) => {
+                ext.ref_type == ExternalRefType::Hyperlink && ext.target == "https://example.com"
+            }
+            _ => false,
+        });
+        assert!(has_external_ref);
+    }
+}
