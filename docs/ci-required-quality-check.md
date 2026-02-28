@@ -31,3 +31,39 @@ gh api repos/seifreed/docir/rulesets
 ## Verification Contract
 
 A merge to `main` is compliant with `FLOW-04` only when required-check configuration includes `quality-gate` as an active required status context.
+
+## Evidence (2026-02-28)
+
+Repository and default branch:
+
+```text
+seifreed/docir main
+```
+
+Authentication status summary:
+
+```text
+github.com account: seifreed
+scopes: gist, read:org, repo, workflow
+```
+
+Branch protection API result:
+
+```text
+HTTP 403 Forbidden
+Upgrade to GitHub Pro or make this repository public to enable this feature.
+```
+
+Rulesets API result:
+
+```text
+HTTP 403 Forbidden
+Upgrade to GitHub Pro or make this repository public to enable this feature.
+```
+
+Status on 2026-02-28:
+
+- Branch protection API exit code: 1
+- Rulesets API exit code: 1
+- `GATE-05` is complete (`quality-gate` workflow/job exists and runs canonical gate).
+- `FLOW-04` is blocked by repository tier limits until rulesets/branch-protection features are available.
