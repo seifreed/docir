@@ -45,7 +45,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. Developers can follow documented local workflow steps that call only the canonical gate.
   2. Pre-commit workflow documentation points to the canonical gate and no parallel quality path.
   3. CI required checks execute `./scripts/quality_gate.sh` directly as the merge-blocking job.
-**Plans**: TBD
+**Plans**:
+- [x] `02-01-PLAN.md` - Local workflow documentation routed to canonical gate
+- [x] `02-02-PLAN.md` - Pre-commit workflow routing and hook installer alignment
+- [x] `02-03-PLAN.md` - Canonical CI job plus required-check runbook baseline
+- [x] `02-04-PLAN.md` - Gap-closure attempt with live GitHub API verification (blocked by repository tier)
 
 ### Phase 3: Baseline Clean Code Commands
 **Goal**: Canonical runs always execute baseline formatting, linting, testing, and warning-strict checks.
@@ -129,7 +133,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Canonical Gate Surface | 3/3 | Complete | 2026-02-28 |
-| 2. Workflow Routing | 0/TBD | Not started | - |
+| 2. Workflow Routing | 4/4 | In progress (blocked external) | - |
 | 3. Baseline Clean Code Commands | 0/TBD | Not started | - |
 | 4. Coverage Integrity Enforcement | 0/TBD | Not started | - |
 | 5. Forbidden Construct Policy | 0/TBD | Not started | - |

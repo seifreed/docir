@@ -76,9 +76,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | GATE-01 | Phase 1 | Complete |
 | GATE-02 | Phase 1 | Complete |
-| GATE-03 | Phase 2 | Pending |
-| GATE-04 | Phase 2 | Pending |
-| GATE-05 | Phase 2 | Pending |
+| GATE-03 | Phase 2 | Complete |
+| GATE-04 | Phase 2 | Complete |
+| GATE-05 | Phase 2 | Complete |
 | GATE-06 | Phase 1 | Complete |
 | CC-01 | Phase 3 | Pending |
 | CC-02 | Phase 3 | Pending |
@@ -106,7 +106,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FLOW-01 | Phase 9 | Pending |
 | FLOW-02 | Phase 9 | Pending |
 | FLOW-03 | Phase 9 | Pending |
-| FLOW-04 | Phase 2 | Pending |
+| FLOW-04 | Phase 2 | Blocked (GitHub tier/API 403) |
 | FLOW-05 | Phase 9 | Pending |
 
 **Coverage:**
@@ -116,4 +116,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-02-28 after roadmap traceability mapping*
+*Last updated: 2026-02-28 after Phase 02-04 gap-closure verification*

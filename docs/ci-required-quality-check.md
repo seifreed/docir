@@ -21,18 +21,18 @@
 # Repository and default branch
 gh repo view --json nameWithOwner,defaultBranchRef
 
-# Branch protection check
-gh api repos/seifreed/docir/branches/main/protection --include
-
-# Rulesets check
+# Rulesets inspection/apply path
 gh api repos/seifreed/docir/rulesets
+
+# Branch protection inspection/apply path
+gh api repos/seifreed/docir/branches/main/protection --include
 ```
 
 ## Verification Contract
 
 A merge to `main` is compliant with `FLOW-04` only when required-check configuration includes `quality-gate` as an active required status context.
 
-## Evidence (2026-02-28)
+## Evidence (2026-02-28, Gap-Closure Plan 02-04)
 
 Repository and default branch:
 
@@ -47,18 +47,22 @@ github.com account: seifreed
 scopes: gist, read:org, repo, workflow
 ```
 
-Branch protection API result:
-
-```text
-HTTP 403 Forbidden
-Upgrade to GitHub Pro or make this repository public to enable this feature.
-```
-
 Rulesets API result:
 
 ```text
+gh api repos/seifreed/docir/rulesets
 HTTP 403 Forbidden
-Upgrade to GitHub Pro or make this repository public to enable this feature.
+{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature.","documentation_url":"https://docs.github.com/rest/repos/rules#get-all-repository-rulesets","status":"403"}
+exit:1
+```
+
+Branch protection API result:
+
+```text
+gh api repos/seifreed/docir/branches/main/protection --include
+HTTP 403 Forbidden
+{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature.","documentation_url":"https://docs.github.com/rest/branches/branch-protection#get-branch-protection","status":"403"}
+exit:1
 ```
 
 Status on 2026-02-28:
@@ -66,4 +70,13 @@ Status on 2026-02-28:
 - Branch protection API exit code: 1
 - Rulesets API exit code: 1
 - `GATE-05` is complete (`quality-gate` workflow/job exists and runs canonical gate).
-- `FLOW-04` is blocked by repository tier limits until rulesets/branch-protection features are available.
+- `FLOW-04` remains blocked by repository tier limits until branch-protection/ruleset features are available.
+
+## Blocker Outcome
+
+`FLOW-04` cannot be marked complete in this repository state because required-check enforcement endpoints are gated (`HTTP 403`) despite valid authenticated access.
+
+Unblock options:
+
+1. Upgrade account/repository tier to enable private-repo branch protection/rulesets.
+2. Make repository public (if policy allows), then configure `quality-gate` as required.
