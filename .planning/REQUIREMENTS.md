@@ -46,7 +46,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **TEST-01**: Coverage target (>=95%) is measured in the canonical run and cannot be skipped in CI.
 - [ ] **TEST-02**: Tests used to satisfy gate requirements validate real behavior and are not trivial assertion-only inflation.
-- [ ] **TEST-03**: Warnings and lint checks remain fully enabled; warning suppression is not used to pass the gate.
+- [x] **TEST-03**: Warnings and lint checks remain fully enabled; warning suppression is not used to pass the gate.
 
 ### Iterative Enforcement and CI Completion
 
@@ -102,7 +102,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARCH-07 | Phase 7 | Pending |
 | TEST-01 | Phase 4 | Pending |
 | TEST-02 | Phase 4 | Pending |
-| TEST-03 | Phase 3 | Pending |
+| TEST-03 | Phase 3 | Complete |
 | FLOW-01 | Phase 9 | Pending |
 | FLOW-02 | Phase 9 | Pending |
 | FLOW-03 | Phase 9 | Pending |
