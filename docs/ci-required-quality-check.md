@@ -19,13 +19,15 @@
 
 ```bash
 # Repository and default branch
-gh repo view --json nameWithOwner,defaultBranchRef
+gh repo view --json nameWithOwner,defaultBranchRef,isPrivate
 
-# Rulesets inspection/apply path
-gh api repos/seifreed/docir/rulesets
+# Apply branch protection with required status check
+gh api -X PUT repos/seifreed/docir/branches/main/protection \
+  -H "Accept: application/vnd.github+json" \
+  --input /tmp/protection_payload.json
 
-# Branch protection inspection/apply path
-gh api repos/seifreed/docir/branches/main/protection --include
+# Verify active protection
+gh api repos/seifreed/docir/branches/main/protection --jq '{strict:.required_status_checks.strict, checks:.required_status_checks.checks}'
 ```
 
 ## Verification Contract
@@ -34,49 +36,49 @@ A merge to `main` is compliant with `FLOW-04` only when required-check configura
 
 ## Evidence (2026-02-28, Gap-Closure Plan 02-04)
 
-Repository and default branch:
+Repository state:
 
 ```text
-seifreed/docir main
+repo: seifreed/docir
+default branch: main
+visibility: PUBLIC
 ```
 
-Authentication status summary:
+Applied protection payload (summary):
 
-```text
-github.com account: seifreed
-scopes: gist, read:org, repo, workflow
+```json
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": ["quality-gate"]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null
+}
 ```
 
-Rulesets API result:
+Verification output:
 
-```text
-gh api repos/seifreed/docir/rulesets
-HTTP 403 Forbidden
-{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature.","documentation_url":"https://docs.github.com/rest/repos/rules#get-all-repository-rulesets","status":"403"}
-exit:1
-```
-
-Branch protection API result:
-
-```text
-gh api repos/seifreed/docir/branches/main/protection --include
-HTTP 403 Forbidden
-{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature.","documentation_url":"https://docs.github.com/rest/branches/branch-protection#get-branch-protection","status":"403"}
-exit:1
+```json
+{
+  "strict": true,
+  "checks": [
+    {
+      "context": "quality-gate",
+      "app_id": null
+    }
+  ]
+}
 ```
 
 Status on 2026-02-28:
 
-- Branch protection API exit code: 1
-- Rulesets API exit code: 1
-- `GATE-05` is complete (`quality-gate` workflow/job exists and runs canonical gate).
-- `FLOW-04` remains blocked by repository tier limits until branch-protection/ruleset features are available.
+- Branch protection endpoint reachable and configured.
+- Required status check context `quality-gate` active on `main`.
+- `GATE-05` complete.
+- `FLOW-04` now enforceable and evidence-backed.
 
-## Blocker Outcome
+## Outcome
 
-`FLOW-04` cannot be marked complete in this repository state because required-check enforcement endpoints are gated (`HTTP 403`) despite valid authenticated access.
-
-Unblock options:
-
-1. Upgrade account/repository tier to enable private-repo branch protection/rulesets.
-2. Make repository public (if policy allows), then configure `quality-gate` as required.
+`FLOW-04` is satisfied: canonical CI job `quality-gate` is configured as a required merge check for `main`.
