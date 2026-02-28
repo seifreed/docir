@@ -501,3 +501,93 @@ pub(super) fn evaluate_ods_formulas(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn number_from_cell(store: &IrStore, id: NodeId) -> Option<f64> {
+        let IRNode::Cell(cell) = store.get(id)? else {
+            return None;
+        };
+        match &cell.value {
+            CellValue::Number(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn evaluate_ods_formulas_computes_ranges_and_functions() {
+        let mut store = IrStore::new();
+        let mut cell_values: HashMap<(u32, u32), CellValue> = HashMap::new();
+        let mut formula_map: HashMap<(u32, u32), String> = HashMap::new();
+
+        let mut a1 = Cell::new("A1".to_string(), 0, 0);
+        a1.value = CellValue::Number(2.0);
+        let a1_id = a1.id;
+        store.insert(IRNode::Cell(a1));
+        cell_values.insert((0, 0), CellValue::Number(2.0));
+
+        let mut b1 = Cell::new("B1".to_string(), 1, 0);
+        b1.value = CellValue::Number(3.0);
+        let b1_id = b1.id;
+        store.insert(IRNode::Cell(b1));
+        cell_values.insert((0, 1), CellValue::Number(3.0));
+
+        let c1 = Cell::new("C1".to_string(), 2, 0);
+        let c1_id = c1.id;
+        store.insert(IRNode::Cell(c1));
+
+        let formula = "SUM([.A1:.B1]) * 2".to_string();
+        formula_map.insert((0, 2), formula.clone());
+        let formula_cells = vec![(c1_id, 0, 2, formula)];
+
+        evaluate_ods_formulas(
+            "Sheet1",
+            &formula_cells,
+            &mut store,
+            &mut cell_values,
+            &formula_map,
+        );
+
+        assert_eq!(number_from_cell(&store, a1_id), Some(2.0));
+        assert_eq!(number_from_cell(&store, b1_id), Some(3.0));
+        assert_eq!(number_from_cell(&store, c1_id), Some(10.0));
+    }
+
+    #[test]
+    fn evaluate_ods_formulas_keeps_cells_empty_on_invalid_expressions() {
+        let mut store = IrStore::new();
+        let mut cell_values: HashMap<(u32, u32), CellValue> = HashMap::new();
+        let mut formula_map: HashMap<(u32, u32), String> = HashMap::new();
+
+        let mut a1 = Cell::new("A1".to_string(), 0, 0);
+        a1.value = CellValue::Number(1.0);
+        store.insert(IRNode::Cell(a1));
+        cell_values.insert((0, 0), CellValue::Number(1.0));
+
+        let b1 = Cell::new("B1".to_string(), 1, 0);
+        let b1_id = b1.id;
+        store.insert(IRNode::Cell(b1));
+        let b1_formula = "A1 / 0".to_string();
+        formula_map.insert((0, 1), b1_formula.clone());
+
+        let c1 = Cell::new("C1".to_string(), 2, 0);
+        let c1_id = c1.id;
+        store.insert(IRNode::Cell(c1));
+        let c1_formula = "[Other.A1]".to_string();
+        formula_map.insert((0, 2), c1_formula.clone());
+
+        let formula_cells = vec![(b1_id, 0, 1, b1_formula), (c1_id, 0, 2, c1_formula)];
+        evaluate_ods_formulas(
+            "Sheet1",
+            &formula_cells,
+            &mut store,
+            &mut cell_values,
+            &formula_map,
+        );
+
+        assert!(number_from_cell(&store, b1_id).is_none());
+        assert!(number_from_cell(&store, c1_id).is_none());
+    }
+}

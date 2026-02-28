@@ -739,3 +739,81 @@ pub(super) fn parse_tracked_changes(
 
     Ok(revisions)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_validation_definition_reads_contract_fields() {
+        let mut start = BytesStart::new("table:content-validation");
+        start.push_attribute(("table:name", "val1"));
+        start.push_attribute(("table:condition", "cell-content-is-between(1,10)"));
+        start.push_attribute(("table:allow-empty-cell", "true"));
+        start.push_attribute(("table:display-list", "true"));
+
+        let (name, def) = parse_validation_definition(&start).expect("validation should parse");
+        assert_eq!(name, "val1");
+        assert_eq!(
+            def.validation_type.as_deref(),
+            Some("cell-content-is-between(1,10)")
+        );
+        assert!(def.allow_blank);
+        assert!(def.show_input_message);
+        assert!(def.show_error_message);
+        assert_eq!(def.formula1.as_deref(), Some("cell-content-is-between(1,10)"));
+    }
+
+    #[test]
+    fn parse_odf_condition_operator_handles_known_forms() {
+        assert_eq!(
+            parse_odf_condition_operator("cell-content-is-greater-than(5)"),
+            Some("greater-than".to_string())
+        );
+        assert_eq!(
+            parse_odf_condition_operator("is-true-formula([.A1]>0)"),
+            Some("true-formula".to_string())
+        );
+        assert_eq!(
+            parse_odf_condition_operator("formula-is([.A1]>0)"),
+            Some("formula".to_string())
+        );
+        assert_eq!(parse_odf_condition_operator("unknown()"), None);
+    }
+
+    #[test]
+    fn parse_text_element_preserves_spacing_controls() {
+        let xml = br#"<text:p xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">A<text:s text:c="2"/><text:tab/><text:line-break/>B</text:p>"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let start = loop {
+            match reader.read_event_into(&mut buf).expect("event read") {
+                Event::Start(e) if e.name().as_ref() == b"text:p" => break e.into_owned(),
+                Event::Eof => panic!("missing text:p start"),
+                _ => {}
+            }
+            buf.clear();
+        };
+
+        let parsed = parse_text_element(&mut reader, start.name().as_ref()).expect("parse text");
+        assert_eq!(parsed, "A  \t\nB");
+    }
+
+    #[test]
+    fn parse_ods_covered_cell_empty_sets_repeat_and_span() {
+        let mut start = BytesStart::new("table:covered-table-cell");
+        start.push_attribute(("table:number-columns-repeated", "3"));
+        start.push_attribute(("table:number-columns-spanned", "2"));
+        start.push_attribute(("table:number-rows-spanned", "2"));
+
+        let cell = parse_ods_covered_cell_empty(&start).expect("covered cell parse");
+        assert!(cell.is_covered);
+        assert_eq!(cell.col_repeat, 3);
+        let merge = cell.merge_range(4, 5).expect("expected merged range");
+        assert_eq!(merge.start_row, 4);
+        assert_eq!(merge.start_col, 5);
+        assert_eq!(merge.end_row, 5);
+        assert_eq!(merge.end_col, 6);
+    }
+}
