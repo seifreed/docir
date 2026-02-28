@@ -31,6 +31,12 @@ Examples of prohibited bypass patterns:
 - Optional fast checks may exist for developer feedback, but they must be documented as non-authoritative and never accepted as gate approval.
 - Documentation and workflow definitions must not describe any alternate accepted gate path.
 
+## Warning and Suppression Policy
+
+- Canonical linting posture is warning-strict and enforced by `cargo clippy --all-targets --all-features -- -D warnings`.
+- Suppression mechanisms are forbidden for acceptance, including `-A` CLI flags, acceptance-time lint allows, and env-based bypass toggles.
+- Raw Cargo commands remain diagnostic-only; only canonical gate output authorizes acceptance.
+
 ## Compliance Record
 
 Current scan evidence is tracked in:
