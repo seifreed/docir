@@ -673,3 +673,147 @@ fn parse_data_validation_empty(start: &BytesStart, sheet_path: &str) -> DataVali
 
     validation
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::zip_handler::SecureZipReader;
+    use docir_core::ir::IRNode;
+
+    #[test]
+    fn parse_worksheet_keeps_empty_conditional_formats_and_validation_container_noop() {
+        let xml = r#"
+            <worksheet>
+              <sheetData/>
+              <conditionalFormatting sqref="A1 A2"/>
+              <dataValidations/>
+            </worksheet>
+        "#;
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Sheet1", "rId1");
+        let mut zip = build_empty_zip();
+        let ws_id = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/worksheets/sheet1.xml",
+                &Relationships::default(),
+                SheetKind::Worksheet,
+            )
+            .expect("parse worksheet");
+        let store = parser.into_store();
+        let ws = match store.get(ws_id) {
+            Some(IRNode::Worksheet(ws)) => ws,
+            _ => panic!("missing worksheet"),
+        };
+        assert_eq!(ws.conditional_formats.len(), 1);
+        assert!(ws.data_validations.is_empty());
+
+        let fmt = match store.get(ws.conditional_formats[0]) {
+            Some(IRNode::ConditionalFormat(fmt)) => fmt,
+            _ => panic!("missing conditional format"),
+        };
+        assert_eq!(fmt.ranges, vec!["A1".to_string(), "A2".to_string()]);
+        assert!(fmt.rules.is_empty());
+    }
+
+    #[test]
+    fn parse_worksheet_retains_page_margins_node_with_non_numeric_values() {
+        let xml = r#"
+            <worksheet>
+              <pageMargins left="bad" right="0.5"/>
+              <sheetData/>
+            </worksheet>
+        "#;
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Sheet1", "rId1");
+        let mut zip = build_empty_zip();
+        let ws_id = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/worksheets/sheet1.xml",
+                &Relationships::default(),
+                SheetKind::Worksheet,
+            )
+            .expect("parse worksheet");
+        let store = parser.into_store();
+        let ws = match store.get(ws_id) {
+            Some(IRNode::Worksheet(ws)) => ws,
+            _ => panic!("missing worksheet"),
+        };
+        let margins = ws.page_margins.as_ref().expect("page margins");
+        assert_eq!(margins.left, None);
+        assert_eq!(margins.right, Some(0.5));
+    }
+
+    #[test]
+    fn parse_chartsheet_without_resolved_chart_relation_does_not_create_drawing() {
+        let xml = r#"
+            <chartsheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <chart r:id="rIdMissing"/>
+            </chartsheet>
+        "#;
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Chart1", "rId1");
+        let mut zip = build_empty_zip();
+        let ws_id = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/chartsheets/sheet1.xml",
+                &Relationships::default(),
+                SheetKind::ChartSheet,
+            )
+            .expect("parse chartsheet");
+        let store = parser.into_store();
+        let ws = match store.get(ws_id) {
+            Some(IRNode::Worksheet(ws)) => ws,
+            _ => panic!("missing worksheet"),
+        };
+        assert!(ws.drawings.is_empty());
+    }
+
+    #[test]
+    fn parse_worksheet_returns_xml_error_for_malformed_input() {
+        let xml = "<worksheet><sheetData><row></worksheet>";
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Sheet1", "rId1");
+        let mut zip = build_empty_zip();
+        let err = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/worksheets/sheet1.xml",
+                &Relationships::default(),
+                SheetKind::Worksheet,
+            )
+            .expect_err("expected malformed xml error");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/worksheets/sheet1.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    fn sheet_info(name: &str, rel_id: &str) -> SheetInfo {
+        SheetInfo {
+            name: name.to_string(),
+            sheet_id: 1,
+            rel_id: rel_id.to_string(),
+            state: SheetState::Visible,
+        }
+    }
+
+    fn build_empty_zip() -> SecureZipReader<std::io::Cursor<Vec<u8>>> {
+        let mut data = Vec::new();
+        {
+            let writer = zip::ZipWriter::new(std::io::Cursor::new(&mut data));
+            writer.finish().expect("finish zip");
+        }
+        SecureZipReader::new(std::io::Cursor::new(data), Default::default()).expect("zip")
+    }
+}

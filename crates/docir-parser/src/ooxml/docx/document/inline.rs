@@ -630,6 +630,110 @@ pub(super) fn parse_field(
     Ok(id)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quick_xml::events::Event;
+
+    #[test]
+    fn parse_run_records_note_references_and_instruction_metadata() {
+        let xml = r#"
+            <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:instrText>REF Test</w:instrText>
+              <w:tab/>
+              <w:fldChar w:fldCharType="begin"/>
+              <w:footnoteReference w:id="42"/>
+              <w:endnoteReference w:id="99"/>
+            </w:r>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut buf = Vec::new();
+        let mut run = None;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:r" => {
+                    run = Some(parse_run(&mut parser, &mut reader, &rels).expect("parse run"));
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => panic!("xml error: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        let run = run.expect("run parsed");
+        assert_eq!(run.text, "REF Test\t");
+        assert!(run.has_instr);
+        assert_eq!(run.field_char.as_deref(), Some("begin"));
+        assert_eq!(run.embedded.len(), 2);
+
+        let store = parser.into_store();
+        let mut has_footnote = false;
+        let mut has_endnote = false;
+        let mut args = Vec::new();
+        for node_id in run.embedded {
+            let field = match store.get(node_id) {
+                Some(docir_core::ir::IRNode::Field(field)) => field,
+                _ => panic!("expected field node"),
+            };
+            let parsed = field.instruction_parsed.as_ref().expect("parsed field");
+            if matches!(parsed.kind, docir_core::ir::FieldKind::FootnoteRef) {
+                has_footnote = true;
+            }
+            if matches!(parsed.kind, docir_core::ir::FieldKind::EndnoteRef) {
+                has_endnote = true;
+            }
+            args.push(parsed.args[0].clone());
+        }
+        args.sort();
+        assert_eq!(args, vec!["42".to_string(), "99".to_string()]);
+        assert!(has_footnote);
+        assert!(has_endnote);
+    }
+
+    #[test]
+    fn parse_run_ignores_unresolvable_vml_picture_reference() {
+        let xml = r#"
+            <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                 xmlns:v="urn:schemas-microsoft-com:vml"
+                 xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <w:t>caption</w:t>
+              <w:pict>
+                <v:shape id="shape1">
+                  <v:imagedata r:id="rIdMissing"/>
+                </v:shape>
+              </w:pict>
+            </w:r>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut buf = Vec::new();
+        let mut run = None;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:r" => {
+                    run = Some(parse_run(&mut parser, &mut reader, &rels).expect("parse run"));
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => panic!("xml error: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        let run = run.expect("run parsed");
+        assert_eq!(run.text, "caption");
+        assert!(run.embedded.is_empty());
+    }
+}
+
 pub(super) fn parse_numbering(
     reader: &mut Reader<&[u8]>,
     props: &mut ParagraphProperties,
