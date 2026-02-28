@@ -198,3 +198,202 @@ impl OoxmlParser {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::zip_handler::PackageReader;
+    use docir_core::ir::PropertyValue;
+    use std::collections::HashMap;
+
+    struct TestPackageReader {
+        files: HashMap<String, Vec<u8>>,
+    }
+
+    impl TestPackageReader {
+        fn new(entries: &[(&str, &str)]) -> Self {
+            let files = entries
+                .iter()
+                .map(|(path, body)| ((*path).to_string(), body.as_bytes().to_vec()))
+                .collect();
+            Self { files }
+        }
+    }
+
+    impl PackageReader for TestPackageReader {
+        fn contains(&self, name: &str) -> bool {
+            self.files.contains_key(name)
+        }
+
+        fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError> {
+            self.files
+                .get(name)
+                .cloned()
+                .ok_or_else(|| ParseError::MissingPart(name.to_string()))
+        }
+
+        fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
+            let bytes = self.read_file(name)?;
+            String::from_utf8(bytes)
+                .map_err(|e| ParseError::Encoding(format!("Invalid UTF-8 in {name}: {e}")))
+        }
+
+        fn file_size(&mut self, name: &str) -> Result<u64, ParseError> {
+            self.files
+                .get(name)
+                .map(|v| v.len() as u64)
+                .ok_or_else(|| ParseError::MissingPart(name.to_string()))
+        }
+
+        fn file_names(&self) -> Vec<String> {
+            self.files.keys().cloned().collect()
+        }
+
+        fn list_prefix(&self, prefix: &str) -> Vec<String> {
+            self.files
+                .keys()
+                .filter(|name| name.starts_with(prefix))
+                .cloned()
+                .collect()
+        }
+
+        fn list_suffix(&self, suffix: &str) -> Vec<String> {
+            self.files
+                .keys()
+                .filter(|name| name.ends_with(suffix))
+                .cloned()
+                .collect()
+        }
+    }
+
+    #[test]
+    fn parse_metadata_returns_none_without_core_properties_part() {
+        let parser = OoxmlParser::new();
+        let mut zip = TestPackageReader::new(&[]);
+        let id = parser.parse_metadata(&mut zip).expect("metadata parse succeeds");
+        assert!(id.is_none());
+    }
+
+    #[test]
+    fn build_metadata_parses_core_app_and_custom_typed_properties() {
+        let core = r#"
+            <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+                               xmlns:dc="http://purl.org/dc/elements/1.1/"
+                               xmlns:dcterms="http://purl.org/dc/terms/">
+              <dc:title>Threat Report</dc:title>
+              <dc:subject>Forensics</dc:subject>
+              <dc:creator>analyst</dc:creator>
+              <cp:keywords>malware,dde</cp:keywords>
+              <dc:description>summary</dc:description>
+              <cp:lastModifiedBy>reviewer</cp:lastModifiedBy>
+              <cp:revision>7</cp:revision>
+              <dcterms:created>2025-05-01T10:00:00Z</dcterms:created>
+              <dcterms:modified>2025-05-01T11:00:00Z</dcterms:modified>
+              <cp:category>incident</cp:category>
+              <cp:contentStatus>final</cp:contentStatus>
+            </cp:coreProperties>
+        "#;
+        let app = r#"
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+              <Application>docir</Application>
+              <AppVersion>1.0</AppVersion>
+              <Company>ACME</Company>
+              <Manager>SecOps</Manager>
+            </Properties>
+        "#;
+        let custom = r#"
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                        xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+              <property fmtid="{A}" pid="2" name="Build"><vt:i4>42</vt:i4></property>
+              <property fmtid="{A}" pid="3" name="Ratio"><vt:r8>3.25</vt:r8></property>
+              <property fmtid="{A}" pid="4" name="Flag"><vt:bool>1</vt:bool></property>
+              <property fmtid="{A}" pid="5" name="SeenAt"><vt:filetime>2025-05-01T00:00:00Z</vt:filetime></property>
+              <property fmtid="{A}" pid="6" name="Payload"><vt:blob>QUJD</vt:blob></property>
+              <property fmtid="{A}" pid="7" name="Tag"><vt:lpwstr>alert</vt:lpwstr></property>
+            </Properties>
+        "#;
+
+        let parser = OoxmlParser::new();
+        let mut zip = TestPackageReader::new(&[
+            ("docProps/core.xml", core),
+            ("docProps/app.xml", app),
+            ("docProps/custom.xml", custom),
+        ]);
+
+        let metadata = parser.build_metadata(&mut zip).expect("metadata built");
+        assert_eq!(metadata.title.as_deref(), Some("Threat Report"));
+        assert_eq!(metadata.subject.as_deref(), Some("Forensics"));
+        assert_eq!(metadata.creator.as_deref(), Some("analyst"));
+        assert_eq!(metadata.keywords.as_deref(), Some("malware,dde"));
+        assert_eq!(metadata.description.as_deref(), Some("summary"));
+        assert_eq!(metadata.last_modified_by.as_deref(), Some("reviewer"));
+        assert_eq!(metadata.revision.as_deref(), Some("7"));
+        assert_eq!(metadata.created.as_deref(), Some("2025-05-01T10:00:00Z"));
+        assert_eq!(metadata.modified.as_deref(), Some("2025-05-01T11:00:00Z"));
+        assert_eq!(metadata.category.as_deref(), Some("incident"));
+        assert_eq!(metadata.content_status.as_deref(), Some("final"));
+        assert_eq!(metadata.application.as_deref(), Some("docir"));
+        assert_eq!(metadata.app_version.as_deref(), Some("1.0"));
+        assert_eq!(metadata.company.as_deref(), Some("ACME"));
+        assert_eq!(metadata.manager.as_deref(), Some("SecOps"));
+        assert_eq!(metadata.custom_properties.len(), 6);
+        assert!(matches!(
+            metadata.custom_properties[0].value,
+            PropertyValue::Integer(42)
+        ));
+        assert!(matches!(
+            metadata.custom_properties[1].value,
+            PropertyValue::Float(v) if (v - 3.25).abs() < f64::EPSILON
+        ));
+        assert!(matches!(
+            metadata.custom_properties[2].value,
+            PropertyValue::Boolean(true)
+        ));
+        assert!(matches!(
+            metadata.custom_properties[3].value,
+            PropertyValue::DateTime(ref v) if v == "2025-05-01T00:00:00Z"
+        ));
+        assert!(matches!(
+            metadata.custom_properties[4].value,
+            PropertyValue::Blob(ref v) if v == "QUJD"
+        ));
+        assert!(matches!(
+            metadata.custom_properties[5].value,
+            PropertyValue::String(ref v) if v == "alert"
+        ));
+    }
+
+    #[test]
+    fn parse_custom_properties_coerces_malformed_values_to_defaults() {
+        let xml = r#"
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                        xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+              <property pid="2" name="BadInt"><vt:int>not-a-number</vt:int></property>
+              <property pid="3" name="BadFloat"><vt:r4>NaN?</vt:r4></property>
+              <property pid="4" name="BoolNo"><vt:bool>false</vt:bool></property>
+              <property pid="5" name="Unknown"><vt:custom>raw</vt:custom></property>
+            </Properties>
+        "#;
+        let parser = OoxmlParser::new();
+        let mut metadata = DocumentMetadata::new();
+        parser.parse_custom_properties(xml, &mut metadata);
+
+        assert_eq!(metadata.custom_properties.len(), 4);
+        assert!(matches!(
+            metadata.custom_properties[0].value,
+            PropertyValue::Integer(0)
+        ));
+        assert!(matches!(
+            metadata.custom_properties[1].value,
+            PropertyValue::Float(v) if v == 0.0
+        ));
+        assert!(matches!(
+            metadata.custom_properties[2].value,
+            PropertyValue::Boolean(false)
+        ));
+        assert!(matches!(
+            metadata.custom_properties[3].value,
+            PropertyValue::String(ref v) if v == "raw"
+        ));
+    }
+}
