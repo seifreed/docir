@@ -244,3 +244,140 @@ pub(super) mod hex {
         data.as_ref().iter().map(|b| format!("{:02x}", b)).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use calamine::CellErrorType;
+    use docir_core::ir::IRNode;
+
+    #[test]
+    fn parse_activex_xml_extracts_core_attributes_and_properties() {
+        let xml = r#"<ocx:ocx name="CommandButton1" clsid="{ABC}" progid="Forms.CommandButton.1" custom="x"/>"#;
+        let control = parse_activex_xml(xml, "word/activeX/activeX1.xml")
+            .expect("expected a parsed ActiveX control");
+
+        assert_eq!(control.name.as_deref(), Some("CommandButton1"));
+        assert_eq!(control.clsid.as_deref(), Some("{ABC}"));
+        assert_eq!(control.prog_id.as_deref(), Some("Forms.CommandButton.1"));
+        assert!(control
+            .properties
+            .iter()
+            .any(|(k, v)| k == "custom" && v == "x"));
+    }
+
+    #[test]
+    fn parse_activex_xml_returns_none_without_identifying_attributes() {
+        let xml = r#"<ocx:ocx custom="x" another="y"/>"#;
+        assert!(parse_activex_xml(xml, "word/activeX/activeX1.xml").is_none());
+    }
+
+    #[test]
+    fn map_calamine_error_maps_all_variants() {
+        let cases = [
+            (CellErrorType::Null, CellError::Null),
+            (CellErrorType::Div0, CellError::DivZero),
+            (CellErrorType::Value, CellError::Value),
+            (CellErrorType::Ref, CellError::Ref),
+            (CellErrorType::Name, CellError::Name),
+            (CellErrorType::Num, CellError::Num),
+            (CellErrorType::NA, CellError::NA),
+            (CellErrorType::GettingData, CellError::GettingData),
+        ];
+
+        for (input, expected) in cases {
+            assert_eq!(map_calamine_error(input), expected);
+        }
+    }
+
+    #[test]
+    fn parse_smartart_part_extracts_counts_and_relationship_ids() {
+        let xml = r#"
+            <dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"
+                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <dgm:pt modelId="0"/>
+              <dgm:pt modelId="1"/>
+              <dgm:cxn srcId="0" destId="1"/>
+              <dgm:relIds r:dm="rId1" r:lo="rId2"/>
+            </dgm:dataModel>
+        "#;
+
+        let part = parse_smartart_part(xml, "ppt/diagrams/data1.xml").expect("smartart parsed");
+        assert_eq!(part.path, "ppt/diagrams/data1.xml");
+        assert_eq!(part.root_element.as_deref(), Some("dgm:dataModel"));
+        assert_eq!(part.point_count, Some(2));
+        assert_eq!(part.connection_count, Some(1));
+        assert_eq!(part.rel_ids, vec!["rId1".to_string(), "rId2".to_string()]);
+    }
+
+    #[test]
+    fn parse_smartart_part_reports_xml_errors_with_source_path() {
+        let err = parse_smartart_part("<dgm:dataModel><dgm:pt></dgm:dataModel>", "bad.xml")
+            .expect_err("invalid XML should fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "bad.xml"),
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_chart_data_extracts_title_and_series_values() {
+        let xml = r#"
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:title><c:tx><c:rich><a:t xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">Quarterly Revenue</a:t></c:rich></c:tx></c:title>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:ser>
+                      <c:tx><c:v>North</c:v></c:tx>
+                      <c:cat><c:v>Q1</c:v><c:v>Q2</c:v></c:cat>
+                      <c:val><c:v>10</c:v><c:v>20</c:v></c:val>
+                    </c:ser>
+                    <c:ser>
+                      <c:tx><c:v>South</c:v></c:tx>
+                      <c:cat><c:v>Q1</c:v></c:cat>
+                      <c:val><c:v>15</c:v></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+        "#;
+
+        let mut store = IrStore::new();
+        let chart_id =
+            parse_chart_data(xml, "xl/charts/chart1.xml", &mut store).expect("chart parsed");
+
+        let Some(IRNode::ChartData(chart)) = store.get(chart_id) else {
+            panic!("expected chart node");
+        };
+        assert_eq!(chart.chart_type.as_deref(), Some("barChart"));
+        assert_eq!(chart.title.as_deref(), Some("Quarterly Revenue"));
+        assert_eq!(chart.series, vec!["North".to_string(), "South".to_string()]);
+        assert_eq!(chart.series_data.len(), 2);
+        assert_eq!(
+            chart.series_data[0].categories,
+            vec!["Q1".to_string(), "Q2".to_string()]
+        );
+        assert_eq!(
+            chart.series_data[0].values,
+            vec!["10".to_string(), "20".to_string()]
+        );
+        assert_eq!(chart.series_data[1].categories, vec!["Q1".to_string()]);
+    }
+
+    #[test]
+    fn parse_chart_data_reports_xml_errors_with_source_path() {
+        let mut store = IrStore::new();
+        let err = parse_chart_data(
+            "<c:chart><c:title></c:chartx>",
+            "xl/charts/bad.xml",
+            &mut store,
+        )
+        .expect_err("invalid XML");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/charts/bad.xml"),
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+}

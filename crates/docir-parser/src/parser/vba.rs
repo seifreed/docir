@@ -149,3 +149,62 @@ fn decode_copy_token(token: u16, decompressed_len: usize) -> (usize, usize) {
     let length = (token & length_mask) as usize + 3;
     (offset, length)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_vba_project_text_extracts_modules_refs_and_protection() {
+        let project = r#"
+            Name="InvoiceMacros"
+            Module=Core/Module1
+            Class=ThisClass/0
+            Document=ThisDocument/&H00000000
+            Reference=*\G{000204EF-0000-0000-C000-000000000046}#2.0#0#..\stdole2.tlb#OLE Automation
+            DPB="AAAAAA"
+        "#;
+
+        let (name, modules, refs, protected) = parse_vba_project_text(project);
+
+        assert_eq!(name.as_deref(), Some("InvoiceMacros"));
+        assert_eq!(modules.len(), 3);
+        assert_eq!(modules[0], ("Core".to_string(), MacroModuleType::Standard));
+        assert_eq!(
+            modules[1],
+            ("ThisClass".to_string(), MacroModuleType::Class)
+        );
+        assert_eq!(
+            modules[2],
+            ("ThisDocument".to_string(), MacroModuleType::Document)
+        );
+        assert_eq!(refs.len(), 1);
+        assert!(refs[0].name.starts_with("Reference="));
+        assert!(protected);
+    }
+
+    #[test]
+    fn vba_decompress_handles_plain_payload_and_invalid_header() {
+        assert_eq!(vba_decompress(&[]), None);
+
+        let plain = b"not-compressed";
+        assert_eq!(vba_decompress(plain), Some(plain.to_vec()));
+    }
+
+    #[test]
+    fn vba_decompress_handles_literal_and_copy_tokens() {
+        // 0x01 signature + one compressed chunk:
+        // flags=0b00000100 => literal 'A', literal 'B', then copy token(offset=2, len=3)
+        let encoded = [0x01, 0x02, 0x80, 0x04, b'A', b'B', 0x00, 0x10];
+        let out = vba_decompress(&encoded).expect("decompress should succeed");
+        assert_eq!(out, b"ABABA");
+    }
+
+    #[test]
+    fn vba_decompress_gracefully_handles_truncated_chunk() {
+        // Declares an uncompressed chunk larger than remaining bytes; parser should stop cleanly.
+        let encoded = [0x01, 0x10, 0x00, b'A', b'B'];
+        let out = vba_decompress(&encoded).expect("decompress should return partial output");
+        assert!(out.is_empty());
+    }
+}
