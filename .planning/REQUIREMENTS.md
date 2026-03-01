@@ -116,4 +116,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-03-01 after Phase 04-14 cross-crate coverage increment (canonical total 76.60%)*
+*Last updated: 2026-03-01 after Phase 04-17 cross-crate/parser increments (canonical total 78.26%)*

@@ -263,7 +263,13 @@ fn intrinsic_key_security(node: &IRNode) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use docir_core::ir::{Cell, Document, IRNode, Paragraph, Run, Worksheet};
+    use docir_core::ir::{
+        BookmarkEnd, BookmarkStart, Cell, Comment, Diagnostics, Document, DrawingPart, Endnote,
+        Footnote, GlossaryEntry, IRNode, Paragraph, PptxCommentAuthor, PresentationTag, Revision,
+        RevisionType, Run, Shape, ShapeType, Slide, SmartArtPart, VmlDrawing, VmlShape,
+        WebExtension, WebExtensionTaskpane, Worksheet,
+    };
+    use docir_core::security::{MacroProject, OleObject};
     use docir_core::types::DocumentFormat;
     use docir_core::visitor::IrStore;
 
@@ -318,5 +324,139 @@ mod tests {
             .collect();
         assert_eq!(run_keys.len(), 2);
         assert_ne!(run_keys[0], run_keys[1]);
+    }
+
+    #[test]
+    fn intrinsic_key_covers_word_presentation_and_security_variants() {
+        let store = IrStore::new();
+
+        assert_eq!(
+            intrinsic_key(&IRNode::Comment(Comment::new("c1")), &store),
+            Some("Comment[c1]".to_string())
+        );
+        assert_eq!(
+            intrinsic_key(&IRNode::Footnote(Footnote::new("f1")), &store),
+            Some("Footnote[f1]".to_string())
+        );
+        assert_eq!(
+            intrinsic_key(&IRNode::Endnote(Endnote::new("e1")), &store),
+            Some("Endnote[e1]".to_string())
+        );
+        assert_eq!(
+            intrinsic_key(&IRNode::BookmarkStart(BookmarkStart::new("b1")), &store),
+            Some("BookmarkStart[b1]".to_string())
+        );
+        assert_eq!(
+            intrinsic_key(&IRNode::BookmarkEnd(BookmarkEnd::new("b1")), &store),
+            Some("BookmarkEnd[b1]".to_string())
+        );
+
+        let mut glossary = GlossaryEntry::new();
+        glossary.name = Some("entry".to_string());
+        assert_eq!(
+            intrinsic_key(&IRNode::GlossaryEntry(glossary), &store),
+            Some("GlossaryEntry[entry]".to_string())
+        );
+        assert_eq!(
+            intrinsic_key(&IRNode::VmlDrawing(VmlDrawing::new("word/vml.vml")), &store),
+            Some("VmlDrawing[word/vml.vml]".to_string())
+        );
+        let mut vml_shape = VmlShape::new();
+        vml_shape.name = Some("shape1".to_string());
+        assert_eq!(
+            intrinsic_key(&IRNode::VmlShape(vml_shape), &store),
+            Some("VmlShape[shape1]".to_string())
+        );
+        assert_eq!(
+            intrinsic_key(&IRNode::DrawingPart(DrawingPart::new("word/drawing1.xml")), &store),
+            Some("DrawingPart[word/drawing1.xml]".to_string())
+        );
+
+        assert_eq!(
+            intrinsic_key(&IRNode::Slide(Slide::new(2)), &store),
+            Some("Slide[2]".to_string())
+        );
+        let mut shape = Shape::new(ShapeType::TextBox);
+        shape.name = Some("Title".to_string());
+        assert_eq!(
+            intrinsic_key(&IRNode::Shape(shape), &store),
+            Some("Shape[Title]".to_string())
+        );
+        assert_eq!(
+            intrinsic_key(
+                &IRNode::PptxCommentAuthor(PptxCommentAuthor {
+                    id: docir_core::types::NodeId::new(),
+                    author_id: 7,
+                    name: None,
+                    initials: None,
+                    span: None,
+                }),
+                &store
+            ),
+            Some("PptxCommentAuthor[7]".to_string())
+        );
+        assert_eq!(
+            intrinsic_key(
+                &IRNode::PresentationTag(PresentationTag {
+                    id: docir_core::types::NodeId::new(),
+                    name: "tag".to_string(),
+                    value: None,
+                    span: None,
+                }),
+                &store
+            ),
+            Some("PresentationTag[tag]".to_string())
+        );
+        assert_eq!(
+            intrinsic_key(
+                &IRNode::SmartArtPart(SmartArtPart {
+                    id: docir_core::types::NodeId::new(),
+                    kind: "diagramData".to_string(),
+                    path: "ppt/diagrams/data1.xml".to_string(),
+                    root_element: None,
+                    point_count: None,
+                    connection_count: None,
+                    rel_ids: Vec::new(),
+                    span: None,
+                }),
+                &store
+            ),
+            Some("SmartArtPart[diagramData]".to_string())
+        );
+
+        let mut project = MacroProject::new();
+        project.name = Some("VBAProject".to_string());
+        assert_eq!(
+            intrinsic_key(&IRNode::MacroProject(project), &store),
+            Some("MacroProject[VBAProject]".to_string())
+        );
+        let mut ole = OleObject::new();
+        ole.name = Some("Obj".to_string());
+        assert_eq!(
+            intrinsic_key(&IRNode::OleObject(ole), &store),
+            Some("OleObject[Obj]".to_string())
+        );
+        let mut ext = WebExtension::new();
+        ext.extension_id = Some("ext-1".to_string());
+        assert_eq!(
+            intrinsic_key(&IRNode::WebExtension(ext), &store),
+            Some("WebExtension[ext-1]".to_string())
+        );
+        let mut taskpane = WebExtensionTaskpane::new();
+        taskpane.web_extension_ref = Some("ext-1".to_string());
+        assert_eq!(
+            intrinsic_key(&IRNode::WebExtensionTaskpane(taskpane), &store),
+            Some("WebExtensionTaskpane[ext-1]".to_string())
+        );
+        assert_eq!(
+            intrinsic_key(&IRNode::Diagnostics(Diagnostics::new()), &store),
+            Some("Diagnostics".to_string())
+        );
+
+        let revision = Revision::new(RevisionType::Insert);
+        assert_eq!(
+            intrinsic_key(&IRNode::Revision(revision), &store),
+            Some("Revision[Insert]".to_string())
+        );
     }
 }
