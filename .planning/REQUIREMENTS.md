@@ -83,7 +83,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CC-01 | Phase 3 | Complete |
 | CC-02 | Phase 3 | Complete |
 | CC-03 | Phase 3 | Complete |
-| CC-04 | Phase 4 | Complete |
+| CC-04 | Phase 4 | In Progress |
 | CC-05 | Phase 5 | Pending |
 | CC-06 | Phase 5 | Pending |
 | CC-07 | Phase 5 | Pending |
@@ -100,8 +100,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARCH-05 | Phase 8 | Pending |
 | ARCH-06 | Phase 7 | Pending |
 | ARCH-07 | Phase 7 | Pending |
-| TEST-01 | Phase 4 | Complete |
-| TEST-02 | Phase 4 | Complete |
+| TEST-01 | Phase 4 | In Progress |
+| TEST-02 | Phase 4 | In Progress |
 | TEST-03 | Phase 3 | Complete |
 | FLOW-01 | Phase 9 | Pending |
 | FLOW-02 | Phase 9 | Pending |
