@@ -1018,4 +1018,141 @@ mod tests {
         assert!(shape_id.is_none());
         assert_eq!(store.values().count(), 0);
     }
+
+    #[test]
+    fn parse_content_spreadsheet_parallel_links_pivots_and_caches() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:spreadsheet>
+      <table:content-validations>
+        <table:content-validation table:name="v1" table:condition="cell-content-is-between(1,2)"/>
+      </table:content-validations>
+      <table:table table:name="SheetA">
+        <table:table-row>
+          <table:table-cell table:content-validation-name="v1"/>
+        </table:table-row>
+      </table:table>
+      <table:table table:name="SheetB"/>
+      <table:data-pilot-table table:name="PivotA"
+        table:source-range-address="'SheetA'.A1:'SheetA'.A1"
+        table:target-range-address="'SheetA'.C1:'SheetA'.C1">
+        <table:data-pilot-field table:source-field-name="Amount"/>
+      </table:data-pilot-table>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let mut config = ParserConfig::default();
+        config.odf.parallel_max_threads = Some(2);
+        let limits = std::sync::Arc::new(OdfAtomicLimits::new(&config, false));
+        let mut store = IrStore::new();
+
+        let result = parse_content_spreadsheet_parallel(xml, &mut store, &limits, &config).unwrap();
+        assert_eq!(result.content.len(), 2);
+        assert_eq!(result.pivot_caches.len(), 1);
+
+        let Some(IRNode::Worksheet(sheet_a)) = store.get(result.content[0]) else {
+            panic!("expected worksheet");
+        };
+        assert_eq!(sheet_a.name, "SheetA");
+        assert_eq!(sheet_a.pivot_tables.len(), 1);
+
+        let Some(IRNode::PivotTable(pivot)) = store.get(sheet_a.pivot_tables[0]) else {
+            panic!("expected pivot table");
+        };
+        assert_eq!(pivot.name.as_deref(), Some("PivotA"));
+        assert_eq!(pivot.ref_range.as_deref(), Some("'SheetA'.C1:'SheetA'.C1"));
+        assert!(pivot.cache_id.is_some());
+
+        let Some(IRNode::PivotCache(cache)) = store.get(result.pivot_caches[0]) else {
+            panic!("expected pivot cache");
+        };
+        assert_eq!(
+            cache.cache_source.as_deref(),
+            Some("'SheetA'.A1:'SheetA'.A1")
+        );
+        assert!(cache.records.is_some());
+    }
+
+    #[test]
+    fn parse_content_spreadsheet_parallel_handles_missing_sheet_chunks() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:spreadsheet>
+      <table:content-validations>
+        <table:content-validation table:name="v1" table:condition="cell-content-is-whole-number()"/>
+      </table:content-validations>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let config = ParserConfig::default();
+        let limits = std::sync::Arc::new(OdfAtomicLimits::new(&config, false));
+        let mut store = IrStore::new();
+
+        let result = parse_content_spreadsheet_parallel(xml, &mut store, &limits, &config).unwrap();
+        assert!(result.content.is_empty());
+        assert!(result.pivot_caches.is_empty());
+        assert_eq!(store.values().count(), 0);
+    }
+
+    #[test]
+    fn parse_content_spreadsheet_parallel_handles_empty_pivot_without_cache() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:spreadsheet>
+      <table:table table:name="SheetA"><table:table-row/></table:table>
+      <table:data-pilot-table table:display-name="PivotNoCache"
+        table:target-range-address="'SheetA'.E1:'SheetA'.E1"/>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let config = ParserConfig::default();
+        let limits = std::sync::Arc::new(OdfAtomicLimits::new(&config, false));
+        let mut store = IrStore::new();
+
+        let result = parse_content_spreadsheet_parallel(xml, &mut store, &limits, &config).unwrap();
+        assert_eq!(result.content.len(), 1);
+        assert!(result.pivot_caches.is_empty());
+
+        let Some(IRNode::Worksheet(sheet)) = store.get(result.content[0]) else {
+            panic!("expected worksheet");
+        };
+        assert_eq!(sheet.name, "SheetA");
+        assert_eq!(sheet.pivot_tables.len(), 1);
+
+        let Some(IRNode::PivotTable(pivot)) = store.get(sheet.pivot_tables[0]) else {
+            panic!("expected pivot table");
+        };
+        assert_eq!(pivot.name.as_deref(), Some("PivotNoCache"));
+        assert_eq!(pivot.ref_range.as_deref(), Some("'SheetA'.E1:'SheetA'.E1"));
+        assert!(pivot.cache_id.is_none());
+    }
+
+    #[test]
+    fn parse_content_spreadsheet_parallel_reports_xml_error_for_malformed_pivot() {
+        let malformed = br#"<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body><office:spreadsheet>
+    <table:table table:name="SheetA"/>
+    <table:data-pilot-table table:name="Broken"><table:data-pilot-field>
+  </office:spreadsheet></office:body></office:document-content>"#;
+
+        let config = ParserConfig::default();
+        let limits = std::sync::Arc::new(OdfAtomicLimits::new(&config, false));
+        let mut store = IrStore::new();
+        let err = parse_content_spreadsheet_parallel(malformed, &mut store, &limits, &config)
+            .unwrap_err();
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+            other => panic!("expected xml error, got {:?}", other),
+        }
+    }
 }

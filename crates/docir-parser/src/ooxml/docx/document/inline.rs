@@ -1262,3 +1262,121 @@ pub(super) fn parse_run_properties(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod run_properties_tests {
+    use super::*;
+    use quick_xml::events::Event;
+
+    #[test]
+    fn parse_run_properties_maps_style_flags_and_alignment() {
+        let xml = r#"
+            <w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:rStyle w:val="Emphasis"/>
+              <w:rFonts w:ascii="Fira Sans"/>
+              <w:sz w:val="24"/>
+              <w:b/>
+              <w:i/>
+              <w:u w:val="double"/>
+              <w:strike/>
+              <w:color w:val="FF0000"/>
+              <w:highlight w:val="yellow"/>
+              <w:caps w:val="1"/>
+              <w:smallCaps w:val="true"/>
+              <w:vertAlign w:val="superscript"/>
+            </w:rPr>
+        "#;
+        let mut reader = Reader::from_str(xml);
+        let mut buf = Vec::new();
+        let mut props = RunProperties::default();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:rPr" => {
+                    parse_run_properties(&mut reader, &mut props).expect("parse run properties");
+                    break;
+                }
+                Ok(Event::Eof) => panic!("missing rPr"),
+                Err(e) => panic!("xml read failed: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        assert_eq!(props.style_id.as_deref(), Some("Emphasis"));
+        assert_eq!(props.font_family.as_deref(), Some("Fira Sans"));
+        assert_eq!(props.font_size, Some(24));
+        assert_eq!(props.bold, Some(true));
+        assert_eq!(props.italic, Some(true));
+        assert_eq!(props.underline, Some(UnderlineStyle::Double));
+        assert_eq!(props.strike, Some(true));
+        assert_eq!(props.color.as_deref(), Some("FF0000"));
+        assert_eq!(props.highlight.as_deref(), Some("yellow"));
+        assert_eq!(props.all_caps, Some(true));
+        assert_eq!(props.small_caps, Some(true));
+        assert_eq!(
+            props.vertical_align,
+            Some(VerticalTextAlignment::Superscript)
+        );
+    }
+
+    #[test]
+    fn parse_run_properties_reports_xml_error_for_malformed_input() {
+        let malformed = r#"
+            <w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:rStyle w:val="Broken">
+            </w:rPr
+        "#;
+        let mut reader = Reader::from_str(malformed);
+        let mut buf = Vec::new();
+        let mut props = RunProperties::default();
+        let mut err = None;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:rPr" => {
+                    err = parse_run_properties(&mut reader, &mut props).err();
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        match err.expect("expected xml parse error") {
+            ParseError::Xml { file, .. } => assert_eq!(file, DOC_XML_PATH),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_numbering_reports_xml_error_for_malformed_input() {
+        let malformed = r#"
+            <w:numPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:numId w:val="9">
+            </w:numPr
+        "#;
+        let mut reader = Reader::from_str(malformed);
+        let mut buf = Vec::new();
+        let mut props = ParagraphProperties::default();
+        let mut err = None;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:numPr" => {
+                    err = parse_numbering(&mut reader, &mut props).err();
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        match err.expect("expected xml parse error") {
+            ParseError::Xml { file, .. } => assert_eq!(file, DOC_XML_PATH),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+}
