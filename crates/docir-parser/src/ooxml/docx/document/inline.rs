@@ -937,6 +937,127 @@ mod tests {
             other => panic!("unexpected error: {other:?}"),
         }
     }
+
+    #[test]
+    fn parse_run_truncated_run_uses_eof_fallback_without_embeds() {
+        let xml = r#"
+            <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:t>broken</w:r>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut buf = Vec::new();
+        let mut run = None;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:r" => {
+                    run = Some(parse_run(&mut parser, &mut reader, &rels).expect("parse run"));
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        let run = run.expect("run parsed");
+        assert_eq!(run.text, "");
+        assert!(run.embedded.is_empty());
+        assert!(!run.has_instr);
+        assert!(run.field_char.is_none());
+    }
+
+    #[test]
+    fn parse_revision_inline_records_metadata_and_run_content() {
+        let xml = r#"
+            <w:ins xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                   w:id="7" w:author="Auditor" w:date="2026-02-28T11:00:00Z">
+              <w:customTag/>
+              <w:r><w:t>added text</w:t></w:r>
+            </w:ins>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut buf = Vec::new();
+        let mut revision_id = None;
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:ins" => {
+                    revision_id = Some(
+                        parse_revision_inline(
+                            &mut parser,
+                            &mut reader,
+                            &rels,
+                            &e.into_owned(),
+                            RevisionType::Insert,
+                        )
+                        .expect("parse revision inline"),
+                    );
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => panic!("xml error: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        let store = parser.into_store();
+        let revision = match store.get(revision_id.expect("revision should parse")) {
+            Some(docir_core::ir::IRNode::Revision(revision)) => revision,
+            _ => panic!("expected revision node"),
+        };
+        assert_eq!(revision.revision_id.as_deref(), Some("7"));
+        assert_eq!(revision.author.as_deref(), Some("Auditor"));
+        assert_eq!(revision.date.as_deref(), Some("2026-02-28T11:00:00Z"));
+        assert_eq!(revision.content.len(), 1);
+
+        let run = match store.get(revision.content[0]) {
+            Some(docir_core::ir::IRNode::Run(run)) => run,
+            _ => panic!("expected run node"),
+        };
+        assert_eq!(run.text, "added text");
+    }
+
+    #[test]
+    fn parse_revision_inline_reports_xml_error_for_malformed_input() {
+        let xml = r#"
+            <w:ins xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:id="9">
+              <w:r><w:t>unterminated</w:r>
+            </w:ins>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut buf = Vec::new();
+        let mut err = None;
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:ins" => {
+                    err = parse_revision_inline(
+                        &mut parser,
+                        &mut reader,
+                        &rels,
+                        &e.into_owned(),
+                        RevisionType::Insert,
+                    )
+                    .err();
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        match err.expect("expected xml parse error") {
+            ParseError::Xml { file, .. } => assert_eq!(file, DOC_XML_PATH),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
 }
 
 pub(super) fn parse_numbering(

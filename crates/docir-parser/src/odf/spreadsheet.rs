@@ -913,8 +913,7 @@ mod tests {
         };
         let mut store = IrStore::new();
 
-        let shape_id =
-            parse_draw_frame_spreadsheet(&mut reader, &frame_start, &mut store).unwrap();
+        let shape_id = parse_draw_frame_spreadsheet(&mut reader, &frame_start, &mut store).unwrap();
         let Some(shape_id) = shape_id else {
             panic!("expected shape");
         };
@@ -924,5 +923,49 @@ mod tests {
         assert_eq!(shape.name.as_deref(), Some("MediaFrame"));
         assert_eq!(shape.media_target.as_deref(), Some("media/movie.mp4"));
         assert_eq!(shape.shape_type, ShapeType::Video);
+    }
+
+    #[test]
+    fn parse_draw_frame_spreadsheet_returns_none_without_shape_payload() {
+        let xml = br#"<draw:frame xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+                draw:name="EmptyFrame">
+            <draw:unknown/>
+        </draw:frame>"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let frame_start = loop {
+            match reader.read_event_into(&mut buf).unwrap() {
+                Event::Start(e) if e.name().as_ref() == b"draw:frame" => break e.into_owned(),
+                Event::Eof => panic!("missing draw:frame"),
+                _ => {}
+            }
+            buf.clear();
+        };
+        let mut store = IrStore::new();
+
+        let shape_id = parse_draw_frame_spreadsheet(&mut reader, &frame_start, &mut store).unwrap();
+        assert!(shape_id.is_none());
+        assert_eq!(store.values().count(), 0);
+    }
+
+    #[test]
+    fn parse_draw_frame_spreadsheet_returns_none_on_truncated_frame() {
+        let xml = br#"<draw:frame xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"><draw:plugin>"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let frame_start = loop {
+            match reader.read_event_into(&mut buf).unwrap() {
+                Event::Start(e) if e.name().as_ref() == b"draw:frame" => break e.into_owned(),
+                Event::Eof => panic!("missing draw:frame"),
+                _ => {}
+            }
+            buf.clear();
+        };
+        let mut store = IrStore::new();
+        let shape_id = parse_draw_frame_spreadsheet(&mut reader, &frame_start, &mut store).unwrap();
+        assert!(shape_id.is_none());
+        assert_eq!(store.values().count(), 0);
     }
 }
