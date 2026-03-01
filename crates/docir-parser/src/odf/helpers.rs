@@ -821,6 +821,20 @@ mod tests {
     }
 
     #[test]
+    fn parse_ods_covered_cell_empty_invalid_repeat_defaults_to_one() {
+        let mut start = BytesStart::new("table:covered-table-cell");
+        start.push_attribute(("table:number-columns-repeated", "not-a-number"));
+        start.push_attribute(("table:number-columns-spanned", "bad"));
+        start.push_attribute(("table:number-rows-spanned", "nope"));
+
+        let cell = parse_ods_covered_cell_empty(&start).expect("covered cell parse");
+        assert!(cell.is_covered);
+        assert_eq!(cell.col_repeat, 1);
+        assert!(cell.col_span.is_none());
+        assert!(cell.row_span.is_none());
+    }
+
+    #[test]
     fn parse_validation_definition_requires_name_attribute() {
         let mut start = BytesStart::new("table:content-validation");
         start.push_attribute(("table:condition", "cell-content-is-between(1,10)"));
@@ -947,5 +961,24 @@ mod tests {
 
         let parsed = parse_text_element(&mut reader, start.name().as_ref()).expect("parse text");
         assert_eq!(parsed, "prefix  ");
+    }
+
+    #[test]
+    fn parse_text_element_invalid_space_count_defaults_to_single_space() {
+        let xml = br#"<text:p xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">A<text:s text:c="oops"/>B</text:p>"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let start = loop {
+            match reader.read_event_into(&mut buf).expect("event read") {
+                Event::Start(e) if e.name().as_ref() == b"text:p" => break e.into_owned(),
+                Event::Eof => panic!("missing text:p start"),
+                _ => {}
+            }
+            buf.clear();
+        };
+
+        let parsed = parse_text_element(&mut reader, start.name().as_ref()).expect("parse text");
+        assert_eq!(parsed, "A B");
     }
 }

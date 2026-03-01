@@ -852,6 +852,49 @@ mod tests {
     }
 
     #[test]
+    fn parse_worksheet_reads_empty_data_validation_bool_coercion() {
+        let xml = r#"
+            <worksheet>
+              <sheetData/>
+              <dataValidations>
+                <dataValidation type="list" allowBlank="TRUE" showInputMessage="False" showErrorMessage="0" sqref="B1 B2"/>
+              </dataValidations>
+            </worksheet>
+        "#;
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Sheet1", "rId1");
+        let mut zip = build_empty_zip();
+        let ws_id = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/worksheets/sheet1.xml",
+                &Relationships::default(),
+                SheetKind::Worksheet,
+            )
+            .expect("parse worksheet");
+        let store = parser.into_store();
+        let ws = match store.get(ws_id) {
+            Some(IRNode::Worksheet(ws)) => ws,
+            _ => panic!("missing worksheet"),
+        };
+        assert_eq!(ws.data_validations.len(), 1);
+
+        let validation = match store.get(ws.data_validations[0]) {
+            Some(IRNode::DataValidation(validation)) => validation,
+            _ => panic!("missing validation"),
+        };
+        assert_eq!(validation.validation_type.as_deref(), Some("list"));
+        assert!(validation.allow_blank);
+        assert!(!validation.show_input_message);
+        assert!(!validation.show_error_message);
+        assert_eq!(validation.ranges, vec!["B1".to_string(), "B2".to_string()]);
+        assert!(validation.formula1.is_none());
+        assert!(validation.formula2.is_none());
+    }
+
+    #[test]
     fn parse_worksheet_returns_xml_error_for_malformed_data_validation() {
         let xml = r#"
             <worksheet>
@@ -1071,6 +1114,48 @@ mod tests {
     }
 
     #[test]
+    fn parse_chartsheet_with_external_chart_target_falls_back_to_no_drawing() {
+        let xml = r#"
+            <chartsheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <chart r:id="rIdChart"/>
+            </chartsheet>
+        "#;
+        let mut rels = Relationships::default();
+        let rel = Relationship {
+            id: "rIdChart".to_string(),
+            rel_type: rel_type::CHART.to_string(),
+            target: "https://example.test/chart.xml".to_string(),
+            target_mode: TargetMode::External,
+        };
+        rels.by_type
+            .entry(rel.rel_type.clone())
+            .or_default()
+            .push(rel.id.clone());
+        rels.by_id.insert(rel.id.clone(), rel);
+
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Chart1", "rId1");
+        let mut zip = build_empty_zip();
+        let ws_id = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/chartsheets/sheet1.xml",
+                &rels,
+                SheetKind::ChartSheet,
+            )
+            .expect("parse chartsheet");
+
+        let store = parser.into_store();
+        let ws = match store.get(ws_id) {
+            Some(IRNode::Worksheet(ws)) => ws,
+            _ => panic!("missing worksheet"),
+        };
+        assert!(ws.drawings.is_empty());
+    }
+
+    #[test]
     fn parse_chartsheet_without_chart_rel_id_falls_back_to_no_drawing() {
         let xml = r#"
             <chartsheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -1116,7 +1201,9 @@ mod tests {
         SecureZipReader::new(std::io::Cursor::new(data), Default::default()).expect("zip")
     }
 
-    fn build_zip_with_entries(entries: &[(&str, &str)]) -> SecureZipReader<std::io::Cursor<Vec<u8>>> {
+    fn build_zip_with_entries(
+        entries: &[(&str, &str)],
+    ) -> SecureZipReader<std::io::Cursor<Vec<u8>>> {
         let mut data = Vec::new();
         {
             let cursor = std::io::Cursor::new(&mut data);
