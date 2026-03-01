@@ -1077,6 +1077,59 @@ mod tests {
     }
 
     #[test]
+    fn parse_content_spreadsheet_ignores_validation_entries_without_name() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:spreadsheet>
+      <table:content-validations>
+        <table:content-validation table:condition="cell-content-is-between(1,9)"/>
+      </table:content-validations>
+      <table:table table:name="Sheet1">
+        <table:table-row>
+          <table:table-cell table:content-validation-name="missing-name"/>
+        </table:table-row>
+      </table:table>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let mut store = IrStore::new();
+        let result = parse_content_spreadsheet(xml, &mut store, &default_limits()).unwrap();
+        assert_eq!(result.content.len(), 1);
+
+        let validation_count = store
+            .values()
+            .filter(|node| matches!(node, IRNode::DataValidation(_)))
+            .count();
+        assert_eq!(validation_count, 0);
+    }
+
+    #[test]
+    fn parse_content_spreadsheet_fast_ignores_tables_outside_spreadsheet_body() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <table:table table:name="Outside"/>
+    <office:spreadsheet>
+      <table:table table:name="Inside"/>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let mut store = IrStore::new();
+        let result = parse_content_spreadsheet(xml, &mut store, &fast_limits()).unwrap();
+        assert_eq!(result.content.len(), 1);
+
+        let Some(IRNode::Worksheet(sheet)) = store.get(result.content[0]) else {
+            panic!("expected worksheet node");
+        };
+        assert_eq!(sheet.name, "Inside");
+    }
+
+    #[test]
     fn parse_content_spreadsheet_parallel_handles_missing_sheet_chunks() {
         let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"

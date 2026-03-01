@@ -933,6 +933,71 @@ mod tests {
     }
 
     #[test]
+    fn parse_ods_row_parses_value_and_covered_cells() {
+        let xml = br#"<table:table-row xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+            xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0">
+            <table:table-cell office:value-type="float" office:value="3.14"/>
+            <table:covered-table-cell table:number-columns-repeated="2"/>
+        </table:table-row>"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let start = loop {
+            match reader.read_event_into(&mut buf).expect("read row event") {
+                Event::Start(e) if e.name().as_ref() == b"table:table-row" => break e.into_owned(),
+                Event::Eof => panic!("missing table-row"),
+                _ => {}
+            }
+            buf.clear();
+        };
+
+        let mut store = IrStore::new();
+        let mut style_map = HashMap::new();
+        let mut next_style_id = 1u32;
+        let row = parse_ods_row(
+            &mut reader,
+            &start,
+            &mut store,
+            &mut style_map,
+            &mut next_style_id,
+        )
+        .expect("parse row");
+
+        assert_eq!(row.cells.len(), 2);
+        assert!(!row.cells[0].is_covered);
+        assert!(row.cells[0].should_emit());
+        assert!(row.cells[1].is_covered);
+        assert_eq!(row.cells[1].col_repeat, 2);
+        assert!(!row.cells[1].should_emit());
+    }
+
+    #[test]
+    fn parse_ods_conditional_formatting_truncated_input_returns_partial_rules() {
+        let xml = br#"<table:conditional-formatting xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+            <table:conditional-format table:condition="cell-content-is-true"/>
+        "#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let start = loop {
+            match reader.read_event_into(&mut buf).expect("read event") {
+                Event::Start(e) if e.name().as_ref() == b"table:conditional-formatting" => {
+                    break e.into_owned();
+                }
+                Event::Eof => panic!("missing conditional-formatting"),
+                _ => {}
+            }
+            buf.clear();
+        };
+
+        let parsed = parse_ods_conditional_formatting(&mut reader, &start)
+            .expect("parse truncated formatting")
+            .expect("expected partial conditional format");
+        assert_eq!(parsed.rules.len(), 1);
+        assert_eq!(parsed.rules[0].operator.as_deref(), Some("true"));
+    }
+
+    #[test]
     fn parse_odf_condition_operator_is_case_insensitive() {
         assert_eq!(
             parse_odf_condition_operator("CELL-CONTENT-IS-LESS-THAN(4)"),

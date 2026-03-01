@@ -633,6 +633,7 @@ pub(super) fn parse_field(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ooxml::relationships::{rel_type, Relationship};
     use quick_xml::events::Event;
 
     #[test]
@@ -1137,6 +1138,88 @@ mod tests {
         assert!(saw_comment_reference);
         assert!(saw_bookmark_end);
         assert!(saw_delete_revision);
+    }
+
+    #[test]
+    fn parse_hyperlink_resolves_anchor_for_external_and_anchor_only_targets() {
+        let mut rels = Relationships::default();
+        let rel = Relationship {
+            id: "rIdExt".to_string(),
+            rel_type: rel_type::HYPERLINK.to_string(),
+            target: "https://example.test/report".to_string(),
+            target_mode: TargetMode::External,
+        };
+        rels.by_type
+            .entry(rel.rel_type.clone())
+            .or_default()
+            .push(rel.id.clone());
+        rels.by_id.insert(rel.id.clone(), rel);
+
+        let xml_external = r#"
+            <w:hyperlink xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                r:id="rIdExt" w:anchor="Section1">
+              <w:r><w:t>jump</w:t></w:r>
+            </w:hyperlink>
+        "#;
+        let mut parser = DocxParser::new();
+        let mut reader = reader_from_str(xml_external);
+        let mut buf = Vec::new();
+        let external_id = loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:hyperlink" => {
+                    break parse_hyperlink(&mut parser, &mut reader, &rels, &e)
+                        .expect("parse hyperlink");
+                }
+                Ok(Event::Eof) => panic!("missing hyperlink"),
+                Err(e) => panic!("xml error: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        };
+
+        let xml_anchor_only = r#"
+            <w:hyperlink xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                w:anchor="LocalBookmark">
+              <w:r><w:t>local</w:t></w:r>
+            </w:hyperlink>
+        "#;
+        let mut reader = reader_from_str(xml_anchor_only);
+        let mut buf = Vec::new();
+        let anchor_only_id = loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:hyperlink" => {
+                    break parse_hyperlink(&mut parser, &mut reader, &rels, &e)
+                        .expect("parse hyperlink");
+                }
+                Ok(Event::Eof) => panic!("missing hyperlink"),
+                Err(e) => panic!("xml error: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        };
+
+        let store = parser.into_store();
+        let external = match store.get(external_id) {
+            Some(docir_core::ir::IRNode::Hyperlink(link)) => link,
+            _ => panic!("expected external hyperlink"),
+        };
+        assert_eq!(
+            external.target,
+            "https://example.test/report#Section1".to_string()
+        );
+        assert!(external.is_external);
+        assert_eq!(external.relationship_id.as_deref(), Some("rIdExt"));
+        assert_eq!(external.runs.len(), 1);
+
+        let anchor_only = match store.get(anchor_only_id) {
+            Some(docir_core::ir::IRNode::Hyperlink(link)) => link,
+            _ => panic!("expected anchor-only hyperlink"),
+        };
+        assert_eq!(anchor_only.target, "#LocalBookmark".to_string());
+        assert!(!anchor_only.is_external);
+        assert!(anchor_only.relationship_id.is_none());
+        assert_eq!(anchor_only.runs.len(), 1);
     }
 }
 

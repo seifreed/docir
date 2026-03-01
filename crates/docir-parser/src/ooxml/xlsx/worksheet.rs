@@ -1183,6 +1183,147 @@ mod tests {
         assert!(ws.drawings.is_empty());
     }
 
+    #[test]
+    fn parse_external_links_and_connections_collects_parts_and_external_refs() {
+        let mut workbook_rels = Relationships::default();
+        let external_link_rel = Relationship {
+            id: "rIdExtLink".to_string(),
+            rel_type: rel_type::EXTERNAL_LINK.to_string(),
+            target: "externalLinks/externalLink1.xml".to_string(),
+            target_mode: TargetMode::Internal,
+        };
+        workbook_rels
+            .by_type
+            .entry(external_link_rel.rel_type.clone())
+            .or_default()
+            .push(external_link_rel.id.clone());
+        workbook_rels
+            .by_id
+            .insert(external_link_rel.id.clone(), external_link_rel);
+
+        let mut zip = build_zip_with_entries(&[
+            (
+                "xl/externalLinks/externalLink1.xml",
+                r#"<externalLink xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                    <externalBook r:id="rIdBook"/>
+                   </externalLink>"#,
+            ),
+            (
+                "xl/externalLinks/_rels/externalLink1.xml.rels",
+                r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                    <Relationship Id="rIdBook"
+                        Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath"
+                        Target="https://example.test/book.xlsx"
+                        TargetMode="External"/>
+                   </Relationships>"#,
+            ),
+            (
+                "xl/connections.xml",
+                r#"<connections>
+                    <connection id="1" odcFile="connections/report.odc">
+                      <dbPr connection="Provider=MSOLAP;Data Source=example"/>
+                      <webPr url="https://example.test/data.csv"/>
+                      <textPr sourceFile="https://example.test/source.txt"/>
+                    </connection>
+                   </connections>"#,
+            ),
+        ]);
+
+        let mut parser = XlsxParser::new();
+        parser
+            .parse_external_links_and_connections(&mut zip, "xl/workbook.xml", &workbook_rels)
+            .expect("parse external links and connections");
+
+        let store = parser.into_store();
+        let shared_parts_count = store
+            .values()
+            .filter(|node| {
+                matches!(
+                    node,
+                    IRNode::ExternalLinkPart(_) | IRNode::ConnectionPart(_)
+                )
+            })
+            .count();
+        assert!(shared_parts_count >= 2);
+
+        let external_targets: Vec<_> = store
+            .values()
+            .filter_map(|node| match node {
+                IRNode::ExternalReference(ext) => Some(ext.target.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(external_targets.iter().any(|t| t == "https://example.test/book.xlsx"));
+        assert!(
+            external_targets
+                .iter()
+                .any(|t| t == "https://example.test/data.csv")
+        );
+        assert!(
+            external_targets
+                .iter()
+                .any(|t| t == "https://example.test/source.txt")
+        );
+        assert!(
+            external_targets
+                .iter()
+                .any(|t| t == "Provider=MSOLAP;Data Source=example")
+        );
+    }
+
+    #[test]
+    fn parse_pivot_cache_loads_records_relation_and_source() {
+        let cache_xml = r#"
+            <pivotCacheDefinition>
+              <cacheSource type="worksheet">
+                <worksheetSource sheet="Data" ref="A1:B4"></worksheetSource>
+              </cacheSource>
+            </pivotCacheDefinition>
+        "#;
+        let mut zip = build_zip_with_entries(&[
+            (
+                "xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels",
+                r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                    <Relationship Id="rIdRecords"
+                        Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords"
+                        Target="pivotCacheRecords1.xml"/>
+                   </Relationships>"#,
+            ),
+            (
+                "xl/pivotCache/pivotCacheRecords1.xml",
+                r#"<pivotCacheRecords>
+                    <r><x v="1"/></r>
+                    <r><x v="2"/></r>
+                   </pivotCacheRecords>"#,
+            ),
+        ]);
+
+        let mut parser = XlsxParser::new();
+        let cache = parser
+            .parse_pivot_cache(
+                &mut zip,
+                cache_xml,
+                "xl/pivotCache/pivotCacheDefinition1.xml",
+                7,
+            )
+            .expect("parse pivot cache");
+
+        assert_eq!(cache.cache_source.as_deref(), Some("worksheet:Data!A1:B4"));
+        assert_eq!(cache.record_count, Some(2));
+        assert!(cache.records.is_some());
+
+        let store = parser.into_store();
+        let records = store
+            .values()
+            .find_map(|node| match node {
+                IRNode::PivotCacheRecords(records) => Some(records),
+                _ => None,
+            })
+            .expect("pivot cache records node");
+        assert_eq!(records.cache_id, Some(7));
+        assert_eq!(records.record_count, Some(2));
+    }
+
     fn sheet_info(name: &str, rel_id: &str) -> SheetInfo {
         SheetInfo {
             name: name.to_string(),
