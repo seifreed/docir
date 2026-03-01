@@ -917,4 +917,35 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn parse_odf_condition_operator_is_case_insensitive() {
+        assert_eq!(
+            parse_odf_condition_operator("CELL-CONTENT-IS-LESS-THAN(4)"),
+            Some("less-than".to_string())
+        );
+        assert_eq!(
+            parse_odf_condition_operator("FORMULA-IS([.A1]>0)"),
+            Some("formula".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_text_element_truncated_input_returns_collected_prefix() {
+        let xml = br#"<text:p xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">prefix<text:s text:c="2">"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_slice()));
+        reader.config_mut().trim_text(false);
+        let mut buf = Vec::new();
+        let start = loop {
+            match reader.read_event_into(&mut buf).expect("event read") {
+                Event::Start(e) if e.name().as_ref() == b"text:p" => break e.into_owned(),
+                Event::Eof => panic!("missing text:p start"),
+                _ => {}
+            }
+            buf.clear();
+        };
+
+        let parsed = parse_text_element(&mut reader, start.name().as_ref()).expect("parse text");
+        assert_eq!(parsed, "prefix  ");
+    }
 }

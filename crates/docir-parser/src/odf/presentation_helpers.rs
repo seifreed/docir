@@ -610,4 +610,24 @@ mod tests {
         assert_eq!(text.paragraphs[0].runs[0].text, "First line");
         assert_eq!(text.paragraphs[1].runs[0].text, "Second line");
     }
+
+    #[test]
+    fn classify_media_shape_covers_audio_video_and_unknown_paths() {
+        assert_eq!(classify_media_shape("media/clip.ogg"), ShapeType::Audio);
+        assert_eq!(classify_media_shape("media/clip.OGV"), ShapeType::Video);
+        assert_eq!(classify_media_shape("media/blob.bin"), ShapeType::Unknown);
+    }
+
+    #[test]
+    fn parse_odf_animation_prefers_target_fallback_and_parses_iso_duration() {
+        let mut start = BytesStart::new("anim:animate");
+        start.push_attribute(("smil:targetElement", "shape-42"));
+        start.push_attribute(("smil:dur", "PT2.5S"));
+        start.push_attribute(("presentation:preset-id", "entrance"));
+
+        let anim = parse_odf_animation(&start).expect("animation metadata");
+        assert_eq!(anim.target.as_deref(), Some("shape-42"));
+        assert_eq!(anim.duration_ms, Some(2500));
+        assert_eq!(anim.preset_id.as_deref(), Some("entrance"));
+    }
 }

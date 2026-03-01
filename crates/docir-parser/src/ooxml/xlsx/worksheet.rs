@@ -1011,6 +1011,93 @@ mod tests {
         assert!(ws.drawings.is_empty());
     }
 
+    #[test]
+    fn parse_chartsheet_with_resolved_chart_part_adds_chart_drawing() {
+        let xml = r#"
+            <chartsheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <chart r:id="rIdChart"/>
+            </chartsheet>
+        "#;
+        let mut rels = Relationships::default();
+        let rel = Relationship {
+            id: "rIdChart".to_string(),
+            rel_type: rel_type::CHART.to_string(),
+            target: "../charts/chart1.xml".to_string(),
+            target_mode: TargetMode::Internal,
+        };
+        rels.by_type
+            .entry(rel.rel_type.clone())
+            .or_default()
+            .push(rel.id.clone());
+        rels.by_id.insert(rel.id.clone(), rel);
+
+        let mut zip = build_zip_with_entries(&[(
+            "xl/charts/chart1.xml",
+            r#"<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                 <c:chart/>
+               </c:chartSpace>"#,
+        )]);
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Chart1", "rId1");
+        let ws_id = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/chartsheets/sheet1.xml",
+                &rels,
+                SheetKind::ChartSheet,
+            )
+            .expect("parse chartsheet");
+
+        let store = parser.into_store();
+        let ws = match store.get(ws_id) {
+            Some(IRNode::Worksheet(ws)) => ws,
+            _ => panic!("missing worksheet"),
+        };
+        assert_eq!(ws.drawings.len(), 1);
+        let drawing = match store.get(ws.drawings[0]) {
+            Some(IRNode::WorksheetDrawing(drawing)) => drawing,
+            _ => panic!("missing worksheet drawing"),
+        };
+        assert_eq!(drawing.shapes.len(), 1);
+        let shape = match store.get(drawing.shapes[0]) {
+            Some(IRNode::Shape(shape)) => shape,
+            _ => panic!("missing chart shape"),
+        };
+        assert_eq!(shape.shape_type, ShapeType::Chart);
+        assert_eq!(shape.relationship_id.as_deref(), Some("rIdChart"));
+        assert_eq!(shape.media_target.as_deref(), Some("xl/charts/chart1.xml"));
+    }
+
+    #[test]
+    fn parse_chartsheet_without_chart_rel_id_falls_back_to_no_drawing() {
+        let xml = r#"
+            <chartsheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <chart/>
+            </chartsheet>
+        "#;
+        let mut parser = XlsxParser::new();
+        let sheet = sheet_info("Chart1", "rId1");
+        let mut zip = build_empty_zip();
+        let ws_id = parser
+            .parse_worksheet(
+                &mut zip,
+                xml,
+                &sheet,
+                "xl/chartsheets/sheet1.xml",
+                &Relationships::default(),
+                SheetKind::ChartSheet,
+            )
+            .expect("parse chartsheet");
+        let store = parser.into_store();
+        let ws = match store.get(ws_id) {
+            Some(IRNode::Worksheet(ws)) => ws,
+            _ => panic!("missing worksheet"),
+        };
+        assert!(ws.drawings.is_empty());
+    }
+
     fn sheet_info(name: &str, rel_id: &str) -> SheetInfo {
         SheetInfo {
             name: name.to_string(),
@@ -1024,6 +1111,24 @@ mod tests {
         let mut data = Vec::new();
         {
             let writer = zip::ZipWriter::new(std::io::Cursor::new(&mut data));
+            writer.finish().expect("finish zip");
+        }
+        SecureZipReader::new(std::io::Cursor::new(data), Default::default()).expect("zip")
+    }
+
+    fn build_zip_with_entries(entries: &[(&str, &str)]) -> SecureZipReader<std::io::Cursor<Vec<u8>>> {
+        let mut data = Vec::new();
+        {
+            let cursor = std::io::Cursor::new(&mut data);
+            let mut writer = zip::ZipWriter::new(cursor);
+            let options = zip::write::SimpleFileOptions::default();
+            for (path, contents) in entries {
+                writer.start_file(path, options).expect("start zip file");
+                use std::io::Write;
+                writer
+                    .write_all(contents.as_bytes())
+                    .expect("write zip contents");
+            }
             writer.finish().expect("finish zip");
         }
         SecureZipReader::new(std::io::Cursor::new(data), Default::default()).expect("zip")
