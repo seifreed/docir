@@ -81,8 +81,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] `04-06-PLAN.md` - OOXML/RTF hotspot behavior tests and canonical residual refresh.
 - [x] `04-07-PLAN.md` - ODF residual hotspot closure with canonical re-measure and next shortlist.
 - [x] `04-08-PLAN.md` - Residual hotspot closure continuation with canonical re-measure and updated shortlist.
-- [x] `04-09-PLAN.md` - Phase closure coverage push requiring passing canonical fail-under 95 verification.
-- [ ] `04-10-PLAN.md` - Final bounded closure increment requiring canonical fail-under 95 pass for acceptance.
+- [x] `04-09-PLAN.md` - Residual hotspot closure increment with canonical re-measure and bounded handoff.
+- [x] `04-10-PLAN.md` - Bounded closure increment requiring canonical fail-under 95 pass for acceptance.
+- [ ] `04-11-PLAN.md` - Residual closure continuation with canonical re-measure and deterministic handoff.
 
 ### Phase 5: Forbidden Construct Policy
 **Goal**: Canonical runs reject prohibited constructs that undermine reliability and maintainability.
@@ -147,7 +148,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | 1. Canonical Gate Surface | 3/3 | Complete | 2026-02-28 |
 | 2. Workflow Routing | 4/4 | Complete | 2026-02-28 |
 | 3. Baseline Clean Code Commands | 2/2 | Complete | 2026-02-28 |
-| 4. Coverage Integrity Enforcement | 10/10 | In progress (executed; canonical threshold unmet) | - |
+| 4. Coverage Integrity Enforcement | 10/11 | In progress (executed; canonical threshold unmet) | - |
 | 5. Forbidden Construct Policy | 0/TBD | Not started | - |
 | 6. Code Hygiene and Complexity Policy | 0/TBD | Not started | - |
 | 7. Architecture Policy Definition | 0/TBD | Not started | - |
