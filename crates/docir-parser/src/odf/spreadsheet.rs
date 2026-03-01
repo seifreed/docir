@@ -894,6 +894,56 @@ mod tests {
     }
 
     #[test]
+    fn parse_content_spreadsheet_keeps_unlinked_pivot_cache_without_records() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:spreadsheet>
+      <table:table table:name="Sheet1"/>
+      <table:data-pilot-table table:display-name="PivotDisplay"
+        table:source-range-address="'Missing'.A1:'Missing'.A1"
+        table:target-range-address="'Missing'.D1:'Missing'.D1"/>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let mut store = IrStore::new();
+        let result = parse_content_spreadsheet(xml, &mut store, &default_limits()).unwrap();
+        assert_eq!(result.content.len(), 1);
+        assert_eq!(result.pivot_caches.len(), 1);
+
+        let Some(IRNode::Worksheet(sheet)) = store.get(result.content[0]) else {
+            panic!("expected worksheet node");
+        };
+        assert_eq!(sheet.name, "Sheet1");
+        assert!(sheet.pivot_tables.is_empty());
+
+        let pivots: Vec<_> = store
+            .values()
+            .filter_map(|node| match node {
+                IRNode::PivotTable(pivot) => Some(pivot),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(pivots.len(), 1);
+        assert_eq!(pivots[0].name.as_deref(), Some("PivotDisplay"));
+        assert_eq!(
+            pivots[0].ref_range.as_deref(),
+            Some("'Missing'.D1:'Missing'.D1")
+        );
+
+        let Some(IRNode::PivotCache(cache)) = store.get(result.pivot_caches[0]) else {
+            panic!("expected pivot cache node");
+        };
+        assert_eq!(
+            cache.cache_source.as_deref(),
+            Some("'Missing'.A1:'Missing'.A1")
+        );
+        assert!(cache.records.is_none());
+    }
+
+    #[test]
     fn parse_draw_frame_spreadsheet_emits_shape_for_plugin_media() {
         let xml = br#"<draw:frame xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
                 xmlns:xlink="http://www.w3.org/1999/xlink"

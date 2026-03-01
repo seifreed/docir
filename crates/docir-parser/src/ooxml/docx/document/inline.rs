@@ -1058,6 +1058,86 @@ mod tests {
             other => panic!("unexpected error: {other:?}"),
         }
     }
+
+    #[test]
+    fn parse_sdt_inline_captures_end_markers_and_delete_revision() {
+        let xml = r#"
+            <w:sdt xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:sdtContent>
+                <w:commentRangeEnd w:id="12"></w:commentRangeEnd>
+                <w:commentReference w:id="12"></w:commentReference>
+                <w:bookmarkEnd w:id="20"></w:bookmarkEnd>
+                <w:del w:id="3" w:author="Bot">
+                  <w:r><w:t>removed</w:t></w:r>
+                </w:del>
+              </w:sdtContent>
+            </w:sdt>
+        "#;
+
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut buf = Vec::new();
+        let mut sdt_id = None;
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:sdt" => {
+                    sdt_id =
+                        Some(parse_sdt(&mut parser, &mut reader, &rels, SdtMode::Inline).unwrap());
+                    break;
+                }
+                Ok(Event::Eof) => break,
+                Err(e) => panic!("xml error: {e}"),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        let store = parser.into_store();
+        let control = match store.get(sdt_id.expect("sdt parsed")) {
+            Some(docir_core::ir::IRNode::ContentControl(control)) => control,
+            _ => panic!("expected content control"),
+        };
+        assert_eq!(control.content.len(), 4);
+
+        let mut saw_comment_end = false;
+        let mut saw_comment_reference = false;
+        let mut saw_bookmark_end = false;
+        let mut saw_delete_revision = false;
+
+        for node_id in &control.content {
+            match store.get(*node_id) {
+                Some(docir_core::ir::IRNode::CommentRangeEnd(node)) => {
+                    saw_comment_end = true;
+                    assert_eq!(node.comment_id, "12");
+                }
+                Some(docir_core::ir::IRNode::CommentReference(node)) => {
+                    saw_comment_reference = true;
+                    assert_eq!(node.comment_id, "12");
+                }
+                Some(docir_core::ir::IRNode::BookmarkEnd(node)) => {
+                    saw_bookmark_end = true;
+                    assert_eq!(node.bookmark_id, "20");
+                }
+                Some(docir_core::ir::IRNode::Revision(revision)) => {
+                    saw_delete_revision = true;
+                    assert!(matches!(revision.change_type, RevisionType::Delete));
+                    assert_eq!(revision.content.len(), 1);
+                    let run = match store.get(revision.content[0]) {
+                        Some(docir_core::ir::IRNode::Run(run)) => run,
+                        _ => panic!("expected run in revision"),
+                    };
+                    assert_eq!(run.text, "removed");
+                }
+                _ => {}
+            }
+        }
+
+        assert!(saw_comment_end);
+        assert!(saw_comment_reference);
+        assert!(saw_bookmark_end);
+        assert!(saw_delete_revision);
+    }
 }
 
 pub(super) fn parse_numbering(
