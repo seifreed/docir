@@ -957,4 +957,142 @@ mod tests {
             "layout_id=layout-1 master_id=master-1"
         );
     }
+
+    #[test]
+    fn summary_and_signature_cover_macro_and_hyperlink_fallback_paths() {
+        let mut store = IrStore::new();
+
+        let run_a = Run::new("PartA");
+        let run_b = Run::new("PartB");
+        store.insert(IRNode::Run(run_a.clone()));
+        store.insert(IRNode::Run(run_b.clone()));
+
+        let mut link = Hyperlink::new("https://example.test", true);
+        link.runs = vec![run_a.id, run_b.id];
+        let link_id = link.id;
+        store.insert(IRNode::Hyperlink(link.clone()));
+
+        let mut para = Paragraph::new();
+        para.runs.push(link_id);
+        let para_text = summarize_paragraph(&para, &store);
+        assert!(para_text.contains("PartAPartB"));
+
+        assert_eq!(
+            content_signature(&IRNode::Hyperlink(link), &store).as_deref(),
+            Some("https://example.test")
+        );
+
+        let mut module = docir_core::security::MacroModule::new(
+            "AutoOpen",
+            docir_core::security::MacroModuleType::Standard,
+        );
+        module
+            .suspicious_calls
+            .push(docir_core::security::SuspiciousCall {
+                name: "Shell".to_string(),
+                category: docir_core::security::SuspiciousCallCategory::ShellExecution,
+                line: Some(1),
+            });
+        let module_summary = summarize(&IRNode::MacroModule(module.clone()), &store);
+        assert!(module_summary.contains("suspicious_calls=1"));
+        assert_eq!(
+            content_signature(&IRNode::MacroModule(module), &store).as_deref(),
+            Some("AutoOpen")
+        );
+
+        let mut project = docir_core::security::MacroProject::new();
+        project.name = Some("VBAProject".to_string());
+        assert_eq!(
+            content_signature(&IRNode::MacroProject(project), &store).as_deref(),
+            Some("VBAProject")
+        );
+
+        let mut activex = docir_core::ActiveXControl::new();
+        activex.name = Some("Btn".to_string());
+        assert_eq!(
+            content_signature(&IRNode::ActiveXControl(activex), &store).as_deref(),
+            Some("Btn")
+        );
+
+        let mut ole = docir_core::security::OleObject::new();
+        ole.name = Some("Object1".to_string());
+        assert_eq!(
+            content_signature(&IRNode::OleObject(ole), &store).as_deref(),
+            Some("Object1")
+        );
+
+        let defined = docir_core::ir::DefinedName {
+            id: NodeId::new(),
+            name: "MyName".to_string(),
+            value: "Sheet1!$A$1".to_string(),
+            local_sheet_id: None,
+            hidden: false,
+            comment: None,
+            span: None,
+        };
+        assert_eq!(
+            content_signature(&IRNode::DefinedName(defined), &store).as_deref(),
+            Some("MyName")
+        );
+
+        let table = docir_core::ir::TableDefinition {
+            id: NodeId::new(),
+            name: Some("TableFallback".to_string()),
+            display_name: None,
+            ref_range: None,
+            header_row_count: None,
+            totals_row_count: None,
+            columns: vec![],
+            span: None,
+        };
+        assert_eq!(
+            content_signature(&IRNode::TableDefinition(table), &store).as_deref(),
+            Some("TableFallback")
+        );
+    }
+
+    #[test]
+    fn style_signature_and_shape_text_cover_remaining_branches() {
+        let store = IrStore::new();
+
+        let para = Paragraph::new();
+        let para_sig = style_signature(&IRNode::Paragraph(para), &store).unwrap();
+        assert!(para_sig.starts_with('{'));
+
+        let run_sig = style_signature(&IRNode::Run(Run::new("r")), &store).unwrap();
+        assert!(run_sig.starts_with('{'));
+
+        let table_sig = style_signature(&IRNode::Table(Table::new()), &store).unwrap();
+        assert!(table_sig.starts_with('{'));
+
+        let shape = Shape {
+            text: Some(ShapeText {
+                paragraphs: vec![
+                    ShapeTextParagraph {
+                        runs: vec![ShapeTextRun {
+                            text: "L1".to_string(),
+                            bold: None,
+                            italic: None,
+                            font_size: None,
+                            font_family: None,
+                        }],
+                        alignment: None,
+                    },
+                    ShapeTextParagraph {
+                        runs: vec![ShapeTextRun {
+                            text: "L2".to_string(),
+                            bold: None,
+                            italic: None,
+                            font_size: None,
+                            font_family: None,
+                        }],
+                        alignment: None,
+                    },
+                ],
+            }),
+            ..Shape::new(ShapeType::TextBox)
+        };
+        let summary = summarize_shape(&shape);
+        assert!(summary.contains("L1\nL2"));
+    }
 }

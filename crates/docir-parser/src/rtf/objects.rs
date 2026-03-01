@@ -49,3 +49,79 @@ pub(crate) fn finalize_picture(object: ObjectContext, store: &mut IrStore) -> Op
     store.insert(docir_core::ir::IRNode::MediaAsset(asset));
     Some(id)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::ir::IRNode;
+
+    #[test]
+    fn finalize_object_uses_name_fallback_and_sets_size() {
+        let mut store = IrStore::new();
+        let object = ObjectContext {
+            class_name: Some("Word.Document.12".to_string()),
+            object_name: None,
+            data_hex_len: 12,
+            ..ObjectContext::default()
+        };
+
+        let id = finalize_object(object, &mut store).expect("object id");
+        let Some(IRNode::OleObject(ole)) = store.get(id) else {
+            panic!("expected OLE object");
+        };
+
+        assert_eq!(ole.name.as_deref(), Some("Word.Document.12"));
+        assert_eq!(ole.prog_id.as_deref(), Some("Word.Document.12"));
+        assert_eq!(ole.size_bytes, 6);
+    }
+
+    #[test]
+    fn finalize_picture_sets_content_type_for_media_variants() {
+        let mut store = IrStore::new();
+
+        let audio = ObjectContext {
+            data_hex_len: 20,
+            media_type: Some(MediaType::Audio),
+            ..ObjectContext::default()
+        };
+        let audio_id = finalize_picture(audio, &mut store).expect("audio id");
+        let Some(IRNode::MediaAsset(asset)) = store.get(audio_id) else {
+            panic!("expected media asset");
+        };
+        assert_eq!(asset.media_type, MediaType::Audio);
+        assert_eq!(asset.content_type.as_deref(), Some("audio/rtf"));
+        assert_eq!(asset.size_bytes, 10);
+        assert_eq!(
+            asset.span.as_ref().map(|s| s.file_path.as_str()),
+            Some("rtf")
+        );
+
+        let other = ObjectContext {
+            data_hex_len: 2,
+            media_type: Some(MediaType::Other),
+            ..ObjectContext::default()
+        };
+        let other_id = finalize_picture(other, &mut store).expect("other id");
+        let Some(IRNode::MediaAsset(asset)) = store.get(other_id) else {
+            panic!("expected media asset");
+        };
+        assert_eq!(asset.media_type, MediaType::Other);
+        assert_eq!(asset.content_type, None);
+    }
+
+    #[test]
+    fn finalize_picture_defaults_to_image_when_media_type_missing() {
+        let mut store = IrStore::new();
+        let object = ObjectContext {
+            data_hex_len: 8,
+            ..ObjectContext::default()
+        };
+        let id = finalize_picture(object, &mut store).expect("media id");
+        let Some(IRNode::MediaAsset(asset)) = store.get(id) else {
+            panic!("expected media asset");
+        };
+        assert_eq!(asset.media_type, MediaType::Image);
+        assert_eq!(asset.content_type, None);
+        assert_eq!(asset.size_bytes, 4);
+    }
+}

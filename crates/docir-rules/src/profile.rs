@@ -84,3 +84,85 @@ pub(crate) fn profile_rule_enabled(profile: &RuleProfile, rule_id: &str) -> bool
     }
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Finding, Rule, RuleCategory, RuleContext, Severity};
+
+    struct DummyRule {
+        id: &'static str,
+    }
+
+    impl Rule for DummyRule {
+        fn id(&self) -> &'static str {
+            self.id
+        }
+
+        fn name(&self) -> &'static str {
+            self.id
+        }
+
+        fn description(&self) -> &'static str {
+            "dummy"
+        }
+
+        fn category(&self) -> RuleCategory {
+            RuleCategory::Security
+        }
+
+        fn default_severity(&self) -> Severity {
+            Severity::Low
+        }
+
+        fn run(&self, _ctx: &RuleContext, _findings: &mut Vec<Finding>) {}
+    }
+
+    #[test]
+    fn apply_profile_returns_all_rules_when_profile_has_no_filters() {
+        let rules: Vec<Box<dyn Rule>> = vec![
+            Box::new(DummyRule { id: "a" }),
+            Box::new(DummyRule { id: "b" }),
+        ];
+        let profile = RuleProfile::default();
+        let filtered = apply_profile(rules, &profile);
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn apply_profile_respects_enabled_and_disabled_rules() {
+        let rules: Vec<Box<dyn Rule>> = vec![
+            Box::new(DummyRule { id: "a" }),
+            Box::new(DummyRule { id: "b" }),
+            Box::new(DummyRule { id: "c" }),
+        ];
+        let profile = RuleProfile {
+            enabled_rules: Some(vec!["a".to_string(), "b".to_string()]),
+            disabled_rules: vec!["b".to_string()],
+            severity_overrides: BTreeMap::new(),
+            thresholds: RuleThresholds::default(),
+        };
+
+        let filtered = apply_profile(rules, &profile);
+        let ids: Vec<_> = filtered.into_iter().map(|r| r.id().to_string()).collect();
+        assert_eq!(ids, vec!["a".to_string()]);
+    }
+
+    #[test]
+    fn profile_rule_enabled_prioritizes_disabled_list() {
+        let profile = RuleProfile {
+            enabled_rules: Some(vec!["r1".to_string(), "r2".to_string()]),
+            disabled_rules: vec!["r2".to_string(), "r3".to_string()],
+            severity_overrides: BTreeMap::new(),
+            thresholds: RuleThresholds::default(),
+        };
+
+        assert!(profile_rule_enabled(&profile, "r1"));
+        assert!(!profile_rule_enabled(&profile, "r2"));
+        assert!(!profile_rule_enabled(&profile, "r3"));
+        assert!(!profile_rule_enabled(&profile, "other"));
+
+        let open_profile = RuleProfile::default();
+        assert!(profile_rule_enabled(&open_profile, "any-rule"));
+    }
+}

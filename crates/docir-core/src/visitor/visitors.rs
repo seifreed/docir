@@ -506,4 +506,20 @@ mod tests {
         assert_eq!(counter.counts.get("Run"), Some(&1));
         assert_eq!(counter.counts.get("ExtensionPart"), Some(&1));
     }
+
+    #[test]
+    fn defaults_and_empty_paragraph_do_not_modify_text() {
+        let mut collector = TextCollector::default();
+        collector.visit_paragraph(&Paragraph::new()).unwrap();
+        assert!(collector.text.is_empty());
+
+        let mut with_newline = TextCollector {
+            text: "line\n".to_string(),
+        };
+        with_newline.visit_paragraph(&Paragraph::new()).unwrap();
+        assert_eq!(with_newline.text, "line\n");
+
+        let counter = NodeCounter::default();
+        assert!(counter.counts.is_empty());
+    }
 }
