@@ -11,16 +11,16 @@ cargo llvm-cov report --json --summary-only --output-path target/llvm-cov-summar
 
 - Baseline from 04-13 canonical fail-under total: `73.44%`
 - After Wave 1 (docir-diff/docir-core hotspot tests): `75.89%` (`EXIT:1`)
-- After Wave 2 (CLI summary/security integration tests): `76.61%` (`EXIT:1`)
-- Net delta vs 04-13 baseline: `+3.17` percentage points
+- After Wave 2 (CLI summary/security integration tests): `76.60%` (`EXIT:1`)
+- Net delta vs 04-13 baseline: `+3.16` percentage points
 
 ## 95% Gate Status (Canonical Truth)
 
 - Command: `cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines 95`
 - Exit code: `1` (FAIL)
-- Observed total: `76.61%`
+- Observed total: `76.60%`
 - Required threshold: `95.00%`
-- Remaining gap: `18.39` percentage points
+- Remaining gap: `18.40` percentage points
 
 ## Cross-Crate Hotspot Snapshot (post-04-14)
 

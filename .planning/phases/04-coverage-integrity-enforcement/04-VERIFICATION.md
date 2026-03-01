@@ -41,10 +41,10 @@ Verdict: Partially satisfied. Canonical gate and CI enforcement remain intact, a
   - Result: PASS (`coverage-command-contract: OK`, `coverage-threshold-fail: OK`, `quality_gate_coverage_commands: OK`)
 - `cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines 95`
   - Result: FAIL (`EXIT:1`)
-  - Observed total lines coverage: `76.61%`
+  - Observed total lines coverage: `76.60%`
 - `cargo llvm-cov --workspace --all-features --summary-only`
   - Result: PASS (`EXIT:0`)
-  - Observed total lines coverage: `76.61%`
+  - Observed total lines coverage: `76.60%`
 
 ## Requirement Validation
 
@@ -54,7 +54,7 @@ Requirement: gate enforces test coverage of at least 95% using `cargo llvm-cov`.
 
 Evidence:
 - Enforced in canonical gate (`scripts/quality_gate.sh`) with `--fail-under-lines 95`.
-- Fresh canonical fail-under run returns `EXIT:1` with total `76.61%`.
+- Fresh canonical fail-under run returns `EXIT:1` with total `76.60%`.
 
 Verdict: `gaps_found`.
 
@@ -81,9 +81,9 @@ Verdict: `passed`.
 
 ## Gap Summary
 
-- Blocking gap: `CC-04` threshold not met; canonical workspace line coverage is `76.61%` vs required `95.00%`.
-- Delta vs 04-13 canonical baseline (`73.44%`): `+3.17` percentage points.
-- Remaining threshold delta: `18.39` percentage points.
+- Blocking gap: `CC-04` threshold not met; canonical workspace line coverage is `76.60%` vs required `95.00%`.
+- Delta vs 04-13 canonical baseline (`73.44%`): `+3.16` percentage points.
+- Remaining threshold delta: `18.40` percentage points.
 
 ## Next Action Path
 

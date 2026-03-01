@@ -16,7 +16,7 @@ completed: 2026-03-01
 
 # Phase 04 Plan 14 Summary
 
-Cross-crate behavior tests raised canonical workspace coverage from `73.44%` to `76.61%` (`+3.17` points), but canonical fail-under still exits `1`.
+Cross-crate behavior tests raised canonical workspace coverage from `73.44%` to `76.60%` (`+3.16` points), but canonical fail-under still exits `1`.
 
 ## Delivered
 
@@ -33,8 +33,8 @@ Cross-crate behavior tests raised canonical workspace coverage from `73.44%` to 
 
 ## Outcome
 
-- Canonical total: `76.61%`
+- Canonical total: `76.60%`
 - Canonical fail-under status: `EXIT:1`
-- Remaining threshold gap: `18.39` points
+- Remaining threshold gap: `18.40` points
 
 Phase 04 remains open until canonical fail-under reaches `EXIT:0` at `>=95%`.
