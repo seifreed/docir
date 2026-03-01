@@ -3,21 +3,21 @@
 status: gaps_found
 phase: `04-coverage-integrity-enforcement`
 date: `2026-03-01`
-commit: `40c7a82`
+commit: `5376cd8`
 
 ## Goal-Backward Verdict
 
 Phase 04 goal from [`ROADMAP.md`](../../ROADMAP.md): coverage threshold and test integrity are enforced as non-optional gate requirements.
 
-Verdict: Partially satisfied. Canonical gate and CI enforcement remain intact, and 04-13 test-integrity artifacts are present, but quantitative threshold compliance (`>=95%` line coverage) remains unmet.
+Verdict: Partially satisfied. Canonical gate and CI enforcement remain intact, and 04-14 cross-crate behavior-test artifacts are present, but quantitative threshold compliance (`>=95%` line coverage) remains unmet.
 
 ## Inputs Reviewed
 
 - `.planning/REQUIREMENTS.md`
 - `.planning/ROADMAP.md`
-- `.planning/phases/04-coverage-integrity-enforcement/04-13-PLAN.md`
-- `.planning/phases/04-coverage-integrity-enforcement/04-13-SUMMARY.md`
-- `.planning/phases/04-coverage-integrity-enforcement/04-13-COVERAGE.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-14-PLAN.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-14-SUMMARY.md`
+- `.planning/phases/04-coverage-integrity-enforcement/04-14-COVERAGE.md`
 - `scripts/quality_gate.sh`
 - `scripts/tests/quality_gate_coverage_commands.sh`
 - `.github/workflows/quality-gate.yml`
@@ -30,10 +30,10 @@ Verdict: Partially satisfied. Canonical gate and CI enforcement remain intact, a
 - CI path: `.github/workflows/quality-gate.yml`
   - Installs `cargo-llvm-cov`
   - Runs `./scripts/quality_gate.sh` as canonical gate entrypoint
-- 04-13 artifacts confirm behavior-first scope, canonical truth capture, and residual handoff:
-  - `04-13-PLAN.md`
-  - `04-13-SUMMARY.md`
-  - `04-13-COVERAGE.md`
+- 04-14 artifacts confirm behavior-first cross-crate scope, canonical truth capture, and residual blocker ranking:
+  - `04-14-PLAN.md`
+  - `04-14-SUMMARY.md`
+  - `04-14-COVERAGE.md`
 
 ## Commands Executed (Fresh)
 
@@ -41,10 +41,10 @@ Verdict: Partially satisfied. Canonical gate and CI enforcement remain intact, a
   - Result: PASS (`coverage-command-contract: OK`, `coverage-threshold-fail: OK`, `quality_gate_coverage_commands: OK`)
 - `cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines 95`
   - Result: FAIL (`EXIT:1`)
-  - Observed total lines coverage: `73.44%`
+  - Observed total lines coverage: `76.61%`
 - `cargo llvm-cov --workspace --all-features --summary-only`
   - Result: PASS (`EXIT:0`)
-  - Observed total lines coverage: `73.44%`
+  - Observed total lines coverage: `76.61%`
 
 ## Requirement Validation
 
@@ -54,7 +54,7 @@ Requirement: gate enforces test coverage of at least 95% using `cargo llvm-cov`.
 
 Evidence:
 - Enforced in canonical gate (`scripts/quality_gate.sh`) with `--fail-under-lines 95`.
-- Fresh canonical fail-under run returns `EXIT:1` with total `73.44%`.
+- Fresh canonical fail-under run returns `EXIT:1` with total `76.61%`.
 
 Verdict: `gaps_found`.
 
@@ -73,21 +73,21 @@ Verdict: `passed`.
 Requirement: tests used to satisfy gate requirements validate real behavior and are not trivial assertion-only inflation.
 
 Evidence:
-- `04-13-PLAN.md` enforces behavior-first assertions and bounded hotspot closure scope.
-- `04-13-SUMMARY.md` reports non-trivial parser behavior checks for inline/worksheet/helpers/spreadsheet branches.
-- `04-13-COVERAGE.md` ties increment outcome to canonical runs and records targeted-module deltas.
+- `04-14-PLAN.md` enforces behavior-first assertions and cross-crate hotspot closure scope.
+- `04-14-SUMMARY.md` reports non-trivial assertions across docir-diff/docir-core utilities and CLI command behavior.
+- `04-14-COVERAGE.md` ties increment outcome to canonical runs and records full-workspace residual blockers.
 
 Verdict: `passed`.
 
 ## Gap Summary
 
-- Blocking gap: `CC-04` threshold not met; canonical workspace line coverage is `73.44%` vs required `95.00%`.
-- Delta vs 04-12 canonical baseline (`72.86%`): `+0.58` percentage points.
-- Remaining threshold delta: `21.56` percentage points.
+- Blocking gap: `CC-04` threshold not met; canonical workspace line coverage is `76.61%` vs required `95.00%`.
+- Delta vs 04-13 canonical baseline (`73.44%`): `+3.17` percentage points.
+- Remaining threshold delta: `18.39` percentage points.
 
 ## Next Action Path
 
-Phase 04 remains `gaps_found`. Continue hotspot closure from 04-13 residual evidence (`.planning/phases/04-coverage-integrity-enforcement/04-13-COVERAGE.md`) and prioritize highest missed-line modules.
+Phase 04 remains `gaps_found`. Continue hotspot closure from 04-14 residual evidence (`.planning/phases/04-coverage-integrity-enforcement/04-14-COVERAGE.md`) and prioritize highest missed-line modules.
 
 Re-run canonical truth commands after each test increment:
 
@@ -99,4 +99,4 @@ Phase 04 can move to `passed` only when fail-under returns `EXIT:0` with total `
 
 ## Completion Note
 
-Verification updated after 04-13 execution using canonical gate/CI paths, 04-13 artifacts, and fresh command evidence.
+Verification updated after 04-14 execution using canonical gate/CI paths, 04-14 artifacts, and fresh command evidence.

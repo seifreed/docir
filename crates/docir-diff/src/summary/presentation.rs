@@ -67,3 +67,158 @@ pub(crate) fn summarize(node: &IRNode, _store: &IrStore) -> Option<String> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::ir::{
+        HandoutMaster, NotesMaster, NotesSlide, PptxComment, PptxCommentAuthor, PresentationInfo,
+        PresentationProperties, PresentationTag, Shape, ShapeType, Slide, SlideLayout, SlideMaster,
+        SlideSize, TableStyleSet, ViewProperties,
+    };
+    use docir_core::types::NodeId;
+    use docir_core::visitor::IrStore;
+
+    #[test]
+    fn summarizes_supported_presentation_nodes() {
+        let store = IrStore::new();
+
+        let mut slide = Slide::new(3);
+        slide.name = Some("Agenda".to_string());
+        slide.hidden = true;
+        assert!(summarize(&IRNode::Slide(slide), &store)
+            .unwrap()
+            .contains("number=3"));
+
+        let mut shape = Shape::new(ShapeType::TextBox);
+        shape.name = Some("Title".to_string());
+        shape.hyperlink = Some("https://example.test".to_string());
+        assert!(summarize(&IRNode::Shape(shape), &store)
+            .unwrap()
+            .contains("name=Title"));
+
+        let mut master = SlideMaster::new();
+        master.shapes.push(NodeId::new());
+        master.layouts.push(NodeId::new());
+        assert_eq!(
+            summarize(&IRNode::SlideMaster(master), &store).unwrap(),
+            "shapes=1 layouts=1"
+        );
+
+        let mut layout = SlideLayout::new();
+        layout.shapes.push(NodeId::new());
+        assert_eq!(
+            summarize(&IRNode::SlideLayout(layout), &store).unwrap(),
+            "shapes=1"
+        );
+
+        let mut notes_master = NotesMaster::new();
+        notes_master.shapes.push(NodeId::new());
+        assert_eq!(
+            summarize(&IRNode::NotesMaster(notes_master), &store).unwrap(),
+            "shapes=1"
+        );
+
+        let mut handout = HandoutMaster::new();
+        handout.shapes.push(NodeId::new());
+        assert_eq!(
+            summarize(&IRNode::HandoutMaster(handout), &store).unwrap(),
+            "shapes=1"
+        );
+
+        let mut notes = NotesSlide::new();
+        notes.shapes.push(NodeId::new());
+        notes.text = Some("Speaker notes".to_string());
+        assert_eq!(
+            summarize(&IRNode::NotesSlide(notes), &store).unwrap(),
+            "shapes=1 text=Speaker notes"
+        );
+
+        let mut props = PresentationProperties::new();
+        props.auto_compress_pictures = Some(true);
+        props.compat_mode = Some("strict".to_string());
+        props.rtl = Some(false);
+        assert_eq!(
+            summarize(&IRNode::PresentationProperties(props), &store).unwrap(),
+            "auto_compress=true compat=strict rtl=false"
+        );
+
+        let mut view = ViewProperties::new();
+        view.last_view = Some("sldView".to_string());
+        view.zoom = Some(120);
+        assert_eq!(
+            summarize(&IRNode::ViewProperties(view), &store).unwrap(),
+            "last_view=sldView zoom=120"
+        );
+
+        let mut table_styles = TableStyleSet::new();
+        table_styles.default_style_id = Some("TableStyleMedium2".to_string());
+        table_styles.styles.push(docir_core::ir::TableStyle {
+            style_id: "TableStyleMedium2".to_string(),
+            name: Some("Medium".to_string()),
+        });
+        assert_eq!(
+            summarize(&IRNode::TableStyleSet(table_styles), &store).unwrap(),
+            "default=TableStyleMedium2 styles=1"
+        );
+
+        let author = PptxCommentAuthor {
+            id: NodeId::new(),
+            author_id: 9,
+            name: Some("Reviewer".to_string()),
+            initials: Some("RV".to_string()),
+            span: None,
+        };
+        assert_eq!(
+            summarize(&IRNode::PptxCommentAuthor(author), &store).unwrap(),
+            "author_id=9 name=Reviewer"
+        );
+
+        let comment = PptxComment {
+            id: NodeId::new(),
+            author_id: Some(9),
+            author_name: Some("Reviewer".to_string()),
+            author_initials: Some("RV".to_string()),
+            datetime: None,
+            text: "Looks good".to_string(),
+            span: None,
+        };
+        assert_eq!(
+            summarize(&IRNode::PptxComment(comment), &store).unwrap(),
+            "author_id=9 text=Looks good"
+        );
+
+        let tag = PresentationTag {
+            id: NodeId::new(),
+            name: "Env".to_string(),
+            value: Some("Prod".to_string()),
+            span: None,
+        };
+        assert_eq!(
+            summarize(&IRNode::PresentationTag(tag), &store).unwrap(),
+            "name=Env value=Prod"
+        );
+
+        let mut info = PresentationInfo::new();
+        info.slide_size = Some(SlideSize {
+            cx: 9144000,
+            cy: 6858000,
+            size_type: Some("screen4x3".to_string()),
+        });
+        info.notes_size = Some(SlideSize {
+            cx: 6858000,
+            cy: 9144000,
+            size_type: None,
+        });
+        info.show_type = Some("window".to_string());
+        assert_eq!(
+            summarize(&IRNode::PresentationInfo(info), &store).unwrap(),
+            "slide_size=9144000x6858000 notes_size=6858000x9144000 show_type=window"
+        );
+
+        assert!(summarize(&IRNode::Document(docir_core::ir::Document::new(
+            docir_core::types::DocumentFormat::WordProcessing
+        )), &store)
+        .is_none());
+    }
+}

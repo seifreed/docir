@@ -588,3 +588,143 @@ fn format_float(value: f64) -> String {
         format!("{:.4}", value)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::ir::{
+        Cell, CellFormula, CellValue, FormulaType, Hyperlink, Paragraph, Run, Shape, ShapeText,
+        ShapeTextParagraph, ShapeTextRun, ShapeType, Worksheet,
+    };
+    use docir_core::security::ExternalRefType;
+    use docir_core::types::{DocumentFormat, NodeId};
+    use docir_core::visitor::IrStore;
+
+    #[test]
+    fn helper_functions_are_deterministic() {
+        assert_eq!(opt_bool(Some(true)), "true");
+        assert_eq!(opt_bool(Some(false)), "false");
+        assert_eq!(opt_bool(None), "-");
+        assert_eq!(opt_u32(Some(42)), "42");
+        assert_eq!(opt_u32(None), "-");
+        assert_eq!(abbreviate("abc", 3), "abc");
+        assert_eq!(abbreviate("abcdef", 3), "abc...");
+        assert_eq!(format_float(2.0), "2");
+        assert_eq!(format_float(2.5), "2.5000");
+        assert_eq!(short_hash("same"), short_hash("same"));
+    }
+
+    #[test]
+    fn summarizes_primary_word_and_security_nodes() {
+        let store = IrStore::new();
+
+        let doc = IRNode::Document(docir_core::ir::Document::new(DocumentFormat::WordProcessing));
+        assert!(summarize_primary(&doc, &store)
+            .unwrap()
+            .contains("format=WordProcessing"));
+
+        let mut section = docir_core::ir::Section::new();
+        section.name = Some("Body".to_string());
+        assert!(summarize_primary(&IRNode::Section(section), &store)
+            .unwrap()
+            .contains("name=Body"));
+
+        let para_id = NodeId::new();
+        let mut with_store = IrStore::new();
+        let run = Run::new("Hello");
+        with_store.insert(IRNode::Run(run.clone()));
+        let mut para = Paragraph::new();
+        para.id = para_id;
+        para.runs.push(run.id);
+        assert!(summarize_primary(&IRNode::Paragraph(para), &with_store)
+            .unwrap()
+            .contains("text=\"Hello\""));
+
+        let run = Run::new("Run text");
+        assert!(summarize_primary(&IRNode::Run(run.clone()), &store)
+            .unwrap()
+            .contains("bold=-"));
+
+        let mut link = Hyperlink::new("https://example.test", true);
+        link.runs.push(run.id);
+        assert!(summarize_primary(&IRNode::Hyperlink(link), &with_store)
+            .unwrap()
+            .contains("external=true"));
+
+        let mut macro_project = docir_core::security::MacroProject::new();
+        macro_project.name = Some("VBA".to_string());
+        macro_project.has_auto_exec = true;
+        assert!(summarize_primary(&IRNode::MacroProject(macro_project), &store)
+            .unwrap()
+            .contains("auto_exec=true"));
+
+        let mut ext =
+            docir_core::security::ExternalReference::new(ExternalRefType::Hyperlink, "http://example.test");
+        ext.ref_type = ExternalRefType::Hyperlink;
+        assert!(summarize_primary(&IRNode::ExternalReference(ext), &store)
+            .unwrap()
+            .contains("target=http://example.test"));
+    }
+
+    #[test]
+    fn secondary_summary_and_signatures_cover_key_branches() {
+        let mut store = IrStore::new();
+        let run_a = Run::new("A");
+        let run_b = Run::new("B");
+        store.insert(IRNode::Run(run_a.clone()));
+        store.insert(IRNode::Run(run_b.clone()));
+
+        let mut para = Paragraph::new();
+        para.runs = vec![run_a.id, run_b.id];
+        let para_sig = content_signature(&IRNode::Paragraph(para), &store).unwrap();
+        assert_eq!(para_sig, "AB");
+
+        let mut cell = Cell::new("C3", 2, 2);
+        cell.value = CellValue::Number(9.0);
+        cell.formula = Some(CellFormula {
+            text: "SUM(A1:A2)".to_string(),
+            formula_type: FormulaType::Normal,
+            shared_index: None,
+            shared_ref: None,
+            is_array: false,
+            array_ref: None,
+        });
+        let cell_sig = content_signature(&IRNode::Cell(cell.clone()), &store).unwrap();
+        assert!(cell_sig.contains("C3=n:9;SUM(A1:A2)"));
+
+        let mut worksheet = Worksheet::new("Data", 1);
+        let cell_id = NodeId::new();
+        store.insert(IRNode::Cell(cell));
+        worksheet.cells.push(cell_id);
+        let ws_sig = content_signature(&IRNode::Worksheet(worksheet), &store).unwrap();
+        assert_eq!(ws_sig.len(), 16);
+
+        let shape = Shape {
+            text: Some(ShapeText {
+                paragraphs: vec![ShapeTextParagraph {
+                    runs: vec![ShapeTextRun {
+                        text: "Title".to_string(),
+                        bold: None,
+                        italic: None,
+                        font_size: None,
+                        font_family: None,
+                    }],
+                    alignment: None,
+                }],
+            }),
+            ..Shape::new(ShapeType::TextBox)
+        };
+        assert_eq!(
+            content_signature(&IRNode::Shape(shape.clone()), &store).unwrap(),
+            "Title"
+        );
+        assert!(style_signature(&IRNode::Shape(shape), &store)
+            .unwrap()
+            .contains("has_text=true"));
+
+        let secondary = summarize_secondary(&IRNode::CommentExtensionSet(
+            docir_core::ir::CommentExtensionSet::new(),
+        ));
+        assert_eq!(secondary, "entries=0");
+    }
+}

@@ -374,3 +374,136 @@ impl IrVisitor for NodeCounter {
         Ok(VisitControl::Continue)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::security::ExternalRefType;
+
+    #[test]
+    fn text_collector_adds_newline_between_paragraphs() {
+        let mut collector = TextCollector::new();
+        collector.visit_run(&Run::new("hello")).unwrap();
+        collector.visit_paragraph(&Paragraph::new()).unwrap();
+        collector.visit_run(&Run::new("world")).unwrap();
+        assert_eq!(collector.text, "hello\nworld");
+    }
+
+    #[test]
+    fn node_counter_counts_supported_nodes() {
+        let mut counter = NodeCounter::new();
+
+        counter
+            .visit_document(&Document::new(crate::types::DocumentFormat::WordProcessing))
+            .unwrap();
+        counter.visit_section(&Section::new()).unwrap();
+        counter.visit_paragraph(&Paragraph::new()).unwrap();
+        counter.visit_run(&Run::new("t")).unwrap();
+        counter.visit_table(&Table::new()).unwrap();
+        counter.visit_table_row(&TableRow::new()).unwrap();
+        counter.visit_table_cell(&TableCell::new()).unwrap();
+        counter.visit_slide(&Slide::new(1)).unwrap();
+        counter.visit_worksheet(&Worksheet::new("Sheet1", 1)).unwrap();
+        counter.visit_cell(&Cell::new("A1", 0, 0)).unwrap();
+        counter.visit_calc_chain(&CalcChain::new()).unwrap();
+        counter
+            .visit_sheet_comment(&SheetComment::new("A1", "comment"))
+            .unwrap();
+        counter.visit_sheet_metadata(&SheetMetadata::new()).unwrap();
+        counter.visit_macro_project(&MacroProject::new()).unwrap();
+        counter.visit_ole_object(&OleObject::new()).unwrap();
+        counter
+            .visit_external_ref(&ExternalReference::new(
+                ExternalRefType::Hyperlink,
+                "https://example.test",
+            ))
+            .unwrap();
+        counter.visit_style_set(&StyleSet::new()).unwrap();
+        counter.visit_numbering_set(&NumberingSet::new()).unwrap();
+        counter.visit_comment(&Comment::new("1")).unwrap();
+        counter.visit_footnote(&Footnote::new("1")).unwrap();
+        counter.visit_endnote(&Endnote::new("1")).unwrap();
+        counter.visit_header(&Header::new()).unwrap();
+        counter.visit_footer(&Footer::new()).unwrap();
+        counter.visit_word_settings(&WordSettings::new()).unwrap();
+        counter.visit_web_settings(&WebSettings::new()).unwrap();
+        counter.visit_font_table(&FontTable::new()).unwrap();
+        counter.visit_content_control(&ContentControl::new()).unwrap();
+        counter.visit_people_part(&PeoplePart::new()).unwrap();
+        counter.visit_web_extension(&WebExtension::new()).unwrap();
+        counter
+            .visit_web_extension_taskpane(&WebExtensionTaskpane::new())
+            .unwrap();
+        counter
+            .visit_glossary_document(&GlossaryDocument::new())
+            .unwrap();
+        counter.visit_glossary_entry(&GlossaryEntry::new()).unwrap();
+        counter.visit_vml_drawing(&VmlDrawing::new("vml.xml")).unwrap();
+        counter.visit_vml_shape(&VmlShape::new()).unwrap();
+        counter
+            .visit_drawing_part(&DrawingPart::new("drawing.xml"))
+            .unwrap();
+        counter
+            .visit_external_link_part(&ExternalLinkPart::new())
+            .unwrap();
+        counter
+            .visit_connection_part(&ConnectionPart::new())
+            .unwrap();
+        counter.visit_slicer_part(&SlicerPart::new()).unwrap();
+        counter.visit_timeline_part(&TimelinePart::new()).unwrap();
+        counter
+            .visit_query_table_part(&QueryTablePart::new())
+            .unwrap();
+        counter
+            .visit_presentation_info(&PresentationInfo::new())
+            .unwrap();
+        counter.visit_bookmark_start(&BookmarkStart::new("b1")).unwrap();
+        counter.visit_bookmark_end(&BookmarkEnd::new("b1")).unwrap();
+        counter.visit_field(&Field::new(Some("DATE".to_string()))).unwrap();
+        counter
+            .visit_revision(&Revision::new(RevisionType::Insert))
+            .unwrap();
+        counter
+            .visit_comment_extension_set(&CommentExtensionSet::new())
+            .unwrap();
+        counter.visit_comment_id_map(&CommentIdMap::new()).unwrap();
+        counter.visit_slide_master(&SlideMaster::new()).unwrap();
+        counter.visit_slide_layout(&SlideLayout::new()).unwrap();
+        counter.visit_notes_master(&NotesMaster::new()).unwrap();
+        counter.visit_handout_master(&HandoutMaster::new()).unwrap();
+        counter.visit_notes_slide(&NotesSlide::new()).unwrap();
+        counter
+            .visit_worksheet_drawing(&WorksheetDrawing::new())
+            .unwrap();
+        counter.visit_chart_data(&ChartData::new()).unwrap();
+        counter.visit_metadata(&DocumentMetadata::new()).unwrap();
+        counter.visit_theme(&Theme::new()).unwrap();
+        counter
+            .visit_media_asset(&MediaAsset::new(
+                "m.bin",
+                crate::ir::MediaType::Other,
+                1,
+            ))
+            .unwrap();
+        counter
+            .visit_custom_xml_part(&CustomXmlPart::new("custom.xml", 1))
+            .unwrap();
+        counter
+            .visit_relationship_graph(&RelationshipGraph::new("xl/workbook.xml"))
+            .unwrap();
+        counter
+            .visit_digital_signature(&crate::ir::DigitalSignature::new())
+            .unwrap();
+        counter
+            .visit_extension_part(&ExtensionPart::new(
+                "ext.bin",
+                7,
+                crate::ir::ExtensionPartKind::Unknown,
+            ))
+            .unwrap();
+
+        assert_eq!(counter.counts.get("Document"), Some(&1));
+        assert_eq!(counter.counts.get("Run"), Some(&1));
+        assert_eq!(counter.counts.get("ExtensionPart"), Some(&1));
+    }
+}

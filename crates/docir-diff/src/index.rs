@@ -259,3 +259,64 @@ fn intrinsic_key_security(node: &IRNode) -> Option<String> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::ir::{Cell, Document, IRNode, Paragraph, Run, Worksheet};
+    use docir_core::types::DocumentFormat;
+    use docir_core::visitor::IrStore;
+
+    #[test]
+    fn build_index_assigns_stable_paths_and_snapshots() {
+        let mut store = IrStore::new();
+        let mut doc = Document::new(DocumentFormat::Spreadsheet);
+
+        let mut ws = Worksheet::new("Sheet1", 1);
+        let mut cell = Cell::new("A1", 0, 0);
+        cell.value = docir_core::ir::CellValue::String("alpha".to_string());
+
+        let ws_id = ws.id;
+        let cell_id = cell.id;
+        ws.cells.push(cell_id);
+        doc.content.push(ws_id);
+
+        store.insert(IRNode::Document(doc.clone()));
+        store.insert(IRNode::Worksheet(ws.clone()));
+        store.insert(IRNode::Cell(cell.clone()));
+
+        let index = build_index(&store, doc.id);
+        assert!(index.keys().any(|k| k.contains("Worksheet[Sheet1]")));
+        assert!(index.keys().any(|k| k.contains("Cell[A1]")));
+
+        let cell_key = index
+            .keys()
+            .find(|k| k.contains("Cell[A1]"))
+            .expect("cell key must exist");
+        let snapshot = index.get(cell_key).expect("snapshot for cell");
+        assert_eq!(snapshot.node_type, docir_core::types::NodeType::Cell);
+        assert!(snapshot.summary.contains("ref=A1"));
+    }
+
+    #[test]
+    fn local_key_with_index_disambiguates_duplicate_nodes() {
+        let mut store = IrStore::new();
+        let run_a = Run::new("same");
+        let run_b = Run::new("same");
+        let mut para = Paragraph::new();
+        para.runs = vec![run_a.id, run_b.id];
+
+        store.insert(IRNode::Paragraph(para.clone()));
+        store.insert(IRNode::Run(run_a));
+        store.insert(IRNode::Run(run_b));
+
+        let index = build_index(&store, para.id);
+        let run_keys: Vec<_> = index
+            .keys()
+            .filter(|k| k.contains("Run["))
+            .cloned()
+            .collect();
+        assert_eq!(run_keys.len(), 2);
+        assert_ne!(run_keys[0], run_keys[1]);
+    }
+}

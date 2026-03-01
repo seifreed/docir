@@ -172,3 +172,246 @@ fn summarize_query_table(part: &docir_core::ir::QueryTablePart) -> String {
         opt_str(&part.url)
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::ir::{
+        CalcChain, CalcChainEntry, Cell, ChartData, ConditionalFormat, DataValidation, DefinedName,
+        ExternalLinkPart, PivotCache, PivotCacheRecords, PivotTable, QueryTablePart, SharedStringItem,
+        SharedStringTable, SheetComment, SheetMetadata, SheetMetadataType, SlicerPart, SpreadsheetStyles,
+        TableColumn, TableDefinition, TimelinePart, WorkbookProperties, Worksheet, WorksheetDrawing,
+    };
+    use docir_core::types::NodeId;
+    use docir_core::visitor::IrStore;
+
+    #[test]
+    fn summarizes_supported_spreadsheet_nodes() {
+        let store = IrStore::new();
+
+        let mut sheet = Worksheet::new("Sheet1", 1);
+        sheet.merged_cells.push(docir_core::ir::MergedCellRange {
+            start_col: 0,
+            start_row: 0,
+            end_col: 1,
+            end_row: 1,
+        });
+        assert!(summarize(&IRNode::Worksheet(sheet), &store)
+            .unwrap()
+            .contains("name=Sheet1"));
+
+        let mut cell = Cell::new("B2", 1, 1);
+        cell.value = docir_core::ir::CellValue::String("value".to_string());
+        assert!(summarize(&IRNode::Cell(cell), &store)
+            .unwrap()
+            .contains("ref=B2"));
+
+        let mut sst = SharedStringTable::new();
+        sst.items.push(SharedStringItem {
+            text: "alpha".to_string(),
+            runs: vec![],
+        });
+        assert_eq!(
+            summarize(&IRNode::SharedStringTable(sst), &store).unwrap(),
+            "items=1"
+        );
+
+        let mut conn = docir_core::ir::ConnectionPart::new();
+        conn.entries.push(docir_core::ir::ConnectionEntry::new());
+        assert_eq!(
+            summarize(&IRNode::ConnectionPart(conn), &store).unwrap(),
+            "connections=1"
+        );
+
+        let mut styles = SpreadsheetStyles::new();
+        styles.table_styles = Some(docir_core::ir::TableStyleInfo {
+            count: Some(1),
+            default_table_style: Some("TableStyleLight1".to_string()),
+            default_pivot_style: None,
+            styles: vec![],
+        });
+        assert!(summarize(&IRNode::SpreadsheetStyles(styles), &store)
+            .unwrap()
+            .contains("table_styles=TableStyleLight1"));
+
+        let def_name = DefinedName {
+            id: NodeId::new(),
+            name: "NamedRange".to_string(),
+            value: "Sheet1!$A$1".to_string(),
+            local_sheet_id: Some(2),
+            hidden: false,
+            comment: None,
+            span: None,
+        };
+        assert_eq!(
+            summarize(&IRNode::DefinedName(def_name), &store).unwrap(),
+            "name=NamedRange scope=sheet:2"
+        );
+
+        let cond = ConditionalFormat {
+            id: NodeId::new(),
+            ranges: vec!["A1:A3".to_string()],
+            rules: vec![],
+            span: None,
+        };
+        assert_eq!(
+            summarize(&IRNode::ConditionalFormat(cond), &store).unwrap(),
+            "ranges=1 rules=0"
+        );
+
+        let validation = DataValidation {
+            id: NodeId::new(),
+            validation_type: Some("list".to_string()),
+            operator: None,
+            allow_blank: false,
+            show_input_message: false,
+            show_error_message: false,
+            error_title: None,
+            error: None,
+            prompt_title: None,
+            prompt: None,
+            ranges: vec!["C1:C5".to_string()],
+            formula1: None,
+            formula2: None,
+            span: None,
+        };
+        assert_eq!(
+            summarize(&IRNode::DataValidation(validation), &store).unwrap(),
+            "ranges=1 type=list"
+        );
+
+        let table = TableDefinition {
+            id: NodeId::new(),
+            name: Some("Table1".to_string()),
+            display_name: Some("Sales".to_string()),
+            ref_range: Some("A1:B10".to_string()),
+            header_row_count: Some(1),
+            totals_row_count: Some(0),
+            columns: vec![TableColumn {
+                id: 1,
+                name: Some("Amount".to_string()),
+                totals_row_label: None,
+                totals_row_function: None,
+            }],
+            span: None,
+        };
+        assert_eq!(
+            summarize(&IRNode::TableDefinition(table), &store).unwrap(),
+            "name=Sales cols=1 ref=A1:B10"
+        );
+
+        let pivot = PivotTable {
+            id: NodeId::new(),
+            name: Some("Pivot1".to_string()),
+            cache_id: Some(7),
+            ref_range: None,
+            span: None,
+        };
+        assert_eq!(
+            summarize(&IRNode::PivotTable(pivot), &store).unwrap(),
+            "name=Pivot1 cache_id=7"
+        );
+
+        let mut cache = PivotCache::new(7);
+        cache.cache_source = Some("A1:B10".to_string());
+        assert_eq!(
+            summarize(&IRNode::PivotCache(cache), &store).unwrap(),
+            "cache_id=7 source=A1:B10"
+        );
+
+        let mut records = PivotCacheRecords::new();
+        records.record_count = Some(11);
+        records.field_count = Some(3);
+        assert_eq!(
+            summarize(&IRNode::PivotCacheRecords(records), &store).unwrap(),
+            "records=11 fields=3"
+        );
+
+        let mut props = WorkbookProperties::new();
+        props.calc_mode = Some("auto".to_string());
+        props.workbook_protected = true;
+        assert_eq!(
+            summarize(&IRNode::WorkbookProperties(props), &store).unwrap(),
+            "calc_mode=auto protected=true"
+        );
+
+        let mut chain = CalcChain::new();
+        chain.entries.push(CalcChainEntry {
+            cell_ref: "A1".to_string(),
+            sheet_id: Some(1),
+            index: None,
+            level: None,
+            new_value: None,
+        });
+        assert_eq!(summarize(&IRNode::CalcChain(chain), &store).unwrap(), "entries=1");
+
+        let mut comment = SheetComment::new("A1", "Very long comment");
+        comment.author = Some("Alice".to_string());
+        assert!(summarize(&IRNode::SheetComment(comment), &store)
+            .unwrap()
+            .contains("author=Alice"));
+
+        let mut metadata = SheetMetadata::new();
+        metadata.metadata_types.push(SheetMetadataType::new());
+        metadata.cell_metadata_count = Some(2);
+        metadata.value_metadata_count = Some(4);
+        assert_eq!(
+            summarize(&IRNode::SheetMetadata(metadata), &store).unwrap(),
+            "types=1 cell_count=2 value_count=4"
+        );
+
+        let mut drawing = WorksheetDrawing::new();
+        drawing.shapes.push(NodeId::new());
+        assert_eq!(
+            summarize(&IRNode::WorksheetDrawing(drawing), &store).unwrap(),
+            "shapes=1"
+        );
+
+        let mut chart = ChartData::new();
+        chart.chart_type = Some("bar".to_string());
+        chart.series.push("Revenue".to_string());
+        chart.series_data.push(docir_core::ir::ChartSeries::new());
+        assert_eq!(
+            summarize(&IRNode::ChartData(chart), &store).unwrap(),
+            "type=bar series=1 series_data=1"
+        );
+
+        let mut ext = ExternalLinkPart::new();
+        ext.link_type = Some("externalWorkbook".to_string());
+        ext.target = Some("http://example.test".to_string());
+        ext.sheets.push(docir_core::ir::ExternalLinkSheet {
+            name: Some("Sheet1".to_string()),
+            r_id: None,
+        });
+        assert_eq!(
+            summarize(&IRNode::ExternalLinkPart(ext), &store).unwrap(),
+            "type=externalWorkbook target=http://example.test sheets=1"
+        );
+
+        let mut slicer = SlicerPart::new();
+        slicer.name = Some("Region".to_string());
+        slicer.caption = Some("Region".to_string());
+        slicer.cache_id = Some("Cache1".to_string());
+        assert_eq!(
+            summarize(&IRNode::SlicerPart(slicer), &store).unwrap(),
+            "name=Region caption=Region cache_id=Cache1"
+        );
+
+        let mut timeline = TimelinePart::new();
+        timeline.name = Some("Date".to_string());
+        timeline.cache_id = Some("Cache2".to_string());
+        assert_eq!(
+            summarize(&IRNode::TimelinePart(timeline), &store).unwrap(),
+            "name=Date cache_id=Cache2"
+        );
+
+        let mut query = QueryTablePart::new();
+        query.name = Some("WebQuery".to_string());
+        query.connection_id = Some("1".to_string());
+        query.url = Some("https://example.test/data.csv".to_string());
+        assert_eq!(
+            summarize(&IRNode::QueryTablePart(query), &store).unwrap(),
+            "name=WebQuery connection_id=1 url=https://example.test/data.csv"
+        );
+    }
+}
