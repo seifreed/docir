@@ -90,6 +90,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] `04-15-PLAN.md` - Cross-crate hotspot closure in docir-diff/docir-rules with canonical re-measure.
 - [x] `04-16-PLAN.md` - Parser hotspot closure in hwp legacy helpers with canonical re-measure.
 - [x] `04-17-PLAN.md` - Cross-crate index hotspot closure with canonical re-measure and refreshed ranking.
+- [x] `04-18-PLAN.md` - Utility hotspot closure in diff/core/parser/rules with canonical re-measure and blocker logging.
+- [x] `04-19-PLAN.md` - Parser `rtf/core.rs` hotspot closure with canonical re-measure and refreshed ranking.
 
 ### Phase 5: Forbidden Construct Policy
 **Goal**: Canonical runs reject prohibited constructs that undermine reliability and maintainability.
@@ -154,7 +156,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | 1. Canonical Gate Surface | 3/3 | Complete | 2026-02-28 |
 | 2. Workflow Routing | 4/4 | Complete | 2026-02-28 |
 | 3. Baseline Clean Code Commands | 2/2 | Complete | 2026-02-28 |
-| 4. Coverage Integrity Enforcement | 17/17 | In progress (executed; canonical threshold unmet) | - |
+| 4. Coverage Integrity Enforcement | 19/19 | In progress (executed; canonical threshold unmet) | - |
 | 5. Forbidden Construct Policy | 0/TBD | Not started | - |
 | 6. Code Hygiene and Complexity Policy | 0/TBD | Not started | - |
 | 7. Architecture Policy Definition | 0/TBD | Not started | - |

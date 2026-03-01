@@ -853,4 +853,184 @@ mod tests {
         assert_eq!(param, None);
         assert_eq!(cursor.peek(), None);
     }
+
+    #[test]
+    fn handle_run_style_and_field_controls_cover_major_branches() {
+        let mut ctx = RtfParseContext::new(256, 1024);
+        let mut store = IrStore::new();
+
+        assert!(handle_run_style_controls("b", Some(1), &mut ctx));
+        assert!(handle_run_style_controls("i", Some(1), &mut ctx));
+        assert!(handle_run_style_controls("ul", Some(1), &mut ctx));
+        assert!(handle_run_style_controls("ulnone", None, &mut ctx));
+        assert!(handle_run_style_controls("strike", Some(0), &mut ctx));
+        assert!(handle_run_style_controls("fs", Some(24), &mut ctx));
+        assert!(handle_run_style_controls("f", Some(2), &mut ctx));
+        assert!(handle_run_style_controls("cf", Some(3), &mut ctx));
+        assert!(handle_run_style_controls("highlight", Some(4), &mut ctx));
+        assert!(handle_run_style_controls("super", None, &mut ctx));
+        assert!(handle_run_style_controls("sub", None, &mut ctx));
+        assert!(handle_run_style_controls("nosupersub", None, &mut ctx));
+        assert!(!handle_run_style_controls("unknown", None, &mut ctx));
+
+        assert_eq!(ctx.current_props.bold, Some(true));
+        assert_eq!(ctx.current_props.italic, Some(true));
+        assert_eq!(ctx.current_props.underline, Some(false));
+        assert_eq!(ctx.current_props.strike, Some(false));
+        assert_eq!(ctx.current_props.font_size, Some(24));
+        assert_eq!(ctx.current_props.font_index, Some(2));
+        assert_eq!(ctx.current_props.color_index, Some(3));
+        assert_eq!(ctx.current_props.highlight_index, Some(4));
+        assert_eq!(
+            ctx.current_props.vertical,
+            Some(docir_core::ir::VerticalTextAlignment::Baseline)
+        );
+
+        assert!(handle_field_controls("field", &mut ctx));
+        assert_eq!(ctx.current_group_kind(), GroupKind::Field);
+        ctx.current_text = "inst".to_string();
+        assert!(handle_field_controls("fldinst", &mut ctx));
+        assert_eq!(ctx.current_group_kind(), GroupKind::FieldInst);
+        assert!(ctx.current_text.is_empty());
+        ctx.current_text = "result".to_string();
+        assert!(handle_field_controls("fldrslt", &mut ctx));
+        assert_eq!(ctx.current_group_kind(), GroupKind::FieldResult);
+        assert!(ctx.current_text.is_empty());
+        assert!(!handle_field_controls("other", &mut ctx));
+
+        assert!(handle_control_word("fcharset", Some(0), &mut ctx, &mut store).is_ok());
+    }
+
+    #[test]
+    fn finalize_field_and_style_and_list_helpers_cover_fallback_paths() {
+        let mut ctx = RtfParseContext::new(256, 1024);
+        let mut store = IrStore::new();
+
+        ctx.field_stack.push(FieldContext {
+            instruction: "DATE".to_string(),
+            runs: vec![],
+        });
+        finalize_field(&mut ctx, &mut store);
+        let has_field = store.values().any(|node| {
+            matches!(
+                node,
+                IRNode::Field(field) if field.instruction.as_deref() == Some("DATE")
+            )
+        });
+        assert!(has_field);
+
+        ctx.current_style = Some(StyleEntryContext {
+            style_id: Some("s1".to_string()),
+            style_type: Some(StyleType::Paragraph),
+            name_buf: "Heading".to_string(),
+        });
+        finalize_style_entry(&mut ctx);
+        let set = ctx.style_set.as_ref().expect("style set created");
+        assert_eq!(set.styles.len(), 1);
+        assert_eq!(set.styles[0].style_id, "s1");
+
+        ctx.current_style = Some(StyleEntryContext {
+            style_id: None,
+            style_type: None,
+            name_buf: " ".to_string(),
+        });
+        finalize_style_entry(&mut ctx);
+        assert_eq!(ctx.style_set.as_ref().expect("style set").styles.len(), 1);
+
+        ctx.current_list_id = Some(9);
+        ctx.current_list_level = 3;
+        finalize_list_entry(&mut ctx);
+        assert_eq!(ctx.list_levels.get(&9), Some(&3));
+        assert_eq!(ctx.current_list_id, None);
+        assert_eq!(ctx.current_list_level, 0);
+
+        ctx.current_list_override = Some(7);
+        ctx.current_list_override_list_id = Some(9);
+        finalize_list_override(&mut ctx);
+        assert_eq!(ctx.list_overrides.get(&7), Some(&9));
+
+        ctx.current_list_override = None;
+        ctx.current_list_override_list_id = Some(9);
+        finalize_list_override(&mut ctx);
+        assert_eq!(ctx.list_overrides.get(&7), Some(&9));
+    }
+
+    #[test]
+    fn border_width_and_run_properties_helpers_cover_remaining_branches() {
+        let mut ctx = RtfParseContext::new(256, 1024);
+        let mut store = IrStore::new();
+
+        ctx.pending_border_target = Some(BorderTarget::Top);
+        ctx.pending_cell_props = Some(TableCellProperties::default());
+        ctx.pending_border = Border {
+            style: BorderStyle::Single,
+            width: Some(12),
+            color: Some("FF0000".to_string()),
+        };
+        apply_border(&mut ctx);
+        let top = ctx
+            .pending_cell_props
+            .as_ref()
+            .and_then(|p| p.borders.as_ref())
+            .and_then(|b| b.top.as_ref());
+        assert!(top.is_some());
+
+        ctx.pending_para_border_target = Some(BorderTarget::Left);
+        ctx.pending_para_border = Border {
+            style: BorderStyle::Double,
+            width: Some(8),
+            color: Some("00FF00".to_string()),
+        };
+        apply_border(&mut ctx);
+        assert!(ctx.pending_para_borders.left.is_some());
+
+        let mut para = Paragraph::new();
+        para.span = Some(SourceSpan::new("rtf"));
+        ctx.current_paragraph = Some(para);
+        ctx.pending_para_border_target = Some(BorderTarget::Right);
+        apply_paragraph_border(&mut ctx);
+        assert!(
+            ctx.current_paragraph
+                .as_ref()
+                .and_then(|p| p.properties.borders.as_ref())
+                .and_then(|b| b.right.as_ref())
+                .is_some()
+        );
+
+        ctx.row_cellx = vec![120, 300];
+        ctx.current_cell_index = 1;
+        let width = cell_width_from_row(&ctx).expect("width");
+        assert_eq!(width.value, 180);
+        assert!(matches!(width.width_type, TableWidthType::Dxa));
+
+        ctx.current_row = Some(TableRow::new());
+        ctx.current_cell = Some(TableCell::new());
+        ctx.pending_cell_props = Some(TableCellProperties::default());
+        finalize_cell(&mut ctx, &mut store);
+        assert_eq!(
+            ctx.current_row
+                .as_ref()
+                .map(|row| row.cells.len())
+                .unwrap_or_default(),
+            1
+        );
+
+        ctx.current_section = Some(NodeId::new());
+        finalize_section(&mut ctx, &mut store);
+
+        ctx.font_table.fonts.insert(1, "Calibri".to_string());
+        ctx.color_table.colors = vec![None, Some("112233".to_string()), Some("AABBCC".to_string())];
+        ctx.current_props.font_index = Some(1);
+        ctx.current_props.color_index = Some(1);
+        ctx.current_props.highlight_index = Some(2);
+        ctx.current_props.underline = Some(true);
+        let props = run_properties_from_state(&ctx);
+        assert_eq!(props.font_family.as_deref(), Some("Calibri"));
+        assert_eq!(props.color.as_deref(), Some("112233"));
+        assert_eq!(props.highlight.as_deref(), Some("AABBCC"));
+        assert_eq!(
+            props.underline,
+            Some(docir_core::ir::UnderlineStyle::Single)
+        );
+    }
 }
