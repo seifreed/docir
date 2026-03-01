@@ -59,7 +59,7 @@ Each task was committed atomically:
 2. **Task 2: Expand worksheet/helpers behavior coverage for residual fallback semantics** - `90264a1` (test)
 3. **Task 3: Re-run canonical coverage and publish bounded 04-11 evidence** - `30c206f` (feat)
 
-**Plan metadata:** `88d0c62` (docs)
+**Plan metadata:** `88d0c62`, `bfcbf5b` (docs)
 
 ## Files Created/Modified
 
