@@ -150,11 +150,18 @@ fn build_ooxml_indicators(
         ));
     }
 
+    // Track which OLE object IDs have already been reported as ActiveX
+    // to avoid duplicate indicators when both ole_objects and activex_controls
+    // reference the same entity.
+    let mut reported_activex_ids: std::collections::HashSet<NodeId> =
+        std::collections::HashSet::new();
+
     for id in &security.ole_objects {
         let Some(IRNode::OleObject(ole)) = store.get(*id) else {
             continue;
         };
         if is_activex_ole(ole) {
+            reported_activex_ids.insert(*id);
             let (location, description) = ole_indicator_details(
                 "ActiveX control binary found at",
                 "ActiveX control binary found",
@@ -181,6 +188,9 @@ fn build_ooxml_indicators(
     }
 
     for id in &security.activex_controls {
+        if reported_activex_ids.contains(id) {
+            continue;
+        }
         let Some(IRNode::ActiveXControl(control)) = store.get(*id) else {
             continue;
         };
@@ -328,7 +338,8 @@ mod tests {
                 && i.description.contains("DDE formula")
                 && i.location.as_deref() == Some("content.xml")
         }));
-        assert!(!indicators.iter().any(|i| {
+        // file:// is now also flagged as remote (security improvement)
+        assert!(indicators.iter().any(|i| {
             i.indicator_type == ThreatIndicatorType::RemoteResource
                 && i.description.contains("file:///tmp/local")
         }));

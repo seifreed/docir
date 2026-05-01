@@ -22,9 +22,10 @@ impl IrStore {
     }
 
     /// Inserts a node into the store.
-    pub fn insert(&mut self, node: IRNode) {
+    /// Returns the previous node with the same ID, if any.
+    pub fn insert(&mut self, node: IRNode) -> Option<IRNode> {
         let id = node.node_id();
-        self.nodes.insert(id, node);
+        self.nodes.insert(id, node)
     }
 
     /// Gets a node by ID.

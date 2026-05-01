@@ -30,6 +30,17 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<OleHeader, ParseError> {
             "OLE header sector shift overflow".to_string(),
         ));
     }
+    // CFB spec: sector_shift must be 9 (v3) or 12 (v4); mini_sector_shift must be 6.
+    if sector_shift < 9 {
+        return Err(ParseError::InvalidStructure(
+            "OLE header sector shift too small (minimum 9)".to_string(),
+        ));
+    }
+    if mini_sector_shift < 6 {
+        return Err(ParseError::InvalidStructure(
+            "OLE header mini sector shift too small (minimum 6)".to_string(),
+        ));
+    }
     Ok(OleHeader {
         sector_size: 1u32 << sector_shift,
         mini_sector_size: 1u32 << mini_sector_shift,

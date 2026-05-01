@@ -98,8 +98,10 @@ pub(super) fn apply_xlm_defined_name_targets(
     }
 
     if has_unresolved_target && !any_marked {
-        for macro_entry in security.xlm_macros.iter_mut() {
-            macro_entry.has_auto_open = true;
+        // Mark only the first macro as auto_open when the target is unresolved,
+        // rather than flagging all macros as a false-positive cascade.
+        if let Some(first) = security.xlm_macros.first_mut() {
+            first.has_auto_open = true;
         }
     }
 
@@ -254,7 +256,9 @@ mod tests {
         let mut indicators = Vec::new();
         apply_xlm_defined_name_targets(&store, &mut security, &mut indicators);
 
-        assert!(security.xlm_macros.iter().all(|m| m.has_auto_open));
+        // Only first macro marked when target is unresolved (not all macros)
+        assert!(security.xlm_macros[0].has_auto_open);
+        assert!(!security.xlm_macros[1].has_auto_open);
         assert_eq!(indicators.len(), 1);
     }
 }

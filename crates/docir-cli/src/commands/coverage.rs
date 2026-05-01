@@ -284,7 +284,7 @@ fn write_csv_entries(out: &mut String, section: &str, entries: &[DiagnosticEntry
 }
 
 fn escape_csv(value: &str) -> String {
-    if value.contains(',') || value.contains('"') || value.contains('\n') {
+    if value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r') {
         let escaped = value.replace('"', "\"\"");
         format!("\"{escaped}\"")
     } else {

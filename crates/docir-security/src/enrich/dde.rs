@@ -14,7 +14,15 @@ pub(super) fn parse_dde_instruction(instruction: &str) -> Option<DdeField> {
     let parts = extract_quoted_parts(instruction);
     let application = parts.first().cloned().unwrap_or_default();
     if application.is_empty() {
-        return None;
+        // DDE field without quoted arguments: still flag it with a generic description.
+        return Some(DdeField {
+            field_type,
+            application: "unknown".to_string(),
+            topic: None,
+            item: None,
+            instruction: instruction.to_string(),
+            location: None,
+        });
     }
     let topic = parts.get(1).cloned().unwrap_or_default();
     let item = parts.get(2).cloned().unwrap_or_default();
@@ -89,8 +97,12 @@ mod tests {
 
     #[test]
     fn parse_dde_instruction_rejects_empty_application() {
-        assert!(parse_dde_instruction(r#"DDEAUTO "" "/c calc" "A1""#).is_none());
-        assert!(parse_dde_instruction("DDE").is_none());
+        // DDE with empty quoted app still flags as "unknown" to avoid false negatives
+        let result = parse_dde_instruction(r#"DDEAUTO "" "/c calc" "A1""#);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().application, "unknown");
+        assert!(parse_dde_instruction("DDE").is_some());
+        assert!(parse_dde_instruction("HYPERLINK").is_none());
     }
 
     #[test]

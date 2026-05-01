@@ -31,7 +31,7 @@ mod tests {
         assert_eq!(abbreviate("abc", 3), "abc");
         assert_eq!(abbreviate("abcdef", 3), "abc...");
         assert_eq!(format_float(2.0), "2");
-        assert_eq!(format_float(2.5), "2.5000");
+        assert_eq!(format_float(2.5), "2.500000");
         assert_eq!(short_hash("same"), short_hash("same"));
     }
 

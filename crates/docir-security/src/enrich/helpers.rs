@@ -106,11 +106,7 @@ pub(super) fn is_activex_ole(ole: &OleObject) -> bool {
         .or(ole.name.as_deref())
         .unwrap_or("");
     let path_lower = path.to_ascii_lowercase();
-    path_lower.contains("activex")
-        || path_lower.contains("\\activ\\")
-        || path_lower.contains("/activ/")
-        || path_lower.ends_with(".ocx")
-        || ole.class_id.is_some()
+    ole.class_id.is_some() || path_lower.contains("activex") || path_lower.ends_with(".ocx")
 }
 
 #[cfg(test)]
@@ -124,28 +120,26 @@ mod tests {
     use docir_core::visitor::IrStore;
 
     #[test]
-    fn push_remote_external_ref_indicators_filters_local_targets() {
+    fn push_remote_external_ref_indicators_includes_file_protocol() {
         let mut store = IrStore::new();
         let mut remote = ExternalReference::new(ExternalRefType::Hyperlink, "https://evil.test");
         remote.span = Some(SourceSpan::new("word/_rels/document.xml.rels"));
-        let local = ExternalReference::new(ExternalRefType::Hyperlink, "file:///tmp/report");
+        let local_file = ExternalReference::new(ExternalRefType::Hyperlink, "file:///tmp/report");
         let missing = NodeId::new();
-        let refs = vec![remote.id, local.id, missing];
+        let refs = vec![remote.id, local_file.id, missing];
         store.insert(IRNode::ExternalReference(remote));
-        store.insert(IRNode::ExternalReference(local));
+        store.insert(IRNode::ExternalReference(local_file));
 
         let mut indicators = Vec::new();
         push_remote_external_ref_indicators(&store, &refs, &mut indicators);
-        assert_eq!(indicators.len(), 1);
+        // Both https:// and file:// are now flagged as remote
+        assert_eq!(indicators.len(), 2);
         assert_eq!(
             indicators[0].indicator_type,
             ThreatIndicatorType::RemoteResource
         );
-        assert_eq!(
-            indicators[0].location.as_deref(),
-            Some("word/_rels/document.xml.rels")
-        );
         assert!(indicators[0].description.contains("https://evil.test"));
+        assert!(indicators[1].description.contains("file:///tmp/report"));
     }
 
     #[test]

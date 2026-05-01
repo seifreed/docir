@@ -6,7 +6,7 @@ use crate::ole_header::{
     END_OF_CHAIN, FAT_SECT, FREE_SECT, SIGNATURE,
 };
 use crate::zip_handler::PackageReader;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CfbEntryType {
@@ -354,7 +354,8 @@ fn read_directory_entries_and_root_stream(
 fn collect_stream_entries(entries: &[DirEntry]) -> HashMap<String, DirEntry> {
     let mut streams = HashMap::new();
     if let Some(child) = entries.first().map(|e| e.child) {
-        walk_siblings(child, "", entries, &mut streams, 0);
+        let mut visited = HashSet::new();
+        walk_siblings(child, "", entries, &mut streams, 0, &mut visited);
     }
     streams
 }
@@ -486,8 +487,12 @@ fn walk_siblings(
     entries: &[DirEntry],
     out: &mut HashMap<String, DirEntry>,
     depth: u32,
+    visited: &mut HashSet<u32>,
 ) {
     if idx == FREE_SECT || idx == END_OF_CHAIN || depth > MAX_RECURSION_DEPTH {
+        return;
+    }
+    if !visited.insert(idx) {
         return;
     }
     let idx_usize = idx as usize;
@@ -495,7 +500,7 @@ fn walk_siblings(
         return;
     }
     let entry = &entries[idx_usize];
-    walk_siblings(entry.left, parent, entries, out, depth + 1);
+    walk_siblings(entry.left, parent, entries, out, depth + 1, visited);
     let mut path = String::new();
     if !parent.is_empty() {
         path.push_str(parent);
@@ -506,9 +511,9 @@ fn walk_siblings(
         out.insert(path.clone(), entry.clone());
     }
     if (entry.object_type == 1 || entry.object_type == 5) && entry.child != FREE_SECT {
-        walk_siblings(entry.child, &path, entries, out, depth + 1);
+        walk_siblings(entry.child, &path, entries, out, depth + 1, visited);
     }
-    walk_siblings(entry.right, parent, entries, out, depth + 1);
+    walk_siblings(entry.right, parent, entries, out, depth + 1, visited);
 }
 
 fn collect_entry_metadata(entries: &[DirEntry]) -> HashMap<String, CfbEntryMetadata> {
@@ -807,7 +812,7 @@ fn collect_chain_with_terminal(table: &[u32], start_sector: u32) -> (Vec<u32>, u
     let mut sector = start_sector;
     let mut guard = 0usize;
     while sector != END_OF_CHAIN && sector != FREE_SECT {
-        if guard > table.len() {
+        if guard >= table.len() {
             return (out, sector);
         }
         out.push(sector);
@@ -998,7 +1003,8 @@ mod tests {
         assert_eq!(entries[2].name, "dir");
 
         let mut out = HashMap::new();
-        walk_siblings(entries[0].child, "", &entries, &mut out, 0);
+        let mut visited = HashSet::new();
+        walk_siblings(entries[0].child, "", &entries, &mut out, 0, &mut visited);
         assert!(out.contains_key("VBA"));
         assert!(out.contains_key("dir"));
 

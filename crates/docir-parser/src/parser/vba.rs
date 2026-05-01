@@ -72,6 +72,8 @@ pub(super) fn parse_vba_project_text(text: &str) -> VbaProjectTextParse {
 }
 
 pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
+    const MAX_DECOMPRESSED_SIZE: usize = 10 * 1024 * 1024; // 10 MiB safety limit
+
     if data.is_empty() {
         return None;
     }
@@ -128,6 +130,9 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
             }
         }
         out.extend_from_slice(&chunk_out);
+        if out.len() > MAX_DECOMPRESSED_SIZE {
+            return None;
+        }
     }
 
     Some(out)

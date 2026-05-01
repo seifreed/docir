@@ -159,7 +159,7 @@ impl DiffEngine {
                         summary: right_snap.summary.clone(),
                     });
                 }
-                (None, None) => {}
+                (None, None) => unreachable!("key must exist in at least one index"),
             }
         }
 

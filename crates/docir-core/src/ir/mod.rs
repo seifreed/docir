@@ -411,7 +411,23 @@ impl IrNode for IRNode {
             IRNode::TableRow(n) => n.children(),
             IRNode::TableCell(n) => n.children(),
             IRNode::Slide(n) => n.children(),
-            IRNode::Shape(n) => n.table.into_iter().collect(),
+            IRNode::Shape(n) => {
+                let mut kids = Vec::new();
+                if let Some(id) = n.table {
+                    kids.push(id);
+                }
+                if let Some(id) = n.ole_object {
+                    kids.push(id);
+                }
+                if let Some(id) = n.chart_id {
+                    kids.push(id);
+                }
+                if let Some(id) = n.media_asset {
+                    kids.push(id);
+                }
+                kids.extend(n.smartart_parts.iter().copied());
+                kids
+            }
             IRNode::Worksheet(n) => n.children(),
             IRNode::MacroProject(n) => n.children(),
             IRNode::Comment(n) => n.content.clone(),
@@ -432,6 +448,7 @@ impl IrNode for IRNode {
             IRNode::GlossaryEntry(n) => n.content.clone(),
             IRNode::VmlDrawing(n) => n.shapes.clone(),
             IRNode::DrawingPart(n) => n.shapes.clone(),
+            IRNode::PivotCache(n) => n.records.into_iter().collect(),
             _ => Vec::new(),
         }
     }

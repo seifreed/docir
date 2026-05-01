@@ -45,25 +45,25 @@ pub fn scan_vba_source(source: &str) -> Vec<SuspiciousCall> {
 pub fn is_suspicious_url(url: &str) -> bool {
     let url_lower = url.to_lowercase();
 
-    // Check for suspicious TLDs
+    // Decode percent-encoded sequences to detect evasion techniques.
+    let decoded = percent_decode_lower(&url_lower);
+
+    // Check for suspicious TLDs against the decoded URL.
     let suspicious_tlds = [".ru", ".cn", ".tk", ".ml", ".ga", ".cf"];
     for tld in &suspicious_tlds {
-        if url_lower.ends_with(tld) || url_lower.contains(&format!("{}/", tld)) {
+        if decoded.ends_with(tld) || decoded.contains(&format!("{}/", tld)) {
             return true;
         }
     }
 
-    // Check for IP addresses (potential C2)
-    let parts: Vec<&str> = url_lower
-        .trim_start_matches("http://")
-        .trim_start_matches("https://")
-        .split('/')
-        .next()
-        .unwrap_or("")
-        .split('.')
-        .collect();
+    // Check for IP addresses (potential C2) using the decoded host portion.
+    let host = extract_host(&decoded);
+    if is_ip_address(&host) {
+        return true;
+    }
 
-    if parts.len() == 4 && parts.iter().all(|p| p.parse::<u8>().is_ok()) {
+    // Check for UNC paths (\\server\share) commonly used in LNK attacks.
+    if url_lower.starts_with("\\\\") || url_lower.starts_with("//") {
         return true;
     }
 
@@ -78,7 +78,7 @@ pub fn is_suspicious_url(url: &str) -> bool {
     ];
 
     for pattern in &suspicious_patterns {
-        if url_lower.contains(pattern) {
+        if decoded.contains(pattern) {
             return true;
         }
     }
@@ -86,20 +86,100 @@ pub fn is_suspicious_url(url: &str) -> bool {
     false
 }
 
+/// Decodes percent-encoded sequences in a lowercase URL for matching.
+/// Only decodes the common evasion characters (dots, slashes, colons).
+fn percent_decode_lower(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(byte_val) = u8::from_str_radix(&input[i + 1..i + 3], 16) {
+                result.push(byte_val.to_ascii_lowercase() as char);
+                i += 3;
+                continue;
+            }
+        }
+        result.push(bytes[i] as char);
+        i += 1;
+    }
+    result
+}
+
+/// Extracts the host portion from a URL, stripping scheme, auth, port, and path.
+fn extract_host(url: &str) -> String {
+    let no_scheme = url
+        .strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .or_else(|| url.strip_prefix("ftp://"))
+        .or_else(|| url.strip_prefix("smb://"))
+        .or_else(|| url.strip_prefix("sftp://"))
+        .or_else(|| url.strip_prefix("file://"))
+        .or_else(|| url.strip_prefix("ldap://"))
+        .or_else(|| url.strip_prefix("ldaps://"))
+        .unwrap_or(url);
+
+    // Strip userinfo (user:pass@)
+    let no_auth = no_scheme.split('@').next_back().unwrap_or(no_scheme);
+
+    // Strip port and path
+    let host_port = no_auth.split('/').next().unwrap_or(no_auth);
+    let host = host_port.split(':').next().unwrap_or(host_port);
+
+    host.to_string()
+}
+
+/// Checks if a string is an IPv4 address.
+fn is_ip_address(host: &str) -> bool {
+    let parts: Vec<&str> = host.split('.').collect();
+    if parts.len() == 4 && parts.iter().all(|p| p.parse::<u8>().is_ok()) {
+        return true;
+    }
+    // Hex IP addresses (0xC0A80101 style)
+    let hex_prefix = host.strip_prefix("0x").or_else(|| host.strip_prefix("0X"));
+    if let Some(hex_part) = hex_prefix {
+        if u32::from_str_radix(hex_part, 16).is_ok() {
+            return true;
+        }
+    }
+    false
+}
+
 /// Checks if a procedure name is an auto-execute trigger.
 pub fn is_auto_exec_procedure(name: &str) -> bool {
-    let name_lower = name.to_lowercase();
     AUTO_EXEC_PROCEDURES
         .iter()
-        .any(|p| p.to_lowercase() == name_lower)
+        .any(|p| p.eq_ignore_ascii_case(name))
 }
 
 /// Checks if a formula contains dangerous XLM functions.
+/// Uses word-boundary matching to avoid false positives from substring matches.
 pub fn contains_dangerous_xlm(formula: &str) -> Vec<String> {
     let formula_upper = formula.to_uppercase();
     DANGEROUS_XLM_FUNCTIONS
         .iter()
-        .filter(|f| formula_upper.contains(&f.to_uppercase()))
+        .filter(|f| {
+            let name = f.to_uppercase();
+            // Check that the function name appears at a word boundary:
+            // either at the start, after =, after (, after ,, or after a space.
+            for pos in formula_upper.match_indices(&name) {
+                let (idx, _) = pos;
+                let before_ok = idx == 0
+                    || matches!(
+                        formula_upper.as_bytes().get(idx - 1),
+                        Some(b'=' | b'(' | b',' | b' ' | b'\t')
+                    );
+                let after_ok = idx + name.len() >= formula_upper.len()
+                    || matches!(
+                        formula_upper.as_bytes().get(idx + name.len()),
+                        Some(b'(' | b',' | b')' | b' ' | b'\t' | b'.' | b'!')
+                    );
+                if before_ok && after_ok {
+                    return true;
+                }
+            }
+            false
+        })
         .map(|f| f.to_string())
         .collect()
 }

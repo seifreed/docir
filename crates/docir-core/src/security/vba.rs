@@ -38,9 +38,6 @@ pub const AUTO_EXEC_PROCEDURES: &[&str] = &[
     "Workbook_Open",
     "Workbook_BeforeClose",
     "Workbook_Activate",
-    // PowerPoint
-    "Auto_Open",
-    "Auto_Close",
 ];
 
 /// Known suspicious VBA API calls.
@@ -102,8 +99,14 @@ pub fn analyze_vba_source(source: &str) -> VbaAnalysis {
             analysis.procedures.push(procedure);
         }
 
+        let is_comment = raw.starts_with('\'') || raw.starts_with("Rem ");
+        if is_comment {
+            continue;
+        }
+
         for (pattern, category) in SUSPICIOUS_VBA_CALLS {
-            if lower.contains(&pattern.to_ascii_lowercase()) {
+            let pattern_lower = pattern.to_ascii_lowercase();
+            if lower.contains(&pattern_lower) {
                 analysis.suspicious_calls.push(SuspiciousCall {
                     name: (*pattern).to_string(),
                     category: *category,
@@ -112,9 +115,11 @@ pub fn analyze_vba_source(source: &str) -> VbaAnalysis {
             }
         }
 
-        for proc in AUTO_EXEC_PROCEDURES {
-            if lower.starts_with("sub ") && lower.contains(&proc.to_ascii_lowercase()) {
-                analysis.auto_exec_procedures.push(proc.to_string());
+        if let Some(proc_name) = parse_vba_procedure_name(raw) {
+            for proc in AUTO_EXEC_PROCEDURES {
+                if proc_name.eq_ignore_ascii_case(proc) {
+                    analysis.auto_exec_procedures.push(proc.to_string());
+                }
             }
         }
     }

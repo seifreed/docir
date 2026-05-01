@@ -108,7 +108,7 @@ pub(crate) fn parse_control_word_and_param(
 
     let mut digits = Vec::new();
     while let Some(b) = cursor.peek() {
-        if b.is_ascii_digit() {
+        if b.is_ascii_digit() && digits.len() < 10 {
             digits.push(b);
             cursor.next();
         } else {

@@ -373,7 +373,7 @@ mod tests {
         assert!(result.has_external_refs);
         assert!(!result.has_dde);
         assert!(!result.has_xlm_macros);
-        assert_eq!(result.findings.len(), 8);
+        assert_eq!(result.findings.len(), 9);
     }
 
     #[test]
@@ -418,7 +418,7 @@ mod tests {
         assert!(report.contains("VBA Macros: YES"));
         assert!(report.contains("OLE Objects: YES"));
         assert!(report.contains("External References: YES"));
-        assert!(report.contains("Findings (8):"));
+        assert!(report.contains("Findings (9):"));
         assert!(report.contains("Location: vba/project.bin"));
     }
 

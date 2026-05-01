@@ -44,11 +44,20 @@ impl Paragraph {
     }
 
     /// Extracts all plain text from this paragraph's runs.
-    /// Note: This requires access to the full IR to resolve run IDs.
-    pub fn text_content(&self) -> String {
-        // This would need the IR context to resolve runs
-        // For now, returns empty - actual implementation would traverse runs
-        String::new()
+    /// Requires the IR store to resolve run node IDs into text.
+    pub fn text_content(&self, store: &crate::visitor::IrStore) -> String {
+        self.runs
+            .iter()
+            .filter_map(|id| {
+                store.get(*id).and_then(|node| {
+                    if let crate::ir::IRNode::Run(run) = node {
+                        Some(run.text.as_str())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect()
     }
 }
 

@@ -584,9 +584,9 @@ pub(crate) fn abbreviate(value: &str, max: usize) -> String {
 }
 
 pub(crate) fn format_float(value: f64) -> String {
-    if value.fract() == 0.0 {
+    if (value.fract() - 0.0).abs() < f64::EPSILON {
         format!("{:.0}", value)
     } else {
-        format!("{:.4}", value)
+        format!("{:.6}", value)
     }
 }

@@ -49,6 +49,16 @@ pub fn run(
     let mut manifest = bundle.manifest;
     for payload in bundle.payloads {
         let output_path = out_dir.join(&payload.relative_path);
+        // Validate that the output path stays within the output directory
+        // to prevent path traversal via malicious relative_path values.
+        let canonical_out = out_dir
+            .canonicalize()
+            .unwrap_or_else(|_| out_dir.to_path_buf());
+        if let Ok(canonical_target) = output_path.canonicalize() {
+            if !canonical_target.starts_with(&canonical_out) {
+                continue;
+            }
+        }
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create {}", parent.display()))?;

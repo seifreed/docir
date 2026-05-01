@@ -84,8 +84,17 @@ fn clear_if(flag: bool, target: &mut bool) {
     }
 }
 
+/// Converts a CLI value to an Optional limit.
+/// Note: passing 0 means "disable" (limit of zero), not "unlimited".
+/// Use the dedicated `--odf-disable-limits` flag to remove all limits.
 fn non_zero(value: u64) -> Option<u64> {
-    (value != 0).then_some(value)
+    if value == 0 {
+        // A value of 0 means "allow nothing" — represent as Some(0) so the
+        // limit is enforced rather than silently dropped.
+        Some(0)
+    } else {
+        Some(value)
+    }
 }
 
 #[cfg(test)]

@@ -131,14 +131,18 @@ where
 
 /// Public API entrypoint: write_text_output.
 pub fn write_text_output(value: &str, output: Option<PathBuf>) -> Result<()> {
+    let content = if value.ends_with('\n') {
+        value.to_string()
+    } else {
+        format!("{}\n", value)
+    };
     if let Some(path) = output {
-        fs::write(&path, value)
+        fs::write(&path, &content)
             .with_context(|| format!("Failed to write to {}", path.display()))?;
     } else {
         let stdout = io::stdout();
         let mut handle = stdout.lock();
-        handle.write_all(value.as_bytes())?;
-        handle.write_all(b"\n")?;
+        handle.write_all(content.as_bytes())?;
     }
     Ok(())
 }
@@ -216,7 +220,7 @@ mod tests {
         let path = temp_file("text_output");
         write_text_output("hello", Some(path.clone())).expect("write output");
         let written = fs::read_to_string(&path).expect("read output");
-        assert_eq!(written, "hello");
+        assert_eq!(written, "hello\n");
         let _ = fs::remove_file(path);
     }
 
