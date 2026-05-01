@@ -37,21 +37,13 @@ impl SecurityAnalyzer {
         AnalysisResult {
             threat_level: self.calculate_threat_level(&security_info),
             findings: std::mem::take(&mut self.findings),
-            has_macros: security_info
-                .as_ref()
-                .map_or(false, |s| s.macro_project.is_some()),
-            has_ole_objects: security_info
-                .as_ref()
-                .map_or(false, |s| !s.ole_objects.is_empty()),
+            has_macros: security_info.as_ref().is_some_and(|s| s.has_macros()),
+            has_ole_objects: security_info.as_ref().is_some_and(|s| s.has_ole_objects()),
             has_external_refs: security_info
                 .as_ref()
-                .map_or(false, |s| !s.external_refs.is_empty()),
-            has_dde: security_info
-                .as_ref()
-                .map_or(false, |s| !s.dde_fields.is_empty()),
-            has_xlm_macros: security_info
-                .as_ref()
-                .map_or(false, |s| !s.xlm_macros.is_empty()),
+                .is_some_and(|s| s.has_external_references()),
+            has_dde: security_info.as_ref().is_some_and(|s| s.has_dde_fields()),
+            has_xlm_macros: security_info.as_ref().is_some_and(|s| s.has_xlm_macros()),
         }
     }
 
@@ -291,8 +283,7 @@ mod tests {
     use docir_core::types::{DocumentFormat, SourceSpan};
     use docir_core::visitor::IrStore;
 
-    #[test]
-    fn analyze_collects_findings_and_escalates_to_critical() {
+    fn build_full_security_fixture() -> (IrStore, docir_core::NodeId) {
         let mut store = IrStore::new();
         let mut doc = Document::new(DocumentFormat::WordProcessing);
         doc.security.threat_level = ThreatLevel::Low;
@@ -358,7 +349,12 @@ mod tests {
         store.insert(IRNode::ExternalReference(ext_remote_image));
         store.insert(IRNode::ExternalReference(ext_ole_link));
         store.insert(IRNode::ActiveXControl(activex));
+        (store, root_id)
+    }
 
+    #[test]
+    fn analyze_collects_findings_and_escalates_to_critical() {
+        let (store, root_id) = build_full_security_fixture();
         let mut analyzer = SecurityAnalyzer::new();
         let result = analyzer.analyze(&store, root_id);
 
@@ -370,6 +366,14 @@ mod tests {
         assert!(!result.has_dde);
         assert!(!result.has_xlm_macros);
         assert_eq!(result.findings.len(), 8);
+    }
+
+    #[test]
+    fn analyze_marks_expected_indicator_types() {
+        let (store, root_id) = build_full_security_fixture();
+        let mut analyzer = SecurityAnalyzer::new();
+        let result = analyzer.analyze(&store, root_id);
+
         assert!(result
             .findings
             .iter()
@@ -394,7 +398,13 @@ mod tests {
             .findings
             .iter()
             .any(|f| f.indicator_type == ThreatIndicatorType::ActiveXControl));
+    }
 
+    #[test]
+    fn analyze_report_includes_summary_and_location() {
+        let (store, root_id) = build_full_security_fixture();
+        let mut analyzer = SecurityAnalyzer::new();
+        let result = analyzer.analyze(&store, root_id);
         let report = result.format_report();
         assert!(report.contains("Threat Level: CRITICAL"));
         assert!(report.contains("VBA Macros: YES"));

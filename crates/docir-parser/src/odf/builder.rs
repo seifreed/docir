@@ -1,5 +1,21 @@
-use super::*;
+use super::spreadsheet_chunks;
+use super::{
+    attach_diagnostics_if_any, build_odf_macro_project, collect_manifest_index,
+    collect_shared_parts, encrypted_manifest_entries, format_odf_encryption_metadata,
+    handle_content_xml, load_meta, parse_odf_signatures, parse_ods_named_ranges, push_entry,
+    scan_odf_filters, DefaultSecurityScanner, DiagnosticSeverity, Diagnostics, Document,
+    DocumentFormat, ExtensionPart, ExtensionPartKind, IRNode, IrStore, OdfManifestEntry, OdfParser,
+    ParseError, ParsedDocument, ParserConfig, SecureZipReader, SourceSpan,
+};
+use super::{
+    merge_styles, parse_master_pages, parse_odf_headers_footers, parse_page_layouts, parse_styles,
+};
+use crate::diagnostics::{push_info, push_warning};
+use crate::input::enforce_input_size;
 use crate::parse_utils::{finalize_document, init_document_state};
+use crate::parser::{run_parser_pipeline, NormalizeStage, ParseStage, PostprocessStage};
+use crate::security_scan::SecurityScanner;
+use std::io::{Read, Seek};
 
 struct OdfReadState {
     content_xml: Option<String>,
@@ -11,12 +27,22 @@ struct OdfReadState {
     file_names: Vec<String>,
 }
 
+struct OdfStyleLayoutInputs<'a> {
+    config: &'a ParserConfig,
+    styles_xml: Option<&'a str>,
+    content_xml: Option<&'a str>,
+    fast_mode: bool,
+}
+
 impl OdfParser {
     /// Parses from any reader.
-    pub fn parse_reader<R: Read + Seek>(
-        &self,
-        mut reader: R,
-    ) -> Result<ParsedDocument, ParseError> {
+    pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
+        run_parser_pipeline(self, reader)
+    }
+}
+
+impl ParseStage for OdfParser {
+    fn parse_stage<R: Read + Seek>(&self, mut reader: R) -> Result<ParsedDocument, ParseError> {
         enforce_input_size(&mut reader, self.config.max_input_size)?;
         let mut zip = SecureZipReader::new(reader, self.config.zip_config.clone())?;
 
@@ -39,10 +65,12 @@ impl OdfParser {
         )?;
 
         self.process_odf_styles_and_layouts(
-            &self.config,
-            read_state.styles_xml.as_deref(),
-            read_state.content_xml.as_deref(),
-            read_state.fast_mode,
+            OdfStyleLayoutInputs {
+                config: &self.config,
+                styles_xml: read_state.styles_xml.as_deref(),
+                content_xml: read_state.content_xml.as_deref(),
+                fast_mode: read_state.fast_mode,
+            },
             &mut store,
             &mut doc,
             &mut diagnostics,
@@ -69,9 +97,11 @@ impl OdfParser {
 
         let scanner = DefaultSecurityScanner;
         scanner.scan_odf(
-            read_state.content_xml.as_deref(),
-            read_state.styles_xml.as_deref(),
-            read_state.settings_xml.as_deref(),
+            crate::security_scan::OdfXmlInputs {
+                content_xml: read_state.content_xml.as_deref(),
+                styles_xml: read_state.styles_xml.as_deref(),
+                settings_xml: read_state.settings_xml.as_deref(),
+            },
             &read_state.file_names,
             &mut zip,
             &mut store,
@@ -90,7 +120,13 @@ impl OdfParser {
 
         Ok(finalize_document(format, store, doc))
     }
+}
 
+impl NormalizeStage for OdfParser {}
+
+impl PostprocessStage for OdfParser {}
+
+impl OdfParser {
     fn parse_content_and_collect_parts<R: Read + Seek>(
         &self,
         zip: &mut SecureZipReader<R>,
@@ -336,15 +372,12 @@ impl OdfParser {
 
     fn process_odf_styles_and_layouts(
         &self,
-        config: &ParserConfig,
-        styles_xml: Option<&str>,
-        content_xml: Option<&str>,
-        fast_mode: bool,
+        inputs: OdfStyleLayoutInputs<'_>,
         store: &mut IrStore,
         doc: &mut Document,
         diagnostics: &mut Diagnostics,
     ) -> Result<(), ParseError> {
-        if let Some(xml) = styles_xml {
+        if let Some(xml) = inputs.styles_xml {
             let masters = parse_master_pages(xml);
             for name in masters {
                 push_info(
@@ -363,7 +396,7 @@ impl OdfParser {
                     Some("styles.xml"),
                 );
             }
-            let (headers, footers) = parse_odf_headers_footers(xml, store, config)?;
+            let (headers, footers) = parse_odf_headers_footers(xml, store, inputs.config)?;
             for header_id in headers {
                 doc.shared_parts.push(header_id);
             }
@@ -372,8 +405,8 @@ impl OdfParser {
             }
         }
 
-        if !fast_mode {
-            if let Some(xml) = content_xml {
+        if !inputs.fast_mode {
+            if let Some(xml) = inputs.content_xml {
                 if let Some(mut styles) = parse_styles(xml) {
                     if let Some(doc_styles_id) = doc.styles {
                         if let Some(IRNode::StyleSet(existing)) = store.get_mut(doc_styles_id) {

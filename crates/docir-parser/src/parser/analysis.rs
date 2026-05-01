@@ -1,4 +1,8 @@
-use super::*;
+use crate::error::ParseError;
+use crate::xml_utils::local_name;
+use docir_core::ir::{CellError, IRNode};
+use docir_core::types::{NodeId, SourceSpan};
+use docir_core::visitor::IrStore;
 
 pub(super) fn parse_activex_xml(
     xml: &str,
@@ -240,6 +244,7 @@ pub(super) fn parse_chart_data(
 
 /// Helper function to encode bytes as hex.
 pub(super) mod hex {
+    /// Public API entrypoint: encode.
     pub fn encode(data: impl AsRef<[u8]>) -> String {
         data.as_ref().iter().map(|b| format!("{:02x}", b)).collect()
     }

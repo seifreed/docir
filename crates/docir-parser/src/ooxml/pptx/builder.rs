@@ -1,4 +1,9 @@
-use super::*;
+use super::{
+    extract_c_sld_name, parse_notes_slide, parse_presentation_info, parse_slide_list,
+    parse_slide_master_meta, push_warning, read_xml_part_and_rels, read_xml_part_and_rels_optional,
+    rel_type, Diagnostics, Document, DocumentFormat, IRNode, NodeId, ParseError, PptxParser,
+    Relationships, SourceSpan,
+};
 use crate::diagnostics::attach_diagnostics_if_any;
 use crate::zip_handler::PackageReader;
 
@@ -79,8 +84,7 @@ impl PptxParser {
                 (index + 1) as u32,
                 &slide_path,
                 &slide_rels,
-                notes_text.as_deref(),
-                notes_slide_id,
+                (notes_text.as_deref(), notes_slide_id),
             )?;
             document.content.push(slide_id);
         }
@@ -221,7 +225,7 @@ impl PptxParser {
     }
 
     fn finalize_presentation(&mut self, presentation_path: &str, document: &mut Document) {
-        document.shared_parts.extend(self.chart_nodes.drain(..));
+        document.shared_parts.append(&mut self.chart_nodes);
         document.security = std::mem::take(&mut self.security_info);
 
         let mut diagnostics = std::mem::replace(&mut self.diagnostics, Diagnostics::new());

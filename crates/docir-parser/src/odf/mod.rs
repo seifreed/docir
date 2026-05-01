@@ -1,13 +1,13 @@
 //! ODF (OpenDocument) parsing support.
 
-use crate::diagnostics::{attach_diagnostics_if_any, push_entry, push_info, push_warning};
+use crate::diagnostics::{attach_diagnostics_if_any, push_entry};
 use crate::error::ParseError;
 use crate::format::FormatParser;
-use crate::input::enforce_input_size;
 use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
-use crate::xml_utils::{attr_value, read_event, xml_error};
+use crate::xml_utils::{attr_value, read_event, scan_xml_events, scan_xml_events_with_reader};
 use crate::zip_handler::SecureZipReader;
+#[allow(unused_imports)]
 use docir_core::ir::{
     BookmarkEnd, BookmarkStart, Cell, CellFormula, CellValue, ChartData, Comment, CommentReference,
     ConditionalFormat, ConditionalRule, DataValidation, DiagnosticSeverity, Diagnostics, Document,
@@ -20,16 +20,14 @@ use docir_core::ir::{
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
-use quick_xml::events::{BytesStart, Event};
+use quick_xml::events::Event;
 use quick_xml::Reader;
-use std::collections::HashMap;
 use std::io::{Read, Seek};
-use std::sync::Arc;
-use std::thread;
 
 mod builder;
 mod container;
 mod formula;
+#[allow(clippy::single_match)]
 mod helpers;
 mod io;
 mod limits;
@@ -49,22 +47,19 @@ mod utils;
 
 use self::security::scan_odf_filters;
 use self::security_helpers::{build_odf_macro_project, parse_odf_signatures};
-use crate::security_scan::{DefaultSecurityScanner, SecurityScanner};
+use crate::security_scan::DefaultSecurityScanner;
 
 use container::{handle_content_xml, load_meta};
 use formula::evaluate_ods_formulas;
-use helpers::*;
 use io::{collect_manifest_index, collect_shared_parts};
 use limits::{OdfAtomicLimits, OdfLimitCounter, OdfLimits};
 use manifest::{
     encrypted_manifest_entries, format_odf_encryption_metadata, is_manifest_entry_encrypted,
     parse_manifest, OdfEncryptionData, OdfManifestEntry,
 };
-use ods::{parse_ods_cell, parse_ods_cell_empty, parse_ods_table, parse_ods_table_fast};
+use ods::{parse_ods_table, parse_ods_table_fast};
 use paragraph::parse_paragraph;
-use presentation_helpers::{
-    build_media_asset, classify_media_shape, parse_draw_page, parse_odp_transition,
-};
+use presentation_helpers::{build_media_asset, parse_draw_page, parse_odp_transition};
 use sampling::parse_ods_row_sample;
 use styles_support::{
     merge_styles, parse_master_pages, parse_odf_headers_footers, parse_page_layouts, parse_styles,
@@ -91,6 +86,12 @@ struct OdfContentResult {
     footnotes: Vec<NodeId>,
     endnotes: Vec<NodeId>,
     pivot_caches: Vec<NodeId>,
+}
+
+impl Default for OdfParser {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OdfParser {
@@ -129,3 +130,5 @@ fn parse_content(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_prelude;

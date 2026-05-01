@@ -10,6 +10,7 @@ use super::paragraph::parse_paragraph_properties;
 use super::table::parse_table_properties;
 
 impl DocxParser {
+    /// Public API entrypoint: parse_styles.
     pub fn parse_styles(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let mut styles = StyleSet::new();
         let mut reader = Reader::from_str(xml);
@@ -58,6 +59,7 @@ impl DocxParser {
         Ok(id)
     }
 
+    /// Public API entrypoint: parse_styles_with_effects.
     pub fn parse_styles_with_effects(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let id = self.parse_styles(xml)?;
         if let Some(docir_core::ir::IRNode::StyleSet(set)) = self.store.get_mut(id) {

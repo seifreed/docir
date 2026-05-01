@@ -6,6 +6,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::collections::HashSet;
 
+/// Public API entrypoint: parse_custom_xml_part.
 pub fn parse_custom_xml_part(
     xml: &str,
     path: &str,

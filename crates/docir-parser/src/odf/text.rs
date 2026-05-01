@@ -1,8 +1,18 @@
 //! ODF text parsing helpers.
 
+use super::helpers::{
+    parse_annotation, parse_draw_frame, parse_note, parse_table, parse_tracked_changes, ListContext,
+};
 use super::spreadsheet::parse_content_spreadsheet_fast;
-use super::*;
+use super::{
+    attr_value, parse_paragraph, BookmarkEnd, BookmarkStart, CommentReference, Field,
+    FieldInstruction, FieldKind, IRNode, IrStore, NodeId, NumberingInfo, OdfContentResult,
+    OdfLimitCounter, Paragraph, ParagraphProperties, ParseError, Run, Section,
+};
 use crate::xml_utils::xml_error;
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::Reader;
+use std::collections::HashMap;
 
 struct OdfTextState {
     in_text: bool,
@@ -146,7 +156,7 @@ fn parse_text_paragraph(
         &mut state.pending_inline_nodes,
         limits,
     )?;
-    section.content.extend(state.pending_inline_nodes.drain(..));
+    section.content.append(&mut state.pending_inline_nodes);
     section.content.push(paragraph_id);
     Ok(())
 }
@@ -159,7 +169,7 @@ fn parse_text_table(
     state: &mut OdfTextState,
 ) -> Result<(), ParseError> {
     let table_id = parse_table(reader, store, limits)?;
-    section.content.extend(state.pending_inline_nodes.drain(..));
+    section.content.append(&mut state.pending_inline_nodes);
     section.content.push(table_id);
     Ok(())
 }
@@ -309,10 +319,11 @@ pub(super) fn build_paragraph(
 ) -> NodeId {
     let mut paragraph = Paragraph::new();
     if numbering.is_some() || outline_level.is_some() {
-        let mut props = ParagraphProperties::default();
-        props.numbering = numbering;
-        props.outline_level = outline_level;
-        paragraph.properties = props;
+        paragraph.properties = ParagraphProperties {
+            numbering,
+            outline_level,
+            ..ParagraphProperties::default()
+        };
     }
     if !text.is_empty() {
         let run = Run::new(text.to_string());

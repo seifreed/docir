@@ -1,12 +1,15 @@
 use super::utils::find_stream_case;
-use super::vba::{parse_vba_project_text, vba_decompress};
+use super::vba::{normalize_vba_source_text, parse_vba_project_text, vba_decompress};
 use super::{hex, ParseError, ParserConfig};
+use crate::ole::Cfb;
 use crate::ooxml::part_utils::get_rels_path;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::IRNode;
 use docir_core::security::analyze_vba_source;
-use docir_core::security::{ExternalRefType, ExternalReference, MacroProject, OleObject};
+use docir_core::security::{
+    ExternalRefType, ExternalReference, MacroExtractionState, MacroProject, OleObject,
+};
 use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
 use std::collections::HashSet;
@@ -16,6 +19,7 @@ pub struct SecurityScanner<'a> {
 }
 
 impl<'a> SecurityScanner<'a> {
+    /// Public API entrypoint: new.
     pub fn new(config: &'a ParserConfig) -> Self {
         Self { config }
     }
@@ -29,6 +33,13 @@ impl<'a> SecurityScanner<'a> {
         self.scan_ole_objects(zip, store)?;
         self.scan_activex_controls(zip, store)?;
         self.scan_word_external_relationships(zip, store)?;
+        Ok(())
+    }
+
+    pub fn scan_cfb(&self, cfb: &Cfb, store: &mut IrStore) -> Result<(), ParseError> {
+        let streams = cfb.list_streams();
+        self.scan_cfb_vba_projects(cfb, &streams, store)?;
+        self.scan_cfb_ole_objects(cfb, &streams, store)?;
         Ok(())
     }
 
@@ -53,6 +64,44 @@ impl<'a> SecurityScanner<'a> {
                 }
                 builder.insert(IRNode::MacroProject(macro_project));
             }
+        }
+        Ok(())
+    }
+
+    fn scan_cfb_vba_projects(
+        &self,
+        cfb: &Cfb,
+        streams: &[String],
+        store: &mut IrStore,
+    ) -> Result<(), ParseError> {
+        let mut builder = docir_core::ir::IrBuilder::new(store);
+        let mut seen_roots = HashSet::new();
+
+        for project_stream in streams.iter().filter(|path| {
+            let upper = path.to_ascii_uppercase();
+            upper == "PROJECT" || upper.ends_with("/PROJECT")
+        }) {
+            let storage_root = project_stream
+                .rsplit_once('/')
+                .map(|(parent, _)| parent.to_string())
+                .unwrap_or_default();
+            if !seen_roots.insert(storage_root.clone()) {
+                continue;
+            }
+
+            let container_label = if storage_root.is_empty() {
+                "cfb:/PROJECT".to_string()
+            } else {
+                format!("cfb:/{storage_root}")
+            };
+            let (mut macro_project, modules) =
+                self.detect_macro_project_in_cfb(cfb, &container_label, &storage_root)?;
+            for module in modules {
+                let id = module.id;
+                builder.insert(IRNode::MacroModule(module));
+                macro_project.modules.push(id);
+            }
+            builder.insert(IRNode::MacroProject(macro_project));
         }
         Ok(())
     }
@@ -97,27 +146,7 @@ impl<'a> SecurityScanner<'a> {
                 control.span = Some(SourceSpan::new(&path));
                 store.insert(IRNode::ActiveXControl(control));
             }
-
-            let rels_path = get_rels_path(&path);
-            if zip.contains(&rels_path) {
-                if let Ok(rels_xml) = zip.read_file_string(&rels_path) {
-                    if let Ok(rels) = Relationships::parse(&rels_xml) {
-                        for rel in rels.by_id.values() {
-                            if !rel.target.ends_with(".bin")
-                                && !rel.rel_type.contains("activeXControlBinary")
-                            {
-                                continue;
-                            }
-                            let bin_path = Relationships::resolve_target(&path, &rel.target);
-                            if activex_bin_seen.insert(bin_path.clone()) && zip.contains(&bin_path)
-                            {
-                                let ole_object = self.detect_ole_object(zip, &bin_path)?;
-                                store.insert(IRNode::OleObject(ole_object));
-                            }
-                        }
-                    }
-                }
-            }
+            self.scan_activex_control_rels(zip, store, &path, &mut activex_bin_seen)?;
         }
         Ok(())
     }
@@ -137,22 +166,72 @@ impl<'a> SecurityScanner<'a> {
             let rels = Relationships::parse(&rels_xml)?;
             for rel in rels.by_id.values() {
                 if rel.target_mode == TargetMode::External {
-                    let ref_type = match rel.rel_type.as_str() {
-                        rel_type::HYPERLINK => ExternalRefType::Hyperlink,
-                        rel_type::IMAGE => ExternalRefType::Image,
-                        rel_type::OLE_OBJECT => ExternalRefType::OleLink,
-                        rel_type::ATTACHED_TEMPLATE => ExternalRefType::AttachedTemplate,
-                        _ => ExternalRefType::Other,
-                    };
-                    let mut ext_ref = ExternalReference::new(ref_type, &rel.target);
-                    ext_ref.relationship_id = Some(rel.id.clone());
-                    ext_ref.relationship_type = Some(rel.rel_type.clone());
-                    ext_ref.span = Some(SourceSpan::new(&rel_path));
-                    store.insert(IRNode::ExternalReference(ext_ref));
+                    self.insert_external_ref(store, &rel_path, rel);
                 }
             }
         }
         Ok(())
+    }
+
+    fn scan_activex_control_rels(
+        &self,
+        zip: &mut impl PackageReader,
+        store: &mut IrStore,
+        control_path: &str,
+        activex_bin_seen: &mut HashSet<String>,
+    ) -> Result<(), ParseError> {
+        let rels_path = get_rels_path(control_path);
+        if !zip.contains(&rels_path) {
+            return Ok(());
+        }
+
+        let Ok(rels_xml) = zip.read_file_string(&rels_path) else {
+            return Ok(());
+        };
+        let Ok(rels) = Relationships::parse(&rels_xml) else {
+            return Ok(());
+        };
+
+        for rel in rels.by_id.values() {
+            if !self.is_activex_binary_rel(rel) {
+                continue;
+            }
+            let bin_path = Relationships::resolve_target(control_path, &rel.target);
+            if activex_bin_seen.insert(bin_path.clone()) && zip.contains(&bin_path) {
+                let ole_object = self.detect_ole_object(zip, &bin_path)?;
+                store.insert(IRNode::OleObject(ole_object));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn is_activex_binary_rel(&self, rel: &crate::ooxml::relationships::Relationship) -> bool {
+        rel.target.ends_with(".bin") || rel.rel_type.contains("activeXControlBinary")
+    }
+
+    fn insert_external_ref(
+        &self,
+        store: &mut IrStore,
+        rel_path: &str,
+        rel: &crate::ooxml::relationships::Relationship,
+    ) {
+        let ref_type = self.map_external_ref_type(&rel.rel_type);
+        let mut ext_ref = ExternalReference::new(ref_type, &rel.target);
+        ext_ref.relationship_id = Some(rel.id.clone());
+        ext_ref.relationship_type = Some(rel.rel_type.clone());
+        ext_ref.span = Some(SourceSpan::new(rel_path));
+        store.insert(IRNode::ExternalReference(ext_ref));
+    }
+
+    fn map_external_ref_type(&self, rel_type_value: &str) -> ExternalRefType {
+        match rel_type_value {
+            rel_type::HYPERLINK => ExternalRefType::Hyperlink,
+            rel_type::IMAGE => ExternalRefType::Image,
+            rel_type::OLE_OBJECT => ExternalRefType::OleLink,
+            rel_type::ATTACHED_TEMPLATE => ExternalRefType::AttachedTemplate,
+            _ => ExternalRefType::Other,
+        }
     }
 
     fn detect_macro_project(
@@ -162,14 +241,30 @@ impl<'a> SecurityScanner<'a> {
     ) -> Result<(MacroProject, Vec<docir_core::security::MacroModule>), ParseError> {
         let data = zip.read_file(path)?;
 
-        let mut project = MacroProject::new();
-        project.span = Some(SourceSpan::new(path));
-
         let cfb = crate::ole::Cfb::parse(data)?;
+        self.detect_macro_project_in_cfb(&cfb, path, "VBA")
+    }
+
+    fn detect_macro_project_in_cfb(
+        &self,
+        cfb: &Cfb,
+        container_path: &str,
+        storage_root: &str,
+    ) -> Result<(MacroProject, Vec<docir_core::security::MacroModule>), ParseError> {
         let streams = cfb.list_streams();
+        let project_stream_name = if storage_root.is_empty() {
+            "PROJECT".to_string()
+        } else {
+            format!("{storage_root}/PROJECT")
+        };
+
+        let mut project = MacroProject::new();
+        project.container_path = Some(container_path.to_string());
+        project.storage_root = Some(storage_root.to_string());
+        project.span = Some(SourceSpan::new(container_path));
 
         let project_stream =
-            find_stream_case(&streams, "VBA/PROJECT").and_then(|p| cfb.read_stream(p));
+            find_stream_case(&streams, &project_stream_name).and_then(|p| cfb.read_stream(p));
         let project_text = project_stream
             .as_ref()
             .map(|data| String::from_utf8_lossy(data).to_string())
@@ -184,32 +279,57 @@ impl<'a> SecurityScanner<'a> {
         let mut auto_exec = Vec::new();
         let mut modules_out = Vec::new();
         for (module_name, module_type) in module_defs {
-            let stream_path = format!("VBA/{module_name}");
-            let data = find_stream_case(&streams, &stream_path)
-                .and_then(|p| cfb.read_stream(p))
-                .and_then(|raw| vba_decompress(&raw));
-
+            let stream_path = if storage_root.is_empty() {
+                module_name.clone()
+            } else {
+                format!("{storage_root}/{module_name}")
+            };
             let mut module =
                 docir_core::security::MacroModule::new(module_name.clone(), module_type);
-            module.span = Some(SourceSpan::new(path));
+            module.stream_name = Some(module_name.clone());
+            module.stream_path = Some(stream_path.clone());
+            module.span = Some(SourceSpan::new(container_path));
 
-            if let Some(src) = data {
-                let source = String::from_utf8_lossy(&src).to_string();
-                let analysis = analyze_vba_source(&source);
-                auto_exec.extend(analysis.auto_exec_procedures.clone());
-                module.procedures = analysis.procedures;
-                module.suspicious_calls = analysis.suspicious_calls;
+            let raw_stream =
+                find_stream_case(&streams, &stream_path).and_then(|p| cfb.read_stream(p));
+            match raw_stream {
+                Some(raw) => {
+                    module.compressed_size = Some(raw.len() as u64);
+                    let Some(src) = vba_decompress(&raw) else {
+                        module.extraction_state = MacroExtractionState::DecodeFailed;
+                        module
+                            .extraction_errors
+                            .push(format!("Failed to decompress {}", stream_path));
+                        modules_out.push(module);
+                        continue;
+                    };
 
-                if self.config.extract_macro_source {
-                    module.source_code = Some(source);
+                    module.decompressed_size = Some(src.len() as u64);
+                    module.extraction_state = MacroExtractionState::Extracted;
+                    module.source_encoding = Some("utf-8-lossy-normalized".to_string());
+                    let source = normalize_vba_source_text(&src);
+                    let analysis = analyze_vba_source(&source);
+                    auto_exec.extend(analysis.auto_exec_procedures.clone());
+                    module.procedures = analysis.procedures;
+                    module.suspicious_calls = analysis.suspicious_calls;
+
+                    if self.config.extract_macro_source {
+                        module.source_code = Some(source);
+                    }
+                    if self.config.compute_hashes {
+                        use sha2::Digest;
+                        let mut hasher = sha2::Sha256::new();
+                        hasher.update(&src);
+                        module.source_hash = Some(hex::encode(hasher.finalize()));
+                    }
                 }
-                if self.config.compute_hashes {
-                    use sha2::Digest;
-                    let mut hasher = sha2::Sha256::new();
-                    hasher.update(&src);
-                    module.source_hash = Some(hex::encode(hasher.finalize()));
+                None => {
+                    module.extraction_state = MacroExtractionState::MissingStream;
+                    module
+                        .extraction_errors
+                        .push(format!("Missing stream {}", stream_path));
                 }
-            }
+            };
 
             modules_out.push(module);
         }
@@ -228,20 +348,55 @@ impl<'a> SecurityScanner<'a> {
         path: &str,
     ) -> Result<OleObject, ParseError> {
         let data = zip.read_file(path)?;
+        Ok(self.build_ole_object_from_bytes(path, &data))
+    }
 
+    fn scan_cfb_ole_objects(
+        &self,
+        cfb: &Cfb,
+        streams: &[String],
+        store: &mut IrStore,
+    ) -> Result<(), ParseError> {
+        for path in streams.iter().filter(|path| {
+            let upper = path.to_ascii_uppercase();
+            upper.contains("OBJECTPOOL/")
+                || upper.ends_with("OLE10NATIVE")
+                || upper.ends_with("/PACKAGE")
+                || upper.ends_with("/CONTENTS")
+        }) {
+            if let Some(bytes) = cfb.read_stream(path) {
+                store.insert(IRNode::OleObject(
+                    self.build_ole_object_from_bytes(path, &bytes),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn build_ole_object_from_bytes(&self, path: &str, data: &[u8]) -> OleObject {
         let mut ole = OleObject::new();
+        ole.source_path = Some(path.to_string());
         ole.span = Some(SourceSpan::new(path));
         ole.size_bytes = data.len() as u64;
+        let upper = path.to_ascii_uppercase();
+        if upper.contains("OBJECTPOOL/") {
+            ole.class_name = Some("ObjectPool".to_string());
+        }
+        if upper.ends_with("OLE10NATIVE") {
+            ole.embedded_payload_kind = Some("ole10native".to_string());
+        } else if upper.ends_with("/PACKAGE") || upper == "PACKAGE" {
+            ole.embedded_payload_kind = Some("package".to_string());
+        }
 
         if self.config.compute_hashes {
             use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
-            hasher.update(&data);
+            hasher.update(data);
             let hash = hasher.finalize();
             ole.data_hash = Some(hex::encode(hash));
         }
 
-        Ok(ole)
+        ole
     }
 }
 
@@ -486,5 +641,110 @@ mod tests {
         assert_eq!(activex_count, 2);
         // Internal relationship should not create an external reference.
         assert_eq!(external_ref_count, 0);
+    }
+
+    #[test]
+    fn scan_zip_sets_ole_hash_when_compute_hashes_enabled() {
+        let mut zip = TestPackageReader::new(&[("word/embeddings/object1.bin", b"OLE-HASH")]);
+        let mut store = IrStore::new();
+        let config = ParserConfig {
+            compute_hashes: true,
+            ..ParserConfig::default()
+        };
+        let scanner = SecurityScanner::new(&config);
+        scanner
+            .scan_zip(&mut zip, &mut store)
+            .expect("scan succeeds");
+
+        let ole_nodes: Vec<_> = store
+            .values()
+            .filter_map(|node| match node {
+                IRNode::OleObject(ole) => Some(ole),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ole_nodes.len(), 1);
+        assert_eq!(ole_nodes[0].size_bytes, 8);
+        assert!(ole_nodes[0].data_hash.is_some());
+    }
+
+    #[test]
+    fn scan_zip_activex_binary_rel_type_without_bin_extension_is_still_scanned() {
+        let activex_xml = br#"<ocx name="ButtonX" clsid="{ABC}"/>"#;
+        let activex_rels = br#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rBin" Type="http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary" Target="activeXBinary.dat"/>
+            </Relationships>
+        "#;
+        let mut zip = TestPackageReader::new(&[
+            ("word/activeX/activeX1.xml", activex_xml),
+            ("word/activeX/_rels/activeX1.xml.rels", activex_rels),
+            ("word/activeX/activeXBinary.dat", b"BINARY"),
+            ("word/_rels/document.xml.rels", b"<Relationships/>"),
+        ]);
+        let mut store = IrStore::new();
+        let config = ParserConfig::default();
+        let scanner = SecurityScanner::new(&config);
+        scanner
+            .scan_zip(&mut zip, &mut store)
+            .expect("scan succeeds");
+
+        let ole_count = store
+            .values()
+            .filter(|node| matches!(node, IRNode::OleObject(_)))
+            .count();
+        let activex_count = store
+            .values()
+            .filter(|node| matches!(node, IRNode::ActiveXControl(_)))
+            .count();
+        assert_eq!(activex_count, 1);
+        assert_eq!(ole_count, 1);
+    }
+
+    #[test]
+    fn scan_zip_collects_external_relationships_from_all_word_rels_files() {
+        let rels_main = br#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rMain" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.test/main" TargetMode="External"/>
+            </Relationships>
+        "#;
+        let rels_footnotes = br#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rFoot" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://example.test/img.png" TargetMode="External"/>
+            </Relationships>
+        "#;
+        let rels_non_word = br#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rSkip" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.test/skip" TargetMode="External"/>
+            </Relationships>
+        "#;
+        let mut zip = TestPackageReader::new(&[
+            ("word/_rels/document.xml.rels", rels_main),
+            ("word/_rels/footnotes.xml.rels", rels_footnotes),
+            ("xl/_rels/workbook.xml.rels", rels_non_word),
+        ]);
+        let mut store = IrStore::new();
+        let config = ParserConfig::default();
+        let scanner = SecurityScanner::new(&config);
+        scanner
+            .scan_zip(&mut zip, &mut store)
+            .expect("scan succeeds");
+
+        let refs: Vec<_> = store
+            .values()
+            .filter_map(|node| match node {
+                IRNode::ExternalReference(ext) => Some(ext),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(refs.len(), 2);
+        assert!(refs.iter().any(|ext| ext
+            .span
+            .as_ref()
+            .is_some_and(|s| s.file_path == "word/_rels/document.xml.rels")));
+        assert!(refs.iter().any(|ext| ext
+            .span
+            .as_ref()
+            .is_some_and(|s| s.file_path == "word/_rels/footnotes.xml.rels")));
     }
 }

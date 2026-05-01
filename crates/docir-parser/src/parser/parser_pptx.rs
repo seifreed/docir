@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    ContentTypes, DocumentFormat, OoxmlParser, ParseError, ParseMetrics, ParsedDocument, PptxParser,
+};
 use crate::ooxml::part_utils::read_xml_part_and_rels;
 use crate::zip_handler::PackageReader;
 

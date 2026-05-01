@@ -15,6 +15,7 @@ pub struct GlossaryDocument {
 }
 
 impl GlossaryDocument {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -39,6 +40,7 @@ pub struct GlossaryEntry {
 }
 
 impl GlossaryEntry {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

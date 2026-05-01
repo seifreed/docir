@@ -1,4 +1,10 @@
-use super::*;
+use super::{
+    ParseError, PresentationProperties, PresentationTag, ShapeType, SmartArtPart, SourceSpan,
+    TableStyle, TableStyleSet, ViewProperties,
+};
+use docir_core::types::NodeId;
+use quick_xml::events::Event;
+use quick_xml::Reader;
 
 pub(super) fn parse_presentation_properties(
     xml: &str,

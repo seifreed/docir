@@ -9,6 +9,7 @@ use quick_xml::Reader;
 use super::paragraph::parse_paragraph_properties;
 
 impl DocxParser {
+    /// Public API entrypoint: parse_numbering.
     pub fn parse_numbering(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let mut set = NumberingSet::new();
         let mut reader = Reader::from_str(xml);

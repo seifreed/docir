@@ -7,6 +7,7 @@ use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
+/// Public API entrypoint: parse_drawingml_part.
 pub fn parse_drawingml_part(
     xml: &str,
     path: &str,
@@ -98,7 +99,7 @@ fn attr_value_by_local_keys(
 ) -> Option<String> {
     for attr in event.attributes().flatten() {
         let key = local_name(attr.key.as_ref());
-        if keys.iter().any(|candidate| key == *candidate) {
+        if keys.contains(&key) {
             return Some(String::from_utf8_lossy(&attr.value).to_string());
         }
     }
@@ -114,7 +115,7 @@ fn rel_ids_from_attr_keys(
         .flatten()
         .filter_map(|attr| {
             let key = local_name(attr.key.as_ref());
-            if keys.iter().any(|candidate| key == *candidate) {
+            if keys.contains(&key) {
                 Some(String::from_utf8_lossy(&attr.value).to_string())
             } else {
                 None

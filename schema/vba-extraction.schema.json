@@ -1,0 +1,272 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docir.dev/schema/vba-extraction.schema.json",
+  "title": "Phase 0 VBA Extraction Result",
+  "description": "Structural VBA recognition and source extraction contract for Phase 0. Excludes AST generation, deobfuscation, and emulation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "phase",
+    "document",
+    "capabilities",
+    "vba"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "phase": {
+      "type": "string",
+      "const": "phase-0"
+    },
+    "document": {
+      "$ref": "#/$defs/documentRef"
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parsing",
+        "extraction",
+        "vba_recognition",
+        "ast",
+        "deobfuscation",
+        "emulation"
+      ],
+      "properties": {
+        "parsing": {
+          "type": "boolean",
+          "const": true
+        },
+        "extraction": {
+          "type": "boolean",
+          "const": true
+        },
+        "vba_recognition": {
+          "type": "boolean",
+          "const": true
+        },
+        "ast": {
+          "type": "boolean",
+          "const": false
+        },
+        "deobfuscation": {
+          "type": "boolean",
+          "const": false
+        },
+        "emulation": {
+          "type": "boolean",
+          "const": false
+        }
+      }
+    },
+    "vba": {
+      "$ref": "#/$defs/vbaExtraction"
+    }
+  },
+  "$defs": {
+    "documentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "format"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "doc",
+            "docm",
+            "docx",
+            "dot",
+            "dotm",
+            "dotx",
+            "xls",
+            "xlsb",
+            "xlsm",
+            "xlsx",
+            "xltm",
+            "ppt",
+            "pptm",
+            "pptx",
+            "rtf",
+            "odt",
+            "ods",
+            "odp",
+            "hwp",
+            "hwpx",
+            "unknown"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "absent",
+        "recognized",
+        "extracted",
+        "partial",
+        "unsupported",
+        "error"
+      ]
+    },
+    "moduleKind": {
+      "type": "string",
+      "enum": [
+        "standard",
+        "class",
+        "document",
+        "form",
+        "unknown"
+      ]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "vbaModule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "kind",
+        "storage_path",
+        "status"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "$ref": "#/$defs/moduleKind"
+        },
+        "storage_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "source_text": {
+          "type": "string"
+        },
+        "source_encoding": {
+          "type": "string",
+          "enum": [
+            "plain",
+            "compressed-container-decoded",
+            "unknown"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        }
+      }
+    },
+    "vbaProject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "container_path",
+        "modules"
+      ],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "container_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/vbaModule"
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        }
+      }
+    },
+    "vbaExtraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "projects"
+      ],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "projects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/vbaProject"
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        }
+      }
+    }
+  }
+}

@@ -81,11 +81,13 @@ pub struct VbaAnalysis {
     pub auto_exec_procedures: Vec<String>,
 }
 
+/// Public API entrypoint: is_dangerous_xlm_function.
 pub fn is_dangerous_xlm_function(name: &str) -> bool {
     let upper = name.to_ascii_uppercase();
     DANGEROUS_XLM_FUNCTIONS.iter().any(|&item| item == upper)
 }
 
+/// Public API entrypoint: analyze_vba_source.
 pub fn analyze_vba_source(source: &str) -> VbaAnalysis {
     let mut analysis = VbaAnalysis::default();
 
@@ -148,5 +150,71 @@ fn strip_visibility_modifier(tokens: &mut Vec<&str>) {
             || tokens[0].eq_ignore_ascii_case("static"))
     {
         tokens.remove(0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{analyze_vba_source, is_dangerous_xlm_function, AUTO_EXEC_PROCEDURES};
+    use crate::security::SuspiciousCallCategory;
+
+    #[test]
+    fn dangerous_xlm_function_check_is_case_insensitive() {
+        assert!(is_dangerous_xlm_function("exec"));
+        assert!(is_dangerous_xlm_function("Call"));
+        assert!(!is_dangerous_xlm_function("SUM"));
+    }
+
+    #[test]
+    fn analyze_vba_source_extracts_procedures_and_suspicious_calls() {
+        let source = r#"
+            Sub AutoOpen()
+                Shell "calc.exe"
+                Dim x: x = Chr(65)
+            End Sub
+
+            Private Function BuildValue()
+                Set o = CreateObject("WScript.Shell")
+                BuildValue = "ok"
+            End Function
+        "#;
+
+        let analysis = analyze_vba_source(source);
+        assert!(analysis.procedures.iter().any(|p| p == "AutoOpen"));
+        assert!(analysis.procedures.iter().any(|p| p == "BuildValue"));
+        assert!(analysis
+            .auto_exec_procedures
+            .iter()
+            .any(|p| p == "AutoOpen"));
+        assert!(analysis.suspicious_calls.iter().any(|c| {
+            c.name == "Shell" && c.category == SuspiciousCallCategory::ShellExecution
+        }));
+        assert!(analysis.suspicious_calls.iter().any(|c| {
+            c.name == "CreateObject" && c.category == SuspiciousCallCategory::ProcessManipulation
+        }));
+        assert!(analysis
+            .suspicious_calls
+            .iter()
+            .any(|c| { c.name == "Chr" && c.category == SuspiciousCallCategory::Obfuscation }));
+        assert!(analysis.suspicious_calls.iter().all(|c| c.line.is_some()));
+    }
+
+    #[test]
+    fn analyze_vba_source_handles_non_matching_lines() {
+        let source = r#"
+            Option Explicit
+            Dim value As String
+            value = "hello"
+        "#;
+        let analysis = analyze_vba_source(source);
+        assert!(analysis.procedures.is_empty());
+        assert!(analysis.suspicious_calls.is_empty());
+        assert!(analysis.auto_exec_procedures.is_empty());
+    }
+
+    #[test]
+    fn auto_exec_procedures_constant_has_expected_entries() {
+        assert!(AUTO_EXEC_PROCEDURES.contains(&"AutoOpen"));
+        assert!(AUTO_EXEC_PROCEDURES.contains(&"Workbook_Open"));
     }
 }

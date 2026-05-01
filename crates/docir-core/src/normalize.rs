@@ -149,3 +149,129 @@ fn cell_key(store: &IrStore, id: NodeId) -> (u32, u32) {
         (u32::MAX, u32::MAX)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::{
+        Cell, DefinedName, Document, ExtensionPart, ExtensionPartKind, IRNode, MediaAsset,
+        MediaType, PivotCache, Section, Worksheet,
+    };
+    use crate::types::DocumentFormat;
+
+    #[test]
+    fn normalize_store_sorts_document_collections_deterministically() {
+        let mut store = IrStore::new();
+        let mut doc = Document::new(DocumentFormat::Spreadsheet);
+
+        let mut section_b = Section::new();
+        section_b.name = Some("B".to_string());
+        let section_b_id = section_b.id;
+        store.insert(IRNode::Section(section_b));
+
+        let mut section_a = Section::new();
+        section_a.name = Some("A".to_string());
+        let section_a_id = section_a.id;
+        store.insert(IRNode::Section(section_a));
+
+        let media = MediaAsset::new("z.bin", MediaType::Other, 1);
+        let media_id = media.id;
+        store.insert(IRNode::MediaAsset(media));
+        let part = ExtensionPart::new("a.ext", 1, ExtensionPartKind::Unknown);
+        let part_id = part.id;
+        store.insert(IRNode::ExtensionPart(part));
+
+        let dn_b = DefinedName {
+            id: NodeId::new(),
+            name: "Zeta".to_string(),
+            value: "Sheet1!$A$1".to_string(),
+            local_sheet_id: Some(2),
+            hidden: false,
+            comment: None,
+            span: None,
+        };
+        let dn_b_id = dn_b.id;
+        store.insert(IRNode::DefinedName(dn_b));
+        let dn_a = DefinedName {
+            id: NodeId::new(),
+            name: "Alpha".to_string(),
+            value: "Sheet1!$B$1".to_string(),
+            local_sheet_id: Some(1),
+            hidden: false,
+            comment: None,
+            span: None,
+        };
+        let dn_a_id = dn_a.id;
+        store.insert(IRNode::DefinedName(dn_a));
+
+        let cache_2 = PivotCache::new(2);
+        let cache_2_id = cache_2.id;
+        store.insert(IRNode::PivotCache(cache_2));
+        let cache_1 = PivotCache::new(1);
+        let cache_1_id = cache_1.id;
+        store.insert(IRNode::PivotCache(cache_1));
+
+        doc.content = vec![section_b_id, section_a_id];
+        doc.shared_parts = vec![part_id, media_id];
+        doc.defined_names = vec![dn_b_id, dn_a_id];
+        doc.pivot_caches = vec![cache_2_id, cache_1_id];
+        doc.diagnostics = vec![part_id, media_id];
+        let root = doc.id;
+        store.insert(IRNode::Document(doc));
+
+        normalize_store(&mut store, root);
+
+        let IRNode::Document(doc) = store.get(root).expect("document present") else {
+            panic!("expected document node");
+        };
+        assert_eq!(doc.content, vec![section_a_id, section_b_id]);
+        assert_eq!(doc.shared_parts, vec![media_id, part_id]);
+        assert_eq!(doc.defined_names, vec![dn_a_id, dn_b_id]);
+        assert_eq!(doc.pivot_caches, vec![cache_1_id, cache_2_id]);
+        assert_eq!(doc.diagnostics, vec![media_id, part_id]);
+    }
+
+    #[test]
+    fn normalize_store_sorts_worksheet_children_and_handles_non_document_root() {
+        let mut store = IrStore::new();
+
+        let mut worksheet = Worksheet::new("Sheet1", 1);
+        let c_b2 = Cell::new("B2", 1, 1);
+        let c_b2_id = c_b2.id;
+        store.insert(IRNode::Cell(c_b2));
+        let c_a1 = Cell::new("A1", 0, 0);
+        let c_a1_id = c_a1.id;
+        store.insert(IRNode::Cell(c_a1));
+
+        let part = ExtensionPart::new("z.ext", 1, ExtensionPartKind::Unknown);
+        let part_id = part.id;
+        store.insert(IRNode::ExtensionPart(part));
+        let media = MediaAsset::new("a.bin", MediaType::Other, 1);
+        let media_id = media.id;
+        store.insert(IRNode::MediaAsset(media));
+
+        worksheet.cells = vec![c_b2_id, c_a1_id];
+        worksheet.drawings = vec![part_id, media_id];
+        worksheet.tables = vec![part_id, media_id];
+        worksheet.conditional_formats = vec![part_id, media_id];
+        worksheet.data_validations = vec![part_id, media_id];
+        worksheet.pivot_tables = vec![part_id, media_id];
+        worksheet.comments = vec![part_id, media_id];
+        let ws_id = worksheet.id;
+        store.insert(IRNode::Worksheet(worksheet));
+
+        // Non-document root: normalization should still process worksheets.
+        normalize_store(&mut store, ws_id);
+
+        let IRNode::Worksheet(ws) = store.get(ws_id).expect("worksheet present") else {
+            panic!("expected worksheet node");
+        };
+        assert_eq!(ws.cells, vec![c_a1_id, c_b2_id]);
+        assert_eq!(ws.drawings, vec![media_id, part_id]);
+        assert_eq!(ws.tables, vec![media_id, part_id]);
+        assert_eq!(ws.conditional_formats, vec![media_id, part_id]);
+        assert_eq!(ws.data_validations, vec![media_id, part_id]);
+        assert_eq!(ws.pivot_tables, vec![media_id, part_id]);
+        assert_eq!(ws.comments, vec![media_id, part_id]);
+    }
+}

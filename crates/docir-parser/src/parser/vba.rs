@@ -1,13 +1,13 @@
 use docir_core::security::{MacroModuleType, MacroReference};
 
-pub(super) fn parse_vba_project_text(
-    text: &str,
-) -> (
+type VbaProjectTextParse = (
     Option<String>,
     Vec<(String, MacroModuleType)>,
     Vec<MacroReference>,
     bool,
-) {
+);
+
+pub(super) fn parse_vba_project_text(text: &str) -> VbaProjectTextParse {
     let mut project_name = None;
     let mut modules = Vec::new();
     let mut references = Vec::new();
@@ -115,6 +115,9 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
                     pos += 2;
                     let (offset, length) = decode_copy_token(token, chunk_out.len());
                     for _ in 0..length {
+                        // offset == 0 indicates malformed token (would cause underflow)
+                        // offset > chunk_out.len() would cause index out of bounds
+                        // decode_copy_token ensures offset >= 1, so this check is defensive
                         if offset == 0 || offset > chunk_out.len() {
                             break;
                         }
@@ -128,6 +131,12 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
     }
 
     Some(out)
+}
+
+pub(super) fn normalize_vba_source_text(data: &[u8]) -> String {
+    let text = String::from_utf8_lossy(data);
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+    text.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 fn decode_copy_token(token: u16, decompressed_len: usize) -> (usize, usize) {

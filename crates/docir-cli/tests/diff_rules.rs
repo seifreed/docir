@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(serde::Deserialize)]
@@ -12,7 +12,7 @@ struct FixtureEntry {
     path: String,
 }
 
-fn fixture_path_by_suffix(root: &PathBuf, manifest: &Manifest, suffix: &str) -> PathBuf {
+fn fixture_path_by_suffix(root: &Path, manifest: &Manifest, suffix: &str) -> PathBuf {
     manifest
         .fixtures
         .iter()
@@ -92,6 +92,59 @@ fn rules_exports_json() {
     assert!(status.success(), "rules failed for {:?}", input);
     assert!(rules_out.exists());
     let rules_data = fs::read_to_string(&rules_out).expect("read rules");
+    let value: serde_json::Value = serde_json::from_str(&rules_data).expect("rules json parses");
+    assert!(value.get("findings").is_some());
+}
+
+#[test]
+fn rules_accepts_profile_json_file() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let manifest_path = root.join("fixtures/manifest.json");
+    let data = fs::read_to_string(&manifest_path).expect("read manifest");
+    let manifest: Manifest = serde_json::from_str(&data).expect("parse manifest");
+
+    let input = fixture_path_by_suffix(&root, &manifest, "rich.docx");
+    let bin = env!("CARGO_BIN_EXE_docir");
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let rules_out = tmp.path().join("rules_with_profile.json");
+    let profile_path = tmp.path().join("profile.json");
+    fs::write(
+        &profile_path,
+        r#"{
+  "enabled_rules": ["many_external_references"],
+  "disabled_rules": [],
+  "severity_overrides": {
+    "many_external_references": "High"
+  },
+  "threshold_overrides": {
+    "many_external_references": 1
+  }
+}"#,
+    )
+    .expect("write profile json");
+
+    let status = Command::new(bin)
+        .arg("rules")
+        .arg(&input)
+        .arg("--profile")
+        .arg(&profile_path)
+        .arg("--output")
+        .arg(&rules_out)
+        .status()
+        .expect("run rules with profile");
+    assert!(
+        status.success(),
+        "rules with profile failed for {:?}",
+        input
+    );
+    assert!(rules_out.exists());
+
+    let rules_data = fs::read_to_string(&rules_out).expect("read rules output");
     let value: serde_json::Value = serde_json::from_str(&rules_data).expect("rules json parses");
     assert!(value.get("findings").is_some());
 }

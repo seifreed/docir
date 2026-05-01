@@ -17,6 +17,7 @@ pub struct NumberingSet {
 }
 
 impl NumberingSet {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

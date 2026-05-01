@@ -13,6 +13,9 @@ pub(super) fn parse_dde_instruction(instruction: &str) -> Option<DdeField> {
 
     let parts = extract_quoted_parts(instruction);
     let application = parts.first().cloned().unwrap_or_default();
+    if application.is_empty() {
+        return None;
+    }
     let topic = parts.get(1).cloned().unwrap_or_default();
     let item = parts.get(2).cloned().unwrap_or_default();
 
@@ -33,7 +36,7 @@ fn extract_quoted_parts(input: &str) -> Vec<String> {
     for ch in input.chars() {
         if ch == '"' {
             in_quotes = !in_quotes;
-            if !in_quotes && !current.is_empty() {
+            if !in_quotes {
                 parts.push(current.clone());
                 current.clear();
             }
@@ -63,11 +66,18 @@ mod tests {
 
     #[test]
     fn parse_dde_instruction_handles_missing_quoted_parts() {
-        let parsed = parse_dde_instruction("DDE").expect("expected DDE parse");
-        assert_eq!(parsed.field_type, DdeFieldType::Dde);
-        assert_eq!(parsed.application, "");
+        let parsed =
+            parse_dde_instruction(r#"DDEAUTO "winword" "" """#).expect("expected DDE parse");
+        assert_eq!(parsed.field_type, DdeFieldType::DdeAuto);
+        assert_eq!(parsed.application, "winword");
         assert_eq!(parsed.topic, None);
         assert_eq!(parsed.item, None);
+    }
+
+    #[test]
+    fn parse_dde_instruction_rejects_empty_application() {
+        assert!(parse_dde_instruction(r#"DDEAUTO "" "/c calc" "A1""#).is_none());
+        assert!(parse_dde_instruction("DDE").is_none());
     }
 
     #[test]

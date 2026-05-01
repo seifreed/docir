@@ -22,6 +22,7 @@ pub struct SlicerPart {
 }
 
 impl SlicerPart {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -48,6 +49,7 @@ pub struct TimelinePart {
 }
 
 impl TimelinePart {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

@@ -14,6 +14,7 @@ pub struct SharedStringTable {
 }
 
 impl SharedStringTable {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: new_node_id(),
@@ -50,6 +51,7 @@ pub struct SpreadsheetStyles {
 }
 
 impl SpreadsheetStyles {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: new_node_id(),
@@ -171,6 +173,7 @@ pub struct DxfStyle {
 }
 
 impl DxfStyle {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             num_fmt: None,

@@ -51,6 +51,7 @@ pub struct RuleReport {
 }
 
 impl RuleReport {
+    /// Public API entrypoint: is_empty.
     pub fn is_empty(&self) -> bool {
         self.findings.is_empty()
     }
@@ -152,5 +153,137 @@ pub(crate) fn build_context<'a>(
         document,
         metadata,
         thresholds: profile.thresholds.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::RuleProfile;
+    use docir_core::ir::{Document, DocumentMetadata, IRNode};
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
+
+    struct CountingRule {
+        id: &'static str,
+        calls: Arc<AtomicU32>,
+    }
+
+    impl Rule for CountingRule {
+        fn id(&self) -> &'static str {
+            self.id
+        }
+
+        fn name(&self) -> &'static str {
+            "counting"
+        }
+
+        fn description(&self) -> &'static str {
+            "test rule"
+        }
+
+        fn category(&self) -> RuleCategory {
+            RuleCategory::Security
+        }
+
+        fn default_severity(&self) -> Severity {
+            Severity::Low
+        }
+
+        fn run(&self, _ctx: &RuleContext, findings: &mut Vec<Finding>) {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            findings.push(Finding {
+                rule_id: self.id.to_string(),
+                rule_name: "counting".to_string(),
+                category: RuleCategory::Security,
+                severity: Severity::Low,
+                message: "generated".to_string(),
+                context: Vec::new(),
+                node_id: None,
+                node_type: None,
+                location: None,
+            });
+        }
+    }
+
+    fn make_store_with_document(include_metadata: bool) -> (IrStore, NodeId) {
+        let mut store = IrStore::new();
+        let mut doc = Document::new(docir_core::types::DocumentFormat::WordProcessing);
+        if include_metadata {
+            let metadata = DocumentMetadata::default();
+            let metadata_id = metadata.id;
+            doc.metadata = Some(metadata_id);
+            store.insert(IRNode::Metadata(metadata));
+        }
+        let root_id = doc.id;
+        store.insert(IRNode::Document(doc));
+        (store, root_id)
+    }
+
+    #[test]
+    fn rule_report_is_empty_reflects_findings_presence() {
+        let empty = RuleReport {
+            findings: Vec::new(),
+        };
+        let non_empty = RuleReport {
+            findings: vec![Finding {
+                rule_id: "X".to_string(),
+                rule_name: "x".to_string(),
+                category: RuleCategory::Security,
+                severity: Severity::Info,
+                message: "msg".to_string(),
+                context: Vec::new(),
+                node_id: None,
+                node_type: None,
+                location: None,
+            }],
+        };
+        assert!(empty.is_empty());
+        assert!(!non_empty.is_empty());
+    }
+
+    #[test]
+    fn build_context_populates_document_and_metadata_when_available() {
+        let (store, root_id) = make_store_with_document(true);
+        let ctx = build_context(&store, root_id, &RuleProfile::default());
+        assert!(ctx.document.is_some());
+        assert!(ctx.metadata.is_some());
+    }
+
+    #[test]
+    fn build_context_handles_missing_root_document() {
+        let store = IrStore::new();
+        let root_id = NodeId::new();
+        let ctx = build_context(&store, root_id, &RuleProfile::default());
+        assert!(ctx.document.is_none());
+        assert!(ctx.metadata.is_none());
+    }
+
+    #[test]
+    fn run_with_profile_applies_disable_and_severity_override() {
+        let calls_disabled = Arc::new(AtomicU32::new(0));
+        let calls_enabled = Arc::new(AtomicU32::new(0));
+        let mut engine = RuleEngine { rules: Vec::new() };
+        engine.add_rule(Box::new(CountingRule {
+            id: "R-ENABLED",
+            calls: calls_enabled.clone(),
+        }));
+        engine.add_rule(Box::new(CountingRule {
+            id: "R-DISABLED",
+            calls: calls_disabled.clone(),
+        }));
+
+        let (store, root_id) = make_store_with_document(false);
+        let mut profile = RuleProfile::default();
+        profile.disabled_rules.push("R-DISABLED".to_string());
+        profile
+            .severity_overrides
+            .insert("R-ENABLED".to_string(), Severity::Critical);
+
+        let report = engine.run_with_profile(&store, root_id, &profile);
+        assert_eq!(calls_enabled.load(Ordering::Relaxed), 1);
+        assert_eq!(calls_disabled.load(Ordering::Relaxed), 0);
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].severity, Severity::Critical);
     }
 }

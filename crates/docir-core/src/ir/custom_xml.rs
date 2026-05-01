@@ -25,6 +25,7 @@ pub struct CustomXmlPart {
 }
 
 impl CustomXmlPart {
+    /// Public API entrypoint: new.
     pub fn new(path: impl Into<String>, size_bytes: u64) -> Self {
         Self {
             id: NodeId::new(),

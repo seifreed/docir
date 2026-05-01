@@ -1,27 +1,21 @@
 //! Built-in rules for docir IR analysis.
 
-use crate::{Finding, Rule, RuleCategory, RuleContext, RuleThresholds, Severity};
+use crate::{Finding, Rule, RuleContext, RuleThresholds};
 use docir_core::ir::IRNode;
-use docir_core::types::NodeType;
 
 mod burst;
+mod security_formula;
+mod security_presence;
 mod structure;
 mod support;
-use support::{add_finding, is_suspicious_formula, visit_nodes};
+use security_formula::security_formula_rules;
+use security_presence::security_presence_rules;
+use support::{add_finding, visit_nodes};
 
 pub(crate) fn default_rules() -> Vec<Box<dyn Rule>> {
-    let mut rules: Vec<Box<dyn Rule>> = vec![
-        Box::new(MacroProjectRule),
-        Box::new(MacroAutoExecRule),
-        Box::new(SuspiciousVbaCallRule),
-        Box::new(XlmMacroRule),
-        Box::new(OleObjectRule),
-        Box::new(ActiveXControlRule),
-        Box::new(DdeFieldRule),
-        Box::new(ExternalReferenceRule),
-        Box::new(ExternalHyperlinkRule),
-        Box::new(SuspiciousFormulaRule),
-    ];
+    let mut rules: Vec<Box<dyn Rule>> = Vec::new();
+    rules.extend(security_presence_rules());
+    rules.extend(security_formula_rules());
     rules.extend(burst::burst_rules());
     rules.extend(structure::structure_rules());
     rules
@@ -41,13 +35,13 @@ fn threshold_max_external_links(thresholds: &RuleThresholds) -> Option<usize> {
 
 fn count_ole_objects(ctx: &RuleContext) -> usize {
     ctx.document
-        .map(|doc| doc.security.ole_objects.len())
+        .map(|doc| doc.security.ole_object_count())
         .unwrap_or(0)
 }
 
 fn count_activex_controls(ctx: &RuleContext) -> usize {
     ctx.document
-        .map(|doc| doc.security.activex_controls.len())
+        .map(|doc| doc.security.activex_control_count())
         .unwrap_or(0)
 }
 
@@ -76,7 +70,72 @@ fn add_security_node_findings(
     }
 }
 
-fn for_each_external_hyperlink(
+pub(super) fn run_security_node_rule(
+    ctx: &RuleContext,
+    findings: &mut Vec<Finding>,
+    rule: &dyn Rule,
+    enabled: impl FnOnce(&docir_core::ir::Document) -> bool,
+    ids: impl FnOnce(&docir_core::ir::Document) -> &[docir_core::types::NodeId],
+    message_for_node: impl Fn(&IRNode) -> Option<String>,
+    fallback_message: &'static str,
+) {
+    let Some(doc) = ctx.document else {
+        return;
+    };
+    if !enabled(doc) {
+        return;
+    }
+    add_security_node_findings(
+        ctx,
+        findings,
+        rule,
+        ids(doc),
+        message_for_node,
+        fallback_message,
+    );
+}
+
+pub(super) fn run_ole_object_rule(ctx: &RuleContext, findings: &mut Vec<Finding>, rule: &dyn Rule) {
+    run_security_node_rule(
+        ctx,
+        findings,
+        rule,
+        |doc| doc.security.has_ole_objects(),
+        |doc| doc.security.ole_object_ids(),
+        |node| match node {
+            IRNode::OleObject(ole) => Some(format!(
+                "OLE object: {}",
+                ole.prog_id.as_deref().unwrap_or("unknown")
+            )),
+            _ => None,
+        },
+        "OLE object detected",
+    );
+}
+
+pub(super) fn run_activex_control_rule(
+    ctx: &RuleContext,
+    findings: &mut Vec<Finding>,
+    rule: &dyn Rule,
+) {
+    run_security_node_rule(
+        ctx,
+        findings,
+        rule,
+        |doc| doc.security.has_activex_controls(),
+        |doc| doc.security.activex_control_ids(),
+        |node| match node {
+            IRNode::ActiveXControl(ctrl) => Some(format!(
+                "ActiveX control detected: {}",
+                ctrl.name.as_deref().unwrap_or("unknown")
+            )),
+            _ => None,
+        },
+        "ActiveX control detected",
+    );
+}
+
+pub(super) fn for_each_external_hyperlink(
     ctx: &RuleContext,
     mut f: impl FnMut(&IRNode, &docir_core::ir::Hyperlink),
 ) {
@@ -89,445 +148,10 @@ fn for_each_external_hyperlink(
     });
 }
 
-/// Rule: Macro project present.
-struct MacroProjectRule;
-
-impl Rule for MacroProjectRule {
-    fn id(&self) -> &'static str {
-        "SEC-001"
-    }
-
-    fn name(&self) -> &'static str {
-        "Macro project present"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects presence of VBA macro project"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::Critical
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(doc) = ctx.document else {
-            return;
-        };
-        if let Some(macro_id) = doc.security.macro_project {
-            let node = ctx.store.get(macro_id);
-            add_finding(
-                findings,
-                self,
-                "VBA macro project detected".to_string(),
-                node,
-                ctx,
-            );
-        }
-    }
-}
-
-/// Rule: Macro auto-exec procedures.
-struct MacroAutoExecRule;
-
-impl Rule for MacroAutoExecRule {
-    fn id(&self) -> &'static str {
-        "SEC-002"
-    }
-
-    fn name(&self) -> &'static str {
-        "Macro auto-exec detected"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects auto-exec procedures in VBA macro project"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::Critical
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(doc) = ctx.document else {
-            return;
-        };
-        let Some(macro_id) = doc.security.macro_project else {
-            return;
-        };
-        let Some(IRNode::MacroProject(project)) = ctx.store.get(macro_id) else {
-            return;
-        };
-
-        if project.has_auto_exec {
-            add_finding(
-                findings,
-                self,
-                format!("Auto-exec macros: {:?}", project.auto_exec_procedures),
-                Some(&IRNode::MacroProject(project.clone())),
-                ctx,
-            );
-        }
-    }
-}
-
-/// Rule: Suspicious VBA API calls.
-struct SuspiciousVbaCallRule;
-
-impl Rule for SuspiciousVbaCallRule {
-    fn id(&self) -> &'static str {
-        "SEC-003"
-    }
-
-    fn name(&self) -> &'static str {
-        "Suspicious VBA API"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects potentially dangerous VBA API calls"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::High
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        for module_id in ctx.store.iter_ids_by_type(NodeType::MacroModule) {
-            let Some(IRNode::MacroModule(module)) = ctx.store.get(module_id) else {
-                continue;
-            };
-            for call in &module.suspicious_calls {
-                add_finding(
-                    findings,
-                    self,
-                    format!("Suspicious VBA call: {}", call.name),
-                    Some(&IRNode::MacroModule(module.clone())),
-                    ctx,
-                );
-            }
-        }
-    }
-}
-
-/// Rule: XLM macros present.
-struct XlmMacroRule;
-
-impl Rule for XlmMacroRule {
-    fn id(&self) -> &'static str {
-        "SEC-004"
-    }
-
-    fn name(&self) -> &'static str {
-        "XLM macros present"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects Excel 4.0 XLM macros"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::High
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(doc) = ctx.document else {
-            return;
-        };
-        if !doc.security.xlm_macros.is_empty() {
-            add_finding(
-                findings,
-                self,
-                format!("XLM macros detected: {}", doc.security.xlm_macros.len()),
-                None,
-                ctx,
-            );
-        }
-    }
-}
-
-/// Rule: OLE object present.
-struct OleObjectRule;
-
-impl Rule for OleObjectRule {
-    fn id(&self) -> &'static str {
-        "SEC-005"
-    }
-
-    fn name(&self) -> &'static str {
-        "OLE object present"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects embedded OLE objects"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::High
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(doc) = ctx.document else {
-            return;
-        };
-        if doc.security.ole_objects.is_empty() {
-            return;
-        }
-        add_security_node_findings(
-            ctx,
-            findings,
-            self,
-            &doc.security.ole_objects,
-            |node| match node {
-                IRNode::OleObject(ole) => Some(format!(
-                    "OLE object: {}",
-                    ole.prog_id.as_deref().unwrap_or("unknown")
-                )),
-                _ => None,
-            },
-            "OLE object detected",
-        );
-    }
-}
-
-/// Rule: ActiveX control present.
-struct ActiveXControlRule;
-
-impl Rule for ActiveXControlRule {
-    fn id(&self) -> &'static str {
-        "SEC-007"
-    }
-
-    fn name(&self) -> &'static str {
-        "ActiveX control present"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects embedded ActiveX controls"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::High
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(doc) = ctx.document else {
-            return;
-        };
-        if doc.security.activex_controls.is_empty() {
-            return;
-        }
-        add_security_node_findings(
-            ctx,
-            findings,
-            self,
-            &doc.security.activex_controls,
-            |node| match node {
-                IRNode::ActiveXControl(ctrl) => Some(format!(
-                    "ActiveX control detected: {}",
-                    ctrl.name.as_deref().unwrap_or("unknown")
-                )),
-                _ => None,
-            },
-            "ActiveX control detected",
-        );
-    }
-}
-
-/// Rule: DDE field present.
-struct DdeFieldRule;
-
-impl Rule for DdeFieldRule {
-    fn id(&self) -> &'static str {
-        "SEC-009"
-    }
-
-    fn name(&self) -> &'static str {
-        "DDE field present"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects DDE fields"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::High
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(doc) = ctx.document else {
-            return;
-        };
-        if doc.security.dde_fields.is_empty() {
-            return;
-        }
-        for field in &doc.security.dde_fields {
-            add_finding(
-                findings,
-                self,
-                format!("DDE field: {}", field.instruction),
-                None,
-                ctx,
-            );
-        }
-    }
-}
-
-/// Rule: External reference present.
-struct ExternalReferenceRule;
-
-impl Rule for ExternalReferenceRule {
-    fn id(&self) -> &'static str {
-        "SEC-010"
-    }
-
-    fn name(&self) -> &'static str {
-        "External references present"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects external references"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::Low
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        let Some(doc) = ctx.document else {
-            return;
-        };
-        if doc.security.external_refs.is_empty() {
-            return;
-        }
-        add_security_node_findings(
-            ctx,
-            findings,
-            self,
-            &doc.security.external_refs,
-            |node| match node {
-                IRNode::ExternalReference(ext) => {
-                    Some(format!("External reference: {}", ext.target))
-                }
-                _ => None,
-            },
-            "External reference detected",
-        );
-    }
-}
-
-/// Rule: External hyperlinks in document content.
-struct ExternalHyperlinkRule;
-
-impl Rule for ExternalHyperlinkRule {
-    fn id(&self) -> &'static str {
-        "SEC-011"
-    }
-
-    fn name(&self) -> &'static str {
-        "External hyperlinks"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects external hyperlinks in document content"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::Low
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        for_each_external_hyperlink(ctx, |node, link| {
-            add_finding(
-                findings,
-                self,
-                format!("External hyperlink: {}", link.target),
-                Some(node),
-                ctx,
-            );
-        });
-    }
-}
-
-/// Rule: Suspicious formulas.
-struct SuspiciousFormulaRule;
-
-impl Rule for SuspiciousFormulaRule {
-    fn id(&self) -> &'static str {
-        "SEC-013"
-    }
-
-    fn name(&self) -> &'static str {
-        "Suspicious formulas"
-    }
-
-    fn description(&self) -> &'static str {
-        "Detects formulas that invoke external or shell-like functions"
-    }
-
-    fn category(&self) -> RuleCategory {
-        RuleCategory::Security
-    }
-
-    fn default_severity(&self) -> Severity {
-        Severity::High
-    }
-
-    fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
-        visit_nodes(ctx, |node| {
-            if let IRNode::Cell(cell) = node {
-                if let Some(formula) = &cell.formula {
-                    if is_suspicious_formula(&formula.text) {
-                        add_finding(
-                            findings,
-                            self,
-                            format!("Suspicious formula in {}: {}", cell.reference, formula.text),
-                            Some(node),
-                            ctx,
-                        );
-                    }
-                }
-            }
-        });
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{RuleCategory, Severity};
     use crate::{RuleEngine, RuleProfile};
     use docir_core::ir::{Cell, CellFormula, Document, FormulaType, Hyperlink, IRNode};
     use docir_core::security::{
@@ -652,8 +276,8 @@ mod tests {
         let found: HashSet<String> = report.findings.iter().map(|f| f.rule_id.clone()).collect();
 
         for id in [
-            "SEC-001", "SEC-002", "SEC-003", "SEC-004", "SEC-005", "SEC-007", "SEC-009",
-            "SEC-010", "SEC-011", "SEC-013",
+            "SEC-001", "SEC-002", "SEC-003", "SEC-004", "SEC-005", "SEC-007", "SEC-009", "SEC-010",
+            "SEC-011", "SEC-013",
         ] {
             assert!(found.contains(id), "missing expected finding {id}");
         }

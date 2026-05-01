@@ -1,11 +1,18 @@
 use crate::error::ParseError;
-use crate::xml_utils::{local_name, read_event};
+use crate::xml_utils::{attr_each, local_name, read_event};
 use docir_core::ir::{WebExtension, WebExtensionProperty, WebExtensionTaskpane};
 use docir_core::types::SourceSpan;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
+type AttrList = Vec<(Vec<u8>, String)>;
+
+/// Public API entrypoint: parse_web_extension.
 pub fn parse_web_extension(xml: &str, path: &str) -> Result<WebExtension, ParseError> {
+    parse_web_extension_impl(xml, path)
+}
+
+fn parse_web_extension_impl(xml: &str, path: &str) -> Result<WebExtension, ParseError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
@@ -16,57 +23,24 @@ pub fn parse_web_extension(xml: &str, path: &str) -> Result<WebExtension, ParseE
     loop {
         match read_event(&mut reader, &mut buf, path)? {
             Event::Start(e) | Event::Empty(e) => {
-                let name_buf = e.name().as_ref().to_vec();
-                let local = local_name(&name_buf);
+                let name = e.name().as_ref().to_vec();
+                let local = local_name(&name);
+                let attrs = collect_local_attrs(&e);
+
                 match local {
                     b"webextension" => {
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            if key == b"id" || key == b"rId" || key == b"rid" {
-                                ext.extension_id = Some(val);
-                            }
+                        if let Some(value) = find_attr(&attrs, &[b"id", b"rId", b"rid"]) {
+                            ext.extension_id = Some(value.to_string());
                         }
                     }
                     b"storeReference" | b"storereference" => {
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            match key {
-                                b"store" => ext.store = Some(val),
-                                b"storeType" | b"storetype" => ext.store_type = Some(val),
-                                b"id" => ext.store_id = Some(val),
-                                b"version" => ext.version = Some(val),
-                                _ => {}
-                            }
-                        }
+                        apply_web_extension_store_reference(&mut ext, &attrs);
                     }
                     b"reference" => {
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            match key {
-                                b"id" => ext.reference_id = Some(val),
-                                b"version" => ext.reference_version = Some(val),
-                                b"store" => ext.store = Some(val),
-                                b"storeType" | b"storetype" => ext.store_type = Some(val),
-                                _ => {}
-                            }
-                        }
+                        apply_web_extension_reference(&mut ext, &attrs);
                     }
                     b"property" => {
-                        let mut name = None;
-                        let mut value = None;
-                        for attr in e.attributes().flatten() {
-                            let key = local_name(attr.key.as_ref());
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            match key {
-                                b"name" => name = Some(val),
-                                b"value" | b"val" => value = Some(val),
-                                _ => {}
-                            }
-                        }
-                        if let (Some(name), Some(value)) = (name, value) {
+                        if let Some((name, value)) = parse_web_extension_property(&attrs) {
                             ext.properties.push(WebExtensionProperty { name, value });
                         }
                     }
@@ -82,6 +56,7 @@ pub fn parse_web_extension(xml: &str, path: &str) -> Result<WebExtension, ParseE
     Ok(ext)
 }
 
+/// Public API entrypoint: parse_web_extension_taskpanes.
 pub fn parse_web_extension_taskpanes(
     xml: &str,
     path: &str,
@@ -96,32 +71,30 @@ pub fn parse_web_extension_taskpanes(
     loop {
         match read_event(&mut reader, &mut buf, path)? {
             Event::Start(e) => {
-                let name_buf = e.name().as_ref().to_vec();
-                let local = local_name(&name_buf);
+                let name = e.name().as_ref().to_vec();
+                let local = local_name(&name);
                 if local == b"taskpane" {
-                    let pane = new_taskpane(path, &e);
-                    current = Some(pane);
+                    current = Some(new_taskpane(path, &e));
                 } else if local == b"webextensionref" {
                     if let Some(pane) = current.as_mut() {
-                        apply_webextension_ref(pane, &e);
+                        apply_webextension_ref_attrs(pane, &collect_local_attrs(&e));
                     }
                 }
             }
             Event::Empty(e) => {
-                let name_buf = e.name().as_ref().to_vec();
-                let local = local_name(&name_buf);
+                let name = e.name().as_ref().to_vec();
+                let local = local_name(&name);
                 if local == b"taskpane" {
-                    let pane = new_taskpane(path, &e);
-                    panes.push(pane);
+                    panes.push(new_taskpane(path, &e));
                 } else if local == b"webextensionref" {
                     if let Some(pane) = current.as_mut() {
-                        apply_webextension_ref(pane, &e);
+                        apply_webextension_ref_attrs(pane, &collect_local_attrs(&e));
                     }
                 }
             }
             Event::End(e) => {
-                let name_buf = e.name().as_ref().to_vec();
-                let local = local_name(&name_buf);
+                let name = e.name().as_ref().to_vec();
+                let local = local_name(&name);
                 if local == b"taskpane" {
                     if let Some(pane) = current.take() {
                         panes.push(pane);
@@ -137,22 +110,19 @@ pub fn parse_web_extension_taskpanes(
     Ok(panes)
 }
 
-fn new_taskpane(path: &str, e: &quick_xml::events::BytesStart<'_>) -> WebExtensionTaskpane {
+fn new_taskpane(path: &str, e: &BytesStart<'_>) -> WebExtensionTaskpane {
     let mut pane = WebExtensionTaskpane::new();
     pane.span = Some(SourceSpan::new(path));
-    apply_taskpane_attrs(&mut pane, e);
+    apply_taskpane_attrs(&mut pane, &collect_local_attrs(e));
     pane
 }
 
-fn apply_taskpane_attrs(pane: &mut WebExtensionTaskpane, e: &quick_xml::events::BytesStart<'_>) {
-    for attr in e.attributes().flatten() {
-        let key = local_name(attr.key.as_ref());
-        let val = String::from_utf8_lossy(&attr.value).to_string();
-        match key {
-            b"dockState" | b"dockstate" => pane.dock_state = Some(val),
+fn apply_taskpane_attrs(pane: &mut WebExtensionTaskpane, attrs: &AttrList) {
+    for (key, val) in attrs {
+        match key.as_slice() {
+            b"dockState" | b"dockstate" => pane.dock_state = Some(val.clone()),
             b"visibility" => {
-                let v = val.eq_ignore_ascii_case("true") || val == "1";
-                pane.visibility = Some(v);
+                pane.visibility = Some(val.as_bytes() == b"1" || val.eq_ignore_ascii_case("true"));
             }
             b"width" => pane.width = val.parse::<u32>().ok(),
             b"height" => pane.height = val.parse::<u32>().ok(),
@@ -163,12 +133,56 @@ fn apply_taskpane_attrs(pane: &mut WebExtensionTaskpane, e: &quick_xml::events::
     }
 }
 
-fn apply_webextension_ref(pane: &mut WebExtensionTaskpane, e: &quick_xml::events::BytesStart<'_>) {
-    for attr in e.attributes().flatten() {
-        let key = local_name(attr.key.as_ref());
-        let val = String::from_utf8_lossy(&attr.value).to_string();
-        if key == b"id" || key == b"rid" || key == b"rId" {
-            pane.web_extension_ref = Some(val);
+fn apply_web_extension_store_reference(ext: &mut WebExtension, attrs: &AttrList) {
+    for (key, val) in attrs {
+        match key.as_slice() {
+            b"store" => ext.store = Some(val.clone()),
+            b"storeType" | b"storetype" => ext.store_type = Some(val.clone()),
+            b"id" => ext.store_id = Some(val.clone()),
+            b"version" => ext.version = Some(val.clone()),
+            _ => {}
         }
     }
+}
+
+fn apply_web_extension_reference(ext: &mut WebExtension, attrs: &AttrList) {
+    for (key, val) in attrs {
+        match key.as_slice() {
+            b"id" => ext.reference_id = Some(val.clone()),
+            b"version" => ext.reference_version = Some(val.clone()),
+            b"store" => ext.store = Some(val.clone()),
+            b"storeType" | b"storetype" => ext.store_type = Some(val.clone()),
+            _ => {}
+        }
+    }
+}
+
+fn apply_webextension_ref_attrs(pane: &mut WebExtensionTaskpane, attrs: &AttrList) {
+    if let Some(value) = find_attr(attrs, &[b"id", b"rid", b"rId"]) {
+        pane.web_extension_ref = Some(value.to_string());
+    }
+}
+
+fn parse_web_extension_property(attrs: &AttrList) -> Option<(String, String)> {
+    let name = find_attr(attrs, &[b"name"])?;
+    let value = find_attr(attrs, &[b"value", b"val"])?;
+    Some((name.to_string(), value.to_string()))
+}
+
+fn collect_local_attrs(element: &BytesStart<'_>) -> AttrList {
+    let mut attrs = Vec::new();
+    attr_each(element, |key, value| {
+        attrs.push((key.to_vec(), String::from_utf8_lossy(value).to_string()));
+    });
+    attrs
+}
+
+fn find_attr<'a>(attrs: &'a AttrList, keys: &[&[u8]]) -> Option<&'a str> {
+    attrs.iter().find_map(|(key, val)| {
+        if keys.contains(&key.as_slice()) {
+            Some(val.as_str())
+        } else {
+            None
+        }
+    })
 }

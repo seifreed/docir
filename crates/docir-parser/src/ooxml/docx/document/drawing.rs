@@ -2,12 +2,12 @@ use super::{span_from_reader, DocxParser};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
-use crate::xml_utils::{attr_value, xml_error};
+use crate::xml_utils::{attr_bool_like, attr_u32_from_bytes, attr_value, xml_error};
 use docir_core::ir::{
     Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeTransform, ShapeType, TextAlignment,
 };
 use docir_core::types::NodeId;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
 pub(super) fn parse_drawing(
@@ -189,11 +189,7 @@ fn parse_drawing_text_paragraph(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"a:pPr" => {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"algn" {
-                            alignment = map_alignment(&String::from_utf8_lossy(&attr.value));
-                        }
-                    }
+                    alignment = parse_paragraph_alignment(&e);
                 }
                 b"a:r" => {
                     let run = parse_drawing_text_run(reader, doc_path)?;
@@ -249,23 +245,10 @@ fn parse_drawing_text_run(
                     text.push_str(&t);
                 }
                 b"a:rPr" => {
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"b" => bold = Some(attr.value.as_ref() == b"1"),
-                            b"i" => italic = Some(attr.value.as_ref() == b"1"),
-                            b"sz" => {
-                                font_size = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            _ => {}
-                        }
-                    }
+                    parse_run_style_attrs(&e, &mut bold, &mut italic, &mut font_size);
                 }
                 b"a:latin" => {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"typeface" {
-                            font_family = Some(String::from_utf8_lossy(&attr.value).to_string());
-                        }
-                    }
+                    font_family = parse_run_font_family(&e);
                 }
                 _ => {}
             },
@@ -318,5 +301,118 @@ fn map_alignment(value: &str) -> Option<TextAlignment> {
         "just" => Some(TextAlignment::Justify),
         "dist" => Some(TextAlignment::Distribute),
         _ => None,
+    }
+}
+
+fn parse_paragraph_alignment(start: &BytesStart<'_>) -> Option<TextAlignment> {
+    attr_value(start, b"algn").and_then(|value| map_alignment(&value))
+}
+
+fn parse_run_style_attrs(
+    start: &BytesStart<'_>,
+    bold: &mut Option<bool>,
+    italic: &mut Option<bool>,
+    font_size: &mut Option<u32>,
+) {
+    if let Some(value) = attr_value(start, b"b") {
+        *bold = Some(attr_bool_like(value.as_bytes()));
+    }
+    if let Some(value) = attr_value(start, b"i") {
+        *italic = Some(attr_bool_like(value.as_bytes()));
+    }
+    *font_size = attr_u32_from_bytes(start, b"sz");
+}
+
+fn parse_run_font_family(start: &BytesStart<'_>) -> Option<String> {
+    attr_value(start, b"typeface")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::xml_utils::reader_from_str;
+
+    #[test]
+    fn map_shape_type_covers_connectors_and_arrow_variants() {
+        assert_eq!(map_shape_type("straightConnector1"), ShapeType::Line);
+        assert_eq!(map_shape_type("bentConnector3"), ShapeType::Line);
+        assert_eq!(map_shape_type("rightArrow"), ShapeType::Arrow);
+        assert_eq!(map_shape_type("curvedUpArrow"), ShapeType::Arrow);
+        assert_eq!(map_shape_type("rect"), ShapeType::Rectangle);
+        assert_eq!(map_shape_type("unknownShape"), ShapeType::Custom);
+    }
+
+    #[test]
+    fn map_alignment_maps_known_values_and_unknown_to_none() {
+        assert_eq!(map_alignment("l"), Some(TextAlignment::Left));
+        assert_eq!(map_alignment("ctr"), Some(TextAlignment::Center));
+        assert_eq!(map_alignment("r"), Some(TextAlignment::Right));
+        assert_eq!(map_alignment("just"), Some(TextAlignment::Justify));
+        assert_eq!(map_alignment("dist"), Some(TextAlignment::Distribute));
+        assert_eq!(map_alignment("x"), None);
+    }
+
+    #[test]
+    fn parse_drawing_text_run_parses_text_and_run_style_flags() {
+        let xml = r#"
+            <a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:rPr b="0" i="1" sz="bad"></a:rPr>
+              <a:latin typeface="Calibri"></a:latin>
+              <a:t>Hello</a:t>
+            </a:r>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"a:r" => break,
+                Ok(Event::Eof) => panic!("a:r start not found"),
+                Ok(_) => {}
+                Err(err) => panic!("unexpected xml read error: {err}"),
+            }
+            buf.clear();
+        }
+
+        let run =
+            parse_drawing_text_run(&mut reader, "word/document.xml").expect("drawing run parse");
+        assert_eq!(run.text, "Hello");
+        assert_eq!(run.bold, Some(false));
+        assert_eq!(run.italic, Some(true));
+        assert_eq!(run.font_size, None);
+        assert_eq!(run.font_family.as_deref(), Some("Calibri"));
+    }
+
+    #[test]
+    fn parse_drawing_text_body_parses_alignment_runs_and_breaks() {
+        let xml = r#"
+            <a:txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:p>
+                <a:pPr algn="ctr"></a:pPr>
+                <a:r><a:t>Line1</a:t></a:r>
+                <a:br></a:br>
+                <a:r><a:t>Line2</a:t></a:r>
+              </a:p>
+            </a:txBody>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"a:txBody" => break,
+                Ok(Event::Eof) => panic!("a:txBody start not found"),
+                Ok(_) => {}
+                Err(err) => panic!("unexpected xml read error: {err}"),
+            }
+            buf.clear();
+        }
+
+        let text =
+            parse_drawing_text_body(&mut reader, "word/document.xml").expect("text body parse");
+        assert_eq!(text.paragraphs.len(), 1);
+        assert_eq!(text.paragraphs[0].alignment, Some(TextAlignment::Center));
+        assert_eq!(text.paragraphs[0].runs.len(), 3);
+        assert_eq!(text.paragraphs[0].runs[0].text, "Line1");
+        assert_eq!(text.paragraphs[0].runs[1].text, "\n");
+        assert_eq!(text.paragraphs[0].runs[2].text, "Line2");
     }
 }

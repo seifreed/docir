@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    ExternalRefType, ExternalReference, IRNode, Relationship, Relationships, SourceSpan, XlsxParser,
+};
 
 impl XlsxParser {
     pub(super) fn process_external_relationships(&mut self, rels: &Relationships, file_path: &str) {

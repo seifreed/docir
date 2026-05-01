@@ -13,4 +13,7 @@ docir-security = { workspace = true }
 docir-serialization = { workspace = true }
 docir-diff = { workspace = true }
 docir-rules = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
+sha2 = { workspace = true }
+zip = { workspace = true }

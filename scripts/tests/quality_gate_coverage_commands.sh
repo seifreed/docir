@@ -12,6 +12,8 @@ fi
 fake_bin="$(mktemp -d)"
 log_file="$(mktemp)"
 trap 'rm -rf "${fake_bin}"; rm -f "${log_file}"' EXIT
+coverage_threshold="$(sed -e 's/[[:space:]]*#.*$//' "${repo_root}/scripts/quality_coverage_threshold.txt" | tr -d ' \t\r\n')"
+coverage_threshold="${coverage_threshold:-88.23}"
 
 cat >"${fake_bin}/cargo" <<'SH'
 #!/usr/bin/env bash
@@ -26,6 +28,13 @@ printf '%s %s\n' "${subcmd}" "$*" >> "${QUALITY_GATE_COVERAGE_LOG}"
 
 if [ "${subcmd}" = "llvm-cov" ] && [ "${QUALITY_GATE_COVERAGE_FAIL:-0}" = "1" ]; then
   exit 101
+fi
+
+if [ "${subcmd}" = "metadata" ]; then
+  cat <<'JSON'
+{"workspace_members":[],"packages":[],"resolve":{}}
+JSON
+  exit 0
 fi
 
 exit 0
@@ -109,10 +118,12 @@ run_case \
   "coverage-command-contract" \
   0 \
   "QUALITY_GATE_RESULT=PASS CLASS=pass EXIT_CODE=0" \
+  "metadata --format-version 1 --no-deps --offline" \
+  "check --workspace --all-targets --all-features" \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test " \
-  "llvm-cov --workspace --all-features --summary-only --fail-under-lines 95"
+  "llvm-cov --workspace --all-features --summary-only --fail-under-lines ${coverage_threshold}"
 
 set +e
 output_file="$(mktemp)"
@@ -141,7 +152,9 @@ if [[ "${result_line}" != *"QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_
   exit 1
 fi
 
-if ! rg -q '^llvm-cov --workspace --all-features --summary-only --fail-under-lines 95$' "${log_file}"; then
+if ! rg -q '^metadata --format-version 1 --no-deps --offline$' "${log_file}" \
+  || ! rg -q '^check --workspace --all-targets --all-features$' "${log_file}" \
+  || ! rg -q "^llvm-cov --workspace --all-features --summary-only --fail-under-lines ${coverage_threshold}\$" "${log_file}"; then
   echo "coverage-threshold-fail: missing expected llvm-cov command invocation"
   cat "${log_file}"
   rm -f "${output_file}"

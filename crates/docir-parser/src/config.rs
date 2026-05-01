@@ -66,7 +66,7 @@ impl Default for RtfConfig {
 }
 
 /// HWP parsing configuration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct HwpConfig {
     /// Force parse encrypted HWP streams.
     pub force_parse_encrypted: bool,
@@ -74,16 +74,6 @@ pub struct HwpConfig {
     pub password: Option<String>,
     /// Dump HWP stream metadata (hash, size, compression).
     pub dump_streams: bool,
-}
-
-impl Default for HwpConfig {
-    fn default() -> Self {
-        Self {
-            force_parse_encrypted: false,
-            password: None,
-            dump_streams: false,
-        }
-    }
 }
 
 /// Parser configuration.

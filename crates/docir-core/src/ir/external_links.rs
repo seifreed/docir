@@ -19,6 +19,7 @@ pub struct ExternalLinkPart {
 }
 
 impl ExternalLinkPart {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

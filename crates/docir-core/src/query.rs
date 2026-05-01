@@ -59,34 +59,31 @@ impl Query {
         }
 
         if let Some(format) = self.format {
-            if let IRNode::Document(doc) = node {
-                if doc.format != format {
-                    return false;
-                }
-            } else {
+            let matches_format = match node {
+                IRNode::Document(doc) => doc.format == format,
+                _ => true,
+            };
+            if !matches_format {
                 return false;
             }
         }
 
         if let Some(expected) = self.has_external_refs {
-            if let IRNode::Document(doc) = node {
-                let has_refs = !doc.security.external_refs.is_empty();
-                if has_refs != expected {
-                    return false;
-                }
-            } else {
+            let has_refs = match node {
+                IRNode::Document(doc) => doc.security.has_external_references(),
+                _ => true,
+            };
+            if has_refs != expected {
                 return false;
             }
         }
 
         if let Some(expected) = self.has_macros {
-            if let IRNode::Document(doc) = node {
-                let has_macros =
-                    doc.security.macro_project.is_some() || !doc.security.xlm_macros.is_empty();
-                if has_macros != expected {
-                    return false;
-                }
-            } else {
+            let has_macros = match node {
+                IRNode::Document(doc) => doc.security.has_macros(),
+                _ => true,
+            };
+            if has_macros != expected {
                 return false;
             }
         }

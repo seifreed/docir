@@ -2,11 +2,17 @@
 
 use crate::error::ParseError;
 use crate::odf::security::scan_odf_security;
-use crate::parser::security::SecurityScanner as OoxmlSecurityScanner;
+use crate::parser::OoxmlSecurityScanner;
 use crate::zip_handler::PackageReader;
 use crate::ParserConfig;
 use docir_core::ir::{Diagnostics, Document};
 use docir_core::visitor::IrStore;
+
+pub struct OdfXmlInputs<'a> {
+    pub content_xml: Option<&'a str>,
+    pub styles_xml: Option<&'a str>,
+    pub settings_xml: Option<&'a str>,
+}
 
 pub trait SecurityScanner {
     fn scan_ooxml(
@@ -18,9 +24,7 @@ pub trait SecurityScanner {
 
     fn scan_odf(
         &self,
-        content_xml: Option<&str>,
-        styles_xml: Option<&str>,
-        settings_xml: Option<&str>,
+        xml: OdfXmlInputs<'_>,
         file_names: &[String],
         zip: &mut impl PackageReader,
         store: &mut IrStore,
@@ -44,24 +48,13 @@ impl SecurityScanner for DefaultSecurityScanner {
 
     fn scan_odf(
         &self,
-        content_xml: Option<&str>,
-        styles_xml: Option<&str>,
-        settings_xml: Option<&str>,
+        xml: OdfXmlInputs<'_>,
         file_names: &[String],
         zip: &mut impl PackageReader,
         store: &mut IrStore,
         doc: &mut Document,
         diagnostics: &mut Diagnostics,
     ) {
-        scan_odf_security(
-            content_xml,
-            styles_xml,
-            settings_xml,
-            file_names,
-            zip,
-            store,
-            doc,
-            diagnostics,
-        );
+        scan_odf_security(xml, file_names, zip, store, doc, diagnostics);
     }
 }

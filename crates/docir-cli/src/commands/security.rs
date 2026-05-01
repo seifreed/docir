@@ -1,18 +1,20 @@
 //! Security command implementation.
 
 use anyhow::Result;
-use docir_app::ParserConfig;
-use docir_security::analyzer::AnalysisResult;
-use std::path::PathBuf;
+use docir_app::{AnalysisResult, ParserConfig};
+use serde_json::json;
+use std::path::{Path, PathBuf};
 
-use crate::commands::util::build_app_and_parse;
+use crate::commands::util::{build_app_and_parse, write_json_output};
 
+/// Public API entrypoint: run.
 pub fn run(input: PathBuf, json: bool, verbose: bool, parser_config: &ParserConfig) -> Result<()> {
     let (app, parsed) = build_app_and_parse(&input, parser_config)?;
     let result = app.analyze_security(&parsed);
 
     if json {
-        print_json_report(&input, &result)?;
+        let output = build_json_report(&input, &result);
+        write_json_output(&output, true, None)?;
     } else {
         print_human_report(&input, &result, verbose);
     }
@@ -20,8 +22,8 @@ pub fn run(input: PathBuf, json: bool, verbose: bool, parser_config: &ParserConf
     Ok(())
 }
 
-fn print_json_report(input: &PathBuf, result: &AnalysisResult) -> Result<()> {
-    let output = serde_json::json!({
+fn build_json_report(input: &Path, result: &AnalysisResult) -> serde_json::Value {
+    let output = json!({
         "file": input.display().to_string(),
         "threat_level": format!("{}", result.threat_level),
         "has_macros": result.has_macros,
@@ -39,11 +41,10 @@ fn print_json_report(input: &PathBuf, result: &AnalysisResult) -> Result<()> {
             })
         }).collect::<Vec<_>>(),
     });
-    println!("{}", serde_json::to_string_pretty(&output)?);
-    Ok(())
+    output
 }
 
-fn print_human_report(input: &PathBuf, result: &AnalysisResult, verbose: bool) {
+fn print_human_report(input: &Path, result: &AnalysisResult, verbose: bool) {
     println!("Security Analysis Report");
     println!("========================");
     println!();
@@ -125,5 +126,29 @@ fn severity_marker(level: docir_core::security::ThreatLevel) -> &'static str {
         docir_core::security::ThreatLevel::Medium => "[!!]",
         docir_core::security::ThreatLevel::High => "[!!!]",
         docir_core::security::ThreatLevel::Critical => "[!!!!]",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{severity_marker, threat_level_marker};
+    use docir_core::security::ThreatLevel;
+
+    #[test]
+    fn threat_level_markers_cover_all_levels() {
+        assert_eq!(threat_level_marker(ThreatLevel::None), "[OK]    ");
+        assert_eq!(threat_level_marker(ThreatLevel::Low), "[LOW]   ");
+        assert_eq!(threat_level_marker(ThreatLevel::Medium), "[MEDIUM]");
+        assert_eq!(threat_level_marker(ThreatLevel::High), "[HIGH]  ");
+        assert_eq!(threat_level_marker(ThreatLevel::Critical), "[CRIT]  ");
+    }
+
+    #[test]
+    fn severity_markers_cover_all_levels() {
+        assert_eq!(severity_marker(ThreatLevel::None), "[ ]");
+        assert_eq!(severity_marker(ThreatLevel::Low), "[!]");
+        assert_eq!(severity_marker(ThreatLevel::Medium), "[!!]");
+        assert_eq!(severity_marker(ThreatLevel::High), "[!!!]");
+        assert_eq!(severity_marker(ThreatLevel::Critical), "[!!!!]");
     }
 }

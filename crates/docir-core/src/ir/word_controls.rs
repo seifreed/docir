@@ -29,6 +29,7 @@ pub struct ContentControl {
 }
 
 impl ContentControl {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -62,6 +63,7 @@ pub struct BookmarkStart {
 }
 
 impl BookmarkStart {
+    /// Public API entrypoint: new.
     pub fn new(bookmark_id: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),
@@ -85,6 +87,7 @@ pub struct BookmarkEnd {
 }
 
 impl BookmarkEnd {
+    /// Public API entrypoint: new.
     pub fn new(bookmark_id: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),
@@ -109,6 +112,7 @@ pub struct Field {
 }
 
 impl Field {
+    /// Public API entrypoint: new.
     pub fn new(instruction: Option<String>) -> Self {
         Self {
             id: NodeId::new(),

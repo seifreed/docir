@@ -10,6 +10,7 @@ pub struct PartSpec {
     pub expected_parser: &'static str,
 }
 
+/// Public API entrypoint: registry_for.
 pub fn registry_for(format: DocumentFormat) -> Vec<PartSpec> {
     match format {
         DocumentFormat::Hwp => hwp_registry(),

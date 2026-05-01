@@ -4,7 +4,9 @@ use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::input::read_all_with_limit;
 use crate::parse_utils::finalize_and_normalize;
-use crate::parser::{ParsedDocument, ParserConfig};
+use crate::parser::{
+    run_parser_pipeline, NormalizeStage, ParseStage, ParsedDocument, ParserConfig, PostprocessStage,
+};
 use docir_core::ir::IRNode;
 use docir_core::types::DocumentFormat;
 use docir_core::visitor::IrStore;
@@ -20,6 +22,12 @@ pub struct RtfParser {
 impl FormatParser for RtfParser {
     fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
         self.parse_reader(reader)
+    }
+}
+
+impl Default for RtfParser {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -40,6 +48,12 @@ impl RtfParser {
 
     /// Parses from any reader.
     pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
+        run_parser_pipeline(self, reader)
+    }
+}
+
+impl ParseStage for RtfParser {
+    fn parse_stage<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
         let data = read_all_with_limit(reader, self.config.max_input_size)?;
         if !is_rtf_bytes(&data) {
             return Err(ParseError::UnsupportedFormat(
@@ -73,3 +87,7 @@ impl RtfParser {
         Ok(finalize_and_normalize(DocumentFormat::Rtf, store, doc))
     }
 }
+
+impl NormalizeStage for RtfParser {}
+
+impl PostprocessStage for RtfParser {}

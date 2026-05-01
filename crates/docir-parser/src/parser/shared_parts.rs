@@ -1,6 +1,8 @@
-use super::*;
+use super::{
+    hex, parse_chart_data, parse_smartart_part, ContentTypes, DocumentFormat, IRNode, IrStore,
+    MediaAsset, NodeId, OoxmlParser, PackageReader, ParseError, Relationships, SourceSpan,
+};
 use crate::ooxml::shared as ooxml_shared;
-use crate::zip_handler::PackageReader;
 
 impl OoxmlParser {
     /// Parse shared/package parts (themes, media, custom XML, relationships, signatures, legacy).
@@ -291,8 +293,7 @@ impl OoxmlParser {
             .collect();
         for path in custom_xml_paths {
             let xml = zip.read_file_string(&path)?;
-            let part =
-                ooxml_shared::parse_custom_xml_part(&xml, &path, xml.as_bytes().len() as u64)?;
+            let part = ooxml_shared::parse_custom_xml_part(&xml, &path, xml.len() as u64)?;
             let id = part.id;
             store.insert(IRNode::CustomXmlPart(part));
             shared_ids.push(id);

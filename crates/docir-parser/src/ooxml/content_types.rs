@@ -1,7 +1,7 @@
 //! [Content_Types].xml parser.
 
 use crate::error::ParseError;
-use crate::xml_utils::{read_event, reader_from_str};
+use crate::xml_utils::{attr_each, read_event, reader_from_str};
 use quick_xml::events::Event;
 use std::collections::HashMap;
 
@@ -24,57 +24,20 @@ impl ContentTypes {
 
         loop {
             match read_event(&mut reader, &mut buf, "[Content_Types].xml")? {
-                Event::Empty(e) | Event::Start(e) => {
-                    match e.name().as_ref() {
-                        b"Default" => {
-                            let mut extension = None;
-                            let mut content_type = None;
-
-                            for attr in e.attributes().flatten() {
-                                match attr.key.as_ref() {
-                                    b"Extension" => {
-                                        extension =
-                                            Some(String::from_utf8_lossy(&attr.value).to_string());
-                                    }
-                                    b"ContentType" => {
-                                        content_type =
-                                            Some(String::from_utf8_lossy(&attr.value).to_string());
-                                    }
-                                    _ => {}
-                                }
-                            }
-
-                            if let (Some(ext), Some(ct)) = (extension, content_type) {
-                                content_types.defaults.insert(ext, ct);
-                            }
+                Event::Empty(e) | Event::Start(e) => match e.name().as_ref() {
+                    b"Default" => {
+                        if let Some((ext, ct)) = parse_default_entry(&e) {
+                            content_types.defaults.insert(ext, ct);
                         }
-                        b"Override" => {
-                            let mut part_name = None;
-                            let mut content_type = None;
-
-                            for attr in e.attributes().flatten() {
-                                match attr.key.as_ref() {
-                                    b"PartName" => {
-                                        part_name =
-                                            Some(String::from_utf8_lossy(&attr.value).to_string());
-                                    }
-                                    b"ContentType" => {
-                                        content_type =
-                                            Some(String::from_utf8_lossy(&attr.value).to_string());
-                                    }
-                                    _ => {}
-                                }
-                            }
-
-                            if let (Some(pn), Some(ct)) = (part_name, content_type) {
-                                // Remove leading slash for consistency
-                                let normalized = pn.strip_prefix('/').unwrap_or(&pn).to_string();
-                                content_types.overrides.insert(normalized, ct);
-                            }
-                        }
-                        _ => {}
                     }
-                }
+                    b"Override" => {
+                        if let Some((pn, ct)) = parse_override_entry(&e) {
+                            let normalized = normalize_part_name(&pn);
+                            content_types.overrides.insert(normalized, ct);
+                        }
+                    }
+                    _ => {}
+                },
                 Event::Eof => break,
                 _ => {}
             }
@@ -87,7 +50,11 @@ impl ContentTypes {
     /// Gets the content type for a given part.
     pub fn get_content_type(&self, part_name: &str) -> Option<&str> {
         // Remove leading slash for lookup
-        let normalized = part_name.strip_prefix('/').unwrap_or(part_name);
+        let normalized = if let Some(without_prefix) = part_name.strip_prefix('/') {
+            without_prefix
+        } else {
+            part_name
+        };
 
         // Check overrides first
         if let Some(ct) = self.overrides.get(normalized) {
@@ -133,10 +100,43 @@ impl ContentTypes {
 
     /// Returns true if the part is treated as a legacy/extension part.
     pub fn is_extension_part(&self, part_name: &str) -> bool {
-        self.get_content_type(part_name)
-            .map(|ct| ct.contains("extension") && !ct.contains("webextension"))
-            .unwrap_or(false)
+        if let Some(content_type) = self.get_content_type(part_name) {
+            return content_type.contains("extension") && !content_type.contains("webextension");
+        }
+        false
     }
+}
+
+fn parse_default_entry(element: &quick_xml::events::BytesStart<'_>) -> Option<(String, String)> {
+    let mut extension = None;
+    let mut content_type = None;
+    attr_each(element, |key, value| match key {
+        b"Extension" => extension = Some(String::from_utf8_lossy(value).to_string()),
+        b"ContentType" => content_type = Some(String::from_utf8_lossy(value).to_string()),
+        _ => {}
+    });
+    match (extension, content_type) {
+        (Some(extension), Some(content_type)) => Some((extension, content_type)),
+        _ => None,
+    }
+}
+
+fn parse_override_entry(element: &quick_xml::events::BytesStart<'_>) -> Option<(String, String)> {
+    let mut part_name = None;
+    let mut content_type = None;
+    attr_each(element, |key, value| match key {
+        b"PartName" => part_name = Some(String::from_utf8_lossy(value).to_string()),
+        b"ContentType" => content_type = Some(String::from_utf8_lossy(value).to_string()),
+        _ => {}
+    });
+    match (part_name, content_type) {
+        (Some(part_name), Some(content_type)) => Some((part_name, content_type)),
+        _ => None,
+    }
+}
+
+fn normalize_part_name(part_name: &str) -> String {
+    part_name.strip_prefix('/').unwrap_or(part_name).to_string()
 }
 
 /// Known OOXML content types.

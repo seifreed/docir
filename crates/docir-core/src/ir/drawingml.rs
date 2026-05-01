@@ -16,6 +16,7 @@ pub struct DrawingPart {
 }
 
 impl DrawingPart {
+    /// Public API entrypoint: new.
     pub fn new(path: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),

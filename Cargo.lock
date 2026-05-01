@@ -380,7 +380,10 @@ dependencies = [
  "docir-rules",
  "docir-security",
  "docir-serialization",
+ "serde",
+ "sha2",
  "thiserror 1.0.69",
+ "zip 2.4.2",
 ]
 
 [[package]]
@@ -391,12 +394,12 @@ dependencies = [
  "clap",
  "docir-app",
  "docir-core",
- "docir-security",
  "env_logger",
  "log",
  "serde",
  "serde_json",
  "tempfile",
+ "zip 2.4.2",
 ]
 
 [[package]]
@@ -449,9 +452,6 @@ dependencies = [
  "anyhow",
  "docir-app",
  "docir-core",
- "docir-parser",
- "docir-rules",
- "docir-serialization",
  "pyo3",
  "serde",
  "serde_json",

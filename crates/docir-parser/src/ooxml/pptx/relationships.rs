@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    ExternalRefType, ExternalReference, IRNode, PptxParser, Relationship, Relationships, SourceSpan,
+};
 
 impl PptxParser {
     pub(super) fn process_external_relationships(&mut self, rels: &Relationships, file_path: &str) {
@@ -43,5 +45,47 @@ pub(super) fn classify_relationship(rel_type_uri: &str) -> ExternalRefType {
         ExternalRefType::DataConnection
     } else {
         ExternalRefType::Other
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::classify_relationship;
+    use docir_core::security::ExternalRefType;
+
+    #[test]
+    fn classify_relationship_maps_known_types() {
+        assert_eq!(
+            classify_relationship(
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+            ),
+            ExternalRefType::Hyperlink
+        );
+        assert_eq!(
+            classify_relationship(
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+            ),
+            ExternalRefType::Image
+        );
+        assert_eq!(
+            classify_relationship(
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout"
+            ),
+            ExternalRefType::SlideMaster
+        );
+        assert_eq!(
+            classify_relationship(
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject"
+            ),
+            ExternalRefType::OleLink
+        );
+        assert_eq!(
+            classify_relationship("http://example.test/externalData"),
+            ExternalRefType::DataConnection
+        );
+        assert_eq!(
+            classify_relationship("http://example.test/unknown"),
+            ExternalRefType::Other
+        );
     }
 }

@@ -1,4 +1,7 @@
 use super::*;
+use docir_core::ir::{Document, IRNode, SheetState, Slide, Worksheet};
+use docir_core::types::DocumentFormat;
+use docir_core::visitor::IrStore;
 use docir_parser::DocumentParser;
 use docir_security::populate_security_indicators;
 use std::io::{Cursor, Write};
@@ -160,4 +163,68 @@ fn test_rule_profile_overrides() {
         .findings
         .iter()
         .any(|f| f.rule_id == "SEC-010" && f.severity == Severity::Critical));
+}
+
+#[test]
+fn test_structure_rules_detect_hidden_worksheet_and_slide() {
+    let mut store = IrStore::new();
+
+    let mut xlsx_doc = Document::new(DocumentFormat::Spreadsheet);
+    let mut hidden_sheet = Worksheet::new("Hidden Sheet", 1);
+    hidden_sheet.state = SheetState::VeryHidden;
+    let hidden_sheet_id = hidden_sheet.id;
+    xlsx_doc.content.push(hidden_sheet_id);
+    let xlsx_root = xlsx_doc.id;
+    store.insert(IRNode::Worksheet(hidden_sheet));
+    store.insert(IRNode::Document(xlsx_doc));
+
+    let mut pptx_doc = Document::new(DocumentFormat::Presentation);
+    let mut hidden_slide = Slide::new(3);
+    hidden_slide.hidden = true;
+    let hidden_slide_id = hidden_slide.id;
+    pptx_doc.content.push(hidden_slide_id);
+    let pptx_root = pptx_doc.id;
+    store.insert(IRNode::Slide(hidden_slide));
+    store.insert(IRNode::Document(pptx_doc));
+
+    let engine = RuleEngine::with_default_rules();
+    let xlsx_report = engine.run(&store, xlsx_root);
+    let pptx_report = engine.run(&store, pptx_root);
+
+    assert!(xlsx_report.findings.iter().any(|f| f.rule_id == "STR-001"));
+    assert!(pptx_report.findings.iter().any(|f| f.rule_id == "STR-002"));
+}
+
+#[test]
+fn test_structure_rules_ignore_visible_sheet_and_slide() {
+    let mut store = IrStore::new();
+    let mut doc = Document::new(DocumentFormat::Spreadsheet);
+    let visible_sheet = Worksheet::new("Visible", 1);
+    let visible_sheet_id = visible_sheet.id;
+    doc.content.push(visible_sheet_id);
+    let root = doc.id;
+    store.insert(IRNode::Worksheet(visible_sheet));
+    store.insert(IRNode::Document(doc));
+
+    let engine = RuleEngine::with_default_rules();
+    let report = engine.run(&store, root);
+    assert!(
+        !report.findings.iter().any(|f| f.rule_id == "STR-001"),
+        "visible worksheets must not trigger STR-001"
+    );
+
+    let mut store = IrStore::new();
+    let mut doc = Document::new(DocumentFormat::Presentation);
+    let visible_slide = Slide::new(1);
+    let visible_slide_id = visible_slide.id;
+    doc.content.push(visible_slide_id);
+    let root = doc.id;
+    store.insert(IRNode::Slide(visible_slide));
+    store.insert(IRNode::Document(doc));
+
+    let report = engine.run(&store, root);
+    assert!(
+        !report.findings.iter().any(|f| f.rule_id == "STR-002"),
+        "visible slides must not trigger STR-002"
+    );
 }

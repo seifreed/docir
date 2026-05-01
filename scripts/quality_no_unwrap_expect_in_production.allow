@@ -1,0 +1,6 @@
+# Exceptions for production unwrap/expect/panic/unreachable checks.
+# Add only explicit approvals here using regex accepted by grep.
+# Regex format examples:
+#   ^crates/docir-parser/src/legacy.rs:.*unwrap_or_else\\(\\|\\) panic
+#   ^crates/docir-security/src/enrich/legacy.rs:.*\\.unwrap\\(
+# Fields are full-line regexes; do not add unreviewed exceptions.

@@ -6,6 +6,14 @@
 - Source: `.github/workflows/quality-gate.yml` job `quality-gate`
 - Acceptance command in CI: `./scripts/quality_gate.sh`
 
+## Mandatory CI Evidence Artifacts
+
+The `quality-gate` workflow must publish artifact `quality-evidence` with:
+
+- `target/quality-evidence/quality_phase1_baseline.log`
+- `target/quality-evidence/quality_wildcard_inventory.log`
+- `target/quality-evidence/residual_dashboard.md`
+
 ## GitHub UI Path
 
 1. Open repository settings.

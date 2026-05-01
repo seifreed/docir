@@ -1,14 +1,14 @@
 //! DOCX document parsing (minimal but real).
 
-use super::field::parse_field_instruction;
 use crate::error::ParseError;
-use crate::ooxml::relationships::{Relationships, TargetMode};
+use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
-use crate::xml_utils::{attr_value, read_event, reader_from_str, xml_error};
+use crate::xml_utils::{attr_value, reader_from_str, scan_xml_events_with_reader, XmlScanControl};
+#[allow(unused_imports)]
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
-    Footer, GlossaryDocument, Header, Hyperlink, LineSpacingRule, NumberingInfo, PageBorders,
-    Paragraph, ParagraphProperties, Revision, RevisionType, Run, RunProperties,
+    Footer, GlossaryDocument, Header, LineSpacingRule, NumberingInfo, PageBorders, Paragraph,
+    ParagraphBorders, ParagraphProperties, Revision, RevisionType, Run, RunProperties,
     StyleParagraphProperties, StyleRunProperties, TextAlignment, UnderlineStyle,
     VerticalTextAlignment, WebSettings, WordSettings,
 };
@@ -23,6 +23,7 @@ mod comments;
 mod drawing;
 mod font_table;
 mod glossary;
+#[allow(clippy::single_match)]
 mod inline;
 mod numbering;
 mod paragraph;
@@ -31,17 +32,14 @@ mod styles;
 mod support;
 mod table;
 use body::{parse_block_until, parse_body_sections};
-use drawing::parse_drawing;
 use glossary::parse_doc_part;
-use inline::{
-    parse_field, parse_hyperlink, parse_numbering, parse_revision_block, parse_revision_inline,
-    parse_run, parse_run_properties, parse_sdt, RunParse, SdtMode,
-};
+use inline::{parse_field, parse_hyperlink, parse_numbering, parse_run_properties};
+#[cfg(test)]
+use inline::{parse_run, parse_sdt, SdtMode};
 #[cfg(test)]
 use paragraph::parse_paragraph;
 use paragraph::parse_paragraph_simple;
 use sections::{apply_section_refs, SectionRef};
-use table::parse_table;
 
 #[derive(Debug, Clone, Copy)]
 pub enum NoteKind {
@@ -65,7 +63,14 @@ struct ParagraphParse {
     section_ref: Option<SectionRef>,
 }
 
+impl Default for DocxParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DocxParser {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             store: IrStore::new(),
@@ -76,10 +81,12 @@ impl DocxParser {
         &mut self.store
     }
 
+    /// Public API entrypoint: into_store.
     pub fn into_store(self) -> IrStore {
         self.store
     }
 
+    /// Public API entrypoint: parse_document.
     pub fn parse_document(
         &mut self,
         xml: &str,
@@ -91,13 +98,14 @@ impl DocxParser {
         let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
 
-        loop {
-            let event = read_event(&mut reader, &mut buf, "word/document.xml")?;
-            match event {
-                Event::Start(e) => {
+        scan_xml_events_with_reader(
+            &mut reader,
+            &mut buf,
+            "word/document.xml",
+            |reader, event| {
+                if let Event::Start(e) = event {
                     if e.name().as_ref() == b"w:body" {
-                        let sections =
-                            parse_body_sections(self, &mut reader, rels, header_footer_map)?;
+                        let sections = parse_body_sections(self, reader, rels, header_footer_map)?;
                         for section in sections {
                             let section_id = section.id;
                             self.store.insert(docir_core::ir::IRNode::Section(section));
@@ -105,17 +113,16 @@ impl DocxParser {
                         }
                     }
                 }
-                Event::Eof => break,
-                _ => {}
-            }
-            buf.clear();
-        }
+                Ok(XmlScanControl::Continue)
+            },
+        )?;
 
         let doc_id = doc.id;
         self.store.insert(docir_core::ir::IRNode::Document(doc));
         Ok(doc_id)
     }
 
+    /// Public API entrypoint: parse_glossary_document.
     pub fn parse_glossary_document(
         &mut self,
         xml: &str,
@@ -127,23 +134,23 @@ impl DocxParser {
         let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
 
-        loop {
-            let event = read_event(&mut reader, &mut buf, "word/glossary/document.xml")?;
-            match event {
-                Event::Start(e) => {
+        scan_xml_events_with_reader(
+            &mut reader,
+            &mut buf,
+            "word/glossary/document.xml",
+            |reader, event| {
+                if let Event::Start(e) = event {
                     if e.name().as_ref() == b"w:docPart" {
-                        let entry = parse_doc_part(self, &mut reader, rels)?;
+                        let entry = parse_doc_part(self, reader, rels)?;
                         let entry_id = entry.id;
                         self.store
                             .insert(docir_core::ir::IRNode::GlossaryEntry(entry));
                         glossary.entries.push(entry_id);
                     }
                 }
-                Event::Eof => break,
-                _ => {}
-            }
-            buf.clear();
-        }
+                Ok(XmlScanControl::Continue)
+            },
+        )?;
 
         let glossary_id = glossary.id;
         self.store
@@ -151,6 +158,7 @@ impl DocxParser {
         Ok(glossary_id)
     }
 
+    /// Public API entrypoint: parse_header_footer.
     pub fn parse_header_footer(
         &mut self,
         xml: &str,
@@ -186,6 +194,7 @@ impl DocxParser {
         Ok(node_id)
     }
 
+    /// Public API entrypoint: parse_settings.
     pub fn parse_settings(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let settings = parse_settings_like(xml)?;
         let id = settings.id;
@@ -194,6 +203,7 @@ impl DocxParser {
         Ok(id)
     }
 
+    /// Public API entrypoint: parse_web_settings.
     pub fn parse_web_settings(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let settings = parse_settings_like(xml)?;
         let mut web = WebSettings::new();
@@ -295,14 +305,6 @@ fn parse_page_borders(reader: &mut Reader<&[u8]>) -> Result<Option<PageBorders>,
 
 fn bool_from_val(start: &BytesStart) -> bool {
     support::bool_from_val(start)
-}
-
-fn parse_vml_pict(
-    parser: &mut DocxParser,
-    reader: &mut Reader<&[u8]>,
-    rels: &Relationships,
-) -> Result<Option<NodeId>, ParseError> {
-    support::parse_vml_pict(parser, reader, rels)
 }
 
 fn parse_settings_like(xml: &str) -> Result<WordSettings, ParseError> {

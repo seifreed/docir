@@ -129,9 +129,10 @@ pub struct CellFormula {
 
 /// Formula types.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FormulaType {
     /// Normal formula.
+    #[default]
     Normal,
     /// Array formula.
     Array,
@@ -139,12 +140,6 @@ pub enum FormulaType {
     DataTable,
     /// Shared formula.
     Shared,
-}
-
-impl Default for FormulaType {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 /// Converts a 0-based column index to Excel-style letter(s).

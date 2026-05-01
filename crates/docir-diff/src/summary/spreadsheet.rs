@@ -1,7 +1,7 @@
 use docir_core::ir::IRNode;
 use docir_core::visitor::IrStore;
 
-use super::{abbreviate, opt_str, opt_u32, summarize_cell, summarize_worksheet};
+use super::summary_parse::{abbreviate, opt_str, opt_u32, summarize_cell, summarize_worksheet};
 
 pub(crate) fn summarize(node: &IRNode, _store: &IrStore) -> Option<String> {
     match node {
@@ -178,17 +178,31 @@ mod tests {
     use super::*;
     use docir_core::ir::{
         CalcChain, CalcChainEntry, Cell, ChartData, ConditionalFormat, DataValidation, DefinedName,
-        ExternalLinkPart, PivotCache, PivotCacheRecords, PivotTable, QueryTablePart, SharedStringItem,
-        SharedStringTable, SheetComment, SheetMetadata, SheetMetadataType, SlicerPart, SpreadsheetStyles,
-        TableColumn, TableDefinition, TimelinePart, WorkbookProperties, Worksheet, WorksheetDrawing,
+        ExternalLinkPart, PivotCache, PivotCacheRecords, PivotTable, QueryTablePart,
+        SharedStringItem, SharedStringTable, SheetComment, SheetMetadata, SheetMetadataType,
+        SlicerPart, SpreadsheetStyles, TableColumn, TableDefinition, TimelinePart,
+        WorkbookProperties, Worksheet, WorksheetDrawing,
     };
     use docir_core::types::NodeId;
     use docir_core::visitor::IrStore;
 
-    #[test]
-    fn summarizes_supported_spreadsheet_nodes() {
+    fn assert_summary_contains(node: IRNode, expected: &str) {
         let store = IrStore::new();
+        let summary = summarize(&node, &store).unwrap();
+        assert!(
+            summary.contains(expected),
+            "expected summary to contain '{expected}', got '{summary}'"
+        );
+    }
 
+    fn assert_summary_eq(node: IRNode, expected: &str) {
+        let store = IrStore::new();
+        let summary = summarize(&node, &store).unwrap();
+        assert_eq!(summary, expected);
+    }
+
+    #[test]
+    fn summarizes_spreadsheet_top_level_nodes() {
         let mut sheet = Worksheet::new("Sheet1", 1);
         sheet.merged_cells.push(docir_core::ir::MergedCellRange {
             start_col: 0,
@@ -196,32 +210,25 @@ mod tests {
             end_col: 1,
             end_row: 1,
         });
-        assert!(summarize(&IRNode::Worksheet(sheet), &store)
-            .unwrap()
-            .contains("name=Sheet1"));
+        assert_summary_contains(IRNode::Worksheet(sheet), "name=Sheet1");
 
         let mut cell = Cell::new("B2", 1, 1);
         cell.value = docir_core::ir::CellValue::String("value".to_string());
-        assert!(summarize(&IRNode::Cell(cell), &store)
-            .unwrap()
-            .contains("ref=B2"));
+        assert_summary_contains(IRNode::Cell(cell), "ref=B2");
 
         let mut sst = SharedStringTable::new();
         sst.items.push(SharedStringItem {
             text: "alpha".to_string(),
             runs: vec![],
         });
-        assert_eq!(
-            summarize(&IRNode::SharedStringTable(sst), &store).unwrap(),
-            "items=1"
-        );
+        assert_summary_eq(IRNode::SharedStringTable(sst), "items=1");
+    }
 
+    #[test]
+    fn summarizes_spreadsheet_connection_and_style_nodes() {
         let mut conn = docir_core::ir::ConnectionPart::new();
         conn.entries.push(docir_core::ir::ConnectionEntry::new());
-        assert_eq!(
-            summarize(&IRNode::ConnectionPart(conn), &store).unwrap(),
-            "connections=1"
-        );
+        assert_summary_eq(IRNode::ConnectionPart(conn), "connections=1");
 
         let mut styles = SpreadsheetStyles::new();
         styles.table_styles = Some(docir_core::ir::TableStyleInfo {
@@ -230,9 +237,10 @@ mod tests {
             default_pivot_style: None,
             styles: vec![],
         });
-        assert!(summarize(&IRNode::SpreadsheetStyles(styles), &store)
-            .unwrap()
-            .contains("table_styles=TableStyleLight1"));
+        assert_summary_contains(
+            IRNode::SpreadsheetStyles(styles),
+            "table_styles=TableStyleLight1",
+        );
 
         let def_name = DefinedName {
             id: NodeId::new(),
@@ -243,21 +251,21 @@ mod tests {
             comment: None,
             span: None,
         };
-        assert_eq!(
-            summarize(&IRNode::DefinedName(def_name), &store).unwrap(),
-            "name=NamedRange scope=sheet:2"
+        assert_summary_eq(
+            IRNode::DefinedName(def_name),
+            "name=NamedRange scope=sheet:2",
         );
+    }
 
+    #[test]
+    fn summarizes_spreadsheet_validation_and_table_nodes() {
         let cond = ConditionalFormat {
             id: NodeId::new(),
             ranges: vec!["A1:A3".to_string()],
             rules: vec![],
             span: None,
         };
-        assert_eq!(
-            summarize(&IRNode::ConditionalFormat(cond), &store).unwrap(),
-            "ranges=1 rules=0"
-        );
+        assert_summary_eq(IRNode::ConditionalFormat(cond), "ranges=1 rules=0");
 
         let validation = DataValidation {
             id: NodeId::new(),
@@ -275,10 +283,7 @@ mod tests {
             formula2: None,
             span: None,
         };
-        assert_eq!(
-            summarize(&IRNode::DataValidation(validation), &store).unwrap(),
-            "ranges=1 type=list"
-        );
+        assert_summary_eq(IRNode::DataValidation(validation), "ranges=1 type=list");
 
         let table = TableDefinition {
             id: NodeId::new(),
@@ -295,11 +300,14 @@ mod tests {
             }],
             span: None,
         };
-        assert_eq!(
-            summarize(&IRNode::TableDefinition(table), &store).unwrap(),
-            "name=Sales cols=1 ref=A1:B10"
+        assert_summary_eq(
+            IRNode::TableDefinition(table),
+            "name=Sales cols=1 ref=A1:B10",
         );
+    }
 
+    #[test]
+    fn summarizes_spreadsheet_pivot_and_chain_nodes() {
         let pivot = PivotTable {
             id: NodeId::new(),
             name: Some("Pivot1".to_string()),
@@ -307,32 +315,23 @@ mod tests {
             ref_range: None,
             span: None,
         };
-        assert_eq!(
-            summarize(&IRNode::PivotTable(pivot), &store).unwrap(),
-            "name=Pivot1 cache_id=7"
-        );
+        assert_summary_eq(IRNode::PivotTable(pivot), "name=Pivot1 cache_id=7");
 
         let mut cache = PivotCache::new(7);
         cache.cache_source = Some("A1:B10".to_string());
-        assert_eq!(
-            summarize(&IRNode::PivotCache(cache), &store).unwrap(),
-            "cache_id=7 source=A1:B10"
-        );
+        assert_summary_eq(IRNode::PivotCache(cache), "cache_id=7 source=A1:B10");
 
         let mut records = PivotCacheRecords::new();
         records.record_count = Some(11);
         records.field_count = Some(3);
-        assert_eq!(
-            summarize(&IRNode::PivotCacheRecords(records), &store).unwrap(),
-            "records=11 fields=3"
-        );
+        assert_summary_eq(IRNode::PivotCacheRecords(records), "records=11 fields=3");
 
         let mut props = WorkbookProperties::new();
         props.calc_mode = Some("auto".to_string());
         props.workbook_protected = true;
-        assert_eq!(
-            summarize(&IRNode::WorkbookProperties(props), &store).unwrap(),
-            "calc_mode=auto protected=true"
+        assert_summary_eq(
+            IRNode::WorkbookProperties(props),
+            "calc_mode=auto protected=true",
         );
 
         let mut chain = CalcChain::new();
@@ -343,38 +342,36 @@ mod tests {
             level: None,
             new_value: None,
         });
-        assert_eq!(summarize(&IRNode::CalcChain(chain), &store).unwrap(), "entries=1");
+        assert_summary_eq(IRNode::CalcChain(chain), "entries=1");
+    }
 
+    #[test]
+    fn summarizes_spreadsheet_metadata_nodes() {
         let mut comment = SheetComment::new("A1", "Very long comment");
         comment.author = Some("Alice".to_string());
-        assert!(summarize(&IRNode::SheetComment(comment), &store)
-            .unwrap()
-            .contains("author=Alice"));
+        assert_summary_contains(IRNode::SheetComment(comment), "author=Alice");
 
         let mut metadata = SheetMetadata::new();
         metadata.metadata_types.push(SheetMetadataType::new());
         metadata.cell_metadata_count = Some(2);
         metadata.value_metadata_count = Some(4);
-        assert_eq!(
-            summarize(&IRNode::SheetMetadata(metadata), &store).unwrap(),
-            "types=1 cell_count=2 value_count=4"
+        assert_summary_eq(
+            IRNode::SheetMetadata(metadata),
+            "types=1 cell_count=2 value_count=4",
         );
 
         let mut drawing = WorksheetDrawing::new();
         drawing.shapes.push(NodeId::new());
-        assert_eq!(
-            summarize(&IRNode::WorksheetDrawing(drawing), &store).unwrap(),
-            "shapes=1"
-        );
+        assert_summary_eq(IRNode::WorksheetDrawing(drawing), "shapes=1");
+    }
 
+    #[test]
+    fn summarizes_spreadsheet_visual_nodes() {
         let mut chart = ChartData::new();
         chart.chart_type = Some("bar".to_string());
         chart.series.push("Revenue".to_string());
         chart.series_data.push(docir_core::ir::ChartSeries::new());
-        assert_eq!(
-            summarize(&IRNode::ChartData(chart), &store).unwrap(),
-            "type=bar series=1 series_data=1"
-        );
+        assert_summary_eq(IRNode::ChartData(chart), "type=bar series=1 series_data=1");
 
         let mut ext = ExternalLinkPart::new();
         ext.link_type = Some("externalWorkbook".to_string());
@@ -383,35 +380,32 @@ mod tests {
             name: Some("Sheet1".to_string()),
             r_id: None,
         });
-        assert_eq!(
-            summarize(&IRNode::ExternalLinkPart(ext), &store).unwrap(),
-            "type=externalWorkbook target=http://example.test sheets=1"
+        assert_summary_eq(
+            IRNode::ExternalLinkPart(ext),
+            "type=externalWorkbook target=http://example.test sheets=1",
         );
 
         let mut slicer = SlicerPart::new();
         slicer.name = Some("Region".to_string());
         slicer.caption = Some("Region".to_string());
         slicer.cache_id = Some("Cache1".to_string());
-        assert_eq!(
-            summarize(&IRNode::SlicerPart(slicer), &store).unwrap(),
-            "name=Region caption=Region cache_id=Cache1"
+        assert_summary_eq(
+            IRNode::SlicerPart(slicer),
+            "name=Region caption=Region cache_id=Cache1",
         );
 
         let mut timeline = TimelinePart::new();
         timeline.name = Some("Date".to_string());
         timeline.cache_id = Some("Cache2".to_string());
-        assert_eq!(
-            summarize(&IRNode::TimelinePart(timeline), &store).unwrap(),
-            "name=Date cache_id=Cache2"
-        );
+        assert_summary_eq(IRNode::TimelinePart(timeline), "name=Date cache_id=Cache2");
 
         let mut query = QueryTablePart::new();
         query.name = Some("WebQuery".to_string());
         query.connection_id = Some("1".to_string());
         query.url = Some("https://example.test/data.csv".to_string());
-        assert_eq!(
-            summarize(&IRNode::QueryTablePart(query), &store).unwrap(),
-            "name=WebQuery connection_id=1 url=https://example.test/data.csv"
+        assert_summary_eq(
+            IRNode::QueryTablePart(query),
+            "name=WebQuery connection_id=1 url=https://example.test/data.csv",
         );
     }
 }

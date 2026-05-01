@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docir.dev/schema/artifact-manifest.schema.json",
+  "title": "Phase 0 Artifact Manifest",
+  "description": "Manifest of artifacts discovered and extracted during Phase 0 parsing and extraction. Excludes AST generation, deobfuscation, and emulation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "phase",
+    "document",
+    "capabilities",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "phase": {
+      "type": "string",
+      "const": "phase-0"
+    },
+    "document": {
+      "$ref": "#/$defs/documentRef"
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parsing",
+        "extraction",
+        "vba_recognition",
+        "ast",
+        "deobfuscation",
+        "emulation"
+      ],
+      "properties": {
+        "parsing": {
+          "type": "boolean",
+          "const": true
+        },
+        "extraction": {
+          "type": "boolean",
+          "const": true
+        },
+        "vba_recognition": {
+          "type": "boolean",
+          "const": true
+        },
+        "ast": {
+          "type": "boolean",
+          "const": false
+        },
+        "deobfuscation": {
+          "type": "boolean",
+          "const": false
+        },
+        "emulation": {
+          "type": "boolean",
+          "const": false
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    }
+  },
+  "$defs": {
+    "documentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "format"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "doc",
+            "docm",
+            "docx",
+            "dot",
+            "dotm",
+            "dotx",
+            "xls",
+            "xlsb",
+            "xlsm",
+            "xlsx",
+            "xltm",
+            "ppt",
+            "pptm",
+            "pptx",
+            "rtf",
+            "odt",
+            "ods",
+            "odp",
+            "hwp",
+            "hwpx",
+            "unknown"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "discovered",
+        "extracted",
+        "partial",
+        "unsupported",
+        "error"
+      ]
+    },
+    "artifactKind": {
+      "type": "string",
+      "enum": [
+        "container-entry",
+        "relationship-target",
+        "embedded-file",
+        "ole-object",
+        "active-content",
+        "vba-project",
+        "vba-module-source",
+        "other"
+      ]
+    },
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "container": {
+          "type": "string",
+          "minLength": 1
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "status",
+        "locator"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "$ref": "#/$defs/artifactKind"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "locator": {
+          "$ref": "#/$defs/locator"
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relationships": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        }
+      }
+    }
+  }
+}

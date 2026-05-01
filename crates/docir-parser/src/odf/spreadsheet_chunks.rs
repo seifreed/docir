@@ -1,4 +1,5 @@
 use super::{attr_value, Event, Reader};
+use crate::xml_utils::{scan_xml_events, XmlScanControl};
 
 #[derive(Clone)]
 pub(super) struct OdfTableChunk {
@@ -49,18 +50,21 @@ pub(super) fn table_name_from_chunk(chunk: &[u8], sheet_id: u32) -> String {
     let mut reader = Reader::from_reader(std::io::Cursor::new(chunk));
     reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"table:table" => {
-                return attr_value(&e, b"table:name")
-                    .unwrap_or_else(|| format!("Sheet{}", sheet_id));
-            }
-            Ok(Event::Eof) => break,
-            _ => {}
+    let mut table_name = None;
+    if scan_xml_events(&mut reader, &mut buf, "content.xml", |event| match event {
+        Event::Start(e) if e.name().as_ref() == b"table:table" => {
+            table_name =
+                Some(attr_value(&e, b"table:name").unwrap_or_else(|| format!("Sheet{}", sheet_id)));
+            Ok(XmlScanControl::Break)
         }
-        buf.clear();
+        _ => Ok(XmlScanControl::Continue),
+    })
+    .is_err()
+    {
+        return format!("Sheet{}", sheet_id);
     }
-    format!("Sheet{}", sheet_id)
+
+    table_name.unwrap_or_else(|| format!("Sheet{}", sheet_id))
 }
 
 fn find_spreadsheet_range(xml: &[u8]) -> Option<(usize, usize)> {

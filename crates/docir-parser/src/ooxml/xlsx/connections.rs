@@ -2,8 +2,8 @@
 
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::xml_error;
 use crate::xml_utils::{attr_bool, attr_u32, attr_value, local_name};
+use crate::xml_utils::{scan_xml_events, XmlScanControl};
 use docir_core::ir::{
     ConnectionEntry, ConnectionPart, ExternalLinkPart, ExternalLinkSheet, QueryTablePart,
     SlicerPart, TimelinePart,
@@ -24,19 +24,17 @@ where
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+    scan_xml_events(&mut reader, &mut buf, path, |event| {
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
                 on_event(local, &e);
             }
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error(path, e)),
             _ => {}
         }
-        buf.clear();
-    }
+        Ok(XmlScanControl::Continue)
+    })?;
 
     Ok(())
 }
@@ -50,37 +48,33 @@ pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<Connection
     part.span = Some(SourceSpan::new(path));
     let mut current: Option<ConnectionEntry> = None;
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+    scan_xml_events(&mut reader, &mut buf, path, |event| {
+        match event {
+            Event::Start(e) => {
                 if e.name().as_ref() == b"connection" {
                     current = Some(connection_entry_from_attrs(&e));
                 } else {
                     apply_connection_child_attrs(&mut current, &e);
                 }
             }
-            Ok(Event::Empty(e)) => {
+            Event::Empty(e) => {
                 if e.name().as_ref() == b"connection" {
                     part.entries.push(connection_entry_from_attrs(&e));
                 } else {
                     apply_connection_child_attrs(&mut current, &e);
                 }
             }
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if e.name().as_ref() == b"connection" {
                     if let Some(entry) = current.take() {
                         part.entries.push(entry);
                     }
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
             _ => {}
         }
-        buf.clear();
-    }
+        Ok(XmlScanControl::Continue)
+    })?;
 
     Ok(part)
 }

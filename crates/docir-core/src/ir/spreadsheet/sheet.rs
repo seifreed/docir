@@ -117,9 +117,10 @@ impl Worksheet {
 
 /// Sheet visibility state.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SheetState {
     /// Normal visible sheet.
+    #[default]
     Visible,
     /// Hidden (can be unhidden by user).
     Hidden,
@@ -129,8 +130,9 @@ pub enum SheetState {
 
 /// Sheet kind.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SheetKind {
+    #[default]
     Worksheet,
     ChartSheet,
     DialogSheet,
@@ -147,18 +149,6 @@ pub struct SheetPageMargins {
     pub bottom: Option<f64>,
     pub header: Option<f64>,
     pub footer: Option<f64>,
-}
-
-impl Default for SheetKind {
-    fn default() -> Self {
-        Self::Worksheet
-    }
-}
-
-impl Default for SheetState {
-    fn default() -> Self {
-        Self::Visible
-    }
 }
 
 /// Merged cell range specification.
@@ -216,6 +206,7 @@ pub struct WorksheetDrawing {
 }
 
 impl WorksheetDrawing {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: new_node_id(),
@@ -224,6 +215,7 @@ impl WorksheetDrawing {
         }
     }
 
+    /// Public API entrypoint: children.
     pub fn children(&self) -> Vec<NodeId> {
         self.shapes.clone()
     }
@@ -244,6 +236,7 @@ pub struct SheetComment {
 }
 
 impl SheetComment {
+    /// Public API entrypoint: new.
     pub fn new(cell_ref: impl Into<String>, text: impl Into<String>) -> Self {
         Self {
             id: new_node_id(),
@@ -271,6 +264,7 @@ pub struct SheetMetadata {
 }
 
 impl SheetMetadata {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: new_node_id(),
@@ -296,6 +290,7 @@ pub struct SheetMetadataType {
 }
 
 impl SheetMetadataType {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             name: None,
@@ -317,6 +312,7 @@ pub struct CalcChain {
 }
 
 impl CalcChain {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: new_node_id(),

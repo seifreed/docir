@@ -15,6 +15,7 @@ pub struct WordSettings {
 }
 
 impl WordSettings {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -53,6 +54,7 @@ pub struct WebSettings {
 }
 
 impl WebSettings {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -73,6 +75,7 @@ pub struct FontTable {
 }
 
 impl FontTable {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

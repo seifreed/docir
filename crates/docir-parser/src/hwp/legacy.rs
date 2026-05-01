@@ -1,5 +1,16 @@
-use super::*;
+use super::io::prepare_hwp_stream_data;
+use crate::diagnostics::push_warning;
+use crate::error::ParseError;
+use crate::ole::Cfb;
+use docir_core::ir::Diagnostics;
+use docir_core::ir::{IRNode, Paragraph, Run};
+use docir_core::security::{
+    ExternalRefType, ExternalReference, MacroModule, MacroModuleType, MacroProject,
+};
+use docir_core::types::{NodeId, SourceSpan};
+use docir_core::visitor::IrStore;
 use flate2::read::{DeflateDecoder, ZlibDecoder};
+use std::io::Read;
 
 const HWPTAG_BEGIN: u16 = 0x010;
 const HWPTAG_DOCUMENT_PROPERTIES: u16 = HWPTAG_BEGIN;
@@ -50,13 +61,20 @@ fn for_each_record<F: FnMut(HwpRecord)>(data: &[u8], mut f: F) -> Result<(), Par
         let _level = ((header >> 10) & 0x3FF) as u16;
         let mut size = ((header >> 20) & 0xFFF) as u32;
         if size == 0xFFF {
+            if offset + 4 > data.len() {
+                return Err(ParseError::InvalidStructure(
+                    "Extended record size missing".to_string(),
+                ));
+            }
             size = read_u32_le(data, offset).ok_or_else(|| {
                 ParseError::InvalidStructure("Invalid extended record size".to_string())
             })?;
             offset += 4;
         }
 
-        let end = offset + size as usize;
+        let end = offset
+            .checked_add(size as usize)
+            .ok_or_else(|| ParseError::InvalidStructure("Record size overflow".to_string()))?;
         if end > data.len() {
             return Err(ParseError::InvalidStructure(
                 "Record size exceeds stream length".to_string(),
@@ -143,7 +161,7 @@ fn decode_hwp_text(data: &[u8]) -> String {
     if data.is_empty() {
         return String::new();
     }
-    let text = if data.len() % 2 == 0 {
+    let text = if data.len().is_multiple_of(2) {
         decode_utf16le(data)
     } else {
         String::from_utf8_lossy(data).to_string()
@@ -233,7 +251,7 @@ fn parse_jscript_stream(data: &[u8]) -> Option<(String, String)> {
         }
     }
     let name = strings
-        .get(0)
+        .first()
         .cloned()
         .unwrap_or_else(|| "DefaultJScript".to_string());
     let source = strings.last().cloned().unwrap_or_else(String::new);
@@ -243,6 +261,8 @@ fn parse_jscript_stream(data: &[u8]) -> Option<(String, String)> {
         Some((name, source))
     }
 }
+
+const MAX_URL_LENGTH: usize = 4096;
 
 fn extract_urls(text: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -259,7 +279,7 @@ fn extract_urls(text: &str) -> Vec<String> {
         }
         if matched {
             let mut end = idx;
-            while end < bytes.len() {
+            while end < bytes.len() && end - idx < MAX_URL_LENGTH {
                 let ch = bytes[end];
                 if ch.is_ascii_whitespace() || ch == b'"' || ch == b'\'' || ch == b')' || ch == b'>'
                 {
@@ -282,52 +302,67 @@ fn extract_urls(text: &str) -> Vec<String> {
 pub(super) fn scan_hwp_external_refs(
     cfb: &Cfb,
     stream_names: &[String],
-    compressed: bool,
-    encrypted: bool,
-    password: Option<&str>,
-    force_parse: bool,
-    try_raw_encrypted: bool,
+    header_ctx: &super::builder::HwpHeaderContext<'_>,
     diagnostics: &mut Diagnostics,
 ) -> Vec<ExternalReference> {
     let mut refs = Vec::new();
     for path in stream_names {
-        if !path.starts_with("BodyText/Section") {
+        if !is_hwp_section_stream(path) {
             continue;
         }
-        if let Some(data) = cfb.read_stream(path) {
-            let data = match prepare_hwp_stream_data(
-                &data,
-                encrypted,
-                password,
-                force_parse,
-                try_raw_encrypted,
-                path,
-                diagnostics,
-            ) {
-                Some(bytes) => bytes,
-                None => continue,
-            };
-            let data = match maybe_decompress_stream(&data, compressed, path) {
-                Ok(bytes) => bytes,
-                Err(err) => {
-                    push_warning(
-                        diagnostics,
-                        "HWP_DECOMPRESS_FAIL",
-                        err.to_string(),
-                        Some(path),
-                    );
-                    continue;
-                }
-            };
-            let text = decode_hwp_text(&data);
-            for url in extract_urls(&text) {
-                let mut ext = ExternalReference::new(ExternalRefType::Hyperlink, url);
-                ext.span = Some(SourceSpan::new(path));
-                refs.push(ext);
-            }
-        }
+        collect_external_refs_from_stream(cfb, path, header_ctx, diagnostics, &mut refs);
     }
     refs
+}
+
+fn is_hwp_section_stream(path: &str) -> bool {
+    path.starts_with("BodyText/Section")
+}
+
+fn collect_external_refs_from_stream(
+    cfb: &Cfb,
+    path: &str,
+    header_ctx: &super::builder::HwpHeaderContext<'_>,
+    diagnostics: &mut Diagnostics,
+    refs: &mut Vec<ExternalReference>,
+) {
+    let Some(data) = cfb.read_stream(path) else {
+        return;
+    };
+    let Some(prepared) = prepare_hwp_stream_data(
+        &data,
+        header_ctx.encrypted,
+        header_ctx.hwp_password,
+        header_ctx.force_parse,
+        header_ctx.try_raw_encrypted,
+        path,
+        diagnostics,
+    ) else {
+        return;
+    };
+
+    let decompressed = match maybe_decompress_stream(&prepared, header_ctx.compressed, path) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            push_warning(
+                diagnostics,
+                "HWP_DECOMPRESS_FAIL",
+                err.to_string(),
+                Some(path),
+            );
+            return;
+        }
+    };
+
+    push_external_refs_from_text(path, &decode_hwp_text(&decompressed), refs);
+}
+
+fn push_external_refs_from_text(path: &str, text: &str, refs: &mut Vec<ExternalReference>) {
+    for url in extract_urls(text) {
+        let mut ext = ExternalReference::new(ExternalRefType::Hyperlink, url);
+        ext.span = Some(SourceSpan::new(path));
+        refs.push(ext);
+    }
 }
 
 fn read_len_string(data: &[u8], offset: usize) -> Option<(String, usize)> {
@@ -349,7 +384,7 @@ fn read_len_string(data: &[u8], offset: usize) -> Option<(String, usize)> {
 
 fn decode_string_bytes(bytes: &[u8]) -> String {
     let zero_bytes = bytes.iter().filter(|b| **b == 0).count();
-    if bytes.len() % 2 == 0 && zero_bytes > 0 {
+    if bytes.len().is_multiple_of(2) && zero_bytes > 0 {
         decode_utf16le(bytes)
     } else {
         String::from_utf8_lossy(bytes).to_string()
@@ -478,7 +513,9 @@ mod tests {
 
         let err = maybe_decompress_stream(b"not-compressed", true, "bad")
             .expect_err("invalid compressed");
-        assert!(err.to_string().contains("Failed to decompress HWP stream bad"));
+        assert!(err
+            .to_string()
+            .contains("Failed to decompress HWP stream bad"));
     }
 
     #[test]
@@ -493,8 +530,8 @@ mod tests {
         data.extend_from_slice(source);
 
         let mut store = IrStore::new();
-        let project_id = parse_default_jscript(&data, &mut store, "Scripts/DefaultJScript")
-            .expect("project id");
+        let project_id =
+            parse_default_jscript(&data, &mut store, "Scripts/DefaultJScript").expect("project id");
         let project = match store.get(project_id).expect("project node") {
             IRNode::MacroProject(p) => p,
             _ => panic!("expected macro project"),

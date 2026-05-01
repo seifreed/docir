@@ -1,4 +1,7 @@
-use super::*;
+#[cfg(test)]
+use super::ShapeType;
+use super::{map_shape_type, parse_transform, ParseError, Reader, Shape};
+use quick_xml::events::Event;
 
 pub(super) fn parse_shape_properties(
     reader: &mut Reader<&[u8]>,
@@ -40,4 +43,48 @@ pub(super) fn parse_shape_properties(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_shape_properties_reads_geometry_and_transform() {
+        let xml = r#"<p:spPr>
+            <a:xfrm>
+                <a:off x="10" y="20"/>
+                <a:ext cx="30" cy="40"/>
+            </a:xfrm>
+            <a:prstGeom prst="ellipse">
+                <a:avLst/>
+            </a:prstGeom>
+        </p:spPr>"#;
+        let mut reader = Reader::from_str(xml);
+        reader.config_mut().trim_text(true);
+        let mut shape = Shape::new(ShapeType::Unknown);
+
+        let parsed = parse_shape_properties(&mut reader, &mut shape, "slide.xml");
+        assert!(parsed.is_ok());
+        assert_eq!(shape.shape_type, ShapeType::Ellipse);
+        assert_eq!(shape.transform.x, 10);
+        assert_eq!(shape.transform.y, 20);
+        assert_eq!(shape.transform.width, 30);
+        assert_eq!(shape.transform.height, 40);
+    }
+
+    #[test]
+    fn parse_shape_properties_returns_xml_error_for_malformed_xml() {
+        let xml = "<p:spPr><a:xfrm><a:off x='1' y='2'></p:spPr";
+        let mut reader = Reader::from_str(xml);
+        reader.config_mut().trim_text(true);
+        let mut shape = Shape::new(ShapeType::Unknown);
+
+        let err = parse_shape_properties(&mut reader, &mut shape, "bad-slide.xml")
+            .expect_err("expected malformed xml error");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "bad-slide.xml"),
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
 }

@@ -95,7 +95,7 @@ pub(super) fn ole_location(ole: &OleObject) -> Option<String> {
     ole.span
         .as_ref()
         .map(|s| s.file_path.clone())
-        .or_else(|| ole.name.clone())
+        .or(ole.name.clone())
 }
 
 pub(super) fn is_activex_ole(ole: &OleObject) -> bool {
@@ -103,9 +103,14 @@ pub(super) fn is_activex_ole(ole: &OleObject) -> bool {
         .span
         .as_ref()
         .map(|s| s.file_path.as_str())
-        .or_else(|| ole.name.as_deref())
+        .or(ole.name.as_deref())
         .unwrap_or("");
-    path.to_ascii_lowercase().contains("activex")
+    let path_lower = path.to_ascii_lowercase();
+    path_lower.contains("activex")
+        || path_lower.contains("\\activ\\")
+        || path_lower.contains("/activ/")
+        || path_lower.ends_with(".ocx")
+        || ole.class_id.is_some()
 }
 
 #[cfg(test)]

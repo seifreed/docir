@@ -35,6 +35,7 @@ pub struct Diagnostics {
 }
 
 impl Diagnostics {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

@@ -42,7 +42,7 @@ pub(super) fn collect_shared_parts<R: Read + Seek>(
             continue;
         }
         let media_type = manifest_index.get(path.as_str()).cloned().unwrap_or(None);
-        let size_bytes = zip.file_size(&path).unwrap_or(0);
+        let size_bytes = zip.file_size(path).unwrap_or(0);
         let mut part = ExtensionPart::new(path.to_string(), size_bytes, ExtensionPartKind::Unknown);
         part.content_type = media_type.clone();
         let part_id = part.id;

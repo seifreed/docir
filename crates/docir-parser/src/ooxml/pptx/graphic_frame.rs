@@ -1,7 +1,10 @@
 use super::graphic_frame_support::{
     apply_graphic_data_shape_type, apply_non_visual_shape_props, capture_chart_rel, capture_ole_rel,
 };
-use super::*;
+use super::{
+    parse_transform, BytesStart, ExternalRefType, ExternalReference, IRNode, NodeId, ParseError,
+    PptxParser, Reader, Relationships, Shape, ShapeType, TargetMode,
+};
 use crate::zip_handler::PackageReader;
 
 pub(super) struct GraphicFrameState {
@@ -170,5 +173,219 @@ impl PptxParser {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ooxml::relationships::{Relationship, TargetMode};
+    use std::collections::HashMap;
+
+    struct DummyZip;
+
+    impl PackageReader for DummyZip {
+        fn contains(&self, _name: &str) -> bool {
+            false
+        }
+
+        fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError> {
+            Err(ParseError::MissingPart(name.to_string()))
+        }
+
+        fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
+            Err(ParseError::MissingPart(name.to_string()))
+        }
+
+        fn file_size(&mut self, name: &str) -> Result<u64, ParseError> {
+            Err(ParseError::MissingPart(name.to_string()))
+        }
+
+        fn file_names(&self) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn list_prefix(&self, _prefix: &str) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn list_suffix(&self, _suffix: &str) -> Vec<String> {
+            Vec::new()
+        }
+    }
+
+    fn relationships_with(rel: Relationship) -> Relationships {
+        let mut by_id = HashMap::new();
+        by_id.insert(rel.id.clone(), rel.clone());
+        let mut by_type = HashMap::new();
+        by_type.insert(rel.rel_type.clone(), vec![rel.id]);
+        Relationships { by_id, by_type }
+    }
+
+    #[test]
+    fn graphic_frame_state_new_initializes_empty_fields() {
+        let state = GraphicFrameState::new();
+        assert!(state.chart_rel.is_none());
+        assert!(state.ole_rel.is_none());
+        assert!(state.table_id.is_none());
+    }
+
+    #[test]
+    fn apply_graphic_frame_relationships_maps_external_ole_reference() {
+        let rel = Relationship {
+            id: "rIdOle".to_string(),
+            rel_type:
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject"
+                    .to_string(),
+            target: "https://example.com/object.bin".to_string(),
+            target_mode: TargetMode::External,
+        };
+        let relationships = relationships_with(rel);
+        let mut parser = PptxParser::new();
+        let mut shape = Shape::new(ShapeType::Custom);
+        let state = GraphicFrameState {
+            chart_rel: None,
+            ole_rel: Some("rIdOle".to_string()),
+            table_id: None,
+        };
+        let mut zip = DummyZip;
+
+        let result = parser.apply_graphic_frame_relationships(
+            &mut shape,
+            "ppt/slides/slide1.xml",
+            &relationships,
+            &mut zip,
+            &state,
+        );
+        assert!(result.is_ok());
+        assert_eq!(shape.shape_type, ShapeType::OleObject);
+        assert_eq!(shape.relationship_id.as_deref(), Some("rIdOle"));
+        assert_eq!(
+            shape.media_target.as_deref(),
+            Some("https://example.com/object.bin")
+        );
+        assert_eq!(parser.security_info.external_refs.len(), 1);
+    }
+
+    #[test]
+    fn apply_graphic_frame_relationships_maps_external_chart_reference() {
+        let rel = Relationship {
+            id: "rIdChart".to_string(),
+            rel_type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
+                .to_string(),
+            target: "https://example.com/chart.xml".to_string(),
+            target_mode: TargetMode::External,
+        };
+        let relationships = relationships_with(rel);
+        let mut parser = PptxParser::new();
+        let mut shape = Shape::new(ShapeType::Custom);
+        let state = GraphicFrameState {
+            chart_rel: Some("rIdChart".to_string()),
+            ole_rel: None,
+            table_id: None,
+        };
+        let mut zip = DummyZip;
+
+        let result = parser.apply_graphic_frame_relationships(
+            &mut shape,
+            "ppt/slides/slide1.xml",
+            &relationships,
+            &mut zip,
+            &state,
+        );
+        assert!(result.is_ok());
+        assert_eq!(shape.shape_type, ShapeType::Chart);
+        assert_eq!(shape.relationship_id.as_deref(), Some("rIdChart"));
+        assert_eq!(
+            shape.media_target.as_deref(),
+            Some("https://example.com/chart.xml")
+        );
+        assert_eq!(parser.security_info.external_refs.len(), 1);
+    }
+
+    #[test]
+    fn apply_graphic_frame_relationships_resolves_internal_chart_target() {
+        let rel = Relationship {
+            id: "rIdChart".to_string(),
+            rel_type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
+                .to_string(),
+            target: "../charts/chart1.xml".to_string(),
+            target_mode: TargetMode::Internal,
+        };
+        let relationships = relationships_with(rel);
+        let mut parser = PptxParser::new();
+        let mut shape = Shape::new(ShapeType::Custom);
+        let state = GraphicFrameState {
+            chart_rel: Some("rIdChart".to_string()),
+            ole_rel: None,
+            table_id: None,
+        };
+        let mut zip = DummyZip;
+
+        let result = parser.apply_graphic_frame_relationships(
+            &mut shape,
+            "ppt/slides/slide1.xml",
+            &relationships,
+            &mut zip,
+            &state,
+        );
+        assert!(result.is_ok());
+        assert_eq!(shape.shape_type, ShapeType::Chart);
+        assert_eq!(shape.media_target.as_deref(), Some("ppt/charts/chart1.xml"));
+        assert!(parser.security_info.external_refs.is_empty());
+        assert!(parser.chart_nodes.is_empty());
+    }
+
+    #[test]
+    fn apply_graphic_frame_relationships_with_missing_ole_rel_id_is_noop() {
+        let relationships = Relationships::default();
+        let mut parser = PptxParser::new();
+        let mut shape = Shape::new(ShapeType::Custom);
+        let state = GraphicFrameState {
+            chart_rel: None,
+            ole_rel: Some("rIdMissingOle".to_string()),
+            table_id: None,
+        };
+        let mut zip = DummyZip;
+
+        let result = parser.apply_graphic_frame_relationships(
+            &mut shape,
+            "ppt/slides/slide1.xml",
+            &relationships,
+            &mut zip,
+            &state,
+        );
+        assert!(result.is_ok());
+        assert_eq!(shape.shape_type, ShapeType::Custom);
+        assert!(shape.relationship_id.is_none());
+        assert!(shape.media_target.is_none());
+        assert!(parser.security_info.external_refs.is_empty());
+    }
+
+    #[test]
+    fn apply_graphic_frame_relationships_with_missing_chart_rel_id_is_noop() {
+        let relationships = Relationships::default();
+        let mut parser = PptxParser::new();
+        let mut shape = Shape::new(ShapeType::Custom);
+        let state = GraphicFrameState {
+            chart_rel: Some("rIdMissingChart".to_string()),
+            ole_rel: None,
+            table_id: None,
+        };
+        let mut zip = DummyZip;
+
+        let result = parser.apply_graphic_frame_relationships(
+            &mut shape,
+            "ppt/slides/slide1.xml",
+            &relationships,
+            &mut zip,
+            &state,
+        );
+        assert!(result.is_ok());
+        assert_eq!(shape.shape_type, ShapeType::Custom);
+        assert!(shape.relationship_id.is_none());
+        assert!(shape.media_target.is_none());
+        assert!(parser.security_info.external_refs.is_empty());
+        assert!(parser.chart_nodes.is_empty());
     }
 }

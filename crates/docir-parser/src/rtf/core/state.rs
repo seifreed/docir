@@ -1,4 +1,11 @@
-use super::*;
+use crate::error::ParseError;
+use crate::rtf::objects::{ObjectContext, ObjectTextTarget};
+use docir_core::ir::{
+    Border, BorderStyle, Indentation, LineSpacingRule, Paragraph, ParagraphBorders, Spacing,
+    StyleSet, StyleType, Table, TableCell, TableCellProperties, TableRow, TextAlignment,
+};
+use docir_core::types::NodeId;
+use encoding_rs::Encoding;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,7 +66,7 @@ pub(super) struct FieldContext {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum BorderTarget {
+pub(crate) enum BorderTarget {
     Top,
     Bottom,
     Left,
@@ -187,10 +194,11 @@ impl RtfParseContext {
     }
 
     pub(super) fn current_group_kind(&self) -> GroupKind {
-        self.group_stack
-            .last()
-            .map(|g| g.kind)
-            .unwrap_or(GroupKind::Normal)
+        if let Some(group) = self.group_stack.last() {
+            group.kind
+        } else {
+            GroupKind::Normal
+        }
     }
 
     pub(super) fn push_group(&mut self, kind: GroupKind) -> Result<(), ParseError> {

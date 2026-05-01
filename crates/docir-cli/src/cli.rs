@@ -103,6 +103,10 @@ pub(crate) struct Cli {
     #[arg(long, global = true)]
     pub(crate) metrics: bool,
 
+    /// Disable SHA-256/hash computation during parse and extraction
+    #[arg(long, global = true)]
+    pub(crate) no_hashes: bool,
+
     #[command(subcommand)]
     pub(crate) command: Commands,
 }
@@ -165,6 +169,328 @@ pub(crate) enum Commands {
         /// Export mode (full report or parts-only)
         #[arg(long, default_value = "full")]
         export_mode: CoverageExportMode,
+    },
+
+    /// Build an enriched artifact inventory for the document
+    Inventory {
+        /// Path to the input document
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Probe the real format/container of a file without full parsing
+    #[command(name = "probe-format")]
+    ProbeFormat {
+        /// Path to the input file
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// List CFB storage and stream FILETIMEs
+    #[command(name = "list-times")]
+    ListTimes {
+        /// Path to the input file
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Inspect classic OLE metadata property sets
+    #[command(name = "inspect-metadata")]
+    InspectMetadata {
+        /// Path to the input file
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Inspect low-level BIFF records from a legacy XLS workbook stream
+    #[command(name = "inspect-sheet-records")]
+    InspectSheetRecords {
+        /// Path to the input file
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Inspect low-level binary records from a legacy PPT presentation stream
+    #[command(name = "inspect-slide-records")]
+    InspectSlideRecords {
+        /// Path to the input file
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Inspect normal CFB directory entries and their structural metadata
+    #[command(name = "inspect-directory")]
+    InspectDirectory {
+        /// Path to the input file
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Inspect CFB sector allocation and stream chains
+    #[command(name = "inspect-sectors")]
+    InspectSectors {
+        /// Path to the input file
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Build an analyst-facing indicator scorecard for the document
+    #[command(name = "report-indicators")]
+    ReportIndicators {
+        /// Path to the input document
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Extract DDE-style active links into a dedicated report
+    #[command(name = "extract-links")]
+    ExtractLinks {
+        /// Path to the input document
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Detect and optionally export embedded SWF/Flash payloads
+    #[command(name = "extract-flash")]
+    ExtractFlash {
+        /// Path to the input document
+        input: PathBuf,
+
+        /// Output directory for extracted SWF payloads
+        #[arg(long)]
+        out: Option<PathBuf>,
+
+        /// Allow writing into an existing output directory
+        #[arg(long)]
+        overwrite: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Emit the canonical Phase 0 artifact manifest as JSON
+    Manifest {
+        /// Path to the input document
+        input: PathBuf,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Dump low-level container entries for OOXML, CFB, or RTF inputs
+    #[command(name = "dump-container")]
+    DumpContainer {
+        /// Path to the input document
+        input: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Recognize VBA projects and modules without AST or deobfuscation
+    #[command(name = "recognize-vba")]
+    RecognizeVba {
+        /// Path to the input document
+        input: PathBuf,
+
+        /// Include normalized module source in JSON/text output
+        #[arg(long)]
+        include_source: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Pretty-print JSON output
+        #[arg(long, short)]
+        pretty: bool,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Extract VBA modules to disk and emit a manifest
+    #[command(name = "extract-vba")]
+    ExtractVba {
+        /// Path to the input document
+        input: PathBuf,
+
+        /// Output directory
+        #[arg(long)]
+        out: PathBuf,
+
+        /// Allow writing into an existing output directory
+        #[arg(long)]
+        overwrite: bool,
+
+        /// Keep partial bundles when some modules cannot be extracted
+        #[arg(long)]
+        best_effort: bool,
+    },
+
+    /// Extract embedded OOXML/RTF artifacts to disk and emit a manifest
+    #[command(name = "extract-artifacts")]
+    ExtractArtifacts {
+        /// Path to the input document
+        input: PathBuf,
+
+        /// Output directory
+        #[arg(long)]
+        out: PathBuf,
+
+        /// Allow writing into an existing output directory
+        #[arg(long)]
+        overwrite: bool,
+
+        /// Also dump raw OOXML embedding and ActiveX container binaries
+        #[arg(long)]
+        with_raw: bool,
+
+        /// Exclude regular OOXML media assets such as images/audio/video
+        #[arg(long)]
+        no_media: bool,
+
+        /// Restrict output to OLE-backed artifacts
+        #[arg(long)]
+        only_ole: bool,
+
+        /// Restrict extraction to RTF objdata blobs
+        #[arg(long)]
+        only_rtf_objects: bool,
     },
 
     /// Perform security analysis on the document

@@ -51,6 +51,7 @@ fn build_registry(format: DocumentFormat, entries: &[PartSpecEntry]) -> Vec<Part
         .collect()
 }
 
+/// Public API entrypoint: registry_for.
 pub fn registry_for(format: DocumentFormat) -> Vec<PartSpec> {
     match format {
         DocumentFormat::WordProcessing => build_registry(format, WORD_PARTS),

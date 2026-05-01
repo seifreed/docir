@@ -1,6 +1,18 @@
-use super::*;
+use super::{
+    parse_pivot_table_definition, parse_sheet_comments, parse_table_definition,
+    parse_threaded_comments, rel_type, IRNode, NodeId, ParseError, Relationships, SheetComment,
+    SourceSpan, XlsxParser,
+};
 use crate::ooxml::part_utils::read_xml_part_and_rels;
 use crate::zip_handler::PackageReader;
+
+type CommentParserFn = fn(&str, &str, Option<&str>) -> Result<Vec<SheetComment>, ParseError>;
+struct CommentPartSpec<'a> {
+    sheet_path: &'a str,
+    sheet_name: &'a str,
+    rel_type: &'a str,
+    parse_fn: CommentParserFn,
+}
 
 impl XlsxParser {
     pub(super) fn load_worksheet_drawings(
@@ -62,20 +74,24 @@ impl XlsxParser {
         let mut comments = Vec::new();
         self.load_worksheet_comment_type(
             zip,
-            sheet_path,
             relationships,
-            sheet_name,
-            rel_type::COMMENTS,
-            parse_sheet_comments,
+            CommentPartSpec {
+                sheet_path,
+                sheet_name,
+                rel_type: rel_type::COMMENTS,
+                parse_fn: parse_sheet_comments,
+            },
             &mut comments,
         )?;
         self.load_worksheet_comment_type(
             zip,
-            sheet_path,
             relationships,
-            sheet_name,
-            rel_type::THREADED_COMMENTS,
-            parse_threaded_comments,
+            CommentPartSpec {
+                sheet_path,
+                sheet_name,
+                rel_type: rel_type::THREADED_COMMENTS,
+                parse_fn: parse_threaded_comments,
+            },
             &mut comments,
         )?;
         Ok(comments)
@@ -136,20 +152,17 @@ impl XlsxParser {
     fn load_worksheet_comment_type(
         &mut self,
         zip: &mut impl PackageReader,
-        sheet_path: &str,
         relationships: &Relationships,
-        sheet_name: &str,
-        rel_type: &str,
-        parse_fn: fn(&str, &str, Option<&str>) -> Result<Vec<SheetComment>, ParseError>,
+        spec: CommentPartSpec<'_>,
         out: &mut Vec<NodeId>,
     ) -> Result<(), ParseError> {
-        for rel in relationships.get_by_type(rel_type) {
-            let comments_path = Relationships::resolve_target(sheet_path, &rel.target);
+        for rel in relationships.get_by_type(spec.rel_type) {
+            let comments_path = Relationships::resolve_target(spec.sheet_path, &rel.target);
             if !zip.contains(&comments_path) {
                 continue;
             }
             let comments_xml = zip.read_file_string(&comments_path)?;
-            let parsed = parse_fn(&comments_xml, &comments_path, Some(sheet_name))?;
+            let parsed = (spec.parse_fn)(&comments_xml, &comments_path, Some(spec.sheet_name))?;
             self.insert_sheet_comments(parsed, &comments_path, &rel.id, out);
         }
         Ok(())

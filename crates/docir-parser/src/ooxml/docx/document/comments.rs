@@ -11,6 +11,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 
 impl DocxParser {
+    /// Public API entrypoint: parse_comments.
     pub fn parse_comments(
         &mut self,
         xml: &str,
@@ -19,6 +20,7 @@ impl DocxParser {
         parse_comments_like(self, xml, rels, None)
     }
 
+    /// Public API entrypoint: parse_notes.
     pub fn parse_notes(
         &mut self,
         xml: &str,
@@ -28,6 +30,7 @@ impl DocxParser {
         parse_comments_like(self, xml, rels, Some(kind))
     }
 
+    /// Public API entrypoint: parse_comments_extended.
     pub fn parse_comments_extended(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let mut set = CommentExtensionSet::new();
         let mut reader = Reader::from_str(xml);
@@ -66,6 +69,7 @@ impl DocxParser {
         Ok(id)
     }
 
+    /// Public API entrypoint: parse_comments_ids.
     pub fn parse_comments_ids(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let mut map = CommentIdMap::new();
         let mut reader = Reader::from_str(xml);

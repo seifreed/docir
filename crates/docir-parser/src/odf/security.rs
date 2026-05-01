@@ -1,5 +1,8 @@
+use super::helpers::parse_odf_condition_operator;
 use crate::diagnostics::push_entry;
+use crate::security_scan::OdfXmlInputs;
 use crate::security_utils::parse_dde_formula;
+use crate::xml_utils::{scan_xml_events, XmlScanControl};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document, IRNode};
 use docir_core::security::{DdeField, ExternalRefType, ExternalReference, OleObject};
@@ -8,39 +11,28 @@ use docir_core::visitor::IrStore;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
+#[derive(Default)]
 pub(crate) struct OdfFormulaScan {
     pub(crate) dde_fields: Vec<DdeField>,
     pub(crate) external_refs: Vec<ExternalReference>,
     pub(crate) diagnostics: Vec<DiagnosticEntry>,
 }
 
-impl Default for OdfFormulaScan {
-    fn default() -> Self {
-        Self {
-            dde_fields: Vec::new(),
-            external_refs: Vec::new(),
-            diagnostics: Vec::new(),
-        }
-    }
-}
-
 fn visit_start_or_empty(xml: &str, mut on_element: impl FnMut(&BytesStart<'_>) -> bool) {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+    let _ = scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
                 if on_element(&e) {
-                    break;
+                    return Ok(XmlScanControl::Break);
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
             _ => {}
         }
-        buf.clear();
-    }
+        Ok(XmlScanControl::Continue)
+    });
 }
 
 pub(crate) fn scan_external_links(xml: &str, location: &str) -> Vec<ExternalReference> {
@@ -128,19 +120,17 @@ pub(crate) fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
     let mut buf = Vec::new();
     let mut unsupported: Vec<String> = Vec::new();
     let mut has_array = false;
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+    let _ = scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
                 if let Some(formula_attr) = super::attr_value(&e, b"table:formula") {
                     process_formula(&formula_attr, &mut scan, &mut unsupported, &mut has_array);
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
             _ => {}
         }
-        buf.clear();
-    }
+        Ok(XmlScanControl::Continue)
+    });
     push_formula_diagnostics(&mut scan.diagnostics, &unsupported, has_array);
     scan
 }
@@ -245,9 +235,7 @@ fn push_formula_diagnostics(
 }
 
 pub(crate) fn scan_odf_security(
-    content_xml: Option<&str>,
-    styles_xml: Option<&str>,
-    settings_xml: Option<&str>,
+    xml: OdfXmlInputs<'_>,
     file_names: &[String],
     zip: &mut impl PackageReader,
     store: &mut IrStore,
@@ -255,30 +243,30 @@ pub(crate) fn scan_odf_security(
     diagnostics: &mut Diagnostics,
 ) {
     let mut formula_scan = OdfFormulaScan::default();
-    if let Some(xml) = content_xml {
-        formula_scan = scan_odf_formula_security(xml);
+    if let Some(content_xml) = xml.content_xml {
+        formula_scan = scan_odf_formula_security(content_xml);
+        diagnostics.entries.append(&mut formula_scan.diagnostics);
+        diagnostics.entries.extend(scan_odf_protection(content_xml));
         diagnostics
             .entries
-            .extend(formula_scan.diagnostics.drain(..));
-        diagnostics.entries.extend(scan_odf_protection(xml));
-        diagnostics.entries.extend(scan_odf_advanced_features(xml));
+            .extend(scan_odf_advanced_features(content_xml));
     }
 
     let mut external_refs = Vec::new();
     for (xml, location) in [
-        (content_xml, "content.xml"),
-        (styles_xml, "styles.xml"),
-        (settings_xml, "settings.xml"),
+        (xml.content_xml, "content.xml"),
+        (xml.styles_xml, "styles.xml"),
+        (xml.settings_xml, "settings.xml"),
     ] {
         if let Some(xml) = xml {
             external_refs.extend(scan_external_links(xml, location));
         }
     }
-    external_refs.extend(formula_scan.external_refs.drain(..));
+    external_refs.append(&mut formula_scan.external_refs);
 
     let mut ole_objects = Vec::new();
-    if let Some(xml) = content_xml {
-        let (oles, ole_links) = scan_odf_objects(xml);
+    if let Some(content_xml) = xml.content_xml {
+        let (oles, ole_links) = scan_odf_objects(content_xml);
         ole_objects.extend(oles);
         external_refs.extend(ole_links);
     }
@@ -290,9 +278,7 @@ pub(crate) fn scan_odf_security(
     for ole in ole_objects {
         store.insert(IRNode::OleObject(ole));
     }
-    doc.security
-        .dde_fields
-        .extend(formula_scan.dde_fields.drain(..));
+    doc.security.dde_fields.append(&mut formula_scan.dde_fields);
 }
 
 pub(crate) fn scan_odf_protection(xml: &str) -> Vec<DiagnosticEntry> {
@@ -330,7 +316,7 @@ pub(crate) fn scan_odf_advanced_features(xml: &str) -> Vec<DiagnosticEntry> {
         match e.name().as_ref() {
             b"table:conditional-format" => {
                 if let Some(condition) = super::attr_value(e, b"table:condition") {
-                    if super::parse_odf_condition_operator(&condition).is_none() {
+                    if parse_odf_condition_operator(&condition).is_none() {
                         conditional_advanced = true;
                     }
                 }
@@ -404,10 +390,8 @@ fn extract_formula_functions(formula: &str) -> Vec<String> {
                     break;
                 }
             }
-            if matches!(lookahead.peek(), Some('(')) {
-                if !ident.is_empty() {
-                    functions.push(ident.to_ascii_uppercase());
-                }
+            if matches!(lookahead.peek(), Some('(')) && !ident.is_empty() {
+                functions.push(ident.to_ascii_uppercase());
             }
         } else {
             chars.next();
@@ -423,7 +407,7 @@ fn extract_quoted_strings(input: &str) -> Vec<String> {
         if ch == '"' || ch == '\'' {
             let quote = ch;
             let mut value = String::new();
-            while let Some(c) = chars.next() {
+            for c in chars.by_ref() {
                 if c == quote {
                     break;
                 }

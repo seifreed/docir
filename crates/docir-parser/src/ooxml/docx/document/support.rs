@@ -1,4 +1,10 @@
-use super::*;
+use super::{
+    attr_value, normalize_docx_target, parse_border, reader_from_str, span_from_reader, DocxParser,
+    NodeId, PageBorders, ParseError, Relationships, WordSettings,
+};
+use crate::xml_utils::xml_error;
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::Reader;
 
 pub(super) fn parse_page_borders(
     reader: &mut Reader<&[u8]>,
@@ -54,10 +60,10 @@ pub(super) fn parse_page_borders(
 }
 
 pub(super) fn bool_from_val(start: &BytesStart) -> bool {
-    match attr_value(start, b"w:val").as_deref() {
-        Some("0") | Some("false") => false,
-        _ => true,
-    }
+    !matches!(
+        attr_value(start, b"w:val").as_deref(),
+        Some("0") | Some("false")
+    )
 }
 
 pub(super) fn parse_vml_style_length(style: &str, key: &str) -> Option<i64> {

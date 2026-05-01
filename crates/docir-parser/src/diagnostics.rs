@@ -25,13 +25,7 @@ pub(crate) fn push_info(
     message: String,
     path: Option<&str>,
 ) {
-    push_entry(
-        &mut diagnostics.entries,
-        DiagnosticSeverity::Info,
-        code,
-        message,
-        path,
-    );
+    push_with_severity(diagnostics, DiagnosticSeverity::Info, code, message, path);
 }
 
 pub(crate) fn push_warning(
@@ -40,13 +34,23 @@ pub(crate) fn push_warning(
     message: String,
     path: Option<&str>,
 ) {
-    push_entry(
-        &mut diagnostics.entries,
+    push_with_severity(
+        diagnostics,
         DiagnosticSeverity::Warning,
         code,
         message,
         path,
     );
+}
+
+pub(crate) fn push_with_severity(
+    diagnostics: &mut Diagnostics,
+    severity: DiagnosticSeverity,
+    code: &str,
+    message: String,
+    path: Option<&str>,
+) {
+    push_entry(&mut diagnostics.entries, severity, code, message, path);
 }
 
 pub(crate) fn attach_diagnostics_if_any(

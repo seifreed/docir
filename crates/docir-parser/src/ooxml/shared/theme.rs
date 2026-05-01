@@ -13,6 +13,7 @@ struct ThemeParseState {
     in_minor_font: bool,
 }
 
+/// Public API entrypoint: parse_theme.
 pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
     let mut theme = Theme::new();
     theme.span = Some(SourceSpan::new(path));

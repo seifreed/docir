@@ -143,9 +143,18 @@ impl<R: Read + Seek> SecureZipReader<R> {
             return true;
         }
 
-        // Check for Windows-style absolute paths
-        if path.len() >= 2 && path.chars().nth(1) == Some(':') {
-            return true;
+        // Check for Windows-style absolute paths (C:\, D:\, etc.)
+        // Windows drive letters are always ASCII letters, so we can safely check bytes
+        let bytes = path.as_bytes();
+        if bytes.len() >= 3 {
+            let first = bytes[0];
+            let second = bytes[1];
+            if first.is_ascii_alphabetic() && second == b':' {
+                let third = bytes[2];
+                if third == b'\\' || third == b'/' {
+                    return true;
+                }
+            }
         }
 
         // Check for backslash (shouldn't appear in OOXML)
@@ -296,17 +305,31 @@ mod tests {
 
     #[test]
     fn test_path_traversal_detection() {
-        assert!(SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal("../etc/passwd"));
-        assert!(SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal("foo/../bar"));
-        assert!(SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal("/absolute/path"));
-        assert!(SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal("C:\\Windows"));
-        assert!(SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal("foo\\bar"));
+        assert!(SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal(
+            "../etc/passwd"
+        ));
+        assert!(SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal(
+            "foo/../bar"
+        ));
+        assert!(SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal(
+            "/absolute/path"
+        ));
+        assert!(SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal(
+            "C:\\Windows"
+        ));
+        assert!(SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal(
+            "foo\\bar"
+        ));
 
-        assert!(!SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal("word/document.xml"));
-        assert!(
-            !SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal("[Content_Types].xml")
-        );
-        assert!(!SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal("_rels/.rels"));
+        assert!(!SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal(
+            "word/document.xml"
+        ));
+        assert!(!SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal(
+            "[Content_Types].xml"
+        ));
+        assert!(!SecureZipReader::<Cursor<Vec<u8>>>::is_path_traversal(
+            "_rels/.rels"
+        ));
     }
 
     #[test]
@@ -337,7 +360,10 @@ mod tests {
         );
         assert_eq!(reader.file_size("word/document.xml").expect("size"), 6);
 
-        let mut names = reader.file_names().map(ToString::to_string).collect::<Vec<_>>();
+        let mut names = reader
+            .file_names()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
         names.sort();
         assert_eq!(
             names,
@@ -359,7 +385,10 @@ mod tests {
     #[test]
     fn secure_zip_reader_reports_missing_and_encoding_errors() {
         let bytes = make_zip(
-            &[("word/document.xml", b"<doc/>"), ("word/binary.bin", &[0xff, 0xfe])],
+            &[
+                ("word/document.xml", b"<doc/>"),
+                ("word/binary.bin", &[0xff, 0xfe]),
+            ],
             CompressionMethod::Stored,
         );
         let mut reader =
@@ -426,7 +455,10 @@ mod tests {
             .expect("path traversal error");
         assert!(matches!(err, ParseError::PathTraversal(_)));
 
-        let bytes = make_zip(&[("word/document.xml", b"12345")], CompressionMethod::Stored);
+        let bytes = make_zip(
+            &[("word/document.xml", b"12345")],
+            CompressionMethod::Stored,
+        );
         let err = SecureZipReader::new(
             Cursor::new(bytes),
             ZipConfig {
@@ -442,7 +474,10 @@ mod tests {
     #[test]
     fn secure_zip_reader_rejects_suspicious_compression_ratio() {
         let large = vec![b'A'; 3 * 1024 * 1024];
-        let bytes = make_zip(&[("word/document.xml", &large)], CompressionMethod::Deflated);
+        let bytes = make_zip(
+            &[("word/document.xml", &large)],
+            CompressionMethod::Deflated,
+        );
 
         let err = SecureZipReader::new(
             Cursor::new(bytes),

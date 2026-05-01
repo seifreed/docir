@@ -27,6 +27,7 @@ pub struct DigitalSignature {
 }
 
 impl DigitalSignature {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

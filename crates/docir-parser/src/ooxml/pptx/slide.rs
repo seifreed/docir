@@ -1,7 +1,16 @@
 use super::graphic_frame::GraphicFrameState;
-use super::*;
+use super::{
+    extract_c_sld_name, parse_comments, parse_shape_properties, parse_slide_layout_meta, PptxParser,
+};
+use crate::error::ParseError;
+use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
 use crate::xml_utils::reader_from_str;
 use crate::zip_handler::PackageReader;
+use docir_core::ir::{IRNode, Shape, ShapeType, Slide, SlideAnimation, SlideTransition};
+use docir_core::security::ExternalRefType;
+use docir_core::types::{NodeId, SourceSpan};
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::Reader;
 
 impl PptxParser {
     pub(super) fn parse_slide(
@@ -11,86 +20,23 @@ impl PptxParser {
         slide_number: u32,
         slide_path: &str,
         relationships: &Relationships,
-        notes_text: Option<&str>,
-        notes_slide_id: Option<NodeId>,
+        notes: (Option<&str>, Option<NodeId>),
     ) -> Result<NodeId, ParseError> {
-        let mut slide = Slide::new(slide_number);
-        slide.span = Some(SourceSpan::new(slide_path));
-
-        if let Some(rel) = relationships.get_first_by_type(rel_type::SLIDE_LAYOUT) {
-            slide.layout_id = Some(Relationships::resolve_target(slide_path, &rel.target));
-        }
-        if let Some(rel) = relationships.get_first_by_type(rel_type::SLIDE_MASTER) {
-            slide.master_id = Some(Relationships::resolve_target(slide_path, &rel.target));
-        }
+        let (notes_text, notes_slide_id) = notes;
+        let mut slide = self.build_slide_shell(slide_number, slide_path, relationships);
 
         let mut reader = reader_from_str(xml);
-
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"p:sld" => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"show" {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                if v == "0" || v.eq_ignore_ascii_case("false") {
-                                    slide.hidden = true;
-                                }
-                            }
-                        }
-                    }
-                    b"p:cSld" => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"name" {
-                                slide.name = Some(String::from_utf8_lossy(&attr.value).to_string());
-                            }
-                        }
-                    }
-                    b"p:sp" => {
-                        let shape =
-                            self.parse_shape_sp(&mut reader, &e, slide_path, relationships)?;
-                        let shape_id = shape.id;
-                        self.store.insert(IRNode::Shape(shape));
-                        slide.shapes.push(shape_id);
-                    }
-                    b"p:pic" => {
-                        let shape =
-                            self.parse_shape_pic(&mut reader, &e, slide_path, relationships)?;
-                        let shape_id = shape.id;
-                        self.store.insert(IRNode::Shape(shape));
-                        slide.shapes.push(shape_id);
-                    }
-                    b"p:graphicFrame" => {
-                        let shape = self.parse_shape_graphic_frame(
-                            &mut reader,
-                            &e,
-                            slide_path,
-                            relationships,
-                            zip,
-                        )?;
-                        let shape_id = shape.id;
-                        self.store.insert(IRNode::Shape(shape));
-                        slide.shapes.push(shape_id);
-                    }
-                    b"p:grpSp" => {
-                        let shape =
-                            self.parse_shape_group(&mut reader, &e, slide_path, relationships)?;
-                        let shape_id = shape.id;
-                        self.store.insert(IRNode::Shape(shape));
-                        slide.shapes.push(shape_id);
-                    }
-                    b"p:transition" => {
-                        let transition = Self::parse_slide_transition(&mut reader, &e, slide_path)?;
-                        slide.transition = Some(transition);
-                    }
-                    b"p:timing" => {
-                        let animations =
-                            Self::parse_slide_animations(&mut reader, slide_path, relationships)?;
-                        slide.animations = animations;
-                    }
-                    _ => {}
-                },
+                Ok(Event::Start(e)) => self.handle_slide_start_event(
+                    &mut reader,
+                    &e,
+                    slide_path,
+                    relationships,
+                    zip,
+                    &mut slide,
+                )?,
                 Ok(Event::Eof) => break,
                 Err(e) => {
                     return Err(ParseError::Xml {
@@ -103,35 +49,119 @@ impl PptxParser {
             buf.clear();
         }
 
+        self.attach_slide_notes(&mut slide, notes_text, notes_slide_id);
+        self.attach_slide_comments(zip, slide_path, relationships, &mut slide)?;
+
+        let slide_id = slide.id;
+        self.store.insert(IRNode::Slide(slide));
+        Ok(slide_id)
+    }
+
+    fn build_slide_shell(
+        &self,
+        slide_number: u32,
+        slide_path: &str,
+        relationships: &Relationships,
+    ) -> Slide {
+        let mut slide = Slide::new(slide_number);
+        slide.span = Some(SourceSpan::new(slide_path));
+        if let Some(rel) = relationships.get_first_by_type(rel_type::SLIDE_LAYOUT) {
+            slide.layout_id = Some(Relationships::resolve_target(slide_path, &rel.target));
+        }
+        if let Some(rel) = relationships.get_first_by_type(rel_type::SLIDE_MASTER) {
+            slide.master_id = Some(Relationships::resolve_target(slide_path, &rel.target));
+        }
+        slide
+    }
+
+    fn handle_slide_start_event(
+        &mut self,
+        reader: &mut Reader<&[u8]>,
+        event: &BytesStart<'_>,
+        slide_path: &str,
+        relationships: &Relationships,
+        zip: &mut impl PackageReader,
+        slide: &mut Slide,
+    ) -> Result<(), ParseError> {
+        match event.name().as_ref() {
+            b"p:sld" => update_slide_visibility(slide, event),
+            b"p:cSld" => update_slide_name(slide, event),
+            b"p:sp" => {
+                let shape = self.parse_shape_sp(reader, event, slide_path, relationships)?;
+                self.push_slide_shape(slide, shape);
+            }
+            b"p:pic" => {
+                let shape = self.parse_shape_pic(reader, event, slide_path, relationships)?;
+                self.push_slide_shape(slide, shape);
+            }
+            b"p:graphicFrame" => {
+                let shape =
+                    self.parse_shape_graphic_frame(reader, event, slide_path, relationships, zip)?;
+                self.push_slide_shape(slide, shape);
+            }
+            b"p:grpSp" => {
+                let shape = self.parse_shape_group(reader, event, slide_path, relationships)?;
+                self.push_slide_shape(slide, shape);
+            }
+            b"p:transition" => {
+                slide.transition = Some(Self::parse_slide_transition(reader, event, slide_path)?)
+            }
+            b"p:timing" => {
+                slide.animations = Self::parse_slide_animations(reader, slide_path, relationships)?
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn push_slide_shape(&mut self, slide: &mut Slide, shape: Shape) {
+        let id = shape.id;
+        self.store.insert(IRNode::Shape(shape));
+        slide.shapes.push(id);
+    }
+
+    fn attach_slide_notes(
+        &self,
+        slide: &mut Slide,
+        notes_text: Option<&str>,
+        notes_slide_id: Option<NodeId>,
+    ) {
         if let Some(notes) = notes_text {
             if !notes.trim().is_empty() {
                 slide.notes = Some(notes.to_string());
             }
         }
         slide.notes_slide = notes_slide_id;
+    }
 
-        // Slide comments
-        if let Some(rel) = relationships
+    fn attach_slide_comments(
+        &mut self,
+        zip: &mut impl PackageReader,
+        slide_path: &str,
+        relationships: &Relationships,
+        slide: &mut Slide,
+    ) -> Result<(), ParseError> {
+        let Some(rel) = relationships
             .by_id
             .values()
             .find(|r| r.rel_type.contains("comments"))
-        {
-            let comments_path = Relationships::resolve_target(slide_path, &rel.target);
-            if zip.contains(&comments_path) {
-                let comments_xml = zip.read_file_string(&comments_path)?;
-                let comments =
-                    parse_comments(&comments_xml, &comments_path, &self.comment_authors)?;
-                for comment in comments {
-                    let id = comment.id;
-                    self.store.insert(IRNode::PptxComment(comment));
-                    slide.comments.push(id);
-                }
-            }
+        else {
+            return Ok(());
+        };
+
+        let comments_path = Relationships::resolve_target(slide_path, &rel.target);
+        if !zip.contains(&comments_path) {
+            return Ok(());
         }
 
-        let slide_id = slide.id;
-        self.store.insert(IRNode::Slide(slide));
-        Ok(slide_id)
+        let comments_xml = zip.read_file_string(&comments_path)?;
+        let comments = parse_comments(&comments_xml, &comments_path, &self.comment_authors)?;
+        for comment in comments {
+            let id = comment.id;
+            self.store.insert(IRNode::PptxComment(comment));
+            slide.comments.push(id);
+        }
+        Ok(())
     }
 
     pub(super) fn parse_slide_layout(
@@ -429,16 +459,7 @@ impl PptxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => {
                     let name = e.name().as_ref().to_vec();
-                    if is_standard_animation(&name) {
-                        let anim = build_animation_from_event(
-                            &name,
-                            e.attributes().flatten(),
-                            slide_path,
-                            relationships,
-                        );
-                        animations.push(anim);
-                        current_index = Some(animations.len() - 1);
-                    } else if is_media_animation(&name) {
+                    if is_standard_animation(&name) || is_media_animation(&name) {
                         let anim = build_animation_from_event(
                             &name,
                             e.attributes().flatten(),
@@ -483,6 +504,25 @@ impl PptxParser {
         }
 
         Ok(animations)
+    }
+}
+
+fn update_slide_visibility(slide: &mut Slide, event: &BytesStart<'_>) {
+    for attr in event.attributes().flatten() {
+        if attr.key.as_ref() == b"show" {
+            let v = String::from_utf8_lossy(&attr.value);
+            if v == "0" || v.eq_ignore_ascii_case("false") {
+                slide.hidden = true;
+            }
+        }
+    }
+}
+
+fn update_slide_name(slide: &mut Slide, event: &BytesStart<'_>) {
+    for attr in event.attributes().flatten() {
+        if attr.key.as_ref() == b"name" {
+            slide.name = Some(String::from_utf8_lossy(&attr.value).to_string());
+        }
     }
 }
 

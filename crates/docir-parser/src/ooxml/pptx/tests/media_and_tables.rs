@@ -40,8 +40,7 @@ fn test_parse_graphic_frame_ole_object() {
             1,
             "ppt/slides/slide1.xml",
             &rels,
-            None,
-            None,
+            (None, None),
         )
         .expect("parse slide");
     let store = parser.into_store();
@@ -97,8 +96,7 @@ fn test_parse_pic_external_media_reference() {
             1,
             "ppt/slides/slide1.xml",
             &rels,
-            None,
-            None,
+            (None, None),
         )
         .expect("parse slide");
     let store = parser.into_store();
@@ -153,8 +151,7 @@ fn test_parse_pic_linked_media_reference() {
             1,
             "ppt/slides/slide1.xml",
             &rels,
-            None,
-            None,
+            (None, None),
         )
         .expect("parse slide");
     let store = parser.into_store();
@@ -212,8 +209,7 @@ fn test_parse_pic_embed_and_link_external() {
             1,
             "ppt/slides/slide1.xml",
             &rels,
-            None,
-            None,
+            (None, None),
         )
         .expect("parse slide");
     let store = parser.into_store();
@@ -276,8 +272,7 @@ fn test_parse_table_in_graphic_frame() {
             1,
             "ppt/slides/slide1.xml",
             &Relationships::default(),
-            None,
-            None,
+            (None, None),
         )
         .expect("slide");
     let store = parser.into_store();

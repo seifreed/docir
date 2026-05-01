@@ -1,11 +1,22 @@
-use super::*;
+use super::{
+    is_manifest_entry_encrypted, parse_content, parse_manifest, parse_styles, spreadsheet,
+    Diagnostics, Document, DocumentFormat, IRNode, IrStore, OdfAtomicLimits, OdfEncryptionData,
+    OdfLimits, OdfManifestEntry, OdfParser, ParseError, ParserConfig, SecureZipReader,
+};
 use crate::diagnostics::{push_info, push_warning};
+use crate::xml_utils::{scan_xml_events, XmlScanControl};
 use aes::{Aes128, Aes256};
 use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
 use cbc::Decryptor;
 use docir_core::ir::DocumentMetadata;
 use pbkdf2::pbkdf2_hmac;
+use quick_xml::events::Event;
+use quick_xml::Reader;
 use sha1::Sha1;
+use std::io::{Read, Seek};
+use std::sync::Arc;
+
+type StylesSettingsSignatures = (Option<String>, Option<String>, Option<String>);
 
 impl OdfParser {
     pub(super) fn load_mimetype_and_manifest<R: Read + Seek>(
@@ -36,7 +47,7 @@ impl OdfParser {
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
         doc: &mut Document,
-    ) -> Result<(Option<String>, Option<String>, Option<String>), ParseError> {
+    ) -> Result<StylesSettingsSignatures, ParseError> {
         let mut styles_xml: Option<String> = None;
         if zip.contains("styles.xml") {
             let xml = zip.read_file_string("styles.xml")?;
@@ -304,9 +315,9 @@ fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
         Modified,
     }
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+    if scan_xml_events(&mut reader, &mut buf, "meta.xml", |event| {
+        match event {
+            Event::Start(e) => {
                 current = match e.name().as_ref() {
                     b"dc:title" => Some(MetaField::Title),
                     b"dc:subject" => Some(MetaField::Subject),
@@ -318,7 +329,7 @@ fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
                     _ => None,
                 };
             }
-            Ok(Event::Text(e)) => {
+            Event::Text(e) => {
                 if let Some(field) = current {
                     let value = e.unescape().unwrap_or_default().to_string();
                     match field {
@@ -332,14 +343,16 @@ fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
                     }
                 }
             }
-            Ok(Event::End(_)) => {
+            Event::End(_) => {
                 current = None;
             }
-            Ok(Event::Eof) => break,
-            Err(_) => return None,
             _ => {}
         }
-        buf.clear();
+        Ok(XmlScanControl::Continue)
+    })
+    .is_err()
+    {
+        return None;
     }
 
     let has_any = meta.title.is_some()
@@ -354,5 +367,100 @@ fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
         Some(meta)
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn encryption_data() -> OdfEncryptionData {
+        OdfEncryptionData {
+            checksum_type: None,
+            checksum: None,
+            algorithm_name: Some("http://www.w3.org/2001/04/xmlenc#aes256-cbc".to_string()),
+            init_vector: Some(vec![0_u8; 16]),
+            key_derivation_name: None,
+            salt: Some(vec![1_u8; 16]),
+            iteration_count: Some(10),
+            key_size: Some(256),
+        }
+    }
+
+    #[test]
+    fn detect_odf_format_supports_expected_mimetypes() {
+        assert_eq!(
+            detect_odf_format("application/vnd.oasis.opendocument.text"),
+            Some(DocumentFormat::OdfText)
+        );
+        assert_eq!(
+            detect_odf_format("application/vnd.sun.xml.calc"),
+            Some(DocumentFormat::OdfSpreadsheet)
+        );
+        assert_eq!(
+            detect_odf_format("application/vnd.oasis.opendocument.presentation"),
+            Some(DocumentFormat::OdfPresentation)
+        );
+        assert_eq!(detect_odf_format("application/octet-stream"), None);
+    }
+
+    #[test]
+    fn parse_meta_extracts_known_fields_and_handles_empty_or_malformed_xml() {
+        let meta = parse_meta(
+            r#"
+            <office:meta xmlns:dc="dc" xmlns:meta="meta">
+              <dc:title>Title</dc:title>
+              <dc:subject>Subject</dc:subject>
+              <dc:creator>Alice</dc:creator>
+              <meta:keyword>tag1,tag2</meta:keyword>
+              <dc:description>Desc</dc:description>
+              <meta:creation-date>2026-01-01</meta:creation-date>
+              <dc:date>2026-01-02</dc:date>
+            </office:meta>
+            "#,
+        )
+        .expect("meta must parse");
+        assert_eq!(meta.title.as_deref(), Some("Title"));
+        assert_eq!(meta.subject.as_deref(), Some("Subject"));
+        assert_eq!(meta.creator.as_deref(), Some("Alice"));
+        assert_eq!(meta.keywords.as_deref(), Some("tag1,tag2"));
+        assert_eq!(meta.description.as_deref(), Some("Desc"));
+        assert_eq!(meta.created.as_deref(), Some("2026-01-01"));
+        assert_eq!(meta.modified.as_deref(), Some("2026-01-02"));
+
+        assert!(parse_meta("<office:meta/>").is_none());
+        assert!(parse_meta("<office:meta><dc:title>").is_none());
+    }
+
+    #[test]
+    fn decrypt_odf_part_validates_required_encryption_fields() {
+        let mut enc = encryption_data();
+        enc.salt = None;
+        let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("missing salt");
+        assert!(err.contains("Missing encryption salt"));
+
+        let mut enc = encryption_data();
+        enc.init_vector = None;
+        let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("missing iv");
+        assert!(err.contains("Missing encryption IV"));
+
+        let mut enc = encryption_data();
+        enc.init_vector = Some(vec![0_u8; 8]);
+        let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("bad iv length");
+        assert!(err.contains("Unsupported IV length: 8"));
+    }
+
+    #[test]
+    fn decrypt_odf_part_rejects_unsupported_algorithm_or_key_length() {
+        let mut enc = encryption_data();
+        enc.algorithm_name = Some("urn:unknown".to_string());
+        enc.key_size = None;
+        let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("unsupported algo");
+        assert!(err.contains("Unsupported encryption algorithm"));
+
+        let mut enc = encryption_data();
+        enc.key_size = Some(192);
+        let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("unsupported key size");
+        assert!(err.contains("Unsupported key length: 24"));
     }
 }

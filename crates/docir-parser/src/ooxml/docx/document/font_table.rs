@@ -6,7 +6,12 @@ use docir_core::types::NodeId;
 use quick_xml::events::Event;
 
 impl DocxParser {
+    /// Public API entrypoint: parse_font_table.
     pub fn parse_font_table(&mut self, xml: &str) -> Result<NodeId, ParseError> {
+        self.parse_font_table_impl(xml)
+    }
+
+    fn parse_font_table_impl(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let mut table = FontTable::new();
         let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();

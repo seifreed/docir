@@ -1,12 +1,12 @@
 //! Coverage command implementation.
 
-use crate::commands::util::parse_document;
+use crate::commands::util::{parse_document, write_json_output, write_text_output};
 use crate::{CoverageExportFormat, CoverageExportMode};
 use anyhow::{Context, Result};
 use docir_app::ParserConfig;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, IRNode};
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct CoverageOptions {
@@ -32,6 +32,7 @@ struct CoverageReport {
     histogram: Vec<DiagnosticEntry>,
 }
 
+/// Public API entrypoint: run.
 pub fn run(input: PathBuf, options: CoverageOptions, parser_config: &ParserConfig) -> Result<()> {
     let parsed = parse_document(&input, parser_config)?;
     let doc = parsed.document().context("Failed to get document root")?;
@@ -39,19 +40,15 @@ pub fn run(input: PathBuf, options: CoverageOptions, parser_config: &ParserConfi
     let report = build_report(entries);
 
     if options.json {
-        output_json_report(&report, options.export.as_ref(), &options)?;
+        write_json_output(&report, true, None)?;
+        if let Some(path) = options.export.as_ref() {
+            write_export(path, options.export_format, options.export_mode, &report)?;
+        }
         return Ok(());
     }
 
     if let Some(path) = options.export.as_ref() {
-        let json = serde_json::to_string_pretty(&report)?;
-        write_export(
-            path,
-            options.export_format,
-            options.export_mode,
-            &report,
-            json,
-        )?;
+        write_export(path, options.export_format, options.export_mode, &report)?;
     }
 
     print_text_report(&input, doc.format.display_name(), &report, &options);
@@ -103,27 +100,8 @@ fn build_report(entries: Vec<DiagnosticEntry>) -> CoverageReport {
     report
 }
 
-fn output_json_report(
-    report: &CoverageReport,
-    export_path: Option<&PathBuf>,
-    options: &CoverageOptions,
-) -> Result<()> {
-    let json = serde_json::to_string_pretty(report)?;
-    println!("{}", json);
-    if let Some(path) = export_path {
-        write_export(
-            path,
-            options.export_format,
-            options.export_mode,
-            report,
-            json,
-        )?;
-    }
-    Ok(())
-}
-
 fn print_text_report(
-    input: &PathBuf,
+    input: &Path,
     format_name: &str,
     report: &CoverageReport,
     options: &CoverageOptions,
@@ -191,29 +169,30 @@ fn print_entry_section(label: &str, entries: &[DiagnosticEntry]) {
 }
 
 fn write_export(
-    path: &PathBuf,
+    path: &Path,
     format: CoverageExportFormat,
     mode: CoverageExportMode,
     report: &CoverageReport,
-    json: String,
 ) -> Result<()> {
     match format {
         CoverageExportFormat::Json => {
-            let payload = match mode {
-                CoverageExportMode::Full => json,
+            let output_path = Some(path.to_path_buf());
+            match mode {
+                CoverageExportMode::Full => {
+                    write_json_output(report, true, output_path.clone())?;
+                }
                 CoverageExportMode::Parts => {
                     let rows = build_part_rows(report);
-                    serde_json::to_string_pretty(&rows)?
+                    write_json_output(&rows, true, output_path)?;
                 }
-            };
-            std::fs::write(path, payload)?;
+            }
         }
         CoverageExportFormat::Csv => {
             let csv = match mode {
                 CoverageExportMode::Full => render_csv(report),
                 CoverageExportMode::Parts => render_parts_csv(report),
             };
-            std::fs::write(path, csv)?;
+            write_text_output(&csv, Some(path.to_path_buf()))?;
         }
     }
     Ok(())
@@ -222,12 +201,17 @@ fn write_export(
 fn render_csv(report: &CoverageReport) -> String {
     let mut out = String::new();
     out.push_str("section,code,severity,message,path\n");
-    write_csv_entries(&mut out, "parts", &report.parts);
-    write_csv_entries(&mut out, "part_rows", &report.part_rows);
-    write_csv_entries(&mut out, "missing", &report.missing);
-    write_csv_entries(&mut out, "inventory", &report.inventory);
-    write_csv_entries(&mut out, "unknown", &report.unknown);
-    write_csv_entries(&mut out, "histogram", &report.histogram);
+    let sections: [(&str, &Vec<DiagnosticEntry>); 6] = [
+        ("parts", &report.parts),
+        ("part_rows", &report.part_rows),
+        ("missing", &report.missing),
+        ("inventory", &report.inventory),
+        ("unknown", &report.unknown),
+        ("histogram", &report.histogram),
+    ];
+    for (section, entries) in sections {
+        write_csv_entries(&mut out, section, entries);
+    }
     if let Some(summary) = &report.summary {
         let msg = escape_csv(summary);
         out.push_str(&format!("summary,COVERAGE_SUMMARY,Info,{msg},\n"));

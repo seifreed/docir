@@ -1,5 +1,6 @@
 use docir_core::ir::{ExtensionPart, ExtensionPartKind, MediaType};
 
+/// Public API entrypoint: classify_media_type.
 pub fn classify_media_type(path: &str) -> MediaType {
     let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     match ext.as_str() {
@@ -10,6 +11,7 @@ pub fn classify_media_type(path: &str) -> MediaType {
     }
 }
 
+/// Public API entrypoint: legacy_extension_part.
 pub fn legacy_extension_part(path: &str, size_bytes: u64) -> ExtensionPart {
     ExtensionPart::new(path, size_bytes, ExtensionPartKind::Legacy)
 }

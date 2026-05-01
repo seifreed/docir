@@ -22,6 +22,7 @@ pub struct ChartData {
 }
 
 impl ChartData {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -45,6 +46,7 @@ pub struct ChartSeries {
 }
 
 impl ChartSeries {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             name: None,

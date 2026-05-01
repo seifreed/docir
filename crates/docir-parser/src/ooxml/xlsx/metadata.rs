@@ -1,9 +1,8 @@
 //! XLSX metadata parsing helpers.
 
 use crate::error::ParseError;
-use crate::xml_utils::local_name;
 use crate::xml_utils::reader_from_str;
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{local_name, scan_xml_events, XmlScanControl};
 use docir_core::ir::{SheetMetadata, SheetMetadataType};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -14,9 +13,9 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
     let mut metadata = SheetMetadata::new();
     metadata.span = Some(SourceSpan::new(path));
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+    scan_xml_events(&mut reader, &mut buf, path, |event| {
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
                 match local {
@@ -62,14 +61,10 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
                     _ => {}
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
             _ => {}
         }
-        buf.clear();
-    }
+        Ok(XmlScanControl::Continue)
+    })?;
 
     Ok(metadata)
 }

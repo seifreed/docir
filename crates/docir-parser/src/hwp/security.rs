@@ -1,4 +1,17 @@
-use super::*;
+use crate::diagnostics::{push_info, push_warning};
+use crate::zip_handler::SecureZipReader;
+use docir_core::ir::Diagnostics;
+use docir_core::ir::{Document, IRNode};
+use docir_core::security::{
+    ExternalRefType, ExternalReference, MacroModule, MacroModuleType, MacroProject, OleObject,
+};
+use docir_core::types::{NodeId, SourceSpan};
+use docir_core::visitor::IrStore;
+use quick_xml::events::Event;
+use quick_xml::Reader;
+use std::io::{Read, Seek};
+
+use super::attach_diagnostics_if_any;
 
 struct HwpxSecurityScan {
     external_refs: Vec<ExternalReference>,

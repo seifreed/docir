@@ -9,6 +9,7 @@ macro_rules! define_adapter {
         }
 
         impl $adapter {
+            /// Public API entrypoint: new.
             pub fn new(config: ParserConfig) -> Self {
                 Self { config }
             }

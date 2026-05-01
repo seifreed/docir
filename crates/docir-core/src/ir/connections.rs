@@ -14,6 +14,7 @@ pub struct ConnectionPart {
 }
 
 impl ConnectionPart {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -44,6 +45,7 @@ pub struct ConnectionEntry {
 }
 
 impl ConnectionEntry {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             connection_id: None,

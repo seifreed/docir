@@ -12,6 +12,7 @@ enum SeriesSection {
     Value,
 }
 
+/// Public API entrypoint: parse_chart_data.
 pub fn parse_chart_data(xml: &str, chart_path: &str, store: &mut IrStore) -> Option<NodeId> {
     let mut chart = ChartData::new();
     chart.span = Some(SourceSpan::new(chart_path));
@@ -73,8 +74,8 @@ pub fn parse_chart_data(xml: &str, chart_path: &str, store: &mut IrStore) -> Opt
     Some(id)
 }
 
-fn handle_start_event<'a>(
-    name: &'a [u8],
+fn handle_start_event(
+    name: &[u8],
     chart: &mut ChartData,
     in_series: &mut bool,
     in_title: &mut bool,

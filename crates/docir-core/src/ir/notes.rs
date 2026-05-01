@@ -28,6 +28,7 @@ pub struct Comment {
 }
 
 impl Comment {
+    /// Public API entrypoint: new.
     pub fn new(comment_id: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),
@@ -58,6 +59,7 @@ pub struct Footnote {
 }
 
 impl Footnote {
+    /// Public API entrypoint: new.
     pub fn new(footnote_id: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),
@@ -83,6 +85,7 @@ pub struct Endnote {
 }
 
 impl Endnote {
+    /// Public API entrypoint: new.
     pub fn new(endnote_id: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),
@@ -105,6 +108,7 @@ pub struct Header {
 }
 
 impl Header {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -125,6 +129,7 @@ pub struct Footer {
 }
 
 impl Footer {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -145,6 +150,7 @@ pub struct CommentRangeStart {
 }
 
 impl CommentRangeStart {
+    /// Public API entrypoint: new.
     pub fn new(comment_id: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),
@@ -165,6 +171,7 @@ pub struct CommentRangeEnd {
 }
 
 impl CommentRangeEnd {
+    /// Public API entrypoint: new.
     pub fn new(comment_id: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),
@@ -185,6 +192,7 @@ pub struct CommentReference {
 }
 
 impl CommentReference {
+    /// Public API entrypoint: new.
     pub fn new(comment_id: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),

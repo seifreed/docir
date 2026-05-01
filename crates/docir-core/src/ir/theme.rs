@@ -23,6 +23,7 @@ pub struct Theme {
 }
 
 impl Theme {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

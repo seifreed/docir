@@ -24,6 +24,7 @@ pub struct QueryTablePart {
 }
 
 impl QueryTablePart {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

@@ -1,6 +1,11 @@
-use super::*;
+use super::{
+    coverage, normalize_store, push_info, push_warning, utils, ContentTypes, Diagnostics,
+    DocumentFormat, HashMap, IRNode, IrStore, NodeId, OoxmlParser, ParseError, ParseMetrics,
+    SourceSpan,
+};
 use crate::diagnostics::attach_diagnostics_if_any_to_store;
 use crate::zip_handler::PackageReader;
+use docir_core::ir::{ExtensionPart, ExtensionPartKind};
 use std::collections::HashSet;
 
 impl OoxmlParser {

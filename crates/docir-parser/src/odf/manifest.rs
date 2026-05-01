@@ -1,7 +1,7 @@
 //! ODF manifest parsing helpers.
 
 use crate::error::ParseError;
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{scan_xml_events, XmlScanControl};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use quick_xml::events::Event;
@@ -14,7 +14,7 @@ pub struct OdfManifestEntry {
     pub encryption: Option<OdfEncryptionData>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OdfEncryptionData {
     pub checksum_type: Option<String>,
     pub checksum: Option<Vec<u8>>,
@@ -26,21 +26,7 @@ pub struct OdfEncryptionData {
     pub key_size: Option<u32>,
 }
 
-impl Default for OdfEncryptionData {
-    fn default() -> Self {
-        Self {
-            checksum_type: None,
-            checksum: None,
-            algorithm_name: None,
-            init_vector: None,
-            key_derivation_name: None,
-            salt: None,
-            iteration_count: None,
-            key_size: None,
-        }
-    }
-}
-
+/// Public API entrypoint: parse_manifest.
 pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
     let mut entries = Vec::new();
     let mut reader = Reader::from_str(xml);
@@ -48,23 +34,17 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
     let mut buf = Vec::new();
     let mut current_entry: Option<OdfManifestEntry> = None;
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => handle_manifest_start_event(&e, &mut current_entry),
-            Ok(Event::Empty(e)) => {
-                handle_manifest_empty_event(&e, &mut entries, &mut current_entry)
-            }
-            Ok(Event::End(e)) => {
+    scan_xml_events(&mut reader, &mut buf, "META-INF/manifest.xml", |event| {
+        match event {
+            Event::Start(e) => handle_manifest_start_event(&e, &mut current_entry),
+            Event::Empty(e) => handle_manifest_empty_event(&e, &mut entries, &mut current_entry),
+            Event::End(e) => {
                 handle_manifest_end_event(e.name().as_ref(), &mut entries, &mut current_entry)
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error("META-INF/manifest.xml", e));
             }
             _ => {}
         }
-        buf.clear();
-    }
+        Ok(XmlScanControl::Continue)
+    })?;
 
     Ok(entries)
 }
@@ -163,6 +143,7 @@ fn apply_key_derivation_attrs(enc: &mut OdfEncryptionData, e: &quick_xml::events
         super::attr_value(e, b"manifest:iteration-count").and_then(|v| v.parse::<u32>().ok());
 }
 
+/// Public API entrypoint: is_manifest_entry_encrypted.
 pub fn is_manifest_entry_encrypted(entry: &OdfManifestEntry) -> bool {
     if entry.encryption.is_some() {
         return true;
@@ -175,6 +156,7 @@ pub fn is_manifest_entry_encrypted(entry: &OdfManifestEntry) -> bool {
     entry.path.to_ascii_lowercase().contains("encrypted")
 }
 
+/// Public API entrypoint: encrypted_manifest_entries.
 pub fn encrypted_manifest_entries(entries: &[OdfManifestEntry]) -> Vec<String> {
     entries
         .iter()
@@ -183,6 +165,7 @@ pub fn encrypted_manifest_entries(entries: &[OdfManifestEntry]) -> Vec<String> {
         .collect()
 }
 
+/// Public API entrypoint: format_odf_encryption_metadata.
 pub fn format_odf_encryption_metadata(entry: &OdfManifestEntry) -> Option<String> {
     let enc = entry.encryption.as_ref()?;
     let algorithm = enc.algorithm_name.as_deref().unwrap_or("unknown");

@@ -13,6 +13,15 @@ fake_bin="$(mktemp -d)"
 cat >"${fake_bin}/cargo" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
+
+subcmd="${1:-}"
+shift || true
+
+if [ "${subcmd}" = "metadata" ]; then
+  echo '{"workspace_members":[],"packages":[],"resolve":{}}'
+  exit 0
+fi
+
 exit 0
 SH
 chmod +x "${fake_bin}/cargo"
@@ -82,5 +91,7 @@ run_case \
 
 bash scripts/tests/quality_gate_baseline_commands.sh
 bash scripts/tests/quality_gate_coverage_commands.sh
+bash scripts/tests/quality_phase1_baseline_contract.sh
+bash scripts/tests/quality_policy_consistency.sh
 
 echo "quality_gate_exit_codes: OK"

@@ -1,6 +1,10 @@
-use super::*;
+use super::{
+    attr_value, text, BookmarkEnd, BookmarkStart, Field, FieldInstruction, FieldKind, IRNode,
+    IrStore, NodeId, NumberingInfo, OdfLimitCounter, OdfReader, ParseError,
+};
+use quick_xml::events::{BytesStart, Event};
 
-pub(super) fn parse_paragraph(
+pub(crate) fn parse_paragraph(
     reader: &mut OdfReader<'_>,
     end_name: &[u8],
     numbering: Option<NumberingInfo>,
@@ -58,7 +62,7 @@ fn handle_inline_event(
             let count = attr_value(event, b"text:c")
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(1);
-            text.extend(std::iter::repeat(' ').take(count));
+            text.extend(std::iter::repeat_n(' ', count));
         }
         b"text:tab" => text.push('\t'),
         b"text:line-break" => text.push('\n'),

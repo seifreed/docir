@@ -148,35 +148,61 @@ pub enum DocumentFormat {
     Rtf,
 }
 
+struct DocumentFormatDescriptor {
+    extension: &'static str,
+    display_name: &'static str,
+}
+
 impl DocumentFormat {
+    fn descriptor(&self) -> DocumentFormatDescriptor {
+        match self {
+            Self::WordProcessing => DocumentFormatDescriptor {
+                extension: "docx",
+                display_name: "Word Document",
+            },
+            Self::Spreadsheet => DocumentFormatDescriptor {
+                extension: "xlsx",
+                display_name: "Excel Spreadsheet",
+            },
+            Self::Presentation => DocumentFormatDescriptor {
+                extension: "pptx",
+                display_name: "PowerPoint Presentation",
+            },
+            Self::OdfText => DocumentFormatDescriptor {
+                extension: "odt",
+                display_name: "OpenDocument Text",
+            },
+            Self::OdfSpreadsheet => DocumentFormatDescriptor {
+                extension: "ods",
+                display_name: "OpenDocument Spreadsheet",
+            },
+            Self::OdfPresentation => DocumentFormatDescriptor {
+                extension: "odp",
+                display_name: "OpenDocument Presentation",
+            },
+            Self::Hwp => DocumentFormatDescriptor {
+                extension: "hwp",
+                display_name: "Hangul Word Processor (HWP)",
+            },
+            Self::Hwpx => DocumentFormatDescriptor {
+                extension: "hwpx",
+                display_name: "Hangul Word Processor (HWPX)",
+            },
+            Self::Rtf => DocumentFormatDescriptor {
+                extension: "rtf",
+                display_name: "Rich Text Format (RTF)",
+            },
+        }
+    }
+
     /// Returns the typical file extension for this format.
     pub fn extension(&self) -> &'static str {
-        match self {
-            Self::WordProcessing => "docx",
-            Self::Spreadsheet => "xlsx",
-            Self::Presentation => "pptx",
-            Self::OdfText => "odt",
-            Self::OdfSpreadsheet => "ods",
-            Self::OdfPresentation => "odp",
-            Self::Hwp => "hwp",
-            Self::Hwpx => "hwpx",
-            Self::Rtf => "rtf",
-        }
+        self.descriptor().extension
     }
 
     /// Returns a human-readable name for this format.
     pub fn display_name(&self) -> &'static str {
-        match self {
-            Self::WordProcessing => "Word Document",
-            Self::Spreadsheet => "Excel Spreadsheet",
-            Self::Presentation => "PowerPoint Presentation",
-            Self::OdfText => "OpenDocument Text",
-            Self::OdfSpreadsheet => "OpenDocument Spreadsheet",
-            Self::OdfPresentation => "OpenDocument Presentation",
-            Self::Hwp => "Hangul Word Processor (HWP)",
-            Self::Hwpx => "Hangul Word Processor (HWPX)",
-            Self::Rtf => "Rich Text Format (RTF)",
-        }
+        self.descriptor().display_name
     }
 }
 

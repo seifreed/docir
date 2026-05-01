@@ -148,7 +148,7 @@ End Sub
 
     #[test]
     fn test_contains_dangerous_xlm() {
-        assert!(!contains_dangerous_xlm("=SUM(A1:A10)").is_empty() == false);
+        assert!(contains_dangerous_xlm("=SUM(A1:A10)").is_empty());
         assert!(!contains_dangerous_xlm("=EXEC(\"cmd /c calc\")").is_empty());
         assert!(!contains_dangerous_xlm("=CALL(\"kernel32\",\"WinExec\")").is_empty());
     }

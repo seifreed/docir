@@ -1,31 +1,17 @@
 //! HWP/HWPX parsing (Hangul Word Processor).
 
-use crate::diagnostics::{attach_diagnostics_if_any, push_info, push_warning};
+use crate::diagnostics::attach_diagnostics_if_any;
 use crate::error::ParseError;
 use crate::format::FormatParser;
-use crate::input::{enforce_input_size, read_all_with_limit};
-use crate::ole::Cfb;
 use crate::parser::{ParsedDocument, ParserConfig};
-use crate::text_utils::parse_text_alignment;
 use crate::xml_utils::{attr_value_by_suffix, local_name};
-use crate::zip_handler::SecureZipReader;
-use docir_core::ir::{
-    Comment, CommentReference, Diagnostics, Document, Endnote, ExtensionPart, ExtensionPartKind,
-    Footer, Footnote, Header, IRNode, MediaAsset, MediaType, NumberingInfo, Paragraph, Revision,
-    RevisionType, Run, RunProperties, Section, Shape, ShapeType, StyleParagraphProperties,
-    StyleRunProperties, Table, TableAlignment, TableCell, TableProperties, TableRow, TableWidth,
-    TableWidthType,
-};
-use docir_core::security::{
-    ExternalRefType, ExternalReference, MacroModule, MacroModuleType, MacroProject, OleObject,
-};
-use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
+use docir_core::ir::{IRNode, Shape, ShapeType, Table, TableCell, TableRow};
+use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
-use io::{dump_hwp_streams, prepare_hwp_stream_data};
-use quick_xml::events::{BytesStart, Event};
-use quick_xml::Reader;
+use quick_xml::events::BytesStart;
 
 mod builder;
+mod helpers;
 mod io;
 mod legacy;
 mod security;
@@ -36,11 +22,17 @@ use std::io::{Read, Seek};
 pub mod part_registry;
 mod section;
 
-use legacy::{
-    maybe_decompress_stream, parse_default_jscript, parse_docinfo_section_count, parse_file_header,
-    parse_hwp_section_stream, scan_hwp_external_refs,
+#[cfg(test)]
+use helpers::build_hwp_diagnostics;
+use helpers::{
+    attr_any, parse_hwpx_paragraph_props, parse_hwpx_table_props, run_properties_from_attrs,
+    style_run_props_from_run,
 };
-use section::parse_hwpx_section;
+#[cfg(test)]
+use helpers::{
+    is_hwpx_footer, is_hwpx_header, is_hwpx_master, is_hwpx_section, media_type_from_path,
+};
+use legacy::{maybe_decompress_stream, parse_file_header, scan_hwp_external_refs};
 use security::scan_hwpx_security;
 
 /// Returns true if the mimetype indicates HWPX.
@@ -61,13 +53,21 @@ impl FormatParser for HwpParser {
     }
 }
 
+impl Default for HwpParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HwpParser {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             config: ParserConfig::default(),
         }
     }
 
+    /// Public API entrypoint: with_config.
     pub fn with_config(config: ParserConfig) -> Self {
         Self { config }
     }
@@ -86,34 +86,26 @@ impl FormatParser for HwpxParser {
     }
 }
 
+impl Default for HwpxParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HwpxParser {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             config: ParserConfig::default(),
         }
     }
 
+    /// Public API entrypoint: with_config.
     pub fn with_config(config: ParserConfig) -> Self {
         Self { config }
     }
 
     crate::impl_parse_entrypoints!();
-}
-
-fn is_hwpx_section(path: &str) -> bool {
-    path.starts_with("Contents/section") && path.ends_with(".xml")
-}
-
-fn is_hwpx_header(path: &str) -> bool {
-    path.starts_with("Contents/header") && path.ends_with(".xml")
-}
-
-fn is_hwpx_footer(path: &str) -> bool {
-    path.starts_with("Contents/footer") && path.ends_with(".xml")
-}
-
-fn is_hwpx_master(path: &str) -> bool {
-    path.starts_with("Contents/masterPage") && path.ends_with(".xml")
 }
 
 fn parse_hwpx_shape(
@@ -219,201 +211,18 @@ fn finalize_table_hwpx(
     }
 }
 
-fn attr_any(e: &BytesStart, names: &[&[u8]]) -> Option<String> {
-    for name in names {
-        for attr in e.attributes().flatten() {
-            if attr.key.as_ref() == *name {
-                if let Ok(value) = attr.unescape_value() {
-                    return Some(value.to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
-fn run_properties_from_attrs(e: &BytesStart) -> RunProperties {
-    let mut props = RunProperties::default();
-    for attr in e.attributes().flatten() {
-        let key = attr.key.as_ref();
-        let Ok(value) = attr.unescape_value() else {
-            continue;
-        };
-        let value = value.to_string();
-        match key {
-            b"bold" | b"b" => {
-                props.bold = Some(value == "1" || value.eq_ignore_ascii_case("true"));
-            }
-            b"italic" | b"i" => {
-                props.italic = Some(value == "1" || value.eq_ignore_ascii_case("true"));
-            }
-            b"underline" | b"u" => {
-                props.underline = Some(docir_core::ir::UnderlineStyle::Single);
-            }
-            b"color" => {
-                props.color = Some(value.trim_start_matches('#').to_string());
-            }
-            b"highlight" => {
-                props.highlight = Some(value.trim_start_matches('#').to_string());
-            }
-            b"font" | b"fontName" => {
-                props.font_family = Some(value);
-            }
-            b"size" | b"fontSize" => {
-                if let Ok(size) = value.parse::<u32>() {
-                    props.font_size = Some(size);
-                }
-            }
-            _ => {}
-        }
-    }
-    props
-}
-
-fn style_run_props_from_run(run: RunProperties) -> StyleRunProperties {
-    StyleRunProperties {
-        font_family: run.font_family,
-        font_size: run.font_size,
-        bold: run.bold,
-        italic: run.italic,
-        underline: run.underline,
-        strike: run.strike,
-        color: run.color,
-        highlight: run.highlight,
-        vertical_align: run.vertical_align,
-        all_caps: run.all_caps,
-        small_caps: run.small_caps,
-    }
-}
-
-fn parse_hwpx_paragraph_props(e: &BytesStart) -> StyleParagraphProperties {
-    let mut props = StyleParagraphProperties::default();
-    if let Some(align) = attr_any(e, &[b"align", b"alignment", b"textAlign"]) {
-        props.alignment = parse_text_alignment(&align);
-    }
-    let mut indent = docir_core::ir::Indentation::default();
-    let mut has_indent = false;
-    if let Some(value) = attr_any(e, &[b"indentLeft", b"indent-left", b"left"]) {
-        if let Ok(left) = value.parse::<i32>() {
-            indent.left = Some(left);
-            has_indent = true;
-        }
-    }
-    if let Some(value) = attr_any(e, &[b"indentRight", b"indent-right", b"right"]) {
-        if let Ok(right) = value.parse::<i32>() {
-            indent.right = Some(right);
-            has_indent = true;
-        }
-    }
-    if let Some(value) = attr_any(e, &[b"firstIndent", b"first-indent", b"first"]) {
-        if let Ok(first) = value.parse::<i32>() {
-            indent.first_line = Some(first);
-            has_indent = true;
-        }
-    }
-    if has_indent {
-        props.indentation = Some(indent);
-    }
-    props
-}
-
-fn parse_hwpx_table_props(e: &BytesStart) -> Option<TableProperties> {
-    let mut props = TableProperties::default();
-    let mut has_value = false;
-    if let Some(width) = attr_any(e, &[b"width", b"w", b"tableWidth"]) {
-        if let Ok(value) = width.parse::<u32>() {
-            props.width = Some(TableWidth {
-                value,
-                width_type: TableWidthType::Dxa,
-            });
-            has_value = true;
-        }
-    }
-    if let Some(align) = attr_any(e, &[b"align", b"alignment", b"tableAlign"]) {
-        let align = align.to_ascii_lowercase();
-        props.alignment = match align.as_str() {
-            "left" => Some(TableAlignment::Left),
-            "center" => Some(TableAlignment::Center),
-            "right" => Some(TableAlignment::Right),
-            _ => None,
-        };
-        if props.alignment.is_some() {
-            has_value = true;
-        }
-    }
-    if has_value {
-        Some(props)
-    } else {
-        None
-    }
-}
-
-fn media_type_from_path(path: &str) -> MediaType {
-    let lower = path.to_ascii_lowercase();
-    if lower.ends_with(".png")
-        || lower.ends_with(".jpg")
-        || lower.ends_with(".jpeg")
-        || lower.ends_with(".gif")
-        || lower.ends_with(".bmp")
-    {
-        MediaType::Image
-    } else if lower.ends_with(".mp3") || lower.ends_with(".wav") || lower.ends_with(".aac") {
-        MediaType::Audio
-    } else if lower.ends_with(".mp4")
-        || lower.ends_with(".avi")
-        || lower.ends_with(".mov")
-        || lower.ends_with(".wmv")
-    {
-        MediaType::Video
-    } else {
-        MediaType::Other
-    }
-}
-
-fn build_hwp_diagnostics(format: DocumentFormat, paths: &[String]) -> Diagnostics {
-    let registry = part_registry::registry_for(format);
-    let mut diagnostics = Diagnostics::new();
-    diagnostics.span = Some(SourceSpan::new("package"));
-
-    for path in paths {
-        push_info(
-            &mut diagnostics,
-            "HWP_PART",
-            format!("part: {}", path),
-            Some(path),
-        );
-    }
-
-    for spec in registry {
-        let mut matched = false;
-        for path in paths {
-            if part_registry::matches_pattern(path, spec.pattern) {
-                matched = true;
-                break;
-            }
-        }
-        if !matched {
-            push_warning(
-                &mut diagnostics,
-                "COVERAGE_MISSING",
-                format!(
-                    "missing part for pattern {} (expected parser={})",
-                    spec.pattern, spec.expected_parser
-                ),
-                Some(spec.pattern),
-            );
-        }
-    }
-
-    diagnostics
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{is_hwpx_mimetype, HwpxParser};
+    use super::{
+        attr_any, build_hwp_diagnostics, is_hwpx_footer, is_hwpx_header, is_hwpx_master,
+        is_hwpx_mimetype, is_hwpx_section, media_type_from_path, parse_hwpx_paragraph_props,
+        parse_hwpx_table_props, run_properties_from_attrs, style_run_props_from_run, HwpxParser,
+    };
     use crate::parser::DocumentParser;
-    use docir_core::ir::{IRNode, ShapeType};
+    use docir_core::ir::{DiagnosticSeverity, IRNode, ShapeType, TableAlignment, TableWidthType};
     use docir_core::types::DocumentFormat;
+    use quick_xml::events::{BytesStart, Event};
+    use quick_xml::Reader;
     use std::io::Write;
     use zip::write::FileOptions;
     use zip::CompressionMethod;
@@ -465,6 +274,120 @@ mod tests {
         assert!(is_hwpx_mimetype("application/hwp+zip"));
         assert!(is_hwpx_mimetype("application/vnd.hancom.hwpx"));
         assert!(!is_hwpx_mimetype("application/vnd.oasis.opendocument.text"));
+    }
+
+    fn start_event(xml: &str) -> BytesStart<'static> {
+        let mut reader = Reader::from_str(xml);
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) | Ok(Event::Empty(e)) => return e.into_owned(),
+                Ok(Event::Eof) => panic!("missing start event"),
+                Ok(_) => {}
+                Err(err) => panic!("xml read error: {err}"),
+            }
+            buf.clear();
+        }
+    }
+
+    #[test]
+    fn test_hwpx_path_classifiers() {
+        assert!(is_hwpx_section("Contents/section0.xml"));
+        assert!(!is_hwpx_section("Contents/section0.txt"));
+        assert!(is_hwpx_header("Contents/header1.xml"));
+        assert!(is_hwpx_footer("Contents/footer2.xml"));
+        assert!(is_hwpx_master("Contents/masterPage0.xml"));
+        assert!(!is_hwpx_master("Contents/masterPage0.bin"));
+    }
+
+    #[test]
+    fn test_media_type_and_attr_helpers() {
+        assert!(matches!(
+            media_type_from_path("BinData/pic.JPG"),
+            docir_core::ir::MediaType::Image
+        ));
+        assert!(matches!(
+            media_type_from_path("BinData/sound.wav"),
+            docir_core::ir::MediaType::Audio
+        ));
+        assert!(matches!(
+            media_type_from_path("BinData/movie.MP4"),
+            docir_core::ir::MediaType::Video
+        ));
+        assert!(matches!(
+            media_type_from_path("BinData/file.bin"),
+            docir_core::ir::MediaType::Other
+        ));
+
+        let e = start_event(r#"<hp:run name="shape-1" altText="preview" unknown="x"/>"#);
+        assert_eq!(
+            attr_any(&e, &[b"missing", b"name"]).as_deref(),
+            Some("shape-1")
+        );
+        assert_eq!(attr_any(&e, &[b"altText"]).as_deref(), Some("preview"));
+        assert!(attr_any(&e, &[b"nope"]).is_none());
+    }
+
+    #[test]
+    fn test_run_and_style_property_helpers() {
+        let e = start_event(
+            r##"<hp:r bold="1" italic="true" underline="single" color="#AABBCC" highlight="#00FF00" font="Malgun" size="12"/>"##,
+        );
+        let run = run_properties_from_attrs(&e);
+        assert_eq!(run.bold, Some(true));
+        assert_eq!(run.italic, Some(true));
+        assert!(run.underline.is_some());
+        assert_eq!(run.color.as_deref(), Some("AABBCC"));
+        assert_eq!(run.highlight.as_deref(), Some("00FF00"));
+        assert_eq!(run.font_family.as_deref(), Some("Malgun"));
+        assert_eq!(run.font_size, Some(12));
+
+        let style = style_run_props_from_run(run);
+        assert_eq!(style.bold, Some(true));
+        assert_eq!(style.font_size, Some(12));
+        assert_eq!(style.color.as_deref(), Some("AABBCC"));
+    }
+
+    #[test]
+    fn test_paragraph_and_table_property_helpers() {
+        let para = start_event(
+            r#"<hp:p align="center" indentLeft="10" indentRight="20" firstIndent="30"/>"#,
+        );
+        let para_props = parse_hwpx_paragraph_props(&para);
+        assert!(para_props.alignment.is_some());
+        let indent = para_props.indentation.expect("indentation");
+        assert_eq!(indent.left, Some(10));
+        assert_eq!(indent.right, Some(20));
+        assert_eq!(indent.first_line, Some(30));
+
+        let table = start_event(r#"<hp:tbl width="7200" align="right"/>"#);
+        let table_props = parse_hwpx_table_props(&table).expect("table props");
+        let width = table_props.width.expect("table width");
+        assert_eq!(width.value, 7200);
+        assert_eq!(width.width_type, TableWidthType::Dxa);
+        assert_eq!(table_props.alignment, Some(TableAlignment::Right));
+
+        let empty = start_event(r#"<hp:tbl align="unknown"/>"#);
+        assert!(parse_hwpx_table_props(&empty).is_none());
+    }
+
+    #[test]
+    fn test_build_hwp_diagnostics_records_parts_and_missing_patterns() {
+        let paths = vec![
+            "FileHeader".to_string(),
+            "DocInfo".to_string(),
+            "BodyText/Section0".to_string(),
+        ];
+        let diagnostics = build_hwp_diagnostics(DocumentFormat::Hwp, &paths);
+        assert!(!diagnostics.entries.is_empty());
+        assert!(diagnostics
+            .entries
+            .iter()
+            .any(|e| e.code == "HWP_PART" && matches!(e.severity, DiagnosticSeverity::Info)));
+        assert!(diagnostics.entries.iter().any(|e| {
+            e.code == "COVERAGE_MISSING" && matches!(e.severity, DiagnosticSeverity::Warning)
+        }));
     }
 
     #[test]

@@ -1,421 +1,20 @@
-use super::*;
+#[path = "styles_support_headers_footers.rs"]
+mod styles_support_headers_footers;
+#[path = "styles_support_styles.rs"]
+mod styles_support_styles;
+pub(crate) use styles_support_headers_footers::parse_odf_headers_footers;
+pub(crate) use styles_support_styles::{
+    merge_styles, parse_master_pages, parse_page_layouts, parse_styles,
+};
 
-pub(super) fn parse_styles(xml: &str) -> Option<StyleSet> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
-    let mut styles = StyleSet::new();
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"style:style" => {
-                    if let Some(mut style) = build_style_from_start(&e, false) {
-                        parse_style_properties(&mut reader, &mut style, b"style:style");
-                        styles.styles.push(style);
-                    }
-                }
-                b"style:default-style" => {
-                    if let Some(mut style) = build_style_from_start(&e, true) {
-                        parse_style_properties(&mut reader, &mut style, b"style:default-style");
-                        styles.styles.push(style);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"style:style" => {
-                    if let Some(style) = build_style_from_start(&e, false) {
-                        styles.styles.push(style);
-                    }
-                }
-                b"style:default-style" => {
-                    if let Some(style) = build_style_from_start(&e, true) {
-                        styles.styles.push(style);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Eof) => break,
-            Err(_) => return None,
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    if styles.styles.is_empty() {
-        None
-    } else {
-        Some(styles)
-    }
-}
-
-fn map_style_family(e: &BytesStart<'_>) -> StyleType {
-    match attr_value(e, b"style:family").as_deref() {
-        Some("paragraph") => StyleType::Paragraph,
-        Some("text") => StyleType::Character,
-        Some("table") => StyleType::Table,
-        Some("list") => StyleType::Numbering,
-        _ => StyleType::Other,
-    }
-}
-
-fn build_style_from_start(start: &BytesStart<'_>, is_default: bool) -> Option<Style> {
-    let style_id = attr_value(start, b"style:name")
-        .or_else(|| attr_value(start, b"style:family").map(|f| format!("default:{f}")));
-    let style_id = style_id?;
-    let mut style = Style {
-        style_id,
-        name: attr_value(start, b"style:display-name"),
-        style_type: map_style_family(start),
-        based_on: attr_value(start, b"style:parent-style-name"),
-        next: attr_value(start, b"style:next-style-name"),
-        is_default,
-        run_props: None,
-        paragraph_props: None,
-        table_props: None,
-    };
-    if let Some(family) = attr_value(start, b"style:family") {
-        if family == "paragraph" || family == "text" {
-            style.is_default = is_default
-                || attr_value(start, b"style:default")
-                    .map(|v| v == "true")
-                    .unwrap_or(false);
-        }
-    }
-    Some(style)
-}
-
-fn parse_style_properties(reader: &mut Reader<&[u8]>, style: &mut Style, end_name: &[u8]) {
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"style:text-properties" => {
-                    let mut props = style.run_props.take().unwrap_or_default();
-                    if let Some(font) = attr_value(&e, b"fo:font-family")
-                        .or_else(|| attr_value(&e, b"style:font-name"))
-                    {
-                        props.font_family = Some(font);
-                    }
-                    if let Some(size) =
-                        attr_value(&e, b"fo:font-size").and_then(|v| parse_font_size(&v))
-                    {
-                        props.font_size = Some(size);
-                    }
-                    if let Some(weight) = attr_value(&e, b"fo:font-weight") {
-                        props.bold = Some(weight.eq_ignore_ascii_case("bold"));
-                    }
-                    if let Some(style_attr) = attr_value(&e, b"fo:font-style") {
-                        props.italic = Some(style_attr.eq_ignore_ascii_case("italic"));
-                    }
-                    if let Some(color) = attr_value(&e, b"fo:color") {
-                        props.color = Some(color);
-                    }
-                    style.run_props = Some(props);
-                }
-                b"style:paragraph-properties" => {
-                    let mut props = style.paragraph_props.take().unwrap_or_default();
-                    if let Some(align) =
-                        attr_value(&e, b"fo:text-align").and_then(|v| parse_text_alignment(&v))
-                    {
-                        props.alignment = Some(align);
-                    }
-                    style.paragraph_props = Some(props);
-                }
-                _ => {}
-            },
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == end_name {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
-        }
-        buf.clear();
-    }
-}
-
-fn parse_font_size(value: &str) -> Option<u32> {
-    let trimmed = value.trim();
-    let num = trimmed
-        .trim_end_matches("pt")
-        .trim_end_matches("px")
-        .trim_end_matches("cm")
-        .trim_end_matches("mm");
-    num.parse::<f32>().ok().map(|v| v.round() as u32)
-}
-
-pub(super) fn merge_styles(existing: &mut StyleSet, incoming: &mut StyleSet) {
-    let mut seen = existing
-        .styles
-        .iter()
-        .map(|s| s.style_id.clone())
-        .collect::<std::collections::HashSet<String>>();
-    for style in incoming.styles.drain(..) {
-        if seen.insert(style.style_id.clone()) {
-            existing.styles.push(style);
-        }
-    }
-}
-
-pub(super) fn parse_master_pages(xml: &str) -> Vec<String> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
-    let mut out = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"style:master-page" {
-                    if let Some(name) = attr_value(&e, b"style:name") {
-                        out.push(name);
-                    }
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
-        }
-        buf.clear();
-    }
-    out
-}
-
-pub(super) fn parse_page_layouts(xml: &str) -> Vec<String> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
-    let mut out = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"style:page-layout" {
-                    if let Some(name) = attr_value(&e, b"style:name") {
-                        out.push(name);
-                    }
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
-        }
-        buf.clear();
-    }
-    out
-}
-
-pub(super) fn parse_odf_headers_footers(
-    xml: &str,
-    store: &mut IrStore,
-    config: &ParserConfig,
-) -> Result<(Vec<NodeId>, Vec<NodeId>), ParseError> {
-    let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_bytes()));
-    reader.config_mut().trim_text(false);
-    let mut buf = Vec::new();
-    let mut headers = Vec::new();
-    let mut footers = Vec::new();
-
-    let limits = OdfLimits::new(config, false);
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"style:header" | b"style:header-left" => {
-                    let content = parse_odf_header_footer_block(
-                        &mut reader,
-                        e.name().as_ref(),
-                        store,
-                        &limits,
-                    )?;
-                    let mut header = Header::new();
-                    header.content = content;
-                    header.span = Some(SourceSpan::new("styles.xml"));
-                    let id = header.id;
-                    store.insert(IRNode::Header(header));
-                    headers.push(id);
-                }
-                b"style:footer" | b"style:footer-left" => {
-                    let content = parse_odf_header_footer_block(
-                        &mut reader,
-                        e.name().as_ref(),
-                        store,
-                        &limits,
-                    )?;
-                    let mut footer = Footer::new();
-                    footer.content = content;
-                    footer.span = Some(SourceSpan::new("styles.xml"));
-                    let id = footer.id;
-                    store.insert(IRNode::Footer(footer));
-                    footers.push(id);
-                }
-                _ => {}
-            },
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error("styles.xml", e));
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok((headers, footers))
-}
-
-#[derive(Debug, Clone, Copy)]
-struct ListContext {
-    num_id: u32,
-    level: u32,
-}
-
-fn parse_odf_header_footer_block(
-    reader: &mut OdfReader<'_>,
-    end_name: &[u8],
-    store: &mut IrStore,
-    limits: &dyn OdfLimitCounter,
-) -> Result<Vec<NodeId>, ParseError> {
-    let mut buf = Vec::new();
-    let mut content = Vec::new();
-    let mut list_stack: Vec<ListContext> = Vec::new();
-    let mut list_id_map: HashMap<String, u32> = HashMap::new();
-    let mut next_list_id = 1u32;
-    let mut pending_inline_nodes: Vec<NodeId> = Vec::new();
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => handle_header_footer_start(
-                &e,
-                reader,
-                store,
-                limits,
-                &mut content,
-                &mut list_stack,
-                &mut list_id_map,
-                &mut next_list_id,
-                &mut pending_inline_nodes,
-            )?,
-            Ok(Event::Empty(e)) => handle_header_footer_empty(
-                &e,
-                store,
-                &mut content,
-                &list_stack,
-                &mut pending_inline_nodes,
-            ),
-            Ok(Event::End(e)) => match e.name().as_ref() {
-                b"text:list" => {
-                    list_stack.pop();
-                }
-                _ if e.name().as_ref() == end_name => break,
-                _ => {}
-            },
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("styles.xml", e)),
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(content)
-}
-
-fn handle_header_footer_start(
-    e: &BytesStart<'_>,
-    reader: &mut OdfReader<'_>,
-    store: &mut IrStore,
-    limits: &dyn OdfLimitCounter,
-    content: &mut Vec<NodeId>,
-    list_stack: &mut Vec<ListContext>,
-    list_id_map: &mut HashMap<String, u32>,
-    next_list_id: &mut u32,
-    pending_inline_nodes: &mut Vec<NodeId>,
-) -> Result<(), ParseError> {
-    match e.name().as_ref() {
-        b"text:list" => {
-            let style_name = attr_value(e, b"text:style-name").unwrap_or_default();
-            let num_id = list_id_map.entry(style_name).or_insert_with(|| {
-                let id = *next_list_id;
-                *next_list_id += 1;
-                id
-            });
-            let level = list_stack.len() as u32;
-            list_stack.push(ListContext {
-                num_id: *num_id,
-                level,
-            });
-        }
-        b"text:p" | b"text:h" => {
-            let paragraph_id = parse_header_footer_paragraph(
-                e,
-                reader,
-                store,
-                limits,
-                list_stack,
-                pending_inline_nodes,
-            )?;
-            content.extend(pending_inline_nodes.drain(..));
-            content.push(paragraph_id);
-        }
-        b"table:table" => {
-            let table_id = parse_table(reader, store, limits)?;
-            content.extend(pending_inline_nodes.drain(..));
-            content.push(table_id);
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-fn handle_header_footer_empty(
-    e: &BytesStart<'_>,
-    store: &mut IrStore,
-    content: &mut Vec<NodeId>,
-    list_stack: &[ListContext],
-    pending_inline_nodes: &mut Vec<NodeId>,
-) {
-    match e.name().as_ref() {
-        b"text:p" | b"text:h" => {
-            let outline_level =
-                attr_value(e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
-            let numbering = list_stack.last().map(|ctx| NumberingInfo {
-                num_id: ctx.num_id,
-                level: ctx.level,
-                format: None,
-            });
-            let paragraph_id = text::build_paragraph(store, "", numbering, outline_level);
-            content.extend(pending_inline_nodes.drain(..));
-            content.push(paragraph_id);
-        }
-        _ => {}
-    }
-}
-
-fn parse_header_footer_paragraph(
-    e: &BytesStart<'_>,
-    reader: &mut OdfReader<'_>,
-    store: &mut IrStore,
-    limits: &dyn OdfLimitCounter,
-    list_stack: &[ListContext],
-    pending_inline_nodes: &mut Vec<NodeId>,
-) -> Result<NodeId, ParseError> {
-    let outline_level = attr_value(e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
-    let numbering = list_stack.last().map(|ctx| NumberingInfo {
-        num_id: ctx.num_id,
-        level: ctx.level,
-        format: None,
-    });
-    parse_paragraph(
-        reader,
-        e.name().as_ref(),
-        numbering,
-        outline_level,
-        store,
-        pending_inline_nodes,
-        limits,
-    )
-}
+#[cfg(test)]
+use crate::error::ParseError;
+#[cfg(test)]
+use crate::parser::ParserConfig;
+#[cfg(test)]
+use crate::IrStore;
+#[cfg(test)]
+use docir_core::ir::{IRNode, Style, StyleSet, StyleType};
 
 #[cfg(test)]
 mod tests {
@@ -442,7 +41,10 @@ mod tests {
         assert_eq!(style.style_type, StyleType::Paragraph);
         assert!(style.is_default);
         assert_eq!(
-            style.run_props.as_ref().and_then(|p| p.font_family.as_deref()),
+            style
+                .run_props
+                .as_ref()
+                .and_then(|p| p.font_family.as_deref()),
             Some("Fira Sans")
         );
         assert_eq!(style.run_props.as_ref().and_then(|p| p.font_size), Some(11));
@@ -482,5 +84,203 @@ mod tests {
             }
             other => panic!("expected styles.xml parse error, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn parse_styles_handles_family_mapping_defaults_and_font_units() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+  xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0">
+  <style:style style:name="ListStyle" style:family="list"/>
+  <style:style style:name="TextDefault" style:family="text" style:default="true">
+    <style:text-properties fo:font-size="13px" fo:font-weight="bold" fo:font-style="italic"/>
+  </style:style>
+  <style:style style:name="OtherStyle" style:family="custom">
+    <style:text-properties fo:font-size="bad-unit"/>
+  </style:style>
+</office:document-styles>
+"#;
+
+        let styles = parse_styles(xml).expect("expected styles");
+        assert_eq!(styles.styles.len(), 3);
+
+        let list_style = styles
+            .styles
+            .iter()
+            .find(|s| s.style_id == "ListStyle")
+            .expect("missing list style");
+        assert_eq!(list_style.style_type, StyleType::Numbering);
+        assert!(!list_style.is_default);
+
+        let text_default = styles
+            .styles
+            .iter()
+            .find(|s| s.style_id == "TextDefault")
+            .expect("missing text style");
+        assert_eq!(text_default.style_type, StyleType::Character);
+        assert!(text_default.is_default);
+        let run_props = text_default.run_props.as_ref().expect("missing run props");
+        assert_eq!(run_props.font_size, Some(13));
+        assert_eq!(run_props.bold, Some(true));
+        assert_eq!(run_props.italic, Some(true));
+
+        let other_style = styles
+            .styles
+            .iter()
+            .find(|s| s.style_id == "OtherStyle")
+            .expect("missing custom style");
+        assert_eq!(other_style.style_type, StyleType::Other);
+        assert_eq!(
+            other_style
+                .run_props
+                .as_ref()
+                .and_then(|props| props.font_size),
+            None
+        );
+    }
+
+    #[test]
+    fn merge_styles_keeps_first_style_when_ids_overlap() {
+        let mut existing = StyleSet::new();
+        existing.styles.push(Style {
+            style_id: "S1".to_string(),
+            name: Some("existing".to_string()),
+            style_type: StyleType::Paragraph,
+            based_on: None,
+            next: None,
+            is_default: false,
+            run_props: None,
+            paragraph_props: None,
+            table_props: None,
+        });
+
+        let mut incoming = StyleSet::new();
+        incoming.styles.push(Style {
+            style_id: "S1".to_string(),
+            name: Some("incoming".to_string()),
+            style_type: StyleType::Character,
+            based_on: None,
+            next: None,
+            is_default: false,
+            run_props: None,
+            paragraph_props: None,
+            table_props: None,
+        });
+        incoming.styles.push(Style {
+            style_id: "S2".to_string(),
+            name: Some("new".to_string()),
+            style_type: StyleType::Table,
+            based_on: None,
+            next: None,
+            is_default: false,
+            run_props: None,
+            paragraph_props: None,
+            table_props: None,
+        });
+
+        merge_styles(&mut existing, &mut incoming);
+
+        assert_eq!(existing.styles.len(), 2);
+        assert_eq!(
+            existing.styles[0].name.as_deref(),
+            Some("existing"),
+            "existing style must win on duplicate IDs"
+        );
+        assert!(existing.styles.iter().any(|s| s.style_id == "S2"));
+        assert!(incoming.styles.is_empty());
+    }
+
+    #[test]
+    fn parse_master_pages_and_layouts_skip_entries_without_names() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0">
+  <style:master-page/>
+  <style:master-page style:name="Standard"/>
+  <style:page-layout/>
+  <style:page-layout style:name="pm1"/>
+</office:document-styles>
+"#;
+
+        assert_eq!(parse_master_pages(xml), vec!["Standard".to_string()]);
+        assert_eq!(parse_page_layouts(xml), vec!["pm1".to_string()]);
+    }
+
+    #[test]
+    fn parse_odf_headers_footers_handles_left_variants_lists_and_empty_headings() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <style:master-page style:name="Standard">
+    <style:header-left>
+      <text:h text:outline-level="2"/>
+      <text:list text:style-name="L1">
+        <text:list-item><text:p>Item one</text:p></text:list-item>
+        <text:list-item><text:p>Item two</text:p></text:list-item>
+      </text:list>
+    </style:header-left>
+    <style:footer-left>
+      <text:p/>
+    </style:footer-left>
+  </style:master-page>
+</office:document-styles>
+"#;
+
+        let mut store = IrStore::new();
+        let (headers, footers) =
+            parse_odf_headers_footers(xml, &mut store, &ParserConfig::default())
+                .expect("parse headers/footers");
+        assert_eq!(headers.len(), 1);
+        assert_eq!(footers.len(), 1);
+
+        let Some(IRNode::Header(header)) = store.get(headers[0]) else {
+            panic!("expected header node");
+        };
+        assert_eq!(
+            header.span.as_ref().map(|s| s.file_path.as_str()),
+            Some("styles.xml")
+        );
+        assert_eq!(header.content.len(), 3);
+
+        let Some(IRNode::Paragraph(heading)) = store.get(header.content[0]) else {
+            panic!("expected heading paragraph");
+        };
+        assert_eq!(heading.properties.outline_level, Some(2));
+        assert!(heading.properties.numbering.is_none());
+
+        let Some(IRNode::Paragraph(list_item_1)) = store.get(header.content[1]) else {
+            panic!("expected first list paragraph");
+        };
+        let Some(IRNode::Paragraph(list_item_2)) = store.get(header.content[2]) else {
+            panic!("expected second list paragraph");
+        };
+        let numbering_1 = list_item_1
+            .properties
+            .numbering
+            .as_ref()
+            .expect("first list item should have numbering");
+        let numbering_2 = list_item_2
+            .properties
+            .numbering
+            .as_ref()
+            .expect("second list item should have numbering");
+        assert_eq!(numbering_1.level, 0);
+        assert_eq!(numbering_2.level, 0);
+        assert_eq!(numbering_1.num_id, numbering_2.num_id);
+
+        let Some(IRNode::Footer(footer)) = store.get(footers[0]) else {
+            panic!("expected footer node");
+        };
+        assert_eq!(
+            footer.span.as_ref().map(|s| s.file_path.as_str()),
+            Some("styles.xml")
+        );
+        assert_eq!(footer.content.len(), 1);
+        let Some(IRNode::Paragraph(footer_para)) = store.get(footer.content[0]) else {
+            panic!("expected footer paragraph");
+        };
+        assert!(footer_para.properties.numbering.is_none());
     }
 }

@@ -1,7 +1,6 @@
-use super::{
-    parse_ods_cell, parse_ods_cell_empty, parse_ods_covered_cell, parse_ods_covered_cell_empty,
-    spreadsheet, OdfReader, OdsRow,
-};
+use super::helpers::{parse_ods_covered_cell, parse_ods_covered_cell_empty, OdsRow};
+use super::ods::{parse_ods_cell, parse_ods_cell_empty};
+use super::{spreadsheet, OdfReader};
 use crate::error::ParseError;
 use crate::xml_utils::attr_value;
 use docir_core::visitor::IrStore;

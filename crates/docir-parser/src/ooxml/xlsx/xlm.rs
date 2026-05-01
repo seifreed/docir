@@ -1,6 +1,7 @@
 //! XLM macro tracking helpers for XLSX parsing.
 
-use super::{SheetInfo, XlsxParser};
+use super::XlsxParser;
+use crate::ooxml::xlsx::workbook::SheetInfo;
 use docir_core::security::is_dangerous_xlm_function;
 use docir_core::security::{XlmFunction, XlmMacro, XlmMacroCell};
 
@@ -23,14 +24,12 @@ impl XlsxParser {
         }
 
         let mut any_marked = false;
-        for target in auto_open_targets {
-            if let Some(target) = target {
-                let target_upper = target.to_ascii_uppercase();
-                for macro_entry in self.security_info.xlm_macros.iter_mut() {
-                    if macro_entry.sheet_name.to_ascii_uppercase() == target_upper {
-                        macro_entry.has_auto_open = true;
-                        any_marked = true;
-                    }
+        for target in auto_open_targets.iter().flatten() {
+            let target_upper = target.to_ascii_uppercase();
+            for macro_entry in self.security_info.xlm_macros.iter_mut() {
+                if macro_entry.sheet_name.to_ascii_uppercase() == target_upper {
+                    macro_entry.has_auto_open = true;
+                    any_marked = true;
                 }
             }
         }

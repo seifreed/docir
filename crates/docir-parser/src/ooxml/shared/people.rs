@@ -4,7 +4,12 @@ use docir_core::ir::{PeoplePart, PersonEntry};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
 
+/// Public API entrypoint: parse_people_part.
 pub fn parse_people_part(xml: &str, path: &str) -> Result<PeoplePart, ParseError> {
+    parse_people_part_impl(xml, path)
+}
+
+fn parse_people_part_impl(xml: &str, path: &str) -> Result<PeoplePart, ParseError> {
     let mut reader = reader_from_str(xml);
 
     let mut people = PeoplePart::new();

@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(serde::Deserialize)]
@@ -44,7 +44,7 @@ fn trim_csv_header(raw: &str) -> String {
     first_line.trim_end_matches('\r').to_string()
 }
 
-fn is_ooxml_fixture(path: &PathBuf) -> bool {
+fn is_ooxml_fixture(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|ext| ext.to_str()),
         Some("docx" | "xlsx" | "pptx" | "xlsb")
@@ -83,8 +83,7 @@ fn coverage_exports_json_and_csv() {
         assert!(status.success(), "coverage json failed for {:?}", path);
         assert!(json_out.exists());
         let json_data = fs::read_to_string(&json_out).expect("read json export");
-        let report: CoverageReport =
-            serde_json::from_str(&json_data).expect("json export parses");
+        let report: CoverageReport = serde_json::from_str(&json_data).expect("json export parses");
         if is_ooxml_fixture(&path) {
             assert!(
                 report
@@ -111,7 +110,10 @@ fn coverage_exports_json_and_csv() {
                 path
             );
             assert!(
-                report.parts.iter().any(|entry| entry.code == "COVERAGE_PART"),
+                report
+                    .parts
+                    .iter()
+                    .any(|entry| entry.code == "COVERAGE_PART"),
                 "coverage export should include COVERAGE_PART rows for {:?}",
                 path
             );
@@ -195,7 +197,11 @@ fn coverage_exports_json_and_csv() {
                 path
             );
         }
-        let data_line_count = csv_data.lines().skip(1).filter(|line| !line.is_empty()).count();
+        let data_line_count = csv_data
+            .lines()
+            .skip(1)
+            .filter(|line| !line.is_empty())
+            .count();
         if is_ooxml_fixture(&path) {
             assert!(
                 data_line_count >= report.parts.len() + report.part_rows.len(),
@@ -237,7 +243,9 @@ fn coverage_exports_parts_only() {
         .iter()
         .find(|entry| {
             matches!(
-                PathBuf::from(&entry.path).extension().and_then(|ext| ext.to_str()),
+                PathBuf::from(&entry.path)
+                    .extension()
+                    .and_then(|ext| ext.to_str()),
                 Some("docx" | "xlsx" | "pptx" | "xlsb")
             )
         })
@@ -273,9 +281,9 @@ fn coverage_exports_parts_only() {
         "parts export should only include complete/pending statuses"
     );
     assert!(
-        parts
-            .iter()
-            .all(|row| !row.path.is_empty() && !row.content_type.is_empty() && !row.parser.is_empty()),
+        parts.iter().all(|row| !row.path.is_empty()
+            && !row.content_type.is_empty()
+            && !row.parser.is_empty()),
         "parts export rows must include path/content_type/parser values"
     );
 
@@ -301,7 +309,11 @@ fn coverage_exports_parts_only() {
         path,
         &csv_data.chars().take(64).collect::<String>()
     );
-    let csv_rows = csv_data.lines().skip(1).filter(|line| !line.is_empty()).count();
+    let csv_rows = csv_data
+        .lines()
+        .skip(1)
+        .filter(|line| !line.is_empty())
+        .count();
     assert_eq!(
         csv_rows,
         parts.len(),

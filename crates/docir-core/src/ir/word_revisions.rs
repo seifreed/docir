@@ -22,6 +22,7 @@ pub struct Revision {
 }
 
 impl Revision {
+    /// Public API entrypoint: new.
     pub fn new(change_type: RevisionType) -> Self {
         Self {
             id: NodeId::new(),
@@ -57,6 +58,7 @@ pub struct CommentExtensionSet {
 }
 
 impl CommentExtensionSet {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -90,6 +92,7 @@ pub struct CommentIdMap {
 }
 
 impl CommentIdMap {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

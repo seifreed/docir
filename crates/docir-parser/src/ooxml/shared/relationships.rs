@@ -2,6 +2,7 @@ use crate::ooxml::relationships::{Relationships, TargetMode};
 use docir_core::ir::{RelationshipEntry, RelationshipGraph, RelationshipTargetMode};
 use docir_core::types::SourceSpan;
 
+/// Public API entrypoint: build_relationship_graph.
 pub fn build_relationship_graph(
     source: &str,
     rels_path: &str,

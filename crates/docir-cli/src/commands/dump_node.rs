@@ -4,9 +4,10 @@ use anyhow::{Context, Result};
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
-use crate::commands::util::{parse_document, parse_node_id};
+use crate::commands::util::{parse_document, parse_node_id, write_json_output};
 use crate::OutputFormat;
 
+/// Public API entrypoint: run.
 pub fn run(
     input: PathBuf,
     node_id_str: &str,
@@ -28,10 +29,51 @@ pub fn run(
     // Serialize based on format
     match format {
         OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(node)?;
-            println!("{}", json);
+            write_json_output(node, true, None)?;
         }
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::run;
+    use crate::commands::util::parse_document;
+    use crate::OutputFormat;
+    use docir_app::ParserConfig;
+    use std::path::PathBuf;
+
+    fn fixture(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/ooxml")
+            .join(name)
+    }
+
+    #[test]
+    fn dump_node_run_reports_missing_node_for_valid_but_stale_id() {
+        let input = fixture("minimal.docx");
+        let parsed = parse_document(&input, &ParserConfig::default()).expect("parse document");
+        let node_id = parsed.root_id().to_string();
+        let err = run(
+            input,
+            &node_id,
+            OutputFormat::Json,
+            &ParserConfig::default(),
+        )
+        .expect_err("stale node id should not exist in a new parse");
+        assert!(err.to_string().contains("Node not found"));
+    }
+
+    #[test]
+    fn dump_node_run_rejects_invalid_id() {
+        let err = run(
+            fixture("minimal.docx"),
+            "not-a-node-id",
+            OutputFormat::Json,
+            &ParserConfig::default(),
+        )
+        .expect_err("invalid id should fail");
+        assert!(err.to_string().contains("Invalid node ID format"));
+    }
 }

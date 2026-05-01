@@ -140,19 +140,26 @@ fn assert_core_fixture_behavior(
         DocumentFormat::WordProcessing | DocumentFormat::Spreadsheet | DocumentFormat::Presentation
     ) {
         assert!(
-            diagnostics.iter().any(|entry| entry.code == "COVERAGE_SUMMARY"),
+            diagnostics
+                .iter()
+                .any(|entry| entry.code == "COVERAGE_SUMMARY"),
             "OOXML fixture should emit COVERAGE_SUMMARY diagnostics: {:?}",
             path
         );
         assert!(
-            diagnostics.iter().any(|entry| entry.code == "COVERAGE_COUNTS"),
+            diagnostics
+                .iter()
+                .any(|entry| entry.code == "COVERAGE_COUNTS"),
             "OOXML fixture should emit COVERAGE_COUNTS diagnostics: {:?}",
             path
         );
         assert!(
             diagnostics.iter().any(|entry| {
                 entry.code == "COVERAGE_PART"
-                    && matches!(entry.severity, DiagnosticSeverity::Info | DiagnosticSeverity::Warning)
+                    && matches!(
+                        entry.severity,
+                        DiagnosticSeverity::Info | DiagnosticSeverity::Warning
+                    )
             }),
             "OOXML fixture should emit COVERAGE_PART diagnostics: {:?}",
             path

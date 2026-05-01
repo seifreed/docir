@@ -352,3 +352,132 @@ pub enum CellVerticalAlignment {
     Center,
     Bottom,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        Border, BorderStyle, CellMargins, CellVerticalAlignment, MergeType, RowHeight,
+        RowHeightRule, Table, TableAlignment, TableBorders, TableCell, TableCellProperties,
+        TableProperties, TableRow, TableWidth, TableWidthType,
+    };
+    use crate::types::NodeId;
+
+    #[test]
+    fn table_new_and_children_helpers() {
+        let mut table = Table::new();
+        let row_id = NodeId::new();
+        table.rows.push(row_id);
+        table.grid.push(super::GridColumn { width: 1800 });
+        table.grid.push(super::GridColumn { width: 2200 });
+
+        assert_eq!(table.children(), vec![row_id]);
+        assert_eq!(table.column_count(), 2);
+        assert_eq!(table.row_count(), 1);
+    }
+
+    #[test]
+    fn table_row_and_cell_children_helpers() {
+        let mut row = TableRow::new();
+        let cell_id = NodeId::new();
+        row.cells.push(cell_id);
+        assert_eq!(row.children(), vec![cell_id]);
+
+        let mut cell = TableCell::new();
+        let content_id = NodeId::new();
+        cell.content.push(content_id);
+        assert_eq!(cell.children(), vec![content_id]);
+    }
+
+    #[test]
+    fn table_property_structs_can_be_fully_populated() {
+        let width = TableWidth {
+            value: 5000,
+            width_type: TableWidthType::Dxa,
+        };
+        let border = Border {
+            style: BorderStyle::Single,
+            width: Some(4),
+            color: Some("FF0000".to_string()),
+        };
+        let borders = TableBorders {
+            top: Some(border.clone()),
+            bottom: Some(border.clone()),
+            left: Some(border.clone()),
+            right: Some(border.clone()),
+            inside_h: Some(border.clone()),
+            inside_v: Some(border),
+        };
+        let margins = CellMargins {
+            top: Some(10),
+            bottom: Some(20),
+            left: Some(30),
+            right: Some(40),
+        };
+        let props = TableProperties {
+            width: Some(width.clone()),
+            alignment: Some(TableAlignment::Center),
+            borders: Some(borders),
+            cell_margins: Some(margins),
+            style_id: Some("TableStyle1".to_string()),
+        };
+
+        assert_eq!(props.width.as_ref().map(|w| w.value), Some(5000));
+        assert_eq!(props.style_id.as_deref(), Some("TableStyle1"));
+        assert!(matches!(props.alignment, Some(TableAlignment::Center)));
+        assert!(props
+            .borders
+            .as_ref()
+            .and_then(|b| b.inside_h.as_ref())
+            .is_some());
+        assert_eq!(props.cell_margins.as_ref().and_then(|m| m.left), Some(30));
+    }
+
+    #[test]
+    fn table_cell_properties_hold_merge_and_alignment_variants() {
+        let cell_props = TableCellProperties {
+            width: Some(TableWidth {
+                value: 2500,
+                width_type: TableWidthType::Pct,
+            }),
+            vertical_merge: Some(MergeType::Restart),
+            grid_span: Some(2),
+            vertical_align: Some(CellVerticalAlignment::Bottom),
+            borders: None,
+            shading: Some("CCCCCC".to_string()),
+        };
+        assert_eq!(cell_props.grid_span, Some(2));
+        assert!(matches!(
+            cell_props.vertical_merge,
+            Some(MergeType::Restart)
+        ));
+        assert!(matches!(
+            cell_props.vertical_align,
+            Some(CellVerticalAlignment::Bottom)
+        ));
+        assert_eq!(cell_props.shading.as_deref(), Some("CCCCCC"));
+        assert!(matches!(
+            cell_props.width.as_ref().map(|w| w.width_type),
+            Some(TableWidthType::Pct)
+        ));
+    }
+
+    #[test]
+    fn row_height_rules_are_assignable() {
+        let exact = RowHeight {
+            value: 300,
+            rule: RowHeightRule::Exact,
+        };
+        let at_least = RowHeight {
+            value: 400,
+            rule: RowHeightRule::AtLeast,
+        };
+        let auto = RowHeight {
+            value: 0,
+            rule: RowHeightRule::Auto,
+        };
+
+        assert!(matches!(exact.rule, RowHeightRule::Exact));
+        assert!(matches!(at_least.rule, RowHeightRule::AtLeast));
+        assert!(matches!(auto.rule, RowHeightRule::Auto));
+    }
+}

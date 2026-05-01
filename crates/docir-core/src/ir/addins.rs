@@ -29,6 +29,7 @@ pub struct WebExtension {
 }
 
 impl WebExtension {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -77,6 +78,7 @@ pub struct WebExtensionTaskpane {
 }
 
 impl WebExtensionTaskpane {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

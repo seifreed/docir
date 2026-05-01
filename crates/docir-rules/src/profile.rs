@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
 /// Rule profile configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RuleProfile {
     #[serde(default)]
     pub enabled_rules: Option<Vec<String>>,
@@ -17,19 +17,8 @@ pub struct RuleProfile {
     pub thresholds: RuleThresholds,
 }
 
-impl Default for RuleProfile {
-    fn default() -> Self {
-        Self {
-            enabled_rules: None,
-            disabled_rules: Vec::new(),
-            severity_overrides: BTreeMap::new(),
-            thresholds: RuleThresholds::default(),
-        }
-    }
-}
-
 /// Thresholds for rule tuning.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RuleThresholds {
     #[serde(default)]
     pub max_external_links: Option<usize>,
@@ -37,16 +26,6 @@ pub struct RuleThresholds {
     pub max_ole_objects: Option<usize>,
     #[serde(default)]
     pub max_activex_controls: Option<usize>,
-}
-
-impl Default for RuleThresholds {
-    fn default() -> Self {
-        Self {
-            max_external_links: None,
-            max_ole_objects: None,
-            max_activex_controls: None,
-        }
-    }
 }
 
 pub(crate) fn apply_profile(

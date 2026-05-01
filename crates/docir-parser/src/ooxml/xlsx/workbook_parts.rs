@@ -1,5 +1,12 @@
-use super::*;
+use super::{
+    parse_calc_chain, parse_query_table_part, parse_shared_strings_table, parse_sheet_metadata,
+    parse_slicer_part, parse_styles, parse_timeline_part, push_warning, rel_type, Document, IRNode,
+    ParseError, Relationships, SheetKind, SourceSpan, XlsxParser,
+};
+use crate::ooxml::part_utils::parse_xml_part_with_span;
 use crate::ooxml::part_utils::{insert_shared_part, read_xml_part_and_rels};
+use crate::ooxml::xlsx::workbook::{auto_open_target_from_defined_name, PivotCacheRef, SheetInfo};
+use crate::zip_handler::PackageReader;
 
 impl XlsxParser {
     pub(super) fn load_workbook_properties(
@@ -150,7 +157,7 @@ impl XlsxParser {
         zip: &mut impl PackageReader,
         workbook_path: &str,
         workbook_rels: &Relationships,
-        pivot_cache_refs: Vec<workbook::PivotCacheRef>,
+        pivot_cache_refs: Vec<PivotCacheRef>,
     ) -> Result<(), ParseError> {
         for cache_ref in pivot_cache_refs {
             let Some(rel) = workbook_rels.get(&cache_ref.rel_id) else {

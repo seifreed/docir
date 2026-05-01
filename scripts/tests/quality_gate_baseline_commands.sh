@@ -12,6 +12,8 @@ fi
 fake_bin="$(mktemp -d)"
 log_file="$(mktemp)"
 trap 'rm -rf "${fake_bin}"; rm -f "${log_file}"' EXIT
+coverage_threshold="$(sed -e 's/[[:space:]]*#.*$//' "${repo_root}/scripts/quality_coverage_threshold.txt" | tr -d ' \t\r\n')"
+coverage_threshold="${coverage_threshold:-88.23}"
 
 cat >"${fake_bin}/cargo" <<'SH'
 #!/usr/bin/env bash
@@ -27,6 +29,13 @@ printf '%s %s\n' "${subcmd}" "$*" >> "${QUALITY_GATE_BASELINE_LOG}"
 fail_stage="${QUALITY_GATE_BASELINE_FAIL_STAGE:-}"
 if [ -n "${fail_stage}" ] && [ "${subcmd}" = "${fail_stage}" ]; then
   exit 101
+fi
+
+if [ "${subcmd}" = "metadata" ]; then
+  cat <<'JSON'
+{"workspace_members":[],"packages":[],"resolve":{}}
+JSON
+  exit 0
 fi
 
 exit 0
@@ -113,16 +122,20 @@ run_case \
   "" \
   0 \
   "QUALITY_GATE_RESULT=PASS CLASS=pass EXIT_CODE=0" \
+  "metadata --format-version 1 --no-deps --offline" \
+  "check --workspace --all-targets --all-features" \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test " \
-  "llvm-cov --workspace --all-features --summary-only --fail-under-lines 95"
+  "llvm-cov --workspace --all-features --summary-only --fail-under-lines ${coverage_threshold}"
 
 run_case \
   "baseline-fail-fmt" \
   "fmt" \
   1 \
   "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
+  "metadata --format-version 1 --no-deps --offline" \
+  "check --workspace --all-targets --all-features" \
   "fmt --all --check"
 
 run_case \
@@ -130,6 +143,8 @@ run_case \
   "clippy" \
   1 \
   "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
+  "metadata --format-version 1 --no-deps --offline" \
+  "check --workspace --all-targets --all-features" \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings"
 
@@ -138,6 +153,8 @@ run_case \
   "test" \
   1 \
   "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
+  "metadata --format-version 1 --no-deps --offline" \
+  "check --workspace --all-targets --all-features" \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test "
@@ -147,9 +164,11 @@ run_case \
   "llvm-cov" \
   1 \
   "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
+  "metadata --format-version 1 --no-deps --offline" \
+  "check --workspace --all-targets --all-features" \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test " \
-  "llvm-cov --workspace --all-features --summary-only --fail-under-lines 95"
+  "llvm-cov --workspace --all-features --summary-only --fail-under-lines ${coverage_threshold}"
 
 echo "quality_gate_baseline_commands: OK"

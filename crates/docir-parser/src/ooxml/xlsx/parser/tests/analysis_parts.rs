@@ -1,4 +1,5 @@
 use super::*;
+use crate::ooxml::xlsx::{connection_targets, parse_connections_part, parse_sheet_metadata};
 use docir_core::ir::IRNode;
 
 #[test]

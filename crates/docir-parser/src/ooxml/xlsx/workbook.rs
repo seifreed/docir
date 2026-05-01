@@ -2,36 +2,39 @@
 
 use super::SheetState;
 use crate::error::ParseError;
+use crate::xml_utils::{
+    dispatch_start_or_empty, reader_from_str, scan_xml_events_with_reader, xml_error,
+    XmlScanControl,
+};
 use docir_core::ir::{DefinedName, WorkbookProperties};
 use docir_core::types::{NodeId, SourceSpan};
-use quick_xml::events::{BytesStart, Event};
+use quick_xml::events::BytesStart;
 use quick_xml::Reader;
 
 #[derive(Debug, Clone)]
-pub(super) struct SheetInfo {
-    pub(super) name: String,
-    pub(super) sheet_id: u32,
-    pub(super) rel_id: String,
-    pub(super) state: SheetState,
+pub(crate) struct SheetInfo {
+    pub(crate) name: String,
+    pub(crate) sheet_id: u32,
+    pub(crate) rel_id: String,
+    pub(crate) state: SheetState,
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct PivotCacheRef {
-    pub(super) cache_id: u32,
-    pub(super) rel_id: String,
+pub(crate) struct PivotCacheRef {
+    pub(crate) cache_id: u32,
+    pub(crate) rel_id: String,
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct WorkbookInfo {
-    pub(super) sheets: Vec<SheetInfo>,
-    pub(super) defined_names: Vec<DefinedName>,
-    pub(super) workbook_properties: Option<WorkbookProperties>,
-    pub(super) pivot_cache_refs: Vec<PivotCacheRef>,
+pub(crate) struct WorkbookInfo {
+    pub(crate) sheets: Vec<SheetInfo>,
+    pub(crate) defined_names: Vec<DefinedName>,
+    pub(crate) workbook_properties: Option<WorkbookProperties>,
+    pub(crate) pivot_cache_refs: Vec<PivotCacheRef>,
 }
 
-pub(super) fn parse_workbook_info(xml: &str) -> Result<WorkbookInfo, ParseError> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+pub(crate) fn parse_workbook_info(xml: &str) -> Result<WorkbookInfo, ParseError> {
+    let mut reader = reader_from_str(xml);
 
     let mut buf = Vec::new();
     let mut sheets: Vec<SheetInfo> = Vec::new();
@@ -39,37 +42,20 @@ pub(super) fn parse_workbook_info(xml: &str) -> Result<WorkbookInfo, ParseError>
     let mut pivot_cache_refs: Vec<PivotCacheRef> = Vec::new();
     let mut workbook_properties: Option<WorkbookProperties> = None;
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => handle_workbook_event(
-                &mut reader,
-                &e,
-                true,
+    scan_xml_events_with_reader(&mut reader, &mut buf, "xl/workbook.xml", |reader, event| {
+        let _ = dispatch_start_or_empty(reader, &event, |reader, e, is_start| {
+            handle_workbook_event(
+                reader,
+                e,
+                is_start,
                 &mut sheets,
                 &mut defined_names,
                 &mut pivot_cache_refs,
                 &mut workbook_properties,
-            )?,
-            Ok(Event::Empty(e)) => handle_workbook_event(
-                &mut reader,
-                &e,
-                false,
-                &mut sheets,
-                &mut defined_names,
-                &mut pivot_cache_refs,
-                &mut workbook_properties,
-            )?,
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "xl/workbook.xml".to_string(),
-                    message: e.to_string(),
-                });
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
+            )
+        })?;
+        Ok(XmlScanControl::Continue)
+    })?;
 
     Ok(WorkbookInfo {
         sheets,
@@ -112,7 +98,7 @@ fn handle_workbook_event(
     Ok(())
 }
 
-pub(super) fn auto_open_target_from_defined_name(name: &DefinedName) -> Option<Option<String>> {
+pub(crate) fn auto_open_target_from_defined_name(name: &DefinedName) -> Option<Option<String>> {
     let upper = name.name.to_ascii_uppercase();
     if upper == "_XLNM.AUTO_OPEN" || upper == "AUTO_OPEN" || upper == "AUTO.OPEN" {
         let val = name.value.trim();
@@ -192,10 +178,7 @@ fn parse_defined_name(
 
     let value = reader
         .read_text(start.name())
-        .map_err(|e| ParseError::Xml {
-            file: "xl/workbook.xml".to_string(),
-            message: e.to_string(),
-        })?;
+        .map_err(|e| xml_error("xl/workbook.xml", e))?;
 
     Ok(name.map(|name| DefinedName {
         id: NodeId::new(),

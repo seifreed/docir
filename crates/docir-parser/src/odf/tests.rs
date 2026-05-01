@@ -1,4 +1,4 @@
-use super::*;
+use super::tests_prelude::*;
 use crate::parser::DocumentParser;
 use docir_core::security::ThreatIndicatorType;
 use std::io::{Cursor, Write};

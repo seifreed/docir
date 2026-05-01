@@ -1,7 +1,9 @@
 use docir_core::ir::IRNode;
 use docir_core::visitor::IrStore;
 
-use super::{abbreviate, opt_bool, opt_str, opt_u32, summarize_shape, summarize_slide};
+use super::summary_parse::{
+    abbreviate, opt_bool, opt_str, opt_u32, summarize_shape, summarize_slide,
+};
 
 pub(crate) fn summarize(node: &IRNode, _store: &IrStore) -> Option<String> {
     match node {
@@ -80,7 +82,7 @@ mod tests {
     use docir_core::visitor::IrStore;
 
     #[test]
-    fn summarizes_supported_presentation_nodes() {
+    fn summarizes_slide_and_shape_nodes() {
         let store = IrStore::new();
 
         let mut slide = Slide::new(3);
@@ -96,7 +98,11 @@ mod tests {
         assert!(summarize(&IRNode::Shape(shape), &store)
             .unwrap()
             .contains("name=Title"));
+    }
 
+    #[test]
+    fn summarizes_layout_and_master_nodes() {
+        let store = IrStore::new();
         let mut master = SlideMaster::new();
         master.shapes.push(NodeId::new());
         master.layouts.push(NodeId::new());
@@ -125,7 +131,11 @@ mod tests {
             summarize(&IRNode::HandoutMaster(handout), &store).unwrap(),
             "shapes=1"
         );
+    }
 
+    #[test]
+    fn summarizes_notes_and_presentation_properties() {
+        let store = IrStore::new();
         let mut notes = NotesSlide::new();
         notes.shapes.push(NodeId::new());
         notes.text = Some("Speaker notes".to_string());
@@ -150,7 +160,11 @@ mod tests {
             summarize(&IRNode::ViewProperties(view), &store).unwrap(),
             "last_view=sldView zoom=120"
         );
+    }
 
+    #[test]
+    fn summarizes_style_comment_and_tag_nodes() {
+        let store = IrStore::new();
         let mut table_styles = TableStyleSet::new();
         table_styles.default_style_id = Some("TableStyleMedium2".to_string());
         table_styles.styles.push(docir_core::ir::TableStyle {
@@ -198,7 +212,11 @@ mod tests {
             summarize(&IRNode::PresentationTag(tag), &store).unwrap(),
             "name=Env value=Prod"
         );
+    }
 
+    #[test]
+    fn summarizes_presentation_info_and_unsupported_nodes() {
+        let store = IrStore::new();
         let mut info = PresentationInfo::new();
         info.slide_size = Some(SlideSize {
             cx: 9144000,
@@ -216,9 +234,12 @@ mod tests {
             "slide_size=9144000x6858000 notes_size=6858000x9144000 show_type=window"
         );
 
-        assert!(summarize(&IRNode::Document(docir_core::ir::Document::new(
-            docir_core::types::DocumentFormat::WordProcessing
-        )), &store)
+        assert!(summarize(
+            &IRNode::Document(docir_core::ir::Document::new(
+                docir_core::types::DocumentFormat::WordProcessing
+            )),
+            &store
+        )
         .is_none());
     }
 }

@@ -28,6 +28,7 @@ pub struct MediaAsset {
 }
 
 impl MediaAsset {
+    /// Public API entrypoint: new.
     pub fn new(path: impl Into<String>, media_type: MediaType, size_bytes: u64) -> Self {
         Self {
             id: NodeId::new(),

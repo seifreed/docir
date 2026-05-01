@@ -2,7 +2,7 @@
 
 use docir_core::ir::{FieldInstruction, FieldKind};
 
-pub(super) fn parse_field_instruction(instr: &str) -> Option<FieldInstruction> {
+pub(crate) fn parse_field_instruction(instr: &str) -> Option<FieldInstruction> {
     let decoded = unescape_xml_entities(instr);
     let tokens = tokenize_field_instruction(&decoded);
     if tokens.is_empty() {

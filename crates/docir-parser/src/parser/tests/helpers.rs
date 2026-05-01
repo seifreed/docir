@@ -1,15 +1,25 @@
 use std::fs::File;
 use std::io::Write;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zip::write::FileOptions;
 
-pub(super) fn create_minimal_docx(include_document: bool) -> std::path::PathBuf {
+static TEST_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn unique_temp_path(prefix: &str, extension: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    path.push(format!("docir_minimal_{nanos}.docx"));
+    let pid = std::process::id();
+    let counter = TEST_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    path.push(format!("{prefix}_{pid}_{nanos}_{counter}.{extension}"));
+    path
+}
+
+pub(super) fn create_minimal_docx(include_document: bool) -> std::path::PathBuf {
+    let path = unique_temp_path("docir_minimal", "docx");
 
     let file = File::create(&path).expect("create temp docx");
     let mut zip = zip::ZipWriter::new(file);
@@ -52,12 +62,7 @@ pub(super) fn create_minimal_docx(include_document: bool) -> std::path::PathBuf 
 }
 
 pub(super) fn create_docx_with_body(body_xml: &str) -> std::path::PathBuf {
-    let mut path = std::env::temp_dir();
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    path.push(format!("docir_body_{nanos}.docx"));
+    let path = unique_temp_path("docir_body", "docx");
 
     let file = File::create(&path).expect("create temp docx");
     let mut zip = zip::ZipWriter::new(file);
@@ -96,12 +101,7 @@ pub(super) fn create_docx_with_relationships(
     content_types: &str,
     extra_files: &[(&str, &str)],
 ) -> std::path::PathBuf {
-    let mut path = std::env::temp_dir();
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    path.push(format!("docir_docx_{nanos}.docx"));
+    let path = unique_temp_path("docir_docx", "docx");
 
     let file = File::create(&path).expect("create temp docx");
     let mut zip = zip::ZipWriter::new(file);
@@ -180,12 +180,7 @@ pub(super) fn build_odf_zip_custom(
 }
 
 pub(super) fn create_pptx_with_media(slide_xml: &str, slide_rels: &str) -> std::path::PathBuf {
-    let mut path = std::env::temp_dir();
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    path.push(format!("docir_pptx_{nanos}.pptx"));
+    let path = unique_temp_path("docir_pptx", "pptx");
 
     let file = File::create(&path).expect("create temp pptx");
     let mut zip = zip::ZipWriter::new(file);

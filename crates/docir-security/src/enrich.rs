@@ -15,6 +15,7 @@ use self::helpers::{
 };
 use self::xlm::{apply_xlm_defined_name_targets, build_xlm_indicators};
 
+/// Public API entrypoint: populate_security_indicators.
 pub fn populate_security_indicators(store: &mut IrStore, root_id: NodeId) {
     let (format, mut security) = match store.get(root_id) {
         Some(IRNode::Document(doc)) => (doc.format, doc.security.clone()),
@@ -39,13 +40,7 @@ pub fn populate_security_indicators(store: &mut IrStore, root_id: NodeId) {
     indicators.append(&mut generated);
 
     if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
-        doc.security.macro_project = security.macro_project;
-        doc.security.ole_objects = security.ole_objects.clone();
-        doc.security.external_refs = security.external_refs.clone();
-        doc.security.activex_controls = security.activex_controls.clone();
-        doc.security.dde_fields = security.dde_fields.clone();
-        doc.security.threat_indicators = indicators;
-        doc.security.recalculate_threat_level();
+        doc.security.apply_scan_result(security, indicators);
     }
 }
 
@@ -274,7 +269,8 @@ mod tests {
     use super::*;
     use docir_core::ir::{Document, Field, IRNode};
     use docir_core::security::{
-        ExternalRefType, ExternalReference, OleObject, ThreatIndicatorType,
+        ActiveXControl, ExternalRefType, ExternalReference, MacroProject, OleObject,
+        ThreatIndicatorType,
     };
     use docir_core::types::{DocumentFormat, SourceSpan};
 
@@ -345,6 +341,130 @@ mod tests {
             i.indicator_type == ThreatIndicatorType::OleObject
                 && i.description.contains("OLE object found at")
                 && i.location.as_deref() == Some("word/embeddings/object1.bin")
+        }));
+    }
+
+    #[test]
+    fn populate_security_indicators_ooxml_adds_macro_and_activex_control_indicators() {
+        let mut store = IrStore::new();
+        let doc = Document::new(DocumentFormat::Spreadsheet);
+        let root_id = doc.id;
+
+        let mut project = MacroProject::new();
+        project.has_auto_exec = true;
+
+        let mut control = ActiveXControl::new();
+        control.name = Some("Button1".to_string());
+
+        store.insert(IRNode::Document(doc));
+        store.insert(IRNode::MacroProject(project));
+        store.insert(IRNode::ActiveXControl(control));
+
+        populate_security_indicators(&mut store, root_id);
+
+        let Some(IRNode::Document(doc)) = store.get(root_id) else {
+            panic!("missing document");
+        };
+        assert!(doc.security.threat_indicators.iter().any(|i| {
+            i.indicator_type == ThreatIndicatorType::AutoExecMacro
+                && i.description.contains("VBA macro project found")
+        }));
+        assert!(doc.security.threat_indicators.iter().any(|i| {
+            i.indicator_type == ThreatIndicatorType::ActiveXControl
+                && i.description.contains("ActiveX control found")
+        }));
+    }
+
+    #[test]
+    fn populate_security_indicators_hwpx_emits_autoexec_but_hwp_does_not() {
+        fn run_for_format(format: DocumentFormat) -> docir_core::security::SecurityInfo {
+            let mut store = IrStore::new();
+            let doc = Document::new(format);
+            let root_id = doc.id;
+
+            let mut project = MacroProject::new();
+            project.has_auto_exec = true;
+
+            let remote =
+                ExternalReference::new(ExternalRefType::DataConnection, "https://evil.test/data");
+            let mut ole = OleObject::new();
+            ole.name = Some("EmbeddedObject".to_string());
+
+            store.insert(IRNode::Document(doc));
+            store.insert(IRNode::MacroProject(project));
+            store.insert(IRNode::ExternalReference(remote));
+            store.insert(IRNode::OleObject(ole));
+
+            populate_security_indicators(&mut store, root_id);
+
+            let Some(IRNode::Document(doc)) = store.get(root_id) else {
+                panic!("missing document");
+            };
+            doc.security.clone()
+        }
+
+        let hwpx = run_for_format(DocumentFormat::Hwpx);
+        assert!(hwpx
+            .threat_indicators
+            .iter()
+            .any(|i| i.indicator_type == ThreatIndicatorType::AutoExecMacro));
+        assert!(hwpx.threat_indicators.iter().any(|i| {
+            i.indicator_type == ThreatIndicatorType::RemoteResource
+                && i.description.contains("https://evil.test/data")
+        }));
+        assert!(hwpx.threat_indicators.iter().any(|i| {
+            i.indicator_type == ThreatIndicatorType::OleObject
+                && i.location.as_deref() == Some("EmbeddedObject")
+        }));
+
+        let hwp = run_for_format(DocumentFormat::Hwp);
+        assert!(!hwp
+            .threat_indicators
+            .iter()
+            .any(|i| i.indicator_type == ThreatIndicatorType::AutoExecMacro));
+        assert!(hwp
+            .threat_indicators
+            .iter()
+            .any(|i| i.indicator_type == ThreatIndicatorType::OleObject));
+    }
+
+    #[test]
+    fn populate_security_indicators_rtf_preserves_existing_indicators_and_locations() {
+        let mut store = IrStore::new();
+        let mut doc = Document::new(DocumentFormat::Rtf);
+        let root_id = doc.id;
+        doc.security.threat_indicators.push(make_indicator(
+            ThreatIndicatorType::SuspiciousLink,
+            ThreatLevel::Low,
+            "existing indicator".to_string(),
+            None,
+            None,
+        ));
+
+        let ole = OleObject::new();
+        let remote = ExternalReference::new(ExternalRefType::Image, "https://evil.test/a.png");
+
+        store.insert(IRNode::Document(doc));
+        store.insert(IRNode::OleObject(ole));
+        store.insert(IRNode::ExternalReference(remote));
+
+        populate_security_indicators(&mut store, root_id);
+
+        let Some(IRNode::Document(doc)) = store.get(root_id) else {
+            panic!("missing document");
+        };
+        assert!(doc
+            .security
+            .threat_indicators
+            .iter()
+            .any(|i| i.description == "existing indicator"));
+        assert!(doc.security.threat_indicators.iter().any(|i| {
+            i.indicator_type == ThreatIndicatorType::OleObject
+                && i.location.as_deref() == Some("rtf")
+        }));
+        assert!(doc.security.threat_indicators.iter().any(|i| {
+            i.indicator_type == ThreatIndicatorType::RemoteResource
+                && i.description.contains("https://evil.test/a.png")
         }));
     }
 }

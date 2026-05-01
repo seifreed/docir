@@ -1,9 +1,21 @@
-use super::*;
+use super::{
+    enforce_input_size, formats, is_hwpx_mimetype, is_ole_container, is_rtf_bytes,
+    read_all_with_limit, run_parser_pipeline, NormalizeStage, OoxmlParser, ParseError, ParseStage,
+    ParsedDocument, ParserConfig, PostprocessStage, Read, SecureZipReader, Seek, SeekFrom,
+};
+use crate::legacy_office::probe_legacy_office_format;
 use crate::parse_utils::is_zip_container;
+use std::path::Path;
 
 /// Unified parser that dispatches OOXML vs ODF based on package signature.
 pub struct DocumentParser {
     config: ParserConfig,
+}
+
+impl Default for DocumentParser {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DocumentParser {
@@ -22,13 +34,8 @@ impl DocumentParser {
     crate::impl_parse_entrypoints!();
 
     /// Parses from any reader.
-    pub fn parse_reader<R: Read + Seek>(
-        &self,
-        mut reader: R,
-    ) -> Result<ParsedDocument, ParseError> {
-        enforce_input_size(&mut reader, self.config.max_input_size)?;
-        let detected = self.detect_format(&mut reader)?;
-        self.parse_detected(detected, reader)
+    pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
+        run_parser_pipeline(self, reader)
     }
 
     fn detect_format<R: Read + Seek>(
@@ -45,7 +52,18 @@ impl DocumentParser {
         }
 
         if is_ole_container(head) {
-            return Ok(formats::DetectedFormat::Hwp);
+            let data = read_all_with_limit(&mut *reader, self.config.max_input_size)?;
+            let cfb = crate::ole::Cfb::parse(data)?;
+            reader.seek(SeekFrom::Start(0))?;
+            if cfb.has_stream("FileHeader") {
+                return Ok(formats::DetectedFormat::Hwp);
+            }
+            if probe_legacy_office_format(&cfb).is_some() {
+                return Ok(formats::DetectedFormat::LegacyOffice);
+            }
+            return Err(ParseError::UnsupportedFormat(
+                "Unknown OLE/CFB container (not HWP or legacy Office)".to_string(),
+            ));
         }
 
         if !is_zip_container(head) {
@@ -112,6 +130,18 @@ impl DocumentParser {
         Ok((parsed, data))
     }
 }
+
+impl ParseStage for DocumentParser {
+    fn parse_stage<R: Read + Seek>(&self, mut reader: R) -> Result<ParsedDocument, ParseError> {
+        enforce_input_size(&mut reader, self.config.max_input_size)?;
+        let detected = self.detect_format(&mut reader)?;
+        self.parse_detected(detected, reader)
+    }
+}
+
+impl NormalizeStage for DocumentParser {}
+
+impl PostprocessStage for DocumentParser {}
 
 impl Default for OoxmlParser {
     fn default() -> Self {

@@ -85,20 +85,19 @@ pub(super) fn apply_xlm_defined_name_targets(
         return;
     }
 
+    let has_unresolved_target = targets.iter().any(|t| t.is_none());
     let mut any_marked = false;
-    for target in &targets {
-        if let Some(target) = target {
-            let target_upper = target.to_ascii_uppercase();
-            for macro_entry in security.xlm_macros.iter_mut() {
-                if macro_entry.sheet_name.to_ascii_uppercase() == target_upper {
-                    macro_entry.has_auto_open = true;
-                    any_marked = true;
-                }
+    for target in targets.iter().flatten() {
+        let target_upper = target.to_ascii_uppercase();
+        for macro_entry in security.xlm_macros.iter_mut() {
+            if macro_entry.sheet_name.to_ascii_uppercase() == target_upper {
+                macro_entry.has_auto_open = true;
+                any_marked = true;
             }
         }
     }
 
-    if !any_marked {
+    if has_unresolved_target && !any_marked {
         for macro_entry in security.xlm_macros.iter_mut() {
             macro_entry.has_auto_open = true;
         }
@@ -209,6 +208,30 @@ mod tests {
         assert_eq!(indicators.len(), 1);
         assert_eq!(indicators[0].indicator_type, ThreatIndicatorType::XlmMacro);
         assert_eq!(indicators[0].location.as_deref(), Some("xl/workbook.xml"));
+    }
+
+    #[test]
+    fn apply_xlm_defined_name_targets_does_not_fallback_when_sheet_not_found() {
+        let mut store = IrStore::new();
+        let defined_name = DefinedName {
+            id: NodeId::new(),
+            name: "_xlnm.auto_open".to_string(),
+            value: "'NonExistentSheet'!$A$1".to_string(),
+            local_sheet_id: None,
+            hidden: false,
+            comment: None,
+            span: None,
+        };
+        store.insert(IRNode::DefinedName(defined_name));
+
+        let mut security = docir_core::security::SecurityInfo::new();
+        security.xlm_macros.push(macro_entry("SheetA"));
+        security.xlm_macros.push(macro_entry("SheetB"));
+        let mut indicators = Vec::new();
+        apply_xlm_defined_name_targets(&store, &mut security, &mut indicators);
+
+        assert!(!security.xlm_macros[0].has_auto_open);
+        assert!(!security.xlm_macros[1].has_auto_open);
     }
 
     #[test]

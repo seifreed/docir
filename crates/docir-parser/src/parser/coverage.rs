@@ -6,6 +6,8 @@ use docir_core::types::DocumentFormat;
 use docir_core::visitor::IrStore;
 use std::collections::{HashMap, HashSet};
 
+type ContentTypeInventory = (Vec<(String, String)>, Vec<String>, HashMap<String, usize>);
+
 #[derive(Default)]
 struct CoverageCounts {
     matched_parts: usize,
@@ -135,7 +137,7 @@ fn emit_registry_diagnostics(
 fn collect_content_type_data(
     content_types: &ContentTypes,
     all_paths: &[String],
-) -> (Vec<(String, String)>, Vec<String>, HashMap<String, usize>) {
+) -> ContentTypeInventory {
     let mut inventory = Vec::new();
     let mut unknown_ct_paths = Vec::new();
     let mut ct_histogram = HashMap::new();

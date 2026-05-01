@@ -1,9 +1,44 @@
-use super::styles::parse_hwpx_styles;
-use super::*;
+#[path = "builder_hwp.rs"]
+mod builder_hwp;
+#[path = "builder_hwpx.rs"]
+mod builder_hwpx;
+use super::{scan_hwpx_security, HwpxParser};
+use crate::diagnostics::push_warning;
+use crate::error::ParseError;
+use crate::input::enforce_input_size;
+use crate::input::read_all_with_limit;
+use crate::ole::Cfb;
 use crate::parse_utils::{finalize_and_normalize, init_store_and_document};
+use crate::parser::{
+    run_parser_pipeline, NormalizeStage, ParseStage, ParsedDocument, PostprocessStage,
+};
+use crate::zip_handler::SecureZipReader;
+pub(crate) use builder_hwp::HwpHeaderContext;
+#[cfg(test)]
+use docir_core::ir::IRNode;
+#[cfg(test)]
+use docir_core::ir::Paragraph;
+use docir_core::types::DocumentFormat;
+#[cfg(test)]
+use docir_core::types::NodeId;
+#[cfg(test)]
+use docir_core::visitor::IrStore;
+use std::io::{Read, Seek};
+
+use super::attach_diagnostics_if_any;
+use super::helpers::build_hwp_diagnostics;
+use super::io::dump_hwp_streams;
+use super::HwpParser;
 
 impl HwpParser {
+    /// Public API entrypoint: parse_reader.
     pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
+        run_parser_pipeline(self, reader)
+    }
+}
+
+impl ParseStage for HwpParser {
+    fn parse_stage<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
         let data = read_all_with_limit(reader, self.config.max_input_size)?;
 
         let cfb = Cfb::parse(data)?;
@@ -16,16 +51,7 @@ impl HwpParser {
         let header_ctx = self.build_header_context(&cfb, &mut diagnostics)?;
 
         if self.config.hwp.dump_streams {
-            dump_hwp_streams(
-                &cfb,
-                &stream_names,
-                header_ctx.compressed,
-                header_ctx.encrypted,
-                header_ctx.hwp_password,
-                header_ctx.force_parse,
-                header_ctx.try_raw_encrypted,
-                &mut diagnostics,
-            );
+            dump_hwp_streams(&cfb, &stream_names, &header_ctx, &mut diagnostics);
         }
 
         let shared_parts = self.collect_stream_parts(&cfb, &stream_names, &mut store);
@@ -71,275 +97,21 @@ impl HwpParser {
 
         Ok(finalize_and_normalize(DocumentFormat::Hwp, store, doc))
     }
-
-    fn collect_stream_parts(
-        &self,
-        cfb: &Cfb,
-        stream_names: &[String],
-        store: &mut IrStore,
-    ) -> Vec<NodeId> {
-        let mut shared_parts = Vec::new();
-        for path in stream_names {
-            let size = cfb.stream_size(path).unwrap_or(0);
-            if path.starts_with("BinData/") {
-                let mut asset = MediaAsset::new(path, MediaType::Other, size);
-                asset.span = Some(SourceSpan::new(path));
-                let asset_id = asset.id;
-                store.insert(IRNode::MediaAsset(asset));
-                shared_parts.push(asset_id);
-            } else {
-                let mut part = ExtensionPart::new(path, size, ExtensionPartKind::Legacy);
-                part.span = Some(SourceSpan::new(path));
-                let part_id = part.id;
-                store.insert(IRNode::ExtensionPart(part));
-                shared_parts.push(part_id);
-            }
-        }
-        shared_parts
-    }
-
-    fn read_docinfo_section_count(
-        &self,
-        cfb: &Cfb,
-        header_ctx: &HwpHeaderContext<'_>,
-        diagnostics: &mut Diagnostics,
-    ) -> Result<Option<u32>, ParseError> {
-        let Some(data) = cfb.read_stream("DocInfo") else {
-            return Ok(None);
-        };
-
-        let data = match prepare_hwp_stream_data(
-            &data,
-            header_ctx.encrypted,
-            header_ctx.hwp_password,
-            header_ctx.force_parse,
-            header_ctx.try_raw_encrypted,
-            "DocInfo",
-            diagnostics,
-        ) {
-            Some(bytes) => bytes,
-            None => {
-                push_warning(
-                    diagnostics,
-                    "HWP_DOCINFO_SKIP",
-                    "DocInfo skipped due to encryption or decryption failure".to_string(),
-                    Some("DocInfo"),
-                );
-                Vec::new()
-            }
-        };
-
-        let count = match maybe_decompress_stream(&data, header_ctx.compressed, "DocInfo") {
-            Ok(bytes) => parse_docinfo_section_count(&bytes)?.map(u32::from),
-            Err(err) => {
-                push_warning(
-                    diagnostics,
-                    "HWP_DECOMPRESS_FAIL",
-                    err.to_string(),
-                    Some("DocInfo"),
-                );
-                None
-            }
-        };
-
-        if let Some(count) = count {
-            push_info(
-                diagnostics,
-                "HWP_SECTION_COUNT",
-                format!("DocInfo section count: {}", count),
-                Some("DocInfo"),
-            );
-        }
-        Ok(count)
-    }
-
-    fn parse_sections(
-        &self,
-        cfb: &Cfb,
-        stream_names: &[String],
-        header_ctx: &HwpHeaderContext<'_>,
-        store: &mut IrStore,
-        diagnostics: &mut Diagnostics,
-    ) -> Result<Vec<NodeId>, ParseError> {
-        if !header_ctx.allow_parse {
-            return Ok(Vec::new());
-        }
-
-        let mut sections = Vec::new();
-        for path in stream_names {
-            if !path.starts_with("BodyText/Section") {
-                continue;
-            }
-            let data = cfb
-                .read_stream(path)
-                .ok_or_else(|| ParseError::MissingPart(path.to_string()))?;
-            let data = match prepare_hwp_stream_data(
-                &data,
-                header_ctx.encrypted,
-                header_ctx.hwp_password,
-                header_ctx.force_parse,
-                header_ctx.try_raw_encrypted,
-                path,
-                diagnostics,
-            ) {
-                Some(bytes) => bytes,
-                None => continue,
-            };
-            let data = match maybe_decompress_stream(&data, header_ctx.compressed, path) {
-                Ok(bytes) => bytes,
-                Err(err) => {
-                    push_warning(
-                        diagnostics,
-                        "HWP_DECOMPRESS_FAIL",
-                        err.to_string(),
-                        Some(path),
-                    );
-                    continue;
-                }
-            };
-            let paragraph_ids = parse_hwp_section_stream(&data, path, store)?;
-            let mut section = Section::new();
-            section.name = Some(path.clone());
-            section.content = paragraph_ids;
-            section.span = Some(SourceSpan::new(path));
-            let section_id = section.id;
-            store.insert(IRNode::Section(section));
-            sections.push(section_id);
-        }
-        Ok(sections)
-    }
-
-    fn parse_default_script(&self, cfb: &Cfb, store: &mut IrStore) {
-        if let Some(script_data) = cfb.read_stream("Scripts/DefaultJScript") {
-            if let Some(_project_id) =
-                parse_default_jscript(&script_data, store, "Scripts/DefaultJScript")
-            {}
-        }
-    }
-
-    fn scan_external_references(
-        &self,
-        cfb: &Cfb,
-        stream_names: &[String],
-        header_ctx: &HwpHeaderContext<'_>,
-        store: &mut IrStore,
-        diagnostics: &mut Diagnostics,
-    ) {
-        if !header_ctx.allow_parse {
-            return;
-        }
-
-        let externals = scan_hwp_external_refs(
-            cfb,
-            stream_names,
-            header_ctx.compressed,
-            header_ctx.encrypted,
-            header_ctx.hwp_password,
-            header_ctx.force_parse,
-            header_ctx.try_raw_encrypted,
-            diagnostics,
-        );
-        for ext in externals {
-            store.insert(IRNode::ExternalReference(ext));
-        }
-    }
-
-    fn collect_ole_objects(&self, cfb: &Cfb, stream_names: &[String], store: &mut IrStore) {
-        for path in stream_names {
-            if path.starts_with("BinData/") {
-                let lower = path.to_ascii_lowercase();
-                if lower.contains("ole") || lower.contains("object") {
-                    let mut ole = OleObject::new();
-                    ole.name = Some(path.clone());
-                    ole.size_bytes = cfb.stream_size(path).unwrap_or(0);
-                    store.insert(IRNode::OleObject(ole));
-                }
-            }
-        }
-    }
-
-    fn build_header_context<'a>(
-        &'a self,
-        cfb: &Cfb,
-        diagnostics: &mut Diagnostics,
-    ) -> Result<HwpHeaderContext<'a>, ParseError> {
-        let header_data = cfb
-            .read_stream("FileHeader")
-            .ok_or_else(|| ParseError::MissingPart("FileHeader".to_string()))?;
-        let header = parse_file_header(&header_data)?;
-        push_info(
-            diagnostics,
-            "HWP_HEADER",
-            format!(
-                "HWP header: version=0x{:08X} flags=0x{:08X}",
-                header.version, header.flags
-            ),
-            Some("FileHeader"),
-        );
-
-        let compressed = header.flags & 0x01 != 0;
-        let encrypted = header.flags & 0x02 != 0;
-        let force_parse = self.config.hwp.force_parse_encrypted;
-        let hwp_password = self.config.hwp.password.as_deref();
-        let try_raw_encrypted = encrypted && hwp_password.is_none();
-        let allow_parse = !encrypted || force_parse || hwp_password.is_some() || try_raw_encrypted;
-        if encrypted {
-            push_warning(
-                diagnostics,
-                "HWP_ENCRYPTED",
-                "HWP file is encrypted; content parsing skipped".to_string(),
-                Some("FileHeader"),
-            );
-            if force_parse {
-                push_warning(
-                    diagnostics,
-                    "HWP_FORCE_PARSE",
-                    "HWP force-parse enabled for encrypted file".to_string(),
-                    Some("FileHeader"),
-                );
-            }
-            if hwp_password.is_some() {
-                push_info(
-                    diagnostics,
-                    "HWP_DECRYPT_ATTEMPT",
-                    "HWP decryption attempt enabled".to_string(),
-                    Some("FileHeader"),
-                );
-            }
-            if try_raw_encrypted {
-                push_warning(
-                    diagnostics,
-                    "HWP_ENCRYPTED_PARTIAL",
-                    "HWP encrypted without password; attempting partial parse of readable streams"
-                        .to_string(),
-                    Some("FileHeader"),
-                );
-            }
-        }
-
-        Ok(HwpHeaderContext {
-            compressed,
-            encrypted,
-            force_parse,
-            hwp_password,
-            try_raw_encrypted,
-            allow_parse,
-        })
-    }
 }
 
-struct HwpHeaderContext<'a> {
-    compressed: bool,
-    encrypted: bool,
-    force_parse: bool,
-    hwp_password: Option<&'a str>,
-    try_raw_encrypted: bool,
-    allow_parse: bool,
-}
+impl NormalizeStage for HwpParser {}
+
+impl PostprocessStage for HwpParser {}
 
 impl HwpxParser {
+    /// Public API entrypoint: parse_reader.
     pub fn parse_reader<R: Read + Seek>(&self, reader: R) -> Result<ParsedDocument, ParseError> {
-        let mut reader = reader;
+        run_parser_pipeline(self, reader)
+    }
+}
+
+impl ParseStage for HwpxParser {
+    fn parse_stage<R: Read + Seek>(&self, mut reader: R) -> Result<ParsedDocument, ParseError> {
         enforce_input_size(&mut reader, self.config.max_input_size)?;
         let mut zip = SecureZipReader::new(reader, self.config.zip_config.clone())?;
 
@@ -382,171 +154,61 @@ impl HwpxParser {
 
         Ok(finalize_and_normalize(DocumentFormat::Hwpx, store, doc))
     }
-
-    fn collect_hwpx_parts<R: Read + Seek>(
-        &self,
-        zip: &mut SecureZipReader<R>,
-        file_names: &[String],
-        store: &mut IrStore,
-    ) -> HwpxPartCollection {
-        let mut shared_parts = Vec::new();
-        let mut media_assets = Vec::new();
-        let mut media_lookup: HashMap<String, NodeId> = HashMap::new();
-        for path in file_names {
-            let size = zip.file_size(path).unwrap_or(0);
-            if path.starts_with("BinData/") {
-                let media_type = media_type_from_path(path);
-                let mut asset = MediaAsset::new(path, media_type, size);
-                asset.span = Some(SourceSpan::new(path));
-                let asset_id = asset.id;
-                store.insert(IRNode::MediaAsset(asset));
-                media_assets.push(asset_id);
-                media_lookup.insert(path.clone(), asset_id);
-            }
-            let mut part = ExtensionPart::new(path, size, ExtensionPartKind::VendorSpecific);
-            part.span = Some(SourceSpan::new(path));
-            let part_id = part.id;
-            store.insert(IRNode::ExtensionPart(part));
-            shared_parts.push(part_id);
-        }
-        HwpxPartCollection {
-            shared_parts,
-            media_assets,
-            media_lookup,
-        }
-    }
-
-    fn parse_hwpx_primary_sections<R: Read + Seek>(
-        &self,
-        zip: &mut SecureZipReader<R>,
-        file_names: &[String],
-        media_lookup: &HashMap<String, NodeId>,
-        store: &mut IrStore,
-        doc: &mut Document,
-    ) -> Result<Vec<NodeId>, ParseError> {
-        let mut section_ids = Vec::new();
-        for path in file_names {
-            if !is_hwpx_section(path) {
-                continue;
-            }
-            let content = self.parse_hwpx_section_content(zip, path, media_lookup, store, doc)?;
-            let mut section = Section::new();
-            section.name = Some(path.clone());
-            section.content = content;
-            section.span = Some(SourceSpan::new(path));
-            let section_id = section.id;
-            store.insert(IRNode::Section(section));
-            section_ids.push(section_id);
-        }
-        Ok(section_ids)
-    }
-
-    fn parse_hwpx_section_groups<R: Read + Seek>(
-        &self,
-        zip: &mut SecureZipReader<R>,
-        file_names: &[String],
-        media_lookup: &HashMap<String, NodeId>,
-        store: &mut IrStore,
-        doc: &mut Document,
-    ) -> Result<HwpxSectionGroups, ParseError> {
-        let mut grouped = HwpxSectionGroups::default();
-        for path in file_names {
-            if is_hwpx_header(path) {
-                let content =
-                    self.parse_hwpx_section_content(zip, path, media_lookup, store, doc)?;
-                let mut header = Header::new();
-                header.content = content;
-                header.span = Some(SourceSpan::new(path));
-                let header_id = header.id;
-                store.insert(IRNode::Header(header));
-                grouped.header_ids.push(header_id);
-            } else if is_hwpx_footer(path) {
-                let content =
-                    self.parse_hwpx_section_content(zip, path, media_lookup, store, doc)?;
-                let mut footer = Footer::new();
-                footer.content = content;
-                footer.span = Some(SourceSpan::new(path));
-                let footer_id = footer.id;
-                store.insert(IRNode::Footer(footer));
-                grouped.footer_ids.push(footer_id);
-            } else if is_hwpx_master(path) {
-                let content =
-                    self.parse_hwpx_section_content(zip, path, media_lookup, store, doc)?;
-                let mut section = Section::new();
-                section.name = Some(format!("master:{}", path));
-                section.content = content;
-                section.span = Some(SourceSpan::new(path));
-                let section_id = section.id;
-                store.insert(IRNode::Section(section));
-                grouped.master_ids.push(section_id);
-            }
-        }
-        Ok(grouped)
-    }
-
-    fn parse_hwpx_section_content<R: Read + Seek>(
-        &self,
-        zip: &mut SecureZipReader<R>,
-        path: &str,
-        media_lookup: &HashMap<String, NodeId>,
-        store: &mut IrStore,
-        doc: &mut Document,
-    ) -> Result<Vec<NodeId>, ParseError> {
-        let xml = zip.read_file_string(path)?;
-        parse_hwpx_section(
-            &xml,
-            path,
-            store,
-            &mut doc.comments,
-            &mut doc.footnotes,
-            &mut doc.endnotes,
-            media_lookup,
-        )
-    }
-
-    fn attach_hwpx_headers_and_footers(
-        &self,
-        store: &mut IrStore,
-        section_ids: &[NodeId],
-        header_ids: &[NodeId],
-        footer_ids: &[NodeId],
-    ) {
-        for section_id in section_ids {
-            if let Some(IRNode::Section(section)) = store.get_mut(*section_id) {
-                section.headers.extend(header_ids.iter().copied());
-                section.footers.extend(footer_ids.iter().copied());
-            }
-        }
-    }
-
-    fn parse_hwpx_styles_part<R: Read + Seek>(
-        &self,
-        zip: &mut SecureZipReader<R>,
-        store: &mut IrStore,
-        doc: &mut Document,
-    ) {
-        if !zip.contains("Contents/content.hpf") {
-            return;
-        }
-        if let Ok(xml) = zip.read_file_string("Contents/content.hpf") {
-            if let Some(style_set) = parse_hwpx_styles(&xml, "Contents/content.hpf") {
-                let style_id = style_set.id;
-                store.insert(IRNode::StyleSet(style_set));
-                doc.styles = Some(style_id);
-            }
-        }
-    }
 }
 
-struct HwpxPartCollection {
-    shared_parts: Vec<NodeId>,
-    media_assets: Vec<NodeId>,
-    media_lookup: HashMap<String, NodeId>,
-}
+impl NormalizeStage for HwpxParser {}
 
-#[derive(Default)]
-struct HwpxSectionGroups {
-    header_ids: Vec<NodeId>,
-    footer_ids: Vec<NodeId>,
-    master_ids: Vec<NodeId>,
+impl PostprocessStage for HwpxParser {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::ir::{Footer, Header, Section};
+
+    #[test]
+    fn attach_hwpx_headers_and_footers_updates_only_section_nodes() {
+        let parser = HwpxParser::new();
+        let mut store = IrStore::new();
+
+        let mut section_one = Section::new();
+        let section_one_id = section_one.id;
+        section_one.headers.push(NodeId::new());
+        store.insert(IRNode::Section(section_one));
+
+        let section_two = Section::new();
+        let section_two_id = section_two.id;
+        store.insert(IRNode::Section(section_two));
+
+        let paragraph = Paragraph::new();
+        let paragraph_id = paragraph.id;
+        store.insert(IRNode::Paragraph(paragraph));
+
+        let header = Header::new();
+        let header_id = header.id;
+        store.insert(IRNode::Header(header));
+
+        let footer = Footer::new();
+        let footer_id = footer.id;
+        store.insert(IRNode::Footer(footer));
+
+        parser.attach_hwpx_headers_and_footers(
+            &mut store,
+            &[section_one_id, paragraph_id, section_two_id],
+            &[header_id],
+            &[footer_id],
+        );
+
+        let Some(IRNode::Section(section_one)) = store.get(section_one_id) else {
+            panic!("expected first section");
+        };
+        assert_eq!(section_one.headers.len(), 2);
+        assert_eq!(section_one.headers[1], header_id);
+        assert_eq!(section_one.footers, vec![footer_id]);
+
+        let Some(IRNode::Section(section_two)) = store.get(section_two_id) else {
+            panic!("expected second section");
+        };
+        assert_eq!(section_two.headers, vec![header_id]);
+        assert_eq!(section_two.footers, vec![footer_id]);
+    }
 }

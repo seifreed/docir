@@ -10,6 +10,7 @@ pub(crate) fn build_parser_config(cli: &Cli) -> ParserConfig {
     apply_hwp_overrides(cli, &mut config);
     copy_if_some(cli.max_input_size, &mut config.max_input_size);
     set_if(cli.metrics, &mut config.enable_metrics);
+    clear_if(cli.no_hashes, &mut config.compute_hashes);
     config
 }
 
@@ -77,6 +78,33 @@ fn set_if(flag: bool, target: &mut bool) {
     }
 }
 
+fn clear_if(flag: bool, target: &mut bool) {
+    if flag {
+        *target = false;
+    }
+}
+
 fn non_zero(value: u64) -> Option<u64> {
     (value != 0).then_some(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_parser_config;
+    use crate::Cli;
+    use clap::Parser;
+
+    #[test]
+    fn build_parser_config_disables_hashes_when_requested() {
+        let cli = Cli::parse_from(["docir", "--no-hashes", "inventory", "sample.docx"]);
+        let config = build_parser_config(&cli);
+        assert!(!config.compute_hashes);
+    }
+
+    #[test]
+    fn build_parser_config_keeps_hashes_enabled_by_default() {
+        let cli = Cli::parse_from(["docir", "inventory", "sample.docx"]);
+        let config = build_parser_config(&cli);
+        assert!(config.compute_hashes);
+    }
 }

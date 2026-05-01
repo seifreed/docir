@@ -6,13 +6,13 @@ use crate::ooxml::part_utils::{
     parse_xml_part_with_span, read_xml_part_and_rels, read_xml_part_and_rels_optional,
 };
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
-use crate::xml_utils::read_event;
+use crate::xml_utils::{attr_u32, attr_u64_from_bytes, attr_value, read_event};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     Diagnostics, Document, GridColumn, IRNode, NotesSlide, Paragraph, PptxCommentAuthor,
     PresentationInfo, PresentationProperties, PresentationTag, Run, Shape, ShapeTransform,
-    ShapeType, Slide, SlideAnimation, SlideSize, SlideTransition, SmartArtPart, Table, TableCell,
-    TableRow, TableStyle, TableStyleSet, ViewProperties,
+    ShapeType, SlideSize, SmartArtPart, Table, TableCell, TableRow, TableStyle, TableStyleSet,
+    ViewProperties,
 };
 use docir_core::security::{ExternalRefType, ExternalReference, SecurityInfo};
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
@@ -28,6 +28,8 @@ mod graphic_frame_support;
 mod metadata;
 mod presentation_parts;
 mod relationships;
+#[path = "shape_parse.rs"]
+mod shape_parse;
 mod shapes;
 mod slide;
 mod text;
@@ -80,184 +82,6 @@ impl PptxParser {
     /// Returns the IR store.
     pub fn into_store(self) -> IrStore {
         self.store
-    }
-
-    fn parse_shapes_from_xml(
-        &mut self,
-        xml: &str,
-        slide_path: &str,
-        relationships: &Relationships,
-        zip: &mut impl PackageReader,
-    ) -> Result<Vec<NodeId>, ParseError> {
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
-        let mut buf = Vec::new();
-        let mut shapes = Vec::new();
-
-        loop {
-            match read_event(&mut reader, &mut buf, slide_path)? {
-                Event::Start(e) => match e.name().as_ref() {
-                    b"p:sp" => {
-                        let shape =
-                            self.parse_shape_sp(&mut reader, &e, slide_path, relationships)?;
-                        let id = shape.id;
-                        self.store.insert(IRNode::Shape(shape));
-                        shapes.push(id);
-                    }
-                    b"p:pic" => {
-                        let shape =
-                            self.parse_shape_pic(&mut reader, &e, slide_path, relationships)?;
-                        let id = shape.id;
-                        self.store.insert(IRNode::Shape(shape));
-                        shapes.push(id);
-                    }
-                    b"p:graphicFrame" => {
-                        let shape = self.parse_shape_graphic_frame(
-                            &mut reader,
-                            &e,
-                            slide_path,
-                            relationships,
-                            zip,
-                        )?;
-                        let id = shape.id;
-                        self.store.insert(IRNode::Shape(shape));
-                        shapes.push(id);
-                    }
-                    b"p:grpSp" => {
-                        let shape =
-                            self.parse_shape_group(&mut reader, &e, slide_path, relationships)?;
-                        let id = shape.id;
-                        self.store.insert(IRNode::Shape(shape));
-                        shapes.push(id);
-                    }
-                    _ => {}
-                },
-                Event::Eof => break,
-                _ => {}
-            }
-            buf.clear();
-        }
-
-        Ok(shapes)
-    }
-
-    fn parse_shape_sp(
-        &mut self,
-        reader: &mut Reader<&[u8]>,
-        _start: &BytesStart,
-        slide_path: &str,
-        relationships: &Relationships,
-    ) -> Result<Shape, ParseError> {
-        let mut shape = Shape::new(ShapeType::Unknown);
-        shape.span = Some(SourceSpan::new(slide_path));
-
-        let mut buf = Vec::new();
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"p:cNvPr" => {
-                        parse_shape_non_visual_props(&e, &mut shape);
-                    }
-                    b"a:hlinkClick" => {
-                        self.attach_hyperlink(&mut shape, &e, relationships, slide_path);
-                    }
-                    b"p:spPr" => {
-                        parse_shape_properties(reader, &mut shape, slide_path)?;
-                    }
-                    b"p:txBody" => {
-                        let text = parse_text_body(reader, slide_path)?;
-                        shape.text = Some(text);
-                        if matches!(shape.shape_type, ShapeType::Unknown) {
-                            shape.shape_type = ShapeType::TextBox;
-                        }
-                    }
-                    _ => {}
-                },
-                Ok(Event::Empty(e)) => {
-                    match e.name().as_ref() {
-                        b"p:cNvPr" => {
-                            parse_shape_non_visual_props(&e, &mut shape);
-                        }
-                        b"a:hlinkClick" => {
-                            self.attach_hyperlink(&mut shape, &e, relationships, slide_path);
-                        }
-                        b"p:spPr" => {
-                            // No nested properties.
-                        }
-                        _ => {}
-                    }
-                }
-                Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"p:sp" {
-                        break;
-                    }
-                }
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
-                }
-                _ => {}
-            }
-            buf.clear();
-        }
-
-        if matches!(shape.shape_type, ShapeType::Unknown) {
-            shape.shape_type = ShapeType::Rectangle;
-        }
-
-        Ok(shape)
-    }
-
-    fn parse_shape_group(
-        &mut self,
-        reader: &mut Reader<&[u8]>,
-        _start: &BytesStart,
-        slide_path: &str,
-        _relationships: &Relationships,
-    ) -> Result<Shape, ParseError> {
-        let mut shape = Shape::new(ShapeType::Group);
-        shape.span = Some(SourceSpan::new(slide_path));
-
-        let mut buf = Vec::new();
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"p:cNvPr" => {
-                        parse_non_visual_name(&e, &mut shape);
-                    }
-                    b"p:grpSpPr" => {
-                        parse_group_properties(reader, &mut shape, slide_path)?;
-                    }
-                    _ => {}
-                },
-                Ok(Event::Empty(e)) => match e.name().as_ref() {
-                    b"p:cNvPr" => {
-                        parse_non_visual_name(&e, &mut shape);
-                    }
-                    b"p:grpSpPr" => {}
-                    _ => {}
-                },
-                Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"p:grpSp" {
-                        break;
-                    }
-                }
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
-                }
-                _ => {}
-            }
-            buf.clear();
-        }
-
-        Ok(shape)
     }
 
     fn parse_pptx_table(
@@ -319,15 +143,14 @@ impl PptxParser {
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"a:tc" => {
+                Ok(Event::Start(e)) => {
+                    if e.name().as_ref() == b"a:tc" {
                         let cell = self.parse_pptx_table_cell(reader, slide_path)?;
                         let id = cell.id;
                         self.store.insert(IRNode::TableCell(cell));
                         row.cells.push(id);
                     }
-                    _ => {}
-                },
+                }
                 Ok(Event::End(e)) => {
                     if e.name().as_ref() == b"a:tr" {
                         break;
@@ -359,8 +182,8 @@ impl PptxParser {
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"a:txBody" => {
+                Ok(Event::Start(e)) => {
+                    if e.name().as_ref() == b"a:txBody" {
                         let text = parse_text_body_table(reader, slide_path)?;
                         let plain = shape_text_to_plain(&text);
                         if !plain.is_empty() {
@@ -374,8 +197,7 @@ impl PptxParser {
                             cell.content.push(para_id);
                         }
                     }
-                    _ => {}
-                },
+                }
                 Ok(Event::End(e)) => {
                     if e.name().as_ref() == b"a:tc" {
                         break;
@@ -394,35 +216,6 @@ impl PptxParser {
         }
 
         Ok(cell)
-    }
-
-    fn attach_hyperlink(
-        &mut self,
-        shape: &mut Shape,
-        element: &BytesStart,
-        relationships: &Relationships,
-        slide_path: &str,
-    ) {
-        let mut rel_id = None;
-        for attr in element.attributes().flatten() {
-            if attr.key.as_ref() == b"r:id" {
-                rel_id = Some(String::from_utf8_lossy(&attr.value).to_string());
-            }
-        }
-
-        let Some(rel_id) = rel_id else {
-            return;
-        };
-        let Some(rel) = relationships.get(&rel_id) else {
-            return;
-        };
-
-        shape.hyperlink = Some(rel.target.clone());
-
-        if rel.target_mode == TargetMode::External {
-            let ref_type = classify_relationship(&rel.rel_type);
-            self.add_external_reference(rel, ref_type, slide_path);
-        }
     }
 }
 
@@ -443,10 +236,8 @@ fn parse_slide_list(xml: &str) -> Result<Vec<String>, ParseError> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
                 if e.name().as_ref() == b"p:sldId" {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"r:id" {
-                            slide_ids.push(String::from_utf8_lossy(&attr.value).to_string());
-                        }
+                    if let Some(rel_id) = attr_value(&e, b"r:id") {
+                        slide_ids.push(rel_id);
                     }
                 }
             }
@@ -465,70 +256,52 @@ fn parse_slide_list(xml: &str) -> Result<Vec<String>, ParseError> {
     Ok(slide_ids)
 }
 
-fn parse_shape_non_visual_props(start: &BytesStart<'_>, shape: &mut Shape) {
-    for attr in start.attributes().flatten() {
-        match attr.key.as_ref() {
-            b"name" => {
-                shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
-            }
-            b"descr" => {
-                shape.alt_text = Some(String::from_utf8_lossy(&attr.value).to_string());
-            }
-            _ => {}
-        }
-    }
-}
-
-fn parse_non_visual_name(start: &BytesStart<'_>, shape: &mut Shape) {
-    for attr in start.attributes().flatten() {
-        if attr.key.as_ref() == b"name" {
-            shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
-        }
-    }
-}
-
 fn parse_grid_column(start: &BytesStart<'_>, table: &mut Table) {
-    for attr in start.attributes().flatten() {
-        if attr.key.as_ref() == b"w" {
-            if let Ok(width) = String::from_utf8_lossy(&attr.value).parse::<u32>() {
-                table.grid.push(GridColumn { width });
-            }
-        }
+    if let Some(width) = parse_u32_attr(start, b"w") {
+        table.grid.push(GridColumn { width });
     }
 }
 
 fn parse_u64_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<u64> {
-    start
-        .attributes()
-        .flatten()
-        .find(|attr| attr.key.as_ref() == key_name)
-        .and_then(|attr| String::from_utf8_lossy(&attr.value).parse::<u64>().ok())
+    attr_u64_from_bytes(start, key_name)
 }
 
-fn parse_bool_value(value: &str) -> bool {
-    value == "1" || value.eq_ignore_ascii_case("true")
+fn parse_u32_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<u32> {
+    attr_u32(start, key_name)
+}
+
+fn parse_bool_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<bool> {
+    attr_value(start, key_name).map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
 }
 
 fn parse_size_type_attr(start: &BytesStart<'_>) -> Option<String> {
-    start
-        .attributes()
-        .flatten()
-        .find(|attr| attr.key.as_ref() == b"type")
-        .map(|attr| String::from_utf8_lossy(&attr.value).to_string())
+    attr_value(start, b"type")
+}
+
+fn parse_size_attrs(start: &BytesStart<'_>) -> Option<(u64, u64)> {
+    let cx = parse_u64_attr(start, b"cx");
+    let cy = parse_u64_attr(start, b"cy");
+    match (cx, cy) {
+        (Some(cx), Some(cy)) => Some((cx, cy)),
+        _ => None,
+    }
 }
 
 fn apply_show_properties(start: &BytesStart<'_>, info: &mut PresentationInfo) {
-    for attr in start.attributes().flatten() {
-        let key = attr.key.as_ref();
-        let val = String::from_utf8_lossy(&attr.value);
-        match key {
-            b"showType" => info.show_type = Some(val.to_string()),
-            b"loop" => info.show_loop = Some(parse_bool_value(&val)),
-            b"showNarration" => info.show_narration = Some(parse_bool_value(&val)),
-            b"showAnimation" => info.show_animation = Some(parse_bool_value(&val)),
-            b"useTimings" => info.use_timings = Some(parse_bool_value(&val)),
-            _ => {}
-        }
+    if let Some(value) = attr_value(start, b"showType") {
+        info.show_type = Some(value);
+    }
+    if let Some(show_loop) = parse_bool_attr(start, b"loop") {
+        info.show_loop = Some(show_loop);
+    }
+    if let Some(show_narration) = parse_bool_attr(start, b"showNarration") {
+        info.show_narration = Some(show_narration);
+    }
+    if let Some(show_animation) = parse_bool_attr(start, b"showAnimation") {
+        info.show_animation = Some(show_animation);
+    }
+    if let Some(use_timings) = parse_bool_attr(start, b"useTimings") {
+        info.use_timings = Some(use_timings);
     }
 }
 
@@ -546,17 +319,13 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                 let name_bytes = e.name().as_ref().to_vec();
                 let name = name_bytes.as_slice();
                 if name == b"p:sldSz" {
-                    let cx = parse_u64_attr(&e, b"cx");
-                    let cy = parse_u64_attr(&e, b"cy");
-                    let size_type = parse_size_type_attr(&e);
-                    if let (Some(cx), Some(cy)) = (cx, cy) {
+                    if let Some((cx, cy)) = parse_size_attrs(&e) {
+                        let size_type = parse_size_type_attr(&e);
                         info.slide_size = Some(SlideSize { cx, cy, size_type });
                         found = true;
                     }
                 } else if name == b"p:notesSz" {
-                    let cx = parse_u64_attr(&e, b"cx");
-                    let cy = parse_u64_attr(&e, b"cy");
-                    if let (Some(cx), Some(cy)) = (cx, cy) {
+                    if let Some((cx, cy)) = parse_size_attrs(&e) {
                         info.notes_size = Some(SlideSize {
                             cx,
                             cy,
@@ -568,12 +337,9 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                     apply_show_properties(&e, &mut info);
                     found = true;
                 } else if name == b"p:presentation" {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"firstSlideNum" {
-                            info.first_slide_num =
-                                String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
-                            found = true;
-                        }
+                    if let Some(first_slide_num) = parse_u32_attr(&e, b"firstSlideNum") {
+                        info.first_slide_num = Some(first_slide_num);
+                        found = true;
                     }
                 }
             }
@@ -596,39 +362,6 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
     }
 }
 
-fn parse_group_properties(
-    reader: &mut Reader<&[u8]>,
-    shape: &mut Shape,
-    slide_path: &str,
-) -> Result<(), ParseError> {
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                if e.name().as_ref() == b"a:xfrm" {
-                    parse_transform(reader, &mut shape.transform, slide_path)?;
-                }
-            }
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"p:grpSpPr" {
-                    break;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: slide_path.to_string(),
-                    message: e.to_string(),
-                });
-            }
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(())
-}
-
 fn extract_c_sld_name(xml: &str) -> Option<String> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -637,11 +370,7 @@ fn extract_c_sld_name(xml: &str) -> Option<String> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
                 if e.name().as_ref().ends_with(b"cSld") {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"name" {
-                            return Some(String::from_utf8_lossy(&attr.value).to_string());
-                        }
-                    }
+                    return attr_value(&e, b"name");
                 }
             }
             Ok(Event::Eof) => break,

@@ -1,9 +1,11 @@
 use super::RtfParser;
 use crate::error::ParseError;
+use crate::format::FormatParser;
 use crate::parser::ParserConfig;
 use docir_core::ir::IRNode;
 use docir_core::types::DocumentFormat;
 use docir_core::types::NodeType;
+use std::io::Cursor;
 
 #[test]
 fn parse_simple_rtf() {
@@ -106,4 +108,48 @@ fn rtf_object_hex_limit() {
         }
         other => panic!("unexpected error: {other:?}"),
     }
+}
+
+#[test]
+fn parse_reader_rejects_non_rtf_input() {
+    let parser = RtfParser::new();
+    let err = parser
+        .parse_reader(Cursor::new(b"plain text".as_slice()))
+        .expect_err("non-rtf input should fail");
+    match err {
+        ParseError::UnsupportedFormat(message) => {
+            assert!(message.contains("Missing RTF header"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_reader_enforces_max_input_size_before_parse() {
+    let config = ParserConfig {
+        max_input_size: 8,
+        ..ParserConfig::default()
+    };
+    let parser = RtfParser::with_config(config);
+    let data = b"{\\rtf1\\ansi too big}";
+
+    let err = parser
+        .parse_reader(Cursor::new(data.as_slice()))
+        .expect_err("oversized input should fail");
+    match err {
+        ParseError::ResourceLimit(message) => {
+            assert!(message.contains("Input too large"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn format_parser_trait_parse_reader_dispatches_to_rtf_parser() {
+    let parser = RtfParser::new();
+    let data = b"{\\rtf1\\ansi Trait dispatch}";
+
+    let parsed = <RtfParser as FormatParser>::parse_reader(&parser, Cursor::new(data.as_slice()))
+        .expect("trait parse_reader should parse rtf");
+    assert_eq!(parsed.format, DocumentFormat::Rtf);
 }

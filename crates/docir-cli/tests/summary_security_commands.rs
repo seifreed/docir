@@ -37,6 +37,30 @@ fn summary_command_prints_expected_sections() {
 }
 
 #[test]
+fn summary_with_metrics_prints_metrics_section() {
+    let root = repo_root();
+    let fixture = root.join("fixtures/ooxml/rich.docx");
+    let bin = env!("CARGO_BIN_EXE_docir");
+
+    let output = Command::new(bin)
+        .arg("--metrics")
+        .arg("summary")
+        .arg(&fixture)
+        .output()
+        .expect("run summary --metrics command");
+    assert!(
+        output.status.success(),
+        "summary --metrics command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Parse Metrics (ms):"));
+    assert!(stdout.contains("Content Types:"));
+    assert!(stdout.contains("Normalization:"));
+}
+
+#[test]
 fn security_command_json_mode_outputs_machine_report() {
     let root = repo_root();
     let fixture = root.join("fixtures/ooxml/minimal.xlsx");
@@ -87,4 +111,30 @@ fn security_command_human_mode_prints_report() {
     assert!(stdout.contains("Security Analysis Report"));
     assert!(stdout.contains("Threat Level:"));
     assert!(stdout.contains("Security Features Detected:"));
+}
+
+#[test]
+fn security_verbose_with_findings_prints_findings_and_recommendation() {
+    let root = repo_root();
+    let fixture = root.join("fixtures/rtf/rich.rtf");
+    let bin = env!("CARGO_BIN_EXE_docir");
+
+    let output = Command::new(bin)
+        .arg("security")
+        .arg(&fixture)
+        .arg("--verbose")
+        .output()
+        .expect("run security --verbose command for rich rtf");
+    assert!(
+        output.status.success(),
+        "security --verbose command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Findings ("));
+    assert!(
+        stdout.contains("RECOMMENDATION: This document contains potentially dangerous content.")
+    );
+    assert!(stdout.contains("Location:"));
 }

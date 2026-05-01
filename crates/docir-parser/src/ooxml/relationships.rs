@@ -19,18 +19,13 @@ pub struct Relationship {
 }
 
 /// Target mode for relationships.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TargetMode {
     /// Internal part within the package.
+    #[default]
     Internal,
     /// External resource (URL or path).
     External,
-}
-
-impl Default for TargetMode {
-    fn default() -> Self {
-        Self::Internal
-    }
 }
 
 /// Collection of relationships from a .rels file.
@@ -133,7 +128,7 @@ impl Relationships {
     pub fn resolve_target(base_path: &str, target: &str) -> String {
         // Handle absolute targets
         if target.starts_with('/') {
-            return target[1..].to_string();
+            return target.strip_prefix('/').unwrap_or(target).to_string();
         }
 
         // Get directory of base path

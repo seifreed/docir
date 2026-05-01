@@ -20,6 +20,7 @@ pub struct RelationshipGraph {
 }
 
 impl RelationshipGraph {
+    /// Public API entrypoint: new.
     pub fn new(source: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),
@@ -69,6 +70,7 @@ pub struct ExtensionPart {
 }
 
 impl ExtensionPart {
+    /// Public API entrypoint: new.
     pub fn new(path: impl Into<String>, size_bytes: u64, kind: ExtensionPartKind) -> Self {
         Self {
             id: NodeId::new(),

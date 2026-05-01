@@ -113,6 +113,7 @@ pub struct PivotCache {
 }
 
 impl PivotCache {
+    /// Public API entrypoint: new.
     pub fn new(cache_id: u32) -> Self {
         Self {
             id: new_node_id(),
@@ -138,6 +139,7 @@ pub struct PivotCacheRecords {
 }
 
 impl PivotCacheRecords {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: new_node_id(),
@@ -174,6 +176,7 @@ pub struct WorkbookProperties {
 }
 
 impl WorkbookProperties {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: new_node_id(),

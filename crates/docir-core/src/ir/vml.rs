@@ -16,6 +16,7 @@ pub struct VmlDrawing {
 }
 
 impl VmlDrawing {
+    /// Public API entrypoint: new.
     pub fn new(path: impl Into<String>) -> Self {
         Self {
             id: NodeId::new(),
@@ -52,6 +53,7 @@ pub struct VmlShape {
 }
 
 impl VmlShape {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),

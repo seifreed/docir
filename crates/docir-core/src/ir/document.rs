@@ -154,57 +154,37 @@ impl Document {
     /// Returns all child node IDs.
     pub fn children(&self) -> Vec<NodeId> {
         let mut children = Vec::new();
-        if let Some(meta_id) = self.metadata {
-            children.push(meta_id);
-        }
-        if let Some(styles_id) = self.styles {
-            children.push(styles_id);
-        }
-        if let Some(numbering_id) = self.numbering {
-            children.push(numbering_id);
-        }
+        children.extend(
+            [
+                self.metadata,
+                self.styles,
+                self.numbering,
+                self.settings,
+                self.web_settings,
+                self.font_table,
+                self.sheet_metadata,
+                self.styles_with_effects,
+                self.comments_extended,
+                self.comment_id_map,
+                self.workbook_properties,
+                self.shared_strings,
+                self.spreadsheet_styles,
+            ]
+            .into_iter()
+            .flatten(),
+        );
+
         children.extend(&self.comments);
         children.extend(&self.footnotes);
         children.extend(&self.endnotes);
-        if let Some(settings_id) = self.settings {
-            children.push(settings_id);
-        }
-        if let Some(web_settings_id) = self.web_settings {
-            children.push(web_settings_id);
-        }
-        if let Some(font_table_id) = self.font_table {
-            children.push(font_table_id);
-        }
-        if let Some(sheet_metadata_id) = self.sheet_metadata {
-            children.push(sheet_metadata_id);
-        }
-        if let Some(styles_with_effects_id) = self.styles_with_effects {
-            children.push(styles_with_effects_id);
-        }
-        if let Some(comments_extended_id) = self.comments_extended {
-            children.push(comments_extended_id);
-        }
-        if let Some(comment_id_map_id) = self.comment_id_map {
-            children.push(comment_id_map_id);
-        }
-        if let Some(workbook_props_id) = self.workbook_properties {
-            children.push(workbook_props_id);
-        }
-        if let Some(shared_strings_id) = self.shared_strings {
-            children.push(shared_strings_id);
-        }
-        if let Some(styles_id) = self.spreadsheet_styles {
-            children.push(styles_id);
-        }
         children.extend(&self.defined_names);
         children.extend(&self.pivot_caches);
         children.extend(&self.content);
-        if let Some(macro_id) = self.security.macro_project {
-            children.push(macro_id);
-        }
-        children.extend(&self.security.ole_objects);
-        children.extend(&self.security.external_refs);
-        children.extend(&self.security.activex_controls);
+
+        children.extend(self.security.macro_project_id());
+        children.extend(self.security.ole_object_ids());
+        children.extend(self.security.external_ref_ids());
+        children.extend(self.security.activex_control_ids());
         children.extend(&self.shared_parts);
         children.extend(&self.diagnostics);
         children

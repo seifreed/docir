@@ -21,6 +21,7 @@ pub struct StyleSet {
 }
 
 impl StyleSet {
+    /// Public API entrypoint: new.
     pub fn new() -> Self {
         Self {
             id: NodeId::new(),
@@ -30,6 +31,7 @@ impl StyleSet {
         }
     }
 
+    /// Public API entrypoint: with_effects.
     pub fn with_effects() -> Self {
         Self {
             with_effects: true,
@@ -71,19 +73,14 @@ pub struct Style {
 
 /// Style type.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StyleType {
     Paragraph,
     Character,
     Table,
     Numbering,
+    #[default]
     Other,
-}
-
-impl Default for StyleType {
-    fn default() -> Self {
-        Self::Other
-    }
 }
 
 /// Run properties for styles.
@@ -138,4 +135,29 @@ pub struct StyleParagraphProperties {
     pub page_break_before: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub widow_control: Option<bool>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{StyleSet, StyleType};
+
+    #[test]
+    fn style_set_new_starts_without_effects() {
+        let set = StyleSet::new();
+        assert!(set.styles.is_empty());
+        assert!(!set.with_effects);
+        assert!(set.span.is_none());
+    }
+
+    #[test]
+    fn style_set_with_effects_sets_flag() {
+        let set = StyleSet::with_effects();
+        assert!(set.with_effects);
+        assert!(set.styles.is_empty());
+    }
+
+    #[test]
+    fn style_type_default_is_other() {
+        assert_eq!(StyleType::default(), StyleType::Other);
+    }
 }

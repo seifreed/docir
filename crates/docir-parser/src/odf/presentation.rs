@@ -1,6 +1,11 @@
 //! ODF presentation parsing helpers.
 
-use super::*;
+use super::{
+    attr_value, parse_draw_page, parse_odp_transition, IRNode, IrStore, OdfContentResult,
+    OdfLimitCounter, ParseError, Slide,
+};
+use quick_xml::events::Event;
+use quick_xml::Reader;
 
 pub(super) fn parse_content_presentation(
     xml: &[u8],
@@ -56,7 +61,8 @@ pub(super) fn parse_content_presentation(
         buf.clear();
     }
 
-    let mut result = OdfContentResult::default();
-    result.content = slides;
-    Ok(result)
+    Ok(OdfContentResult {
+        content: slides,
+        ..OdfContentResult::default()
+    })
 }

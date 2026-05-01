@@ -1,97 +1,60 @@
-use super::*;
+#[path = "field_utils_parse.rs"]
+mod field_utils_parse;
+use docir_core::ir::{FieldInstruction, FieldKind};
 
-pub(super) fn parse_field_instruction(text: &str) -> Option<FieldInstruction> {
-    let tokens = tokenize_field_instruction(text);
-    if tokens.is_empty() {
-        return None;
-    }
-    let first = tokens[0].to_ascii_uppercase();
-    let kind = match first.as_str() {
-        "HYPERLINK" => FieldKind::Hyperlink,
-        "INCLUDETEXT" => FieldKind::IncludeText,
-        "MERGEFIELD" => FieldKind::MergeField,
-        "DATE" => FieldKind::Date,
-        "REF" => FieldKind::Ref,
-        "PAGEREF" => FieldKind::PageRef,
-        _ => FieldKind::Unknown,
-    };
-    let mut args = Vec::new();
-    let mut switches = Vec::new();
-    for token in tokens.iter().skip(1) {
-        if token.starts_with('\\') {
-            switches.push(token.trim_start_matches('\\').to_string());
-        } else {
-            args.push(token.to_string());
-        }
-    }
-    Some(FieldInstruction {
-        kind,
-        args,
-        switches,
-    })
+pub(crate) fn parse_field_instruction(text: &str) -> Option<FieldInstruction> {
+    field_utils_parse::parse_field_instruction(text)
 }
 
 pub(super) fn parse_hyperlink_instruction(
     text: &str,
 ) -> Option<(String, Vec<String>, Vec<String>)> {
-    let tokens = tokenize_field_instruction(text);
-    if tokens.is_empty() || tokens[0].to_ascii_uppercase() != "HYPERLINK" {
-        return None;
-    }
-    let mut target = None;
-    let mut args = Vec::new();
-    let mut switches = Vec::new();
-    for token in tokens.into_iter().skip(1) {
-        if token.starts_with('\\') {
-            switches.push(token.trim_start_matches('\\').to_string());
-        } else if target.is_none() {
-            target = Some(token);
-        } else {
-            args.push(token);
-        }
-    }
-    target.map(|t| (t, args, switches))
+    field_utils_parse::parse_hyperlink_instruction(text)
 }
 
+#[cfg(test)]
 pub(super) fn tokenize_field_instruction(text: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
-    let mut current = String::new();
-    let mut in_quotes = false;
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' => {
-                in_quotes = !in_quotes;
-            }
-            '\\' => {
-                if !current.is_empty() {
-                    tokens.push(current.clone());
-                    current.clear();
-                }
-                let mut switch = String::from("\\");
-                while let Some(&c) = chars.peek() {
-                    if c.is_whitespace() {
-                        break;
-                    }
-                    if c == '"' {
-                        break;
-                    }
-                    switch.push(c);
-                    chars.next();
-                }
-                tokens.push(switch);
-            }
-            c if c.is_whitespace() && !in_quotes => {
-                if !current.is_empty() {
-                    tokens.push(current.clone());
-                    current.clear();
-                }
-            }
-            _ => current.push(ch),
-        }
+    field_utils_parse::tokenize_field_instruction(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_field_instruction, parse_hyperlink_instruction, tokenize_field_instruction};
+    use docir_core::ir::FieldKind;
+
+    #[test]
+    fn tokenize_handles_quotes_and_switches() {
+        let tokens = tokenize_field_instruction(r#"HYPERLINK "https://example.test" \t "_blank""#);
+        assert_eq!(
+            tokens,
+            vec![
+                "HYPERLINK".to_string(),
+                "https://example.test".to_string(),
+                r#"\t"#.to_string(),
+                "_blank".to_string(),
+            ]
+        );
     }
-    if !current.is_empty() {
-        tokens.push(current);
+
+    #[test]
+    fn parse_field_instruction_splits_args_and_switches() {
+        let parsed = parse_field_instruction(r#"MERGEFIELD customer_name \* MERGEFORMAT"#)
+            .expect("field instruction");
+        assert!(matches!(parsed.kind, FieldKind::MergeField));
+        assert_eq!(
+            parsed.args,
+            vec!["customer_name".to_string(), "MERGEFORMAT".to_string()]
+        );
+        assert_eq!(parsed.switches, vec!["*".to_string()]);
     }
-    tokens
+
+    #[test]
+    fn parse_hyperlink_instruction_extracts_target_and_rest() {
+        let (target, args, switches) =
+            parse_hyperlink_instruction(r#"HYPERLINK "https://example.test" \l section1"#)
+                .expect("hyperlink instruction");
+        assert_eq!(target, "https://example.test");
+        assert_eq!(args, vec!["section1".to_string()]);
+        assert_eq!(switches, vec!["l".to_string()]);
+    }
 }

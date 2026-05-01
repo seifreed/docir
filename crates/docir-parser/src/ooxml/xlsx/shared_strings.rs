@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::xml_utils::{scan_xml_events, XmlScanControl};
 use docir_core::ir::{SharedStringItem, SharedStringTable};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -22,9 +23,9 @@ pub(crate) fn parse_shared_strings_table(
     let mut current_run = String::new();
     let mut runs: Vec<String> = Vec::new();
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+    scan_xml_events(&mut reader, &mut buf, "xl/sharedStrings.xml", |event| {
+        match event {
+            Event::Start(e) => match e.name().as_ref() {
                 b"si" => {
                     in_si = true;
                     current.clear();
@@ -40,7 +41,7 @@ pub(crate) fn parse_shared_strings_table(
                 }
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
+            Event::Text(e) => {
                 if in_si && in_t {
                     let text = e.unescape().map_err(|err| ParseError::Xml {
                         file: "xl/sharedStrings.xml".to_string(),
@@ -52,7 +53,7 @@ pub(crate) fn parse_shared_strings_table(
                     }
                 }
             }
-            Ok(Event::End(e)) => match e.name().as_ref() {
+            Event::End(e) => match e.name().as_ref() {
                 b"t" => in_t = false,
                 b"r" => {
                     if in_run {
@@ -71,17 +72,10 @@ pub(crate) fn parse_shared_strings_table(
                 }
                 _ => {}
             },
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "xl/sharedStrings.xml".to_string(),
-                    message: e.to_string(),
-                });
-            }
             _ => {}
         }
-        buf.clear();
-    }
+        Ok(XmlScanControl::Continue)
+    })?;
 
     Ok((table, strings))
 }

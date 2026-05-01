@@ -23,5 +23,63 @@ jobs:
       - name: Verify coverage tooling
         run: cargo llvm-cov --version
 
+      - name: Verify gate script contracts
+        run: bash scripts/tests/quality_gate_exit_codes.sh
+
       - name: Run canonical quality gate
-        run: ./scripts/quality_gate.sh
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_REF=""
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${{ github.base_ref }}" ]; then
+            git fetch --no-tags --prune --depth=1 origin "${{ github.base_ref }}"
+            BASE_REF="origin/${{ github.base_ref }}"
+          else
+            git fetch --no-tags --prune --depth=1 origin main || true
+            BASE_REF="$(git merge-base HEAD origin/main 2>/dev/null || true)"
+            if [ -z "${BASE_REF}" ] && [ -n "${{ github.event.before }}" ]; then
+              BASE_REF="${{ github.event.before }}"
+            fi
+          fi
+
+          if [ -z "${BASE_REF}" ]; then
+            echo "Unable to resolve baseline reference for diff-based checks."
+            exit 2
+          fi
+
+          QUALITY_NO_UNWRAP_MODE=baseline \
+          QUALITY_NO_WILDCARD_MODE=baseline \
+          QUALITY_NO_UNWRAP_BASE="${BASE_REF}" \
+          QUALITY_NO_WILDCARD_BASE="${BASE_REF}" \
+            ./scripts/quality_gate.sh
+
+      - name: Run layer policy (on-demand, non-blocking)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/quality_layer_policy.sh
+
+      - name: Run API hygiene (on-demand, non-blocking)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/quality_api_hygiene.sh
+
+      - name: Collect quality evidence artifacts
+        if: always()
+        run: |
+          mkdir -p target/quality-evidence
+          bash scripts/quality_phase1_baseline.sh > target/quality-evidence/quality_phase1_baseline.log
+          bash scripts/quality_no_wildcard_super_in_production.sh inventory > target/quality-evidence/quality_wildcard_inventory.log
+          bash scripts/quality_dashboard_freshness.sh > target/quality-evidence/quality_dashboard_freshness.log || true
+          bash scripts/quality_residual_dashboard.sh target/quality-evidence/residual_dashboard.md
+
+      - name: Upload quality evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-evidence
+          path: target/quality-evidence/

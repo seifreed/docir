@@ -6,53 +6,91 @@ use docir_core::types::{NodeId, NodeType};
 use docir_core::visitor::IrStore;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
 mod index;
 mod summary;
 
 use index::build_index;
 
-/// Diff result between two IR trees.
+/// Result of a differential comparison between two IR trees.
+///
+/// The payload is grouped by change shape:
+/// - `added`: nodes only in the right-hand document.
+/// - `removed`: nodes only in the left-hand document.
+/// - `modified`: nodes present in both documents with changed summaries.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffResult {
     /// Nodes only present in the right-hand document.
     pub added: Vec<NodeChange>,
     /// Nodes only present in the left-hand document.
     pub removed: Vec<NodeChange>,
-    /// Nodes present in both but with differing summaries.
+    /// Nodes present in both documents but with differing summaries.
     pub modified: Vec<NodeModification>,
 }
 
 impl DiffResult {
-    /// Returns true if there are no differences.
+    /// Returns true when no diff has been detected.
     pub fn is_empty(&self) -> bool {
         self.added.is_empty() && self.removed.is_empty() && self.modified.is_empty()
     }
 }
 
-/// A node that was added or removed.
+/// Diff-specific error type for production pathways.
+#[derive(Debug)]
+pub enum DiffError {
+    /// Could not build an index for one of the input stores.
+    NodeIndexing(String),
+    /// Could not build a test ZIP for parser-driven diff fixtures.
+    TestZipBuild(String),
+}
+
+impl std::fmt::Display for DiffError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NodeIndexing(message) => write!(f, "diff node indexing failed: {message}"),
+            Self::TestZipBuild(message) => write!(f, "diff test zip build failed: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for DiffError {}
+
+/// Node that was added or removed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeChange {
+    /// Stable key used by the IR index and diff algorithm.
     pub key: String,
+    /// Node type for the changed element.
     pub node_type: NodeType,
+    /// Human summary shown in report output.
     pub summary: String,
 }
 
-/// A node that was modified.
+/// Node that was modified between two IR snapshots.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeModification {
+    /// Stable key used by the IR index and diff algorithm.
     pub key: String,
+    /// Node type for the changed element.
     pub node_type: NodeType,
+    /// Summary text before applying the change.
     pub before: String,
+    /// Summary text after applying the change.
     pub after: String,
+    /// Change classification inferred by signature comparison.
     pub change_kind: ChangeKind,
 }
 
-/// Kind of change detected between two matched nodes.
+/// Change classification for a pair of compared nodes.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ChangeKind {
+    /// Only content changed.
     Content,
+    /// Only style metadata changed.
     Style,
+    /// Both content and style changed.
     Both,
+    /// Change is limited to metadata.
     Metadata,
 }
 
@@ -66,7 +104,7 @@ impl DiffEngine {
         left_root: NodeId,
         right: &IrStore,
         right_root: NodeId,
-    ) -> DiffResult {
+    ) -> Result<DiffResult, DiffError> {
         let left_index = build_index(left, left_root);
         let right_index = build_index(right, right_root);
 
@@ -97,6 +135,7 @@ impl DiffEngine {
                         } else {
                             ChangeKind::Metadata
                         };
+
                         modified.push(NodeModification {
                             key: (*key).clone(),
                             node_type: left_snap.node_type,
@@ -124,11 +163,11 @@ impl DiffEngine {
             }
         }
 
-        DiffResult {
+        Ok(DiffResult {
             added,
             removed,
             modified,
-        }
+        })
     }
 }
 
@@ -139,19 +178,24 @@ mod tests {
     use std::io::{Cursor, Write};
     use zip::write::FileOptions;
 
-    fn build_odf_zip(content_xml: &str) -> Vec<u8> {
+    fn build_odf_zip(content_xml: &str) -> Result<Vec<u8>, DiffError> {
         let mut buffer = Vec::new();
         let cursor = Cursor::new(&mut buffer);
         let mut zip = zip::ZipWriter::new(cursor);
         let stored =
             FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
-        zip.start_file("mimetype", stored).unwrap();
-        zip.write_all(b"application/vnd.oasis.opendocument.text")
-            .unwrap();
 
+        zip.start_file("mimetype", stored)
+            .map_err(|err| map_zip_error("start mimetype file", err))?;
+        write_exact(
+            &mut zip,
+            b"application/vnd.oasis.opendocument.text",
+            "write mimetype payload",
+        )?;
         zip.start_file("META-INF/manifest.xml", FileOptions::<()>::default())
-            .unwrap();
-        zip.write_all(
+            .map_err(|err| map_zip_error("start manifest file", err))?;
+        write_exact(
+            &mut zip,
             br#"<?xml version="1.0" encoding="UTF-8"?>
 <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
   <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>
@@ -159,16 +203,17 @@ mod tests {
   <manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/>
 </manifest:manifest>
 "#,
-        )
-        .unwrap();
+            "write manifest xml",
+        )?;
 
         zip.start_file("content.xml", FileOptions::<()>::default())
-            .unwrap();
-        zip.write_all(content_xml.as_bytes()).unwrap();
+            .map_err(|err| map_zip_error("start content file", err))?;
+        write_exact(&mut zip, content_xml.as_bytes(), "write content xml")?;
 
         zip.start_file("meta.xml", FileOptions::<()>::default())
-            .unwrap();
-        zip.write_all(
+            .map_err(|err| map_zip_error("start meta file", err))?;
+        write_exact(
+            &mut zip,
             br#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0">
   <office:meta>
@@ -176,11 +221,40 @@ mod tests {
   </office:meta>
 </office:document-meta>
 "#,
-        )
-        .unwrap();
+            "write meta xml",
+        )?;
 
-        zip.finish().unwrap();
-        buffer
+        zip.start_file("styles.xml", FileOptions::<()>::default())
+            .map_err(|err| map_zip_error("start styles file", err))?;
+        write_exact(
+            &mut zip,
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"/>
+"#,
+            "write styles xml",
+        )?;
+
+        zip.finish()
+            .map_err(|err| map_zip_error("finish zip", err))?;
+        Ok(buffer)
+    }
+
+    fn map_zip_error(operation: &'static str, err: zip::result::ZipError) -> DiffError {
+        DiffError::TestZipBuild(format!("{operation}: {err}"))
+    }
+
+    fn write_exact<W: Write>(
+        target: &mut W,
+        data: &[u8],
+        operation: &'static str,
+    ) -> Result<(), DiffError> {
+        target
+            .write_all(data)
+            .map_err(|err| io_error(operation, err))
+    }
+
+    fn io_error(operation: &'static str, err: std::io::Error) -> DiffError {
+        DiffError::TestZipBuild(format!("{operation}: {err}"))
     }
 
     #[test]
@@ -205,8 +279,8 @@ mod tests {
   </office:body>
 </office:document-content>
 "#;
-        let left_zip = build_odf_zip(content_left);
-        let right_zip = build_odf_zip(content_right);
+        let left_zip = build_odf_zip(content_left).expect("zip fixture");
+        let right_zip = build_odf_zip(content_right).expect("zip fixture");
 
         let parser = DocumentParser::new();
         let left_doc = parser.parse_reader(Cursor::new(left_zip)).unwrap();
@@ -217,7 +291,8 @@ mod tests {
             left_doc.root_id,
             &right_doc.store,
             right_doc.root_id,
-        );
+        )
+        .expect("diff should succeed");
 
         assert!(diff
             .modified
