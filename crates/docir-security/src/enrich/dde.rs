@@ -33,18 +33,31 @@ fn extract_quoted_parts(input: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;
-    for ch in input.chars() {
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
         if ch == '"' {
-            in_quotes = !in_quotes;
-            if !in_quotes {
-                parts.push(current.clone());
-                current.clear();
+            if in_quotes {
+                // Check for escaped quote ""
+                if chars.peek() == Some(&'"') {
+                    chars.next();
+                    current.push('"');
+                } else {
+                    in_quotes = false;
+                    parts.push(current.clone());
+                    current.clear();
+                }
+            } else {
+                in_quotes = true;
             }
             continue;
         }
         if in_quotes {
             current.push(ch);
         }
+    }
+    // Handle unclosed quote: include accumulated text as a part
+    if in_quotes && !current.is_empty() {
+        parts.push(current);
     }
     parts
 }

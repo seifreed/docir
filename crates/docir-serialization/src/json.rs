@@ -49,11 +49,10 @@ impl JsonSerializer {
             .get(root_id)
             .ok_or_else(|| SerializationError::NodeNotFound(format!("{}", root_id)))?;
 
-        let children: Vec<TreeNode> = node
-            .children()
-            .into_iter()
-            .filter_map(|child_id| Self::build_tree(store, child_id).ok())
-            .collect();
+        let mut children = Vec::new();
+        for child_id in node.children() {
+            children.push(Self::build_tree(store, child_id)?);
+        }
 
         Ok(TreeNode {
             node: node.clone(),

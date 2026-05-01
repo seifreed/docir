@@ -67,7 +67,34 @@ pub(super) fn is_suspicious_formula(text: &str) -> bool {
         "DDE(",
         "DDEAUTO(",
     ];
-    tokens.iter().any(|t| upper.contains(t))
+    let code_only = strip_string_literals(&upper);
+    tokens.iter().any(|t| code_only.contains(t))
+}
+
+fn strip_string_literals(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut in_string = false;
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '"' {
+            if in_string {
+                if chars.peek() == Some(&'"') {
+                    chars.next();
+                    result.push(' ');
+                } else {
+                    in_string = false;
+                }
+            } else {
+                in_string = true;
+            }
+            result.push(' ');
+        } else if in_string {
+            result.push(' ');
+        } else {
+            result.push(ch);
+        }
+    }
+    result
 }
 
 fn iter_nodes<'a>(

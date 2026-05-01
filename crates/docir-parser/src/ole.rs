@@ -156,7 +156,9 @@ impl Cfb {
         }
 
         let data = self.read_regular_stream(entry).ok()?;
-        Some(data[..entry.size as usize].to_vec())
+        let size = usize::try_from(entry.size).unwrap_or(usize::MAX);
+        let len = data.len().min(size);
+        Some(data[..len].to_vec())
     }
 
     /// Public API entrypoint: has_stream.
@@ -247,7 +249,8 @@ impl Cfb {
 
     /// Public API entrypoint: sector_count.
     pub fn sector_count(&self) -> u32 {
-        (self.data.len() / self.sector_size as usize).saturating_sub(1) as u32
+        let count = (self.data.len() / self.sector_size as usize).saturating_sub(1);
+        count.try_into().unwrap_or(u32::MAX)
     }
 
     /// Public API entrypoint: fat_entry_count.
@@ -779,10 +782,13 @@ fn read_stream_from_mini(
     let mut sector = start_sector;
     let mut guard = 0usize;
     while sector != END_OF_CHAIN && sector != FREE_SECT && out.len() < size {
-        if guard > mini_fat.len() {
+        if guard >= mini_fat.len() {
             break;
         }
-        let offset = sector as usize * mini_sector_size as usize;
+        let offset = match (sector as usize).checked_mul(mini_sector_size as usize) {
+            Some(o) => o,
+            None => break,
+        };
         let end = offset + mini_sector_size as usize;
         if end > mini_stream.len() {
             break;

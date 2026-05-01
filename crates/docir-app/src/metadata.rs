@@ -105,7 +105,10 @@ fn parse_property_stream(
 
     let mut properties = Vec::new();
     for section_index in 0..section_count {
-        let descriptor_offset = 28 + section_index * 20;
+        let descriptor_offset = match 28usize.checked_add(section_index.saturating_mul(20)) {
+            Some(off) => off,
+            None => break,
+        };
         if descriptor_offset + 20 > data.len() {
             break;
         }
@@ -122,13 +125,22 @@ fn parse_property_stream(
         let section_end = section_offset.saturating_add(section_size).min(data.len());
 
         for index in 0..property_count {
-            let entry_offset = section_offset + 8 + index * 8;
+            let entry_offset = match section_offset
+                .checked_add(8)
+                .and_then(|base| base.checked_add(index.saturating_mul(8)))
+            {
+                Some(off) => off,
+                None => break,
+            };
             if entry_offset + 8 > section_end {
                 break;
             }
             let property_id = read_u32(data, entry_offset)?;
             let value_offset = read_u32(data, entry_offset + 4)? as usize;
-            let absolute_offset = section_offset + value_offset;
+            let absolute_offset = match section_offset.checked_add(value_offset) {
+                Some(off) => off,
+                None => continue,
+            };
             if absolute_offset + 4 > section_end {
                 continue;
             }

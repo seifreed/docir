@@ -24,7 +24,15 @@ impl SecurityAnalyzer {
 
         // Run visitor analysis
         let mut walker = PreOrderWalker::new(store, root_id);
-        let _ = walker.walk(self);
+        if let Err(err) = walker.walk(self) {
+            self.findings.push(ThreatIndicator {
+                indicator_type: ThreatIndicatorType::SuspiciousApiCall,
+                severity: ThreatLevel::Low,
+                description: format!("Security walk incomplete: {err}"),
+                location: None,
+                node_id: None,
+            });
+        }
 
         // Get document security info
         let security_info = if let Some(IRNode::Document(doc)) = store.get(root_id) {

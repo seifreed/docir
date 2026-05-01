@@ -273,8 +273,10 @@ fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
     blobs
 }
 
+const MAX_HEX_BLOB_SIZE: usize = 100 * 1024 * 1024;
+
 fn decode_hex_blob(hex: &[u8]) -> Option<Vec<u8>> {
-    if hex.len() < 2 {
+    if hex.len() < 2 || hex.len() > MAX_HEX_BLOB_SIZE {
         return None;
     }
     let even_len = hex.len() - (hex.len() % 2);

@@ -115,13 +115,35 @@ fn build_ooxml_indicators(
     let mut indicators = Vec::new();
 
     if let Some(macro_id) = security.macro_project {
-        let (location, description) = match store.get(macro_id) {
-            Some(IRNode::MacroProject(project)) => macro_project_details(project),
-            _ => (None, "VBA macro project found".to_string()),
+        let (indicator_type, severity, description, location) = match store.get(macro_id) {
+            Some(IRNode::MacroProject(project)) => {
+                let details = macro_project_details(project);
+                if project.has_auto_exec {
+                    (
+                        ThreatIndicatorType::AutoExecMacro,
+                        ThreatLevel::Critical,
+                        details.1,
+                        details.0,
+                    )
+                } else {
+                    (
+                        ThreatIndicatorType::MacroProject,
+                        ThreatLevel::High,
+                        details.1,
+                        details.0,
+                    )
+                }
+            }
+            _ => (
+                ThreatIndicatorType::MacroProject,
+                ThreatLevel::High,
+                "VBA macro project found".to_string(),
+                None,
+            ),
         };
         indicators.push(make_indicator(
-            ThreatIndicatorType::AutoExecMacro,
-            ThreatLevel::Critical,
+            indicator_type,
+            severity,
             description,
             location,
             Some(macro_id),

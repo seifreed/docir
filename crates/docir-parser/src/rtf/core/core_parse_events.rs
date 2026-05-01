@@ -355,7 +355,7 @@ pub(crate) fn pending_numbering(ctx: &RtfParseContext) -> Option<docir_core::ir:
         .unwrap_or(list_override);
     let format = ctx.list_level_formats.get(&(list_id, level)).cloned();
     Some(docir_core::ir::NumberingInfo {
-        num_id: list_id as u32,
+        num_id: list_id.max(0) as u32,
         level,
         format,
     })

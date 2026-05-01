@@ -67,6 +67,8 @@ pub struct ThreatIndicator {
 pub enum ThreatIndicatorType {
     /// VBA macro with auto-execute.
     AutoExecMacro,
+    /// Macro project without auto-execute.
+    MacroProject,
     /// Suspicious VBA API call.
     SuspiciousApiCall,
     /// External template reference.

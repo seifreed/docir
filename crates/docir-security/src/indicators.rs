@@ -24,23 +24,17 @@ pub fn make_indicator(
 /// Scans VBA source code for suspicious API calls.
 pub fn scan_vba_source(source: &str) -> Vec<SuspiciousCall> {
     let mut calls = Vec::new();
-    let source_upper = source.to_uppercase();
 
     for (pattern, category) in SUSPICIOUS_VBA_CALLS {
         let pattern_upper = pattern.to_uppercase();
-        if source_upper.contains(&pattern_upper) {
-            // Find line number
-            let line = source
-                .lines()
-                .enumerate()
-                .find(|(_, line)| line.to_uppercase().contains(&pattern_upper))
-                .map(|(i, _)| i as u32 + 1);
-
-            calls.push(SuspiciousCall {
-                name: pattern.to_string(),
-                category: *category,
-                line,
-            });
+        for (i, line) in source.lines().enumerate() {
+            if line.to_uppercase().contains(&pattern_upper) {
+                calls.push(SuspiciousCall {
+                    name: pattern.to_string(),
+                    category: *category,
+                    line: Some(i as u32 + 1),
+                });
+            }
         }
     }
 

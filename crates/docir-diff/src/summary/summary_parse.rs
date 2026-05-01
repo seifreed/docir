@@ -270,11 +270,15 @@ pub(crate) fn content_signature(node: &IRNode, store: &IrStore) -> Option<String
 
 pub(crate) fn style_signature(node: &IRNode, _store: &IrStore) -> Option<String> {
     match node {
-        IRNode::Paragraph(para) => {
-            Some(serde_json::to_string(&para.properties).unwrap_or_default())
-        }
-        IRNode::Run(run) => Some(serde_json::to_string(&run.properties).unwrap_or_default()),
-        IRNode::Table(table) => Some(serde_json::to_string(&table.properties).unwrap_or_default()),
+        IRNode::Paragraph(para) => serde_json::to_string(&para.properties)
+            .ok()
+            .filter(|s| !s.is_empty()),
+        IRNode::Run(run) => serde_json::to_string(&run.properties)
+            .ok()
+            .filter(|s| !s.is_empty()),
+        IRNode::Table(table) => serde_json::to_string(&table.properties)
+            .ok()
+            .filter(|s| !s.is_empty()),
         IRNode::Cell(cell) => Some(format!(
             "style={}",
             cell.style_id.map_or("-".to_string(), |id| id.to_string())
@@ -295,15 +299,7 @@ pub(crate) fn style_signature(node: &IRNode, _store: &IrStore) -> Option<String>
 }
 
 pub(crate) fn text_from_paragraph(para: &Paragraph, store: &IrStore) -> String {
-    let mut out = String::new();
-    for run_id in &para.runs {
-        if let Some(IRNode::Run(run)) = store.get(*run_id) {
-            if !run.text.is_empty() {
-                out.push_str(&run.text);
-            }
-        }
-    }
-    out
+    paragraph_text(para, store)
 }
 
 fn cell_content_signature(cell: &Cell) -> String {
@@ -574,7 +570,15 @@ pub(crate) fn abbreviate(value: &str, max: usize) -> String {
     if value.len() <= max {
         return value.to_string();
     }
-    let mut out = value.chars().take(max).collect::<String>();
+    let mut out = String::new();
+    let mut char_len = 0;
+    for ch in value.chars() {
+        if char_len + ch.len_utf8() > max {
+            break;
+        }
+        out.push(ch);
+        char_len += ch.len_utf8();
+    }
     out.push_str("...");
     out
 }

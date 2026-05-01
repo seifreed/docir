@@ -25,6 +25,11 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<OleHeader, ParseError> {
     }
     let sector_shift = read_u16(data, 0x1E)? as u32;
     let mini_sector_shift = read_u16(data, 0x20)? as u32;
+    if sector_shift >= 32 || mini_sector_shift >= 32 {
+        return Err(ParseError::InvalidStructure(
+            "OLE header sector shift overflow".to_string(),
+        ));
+    }
     Ok(OleHeader {
         sector_size: 1u32 << sector_shift,
         mini_sector_size: 1u32 << mini_sector_shift,
