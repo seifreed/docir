@@ -1,12 +1,11 @@
+use crate::io_support::read_bounded_file;
 use crate::{AppResult, ParserConfig};
 use docir_parser::hwp::is_hwpx_mimetype;
 use docir_parser::legacy_office::probe_legacy_office_format;
 use docir_parser::ole::{is_ole_container, Cfb};
 use docir_parser::ooxml::content_types::ContentTypes;
 use docir_parser::zip_handler::SecureZipReader;
-use docir_parser::ParseError as ParserParseError;
 use serde::Serialize;
-use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 
@@ -24,17 +23,7 @@ pub struct FormatProbe {
 
 /// Probes an on-disk file without running the full parser pipeline.
 pub fn probe_format_path<P: AsRef<Path>>(path: P, config: &ParserConfig) -> AppResult<FormatProbe> {
-    let path = path.as_ref();
-    let metadata = fs::metadata(path).map_err(ParserParseError::from)?;
-    if metadata.len() > config.max_input_size {
-        return Err(ParserParseError::ResourceLimit(format!(
-            "Input exceeds max_input_size ({} > {})",
-            metadata.len(),
-            config.max_input_size
-        ))
-        .into());
-    }
-    let bytes = fs::read(path).map_err(ParserParseError::from)?;
+    let bytes = read_bounded_file(path, config.max_input_size)?;
     Ok(probe_format_bytes(&bytes, config))
 }
 

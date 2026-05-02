@@ -10,28 +10,21 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static NODE_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 /// Parse errors for enum string conversions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("Unknown {kind}: {input}")]
 pub struct ParseEnumError {
     kind: &'static str,
     input: String,
 }
 
 impl ParseEnumError {
-    fn new(kind: &'static str, input: &str) -> Self {
+    pub(crate) fn new(kind: &'static str, input: &str) -> Self {
         Self {
             kind,
             input: input.to_string(),
         }
     }
 }
-
-impl fmt::Display for ParseEnumError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unknown {}: {}", self.kind, self.input)
-    }
-}
-
-impl std::error::Error for ParseEnumError {}
 
 /// Unique identifier for IR nodes.
 ///

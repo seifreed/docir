@@ -1,10 +1,9 @@
 use crate::bucket_count::BucketCount;
+use crate::io_support::read_bounded_file;
 use crate::severity::max_severity;
 use crate::{AppResult, ParserConfig};
 use docir_parser::ole::{Cfb, CfbDirectoryState, CfbEntryType};
-use docir_parser::ParseError as ParserParseError;
 use serde::Serialize;
-use std::fs;
 use std::path::Path;
 
 /// Dedicated structural view of normal CFB directory entries.
@@ -101,17 +100,7 @@ pub fn inspect_directory_path<P: AsRef<Path>>(
     path: P,
     config: &ParserConfig,
 ) -> AppResult<DirectoryInspection> {
-    let path = path.as_ref();
-    let metadata = fs::metadata(path).map_err(ParserParseError::from)?;
-    if metadata.len() > config.max_input_size {
-        return Err(ParserParseError::ResourceLimit(format!(
-            "Input exceeds max_input_size ({} > {})",
-            metadata.len(),
-            config.max_input_size
-        ))
-        .into());
-    }
-    let bytes = fs::read(path).map_err(ParserParseError::from)?;
+    let bytes = read_bounded_file(path, config.max_input_size)?;
     inspect_directory_bytes(&bytes)
 }
 

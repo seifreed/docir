@@ -1,5 +1,6 @@
 use crate::ParsedDocument;
 use docir_core::ir::IRNode;
+use docir_core::security::{ThreatIndicatorType, ThreatLevel};
 use docir_core::visitor::{IrVisitor, NodeCounter, PreOrderWalker, VisitControl, VisitorResult};
 
 #[derive(Debug, Clone, Default)]
@@ -35,7 +36,7 @@ pub struct ParseMetricsSummary {
 
 #[derive(Debug, Clone)]
 pub struct SecuritySummary {
-    pub threat_level: String,
+    pub threat_level: ThreatLevel,
     pub has_macro_project: bool,
     pub ole_objects: usize,
     pub external_refs: usize,
@@ -46,8 +47,8 @@ pub struct SecuritySummary {
 
 #[derive(Debug, Clone)]
 pub struct ThreatIndicatorSummary {
-    pub severity: String,
-    pub indicator_type: String,
+    pub severity: ThreatLevel,
+    pub indicator_type: ThreatIndicatorType,
     pub description: String,
 }
 
@@ -72,8 +73,13 @@ pub fn summarize_document(parsed: &ParsedDocument) -> Option<DocumentSummary> {
         node_counts: build_node_counts(parsed),
         text_stats: build_text_stats(parsed),
         metrics: build_metrics_summary(parsed),
-        security: build_security_summary(doc),
-        threat_indicators: build_threat_indicators(doc),
+        security: SecuritySummary::from(doc),
+        threat_indicators: doc
+            .security
+            .threat_indicators
+            .iter()
+            .map(ThreatIndicatorSummary::from)
+            .collect(),
     })
 }
 
@@ -133,28 +139,28 @@ fn build_metrics_summary(parsed: &ParsedDocument) -> Option<ParseMetricsSummary>
     })
 }
 
-fn build_security_summary(doc: &docir_core::ir::Document) -> SecuritySummary {
-    SecuritySummary {
-        threat_level: doc.security.threat_level.to_string(),
-        has_macro_project: doc.security.has_macro_project(),
-        ole_objects: doc.security.ole_object_count(),
-        external_refs: doc.security.external_ref_count(),
-        dde_fields: doc.security.dde_field_count(),
-        activex_controls: doc.security.activex_control_count(),
-        xlm_macros: doc.security.xlm_macro_count(),
+impl From<&docir_core::ir::Document> for SecuritySummary {
+    fn from(doc: &docir_core::ir::Document) -> Self {
+        SecuritySummary {
+            threat_level: doc.security.threat_level,
+            has_macro_project: doc.security.has_macro_project(),
+            ole_objects: doc.security.ole_object_count(),
+            external_refs: doc.security.external_ref_count(),
+            dde_fields: doc.security.dde_field_count(),
+            activex_controls: doc.security.activex_control_count(),
+            xlm_macros: doc.security.xlm_macro_count(),
+        }
     }
 }
 
-fn build_threat_indicators(doc: &docir_core::ir::Document) -> Vec<ThreatIndicatorSummary> {
-    doc.security
-        .threat_indicators
-        .iter()
-        .map(|indicator| ThreatIndicatorSummary {
-            severity: indicator.severity.to_string(),
-            indicator_type: format!("{:?}", indicator.indicator_type),
+impl From<&docir_core::security::ThreatIndicator> for ThreatIndicatorSummary {
+    fn from(indicator: &docir_core::security::ThreatIndicator) -> Self {
+        ThreatIndicatorSummary {
+            severity: indicator.severity,
+            indicator_type: indicator.indicator_type,
             description: indicator.description.clone(),
-        })
-        .collect()
+        }
+    }
 }
 
 struct TextStats {
@@ -269,7 +275,7 @@ mod tests {
         assert_eq!(summary.metadata.application.as_deref(), Some("app"));
         assert_eq!(summary.text_stats.word_count, 2);
         assert!(summary.text_stats.char_count >= 11);
-        assert_eq!(summary.security.threat_level, "HIGH");
+        assert_eq!(summary.security.threat_level, ThreatLevel::High);
         assert_eq!(summary.security.external_refs, 1);
         assert_eq!(summary.threat_indicators.len(), 1);
         assert!(summary

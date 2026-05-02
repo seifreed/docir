@@ -1,10 +1,9 @@
+use crate::io_support::read_bounded_file;
 use crate::{AppResult, ParserConfig};
 use docir_parser::ole::{is_ole_container, Cfb};
 use docir_parser::zip_handler::SecureZipReader;
-use docir_parser::ParseError as ParserParseError;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 
@@ -36,17 +35,7 @@ pub fn extract_flash_path<P: AsRef<Path>>(
     path: P,
     config: &ParserConfig,
 ) -> AppResult<FlashExtractionReport> {
-    let path = path.as_ref();
-    let metadata = fs::metadata(path).map_err(ParserParseError::from)?;
-    if metadata.len() > config.max_input_size {
-        return Err(ParserParseError::ResourceLimit(format!(
-            "Input exceeds max_input_size ({} > {})",
-            metadata.len(),
-            config.max_input_size
-        ))
-        .into());
-    }
-    let bytes = fs::read(path).map_err(ParserParseError::from)?;
+    let bytes = read_bounded_file(path, config.max_input_size)?;
     extract_flash_bytes(&bytes, config)
 }
 

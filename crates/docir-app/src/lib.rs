@@ -28,6 +28,7 @@ mod inspect_sectors;
 mod inspect_sheet_records;
 mod inspect_slide_records;
 mod inventory;
+mod io_support;
 mod list_times;
 mod metadata;
 mod probe;

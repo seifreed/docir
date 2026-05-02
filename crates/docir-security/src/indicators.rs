@@ -1,7 +1,7 @@
 //! Security indicator detection utilities.
 
-use crate::policy::{AUTO_EXEC_PROCEDURES, DANGEROUS_XLM_FUNCTIONS, SUSPICIOUS_VBA_CALLS};
 use docir_core::security::{SuspiciousCall, ThreatIndicator, ThreatIndicatorType, ThreatLevel};
+use docir_core::security::{AUTO_EXEC_PROCEDURES, DANGEROUS_XLM_FUNCTIONS, SUSPICIOUS_VBA_CALLS};
 use docir_core::types::NodeId;
 
 /// Builds a threat indicator with standardized fields.

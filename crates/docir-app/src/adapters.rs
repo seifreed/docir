@@ -186,7 +186,7 @@ fn format_threat_indicators(output: &mut String, summary: &DocumentSummary) {
     output.push_str("Threat Indicators:\n");
     for indicator in &summary.threat_indicators {
         output.push_str(&format!(
-            "  [{}] {}: {}\n",
+            "  [{}] {:?}: {}\n",
             indicator.severity, indicator.indicator_type, indicator.description
         ));
     }

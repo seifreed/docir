@@ -9,8 +9,6 @@ pub mod analyzer;
 pub mod enrich;
 /// Atomic indicators used by security and rules layers.
 pub mod indicators;
-/// Policy model and evaluation helpers.
-pub mod policy;
 
 /// Public analyzer facade used by app and CLI entrypoints.
 pub use analyzer::SecurityAnalyzer;
@@ -18,5 +16,3 @@ pub use analyzer::SecurityAnalyzer;
 pub use enrich::populate_security_indicators;
 /// Re-exports security indicators.
 pub use indicators::*;
-/// Re-exports policy model types.
-pub use policy::*;

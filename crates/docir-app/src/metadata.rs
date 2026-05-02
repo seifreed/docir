@@ -1,8 +1,8 @@
+use crate::io_support::read_bounded_file;
 use crate::{AppResult, ParserConfig};
 use docir_parser::ole::Cfb;
 use docir_parser::ParseError as ParserParseError;
 use serde::Serialize;
-use std::fs;
 use std::path::Path;
 
 const SUMMARY_INFO_STREAM: &str = "\u{0005}SummaryInformation";
@@ -41,17 +41,7 @@ pub fn inspect_metadata_path<P: AsRef<Path>>(
     path: P,
     config: &ParserConfig,
 ) -> AppResult<MetadataInspection> {
-    let path = path.as_ref();
-    let metadata = fs::metadata(path).map_err(ParserParseError::from)?;
-    if metadata.len() > config.max_input_size {
-        return Err(ParserParseError::ResourceLimit(format!(
-            "Input exceeds max_input_size ({} > {})",
-            metadata.len(),
-            config.max_input_size
-        ))
-        .into());
-    }
-    let bytes = fs::read(path).map_err(ParserParseError::from)?;
+    let bytes = read_bounded_file(path, config.max_input_size)?;
     inspect_metadata_bytes(&bytes)
 }
 

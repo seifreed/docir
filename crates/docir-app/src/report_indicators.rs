@@ -41,145 +41,33 @@ impl IndicatorReport {
         let security = parsed.security_info();
 
         let mut indicators = Vec::new();
-        indicators.push(DocumentIndicator {
-            key: "format-container".to_string(),
-            value: format!(
-                "{}/{}",
-                parsed.format().extension(),
-                container_label(inventory.container_kind)
-            ),
-            risk: ThreatLevel::None,
-            reason: "Detected document format and source container".to_string(),
-            evidence: Vec::new(),
-        });
+        indicators.push(format_container_indicator(parsed, &inventory));
+        indicators.extend(collect_macro_indicators(&vba));
 
-        let macro_count = vba.projects.len();
-        let macro_evidence = vba
-            .projects
-            .iter()
-            .map(|project| {
-                project
-                    .container_path
-                    .clone()
-                    .or_else(|| project.storage_root.clone())
-                    .or_else(|| project.project_name.clone())
-                    .unwrap_or_else(|| project.node_id.clone())
-            })
-            .collect::<Vec<_>>();
-        indicators.push(boolean_or_count_indicator(
-            "macros",
-            macro_count,
-            ThreatLevel::Critical,
-            "VBA project or macro-capable content detected",
-            "No macro-capable content detected",
-            macro_evidence,
-        ));
-
-        let auto_exec = vba
-            .projects
-            .iter()
-            .flat_map(|project| {
-                project.auto_exec_procedures.iter().map(|proc_name| {
-                    format!(
-                        "{}:{}",
-                        project
-                            .project_name
-                            .clone()
-                            .unwrap_or_else(|| project.node_id.clone()),
-                        proc_name
-                    )
-                })
-            })
-            .collect::<Vec<_>>();
-        indicators.push(boolean_or_count_indicator(
-            "autoexec",
-            auto_exec.len(),
-            ThreatLevel::Critical,
-            "Auto-execute VBA entrypoints detected",
-            "No auto-execute VBA entrypoints detected",
-            auto_exec,
-        ));
-
-        let protected_projects = vba
-            .projects
-            .iter()
-            .filter(|project| project.is_protected)
-            .map(|project| {
-                project
-                    .project_name
-                    .clone()
-                    .or_else(|| project.storage_root.clone())
-                    .unwrap_or_else(|| project.node_id.clone())
-            })
-            .collect::<Vec<_>>();
-        indicators.push(boolean_or_count_indicator(
-            "protected-vba",
-            protected_projects.len(),
-            ThreatLevel::Medium,
-            "Password-protected VBA projects detected",
-            "No password-protected VBA projects detected",
-            protected_projects,
-        ));
-
-        let mut ole_evidence = Vec::new();
-        let mut native_payload_evidence = Vec::new();
-        let mut activex_evidence = Vec::new();
-        let mut external_reference_evidence = Vec::new();
-        for node in parsed.store().values() {
-            match node {
-                IRNode::OleObject(ole) => {
-                    ole_evidence.push(ole_location_label(ole));
-                    if ole.embedded_payload_kind.is_some()
-                        || ole
-                            .source_path
-                            .as_deref()
-                            .is_some_and(is_native_payload_path)
-                    {
-                        native_payload_evidence.push(ole_location_label(ole));
-                    }
-                }
-                IRNode::ActiveXControl(control) => {
-                    activex_evidence.push(
-                        control
-                            .span
-                            .as_ref()
-                            .map(|span| span.file_path.clone())
-                            .or_else(|| control.name.clone())
-                            .or_else(|| control.prog_id.clone())
-                            .unwrap_or_else(|| control.id.to_string()),
-                    );
-                }
-                IRNode::ExternalReference(reference) => {
-                    external_reference_evidence
-                        .push(format!("{:?}: {}", reference.ref_type, reference.target));
-                }
-                _ => {}
-            }
-        }
-
+        let embeddings = collect_embedding_indicators(parsed);
         indicators.push(boolean_or_count_indicator(
             "ole-objects",
-            ole_evidence.len(),
+            embeddings.ole_evidence.len(),
             ThreatLevel::High,
             "Embedded or linked OLE objects detected",
             "No OLE objects detected",
-            ole_evidence,
+            embeddings.ole_evidence,
         ));
         indicators.push(boolean_or_count_indicator(
             "activex",
-            activex_evidence.len(),
+            embeddings.activex_evidence.len(),
             ThreatLevel::High,
             "ActiveX controls detected",
             "No ActiveX controls detected",
-            activex_evidence,
+            embeddings.activex_evidence,
         ));
         indicators.push(boolean_or_count_indicator(
             "external-references",
-            external_reference_evidence.len(),
+            embeddings.external_reference_evidence.len(),
             ThreatLevel::Medium,
             "External references or remote relationships detected",
             "No external references detected",
-            external_reference_evidence,
+            embeddings.external_reference_evidence,
         ));
 
         let dde_evidence = security
@@ -222,192 +110,17 @@ impl IndicatorReport {
 
         indicators.push(boolean_or_count_indicator(
             "native-payloads",
-            native_payload_evidence.len(),
+            embeddings.native_payload_evidence.len(),
             ThreatLevel::High,
             "Ole10Native or Package-style payloads detected",
             "No Ole10Native or Package-style payloads detected",
-            native_payload_evidence,
+            embeddings.native_payload_evidence,
         ));
 
-        let suspicious_relationships = security
-            .map(|info| {
-                info.threat_indicators
-                    .iter()
-                    .filter(|indicator| {
-                        matches!(
-                            indicator.indicator_type,
-                            ThreatIndicatorType::ExternalTemplate
-                                | ThreatIndicatorType::RemoteResource
-                                | ThreatIndicatorType::SuspiciousLink
-                        )
-                    })
-                    .map(|indicator| {
-                        indicator
-                            .location
-                            .as_ref()
-                            .map(|location| format!("{location}: {}", indicator.description))
-                            .unwrap_or_else(|| indicator.description.clone())
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        indicators.push(boolean_or_count_indicator(
-            "suspicious-relationships",
-            suspicious_relationships.len(),
-            ThreatLevel::Medium,
-            "Relationship-level external or suspicious targets detected",
-            "No suspicious relationship targets detected",
-            suspicious_relationships,
-        ));
+        indicators.push(collect_suspicious_relationships(security));
 
         if let Some(bytes) = source_bytes {
-            let structural = structural_cfb_summary(bytes);
-            let structural_evidence = structural
-                .as_ref()
-                .map(|summary| summary.all_evidence.clone())
-                .unwrap_or_default();
-            indicators.push(boolean_or_count_indicator(
-                "cfb-structural-anomalies",
-                structural_evidence.len(),
-                ThreatLevel::High,
-                "Low-level CFB structural anomalies detected",
-                "No low-level CFB structural anomalies detected",
-                structural_evidence,
-            ));
-            if let Some(summary) = structural {
-                indicators.push(boolean_or_count_indicator(
-                    "cfb-shared-sectors",
-                    summary.shared_sector_evidence.len(),
-                    ThreatLevel::High,
-                    "Shared CFB sectors detected",
-                    "No shared CFB sectors detected",
-                    summary.shared_sector_evidence,
-                ));
-                indicators.push(boolean_or_count_indicator(
-                    "cfb-live-unreachable",
-                    summary.live_unreachable_evidence.len(),
-                    ThreatLevel::High,
-                    "Reachable graph misses live CFB entries",
-                    "No unreachable live CFB entries detected",
-                    summary.live_unreachable_evidence,
-                ));
-                indicators.push(boolean_or_count_indicator(
-                    "cfb-short-cycles",
-                    summary.short_cycle_evidence.len(),
-                    ThreatLevel::High,
-                    "Short directory cycles detected in CFB graph",
-                    "No short directory cycles detected",
-                    summary.short_cycle_evidence,
-                ));
-                indicators.push(boolean_or_count_indicator(
-                    "cfb-truncated-chains",
-                    summary.truncated_chain_evidence.len(),
-                    ThreatLevel::High,
-                    "Truncated CFB stream chains detected",
-                    "No truncated CFB stream chains detected",
-                    summary.truncated_chain_evidence,
-                ));
-                indicators.push(boolean_or_count_indicator(
-                    "cfb-chain-health",
-                    summary.chain_health_evidence.len(),
-                    ThreatLevel::Medium,
-                    "CFB chain health issues detected",
-                    "No CFB chain health issues detected",
-                    summary.chain_health_evidence.clone(),
-                ));
-                indicators.push(DocumentIndicator {
-                    key: "cfb-directory-score".to_string(),
-                    value: summary.directory_score.clone(),
-                    risk: severity_to_threat_level(&summary.directory_score),
-                    reason: "Aggregated directory-graph corruption score for the CFB container"
-                        .to_string(),
-                    evidence: summary
-                        .all_evidence
-                        .iter()
-                        .filter(|entry| entry.starts_with("directory:"))
-                        .cloned()
-                        .collect(),
-                });
-                indicators.push(DocumentIndicator {
-                    key: "cfb-sector-score".to_string(),
-                    value: summary.sector_score.clone(),
-                    risk: match summary.sector_score.as_str() {
-                        "high" => ThreatLevel::High,
-                        "medium" => ThreatLevel::Medium,
-                        "low" => ThreatLevel::Low,
-                        _ => ThreatLevel::None,
-                    },
-                    reason: "Aggregated sector-allocation corruption score for the CFB container"
-                        .to_string(),
-                    evidence: summary
-                        .all_evidence
-                        .iter()
-                        .filter(|entry| entry.starts_with("sector:"))
-                        .cloned()
-                        .collect(),
-                });
-                indicators.push(DocumentIndicator {
-                    key: "cfb-stream-score".to_string(),
-                    value: summary.stream_score.clone(),
-                    risk: match summary.stream_score.as_str() {
-                        "high" => ThreatLevel::High,
-                        "medium" => ThreatLevel::Medium,
-                        "low" => ThreatLevel::Low,
-                        _ => ThreatLevel::None,
-                    },
-                    reason: "Aggregated stream-level corruption score for the CFB container"
-                        .to_string(),
-                    evidence: summary.chain_health_evidence.clone(),
-                });
-                indicators.push(boolean_or_count_indicator(
-                    "cfb-objectpool-corruption",
-                    summary.objectpool_corruption_evidence.len(),
-                    ThreatLevel::High,
-                    "ObjectPool structural corruption detected",
-                    "No ObjectPool structural corruption detected",
-                    summary.objectpool_corruption_evidence,
-                ));
-                indicators.push(boolean_or_count_indicator(
-                    "cfb-vba-structure-anomalies",
-                    summary.vba_structure_anomalies_evidence.len(),
-                    ThreatLevel::High,
-                    "VBA-related structural anomalies detected",
-                    "No VBA structural anomalies detected",
-                    summary.vba_structure_anomalies_evidence,
-                ));
-                indicators.push(boolean_or_count_indicator(
-                    "cfb-main-stream-corruption",
-                    summary.main_stream_corruption_evidence.len(),
-                    ThreatLevel::High,
-                    "Main document stream corruption detected",
-                    "No main document stream corruption detected",
-                    summary.main_stream_corruption_evidence,
-                ));
-                indicators.push(DocumentIndicator {
-                    key: "cfb-dominant-anomaly-class".to_string(),
-                    value: summary.dominant_anomaly_class.clone(),
-                    risk: if summary.dominant_anomaly_class == "none" {
-                        ThreatLevel::None
-                    } else {
-                        ThreatLevel::Medium
-                    },
-                    reason: "Dominant low-level anomaly class across the CFB container".to_string(),
-                    evidence: Vec::new(),
-                });
-                indicators.push(DocumentIndicator {
-                    key: "cfb-structural-score".to_string(),
-                    value: summary.structural_score.clone(),
-                    risk: match summary.structural_score.as_str() {
-                        "high" => ThreatLevel::High,
-                        "medium" => ThreatLevel::Medium,
-                        "low" => ThreatLevel::Low,
-                        _ => ThreatLevel::None,
-                    },
-                    reason: "Aggregated structural corruption score for the CFB container"
-                        .to_string(),
-                    evidence: summary.all_evidence,
-                });
-            }
+            indicators.extend(collect_cfb_structural_indicators(bytes));
         }
 
         let overall_risk = security.map(|info| info.threat_level).unwrap_or_else(|| {
@@ -426,6 +139,332 @@ impl IndicatorReport {
             indicators,
         }
     }
+}
+
+struct EmbeddingIndicators {
+    ole_evidence: Vec<String>,
+    activex_evidence: Vec<String>,
+    external_reference_evidence: Vec<String>,
+    native_payload_evidence: Vec<String>,
+}
+
+fn format_container_indicator(
+    parsed: &ParsedDocument,
+    inventory: &ArtifactInventory,
+) -> DocumentIndicator {
+    DocumentIndicator {
+        key: "format-container".to_string(),
+        value: format!(
+            "{}/{}",
+            parsed.format().extension(),
+            container_label(inventory.container_kind)
+        ),
+        risk: ThreatLevel::None,
+        reason: "Detected document format and source container".to_string(),
+        evidence: Vec::new(),
+    }
+}
+
+fn collect_macro_indicators(vba: &VbaRecognitionReport) -> Vec<DocumentIndicator> {
+    let mut indicators = Vec::with_capacity(3);
+
+    let macro_count = vba.projects.len();
+    let macro_evidence = vba
+        .projects
+        .iter()
+        .map(|project| {
+            project
+                .container_path
+                .clone()
+                .or_else(|| project.storage_root.clone())
+                .or_else(|| project.project_name.clone())
+                .unwrap_or_else(|| project.node_id.clone())
+        })
+        .collect::<Vec<_>>();
+    indicators.push(boolean_or_count_indicator(
+        "macros",
+        macro_count,
+        ThreatLevel::Critical,
+        "VBA project or macro-capable content detected",
+        "No macro-capable content detected",
+        macro_evidence,
+    ));
+
+    let auto_exec = vba
+        .projects
+        .iter()
+        .flat_map(|project| {
+            project.auto_exec_procedures.iter().map(|proc_name| {
+                format!(
+                    "{}:{}",
+                    project
+                        .project_name
+                        .clone()
+                        .unwrap_or_else(|| project.node_id.clone()),
+                    proc_name
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    indicators.push(boolean_or_count_indicator(
+        "autoexec",
+        auto_exec.len(),
+        ThreatLevel::Critical,
+        "Auto-execute VBA entrypoints detected",
+        "No auto-execute VBA entrypoints detected",
+        auto_exec,
+    ));
+
+    let protected_projects = vba
+        .projects
+        .iter()
+        .filter(|project| project.is_protected)
+        .map(|project| {
+            project
+                .project_name
+                .clone()
+                .or_else(|| project.storage_root.clone())
+                .unwrap_or_else(|| project.node_id.clone())
+        })
+        .collect::<Vec<_>>();
+    indicators.push(boolean_or_count_indicator(
+        "protected-vba",
+        protected_projects.len(),
+        ThreatLevel::Medium,
+        "Password-protected VBA projects detected",
+        "No password-protected VBA projects detected",
+        protected_projects,
+    ));
+
+    indicators
+}
+
+fn collect_embedding_indicators(parsed: &ParsedDocument) -> EmbeddingIndicators {
+    let mut ole_evidence = Vec::new();
+    let mut native_payload_evidence = Vec::new();
+    let mut activex_evidence = Vec::new();
+    let mut external_reference_evidence = Vec::new();
+    for node in parsed.store().values() {
+        match node {
+            IRNode::OleObject(ole) => {
+                ole_evidence.push(ole_location_label(ole));
+                if ole.embedded_payload_kind.is_some()
+                    || ole
+                        .source_path
+                        .as_deref()
+                        .is_some_and(is_native_payload_path)
+                {
+                    native_payload_evidence.push(ole_location_label(ole));
+                }
+            }
+            IRNode::ActiveXControl(control) => {
+                activex_evidence.push(
+                    control
+                        .span
+                        .as_ref()
+                        .map(|span| span.file_path.clone())
+                        .or_else(|| control.name.clone())
+                        .or_else(|| control.prog_id.clone())
+                        .unwrap_or_else(|| control.id.to_string()),
+                );
+            }
+            IRNode::ExternalReference(reference) => {
+                external_reference_evidence
+                    .push(format!("{:?}: {}", reference.ref_type, reference.target));
+            }
+            _ => {}
+        }
+    }
+    EmbeddingIndicators {
+        ole_evidence,
+        activex_evidence,
+        external_reference_evidence,
+        native_payload_evidence,
+    }
+}
+
+fn collect_suspicious_relationships(
+    security: Option<&docir_core::security::SecurityInfo>,
+) -> DocumentIndicator {
+    let suspicious_relationships = security
+        .map(|info| {
+            info.threat_indicators
+                .iter()
+                .filter(|indicator| {
+                    matches!(
+                        indicator.indicator_type,
+                        ThreatIndicatorType::ExternalTemplate
+                            | ThreatIndicatorType::RemoteResource
+                            | ThreatIndicatorType::SuspiciousLink
+                    )
+                })
+                .map(|indicator| {
+                    indicator
+                        .location
+                        .as_ref()
+                        .map(|location| format!("{location}: {}", indicator.description))
+                        .unwrap_or_else(|| indicator.description.clone())
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    boolean_or_count_indicator(
+        "suspicious-relationships",
+        suspicious_relationships.len(),
+        ThreatLevel::Medium,
+        "Relationship-level external or suspicious targets detected",
+        "No suspicious relationship targets detected",
+        suspicious_relationships,
+    )
+}
+
+fn collect_cfb_structural_indicators(source_bytes: &[u8]) -> Vec<DocumentIndicator> {
+    let structural = structural_cfb_summary(source_bytes);
+    let structural_evidence = structural
+        .as_ref()
+        .map(|summary| summary.all_evidence.clone())
+        .unwrap_or_default();
+    let mut indicators = Vec::new();
+    indicators.push(boolean_or_count_indicator(
+        "cfb-structural-anomalies",
+        structural_evidence.len(),
+        ThreatLevel::High,
+        "Low-level CFB structural anomalies detected",
+        "No low-level CFB structural anomalies detected",
+        structural_evidence,
+    ));
+    let Some(summary) = structural else {
+        return indicators;
+    };
+    indicators.push(boolean_or_count_indicator(
+        "cfb-shared-sectors",
+        summary.shared_sector_evidence.len(),
+        ThreatLevel::High,
+        "Shared CFB sectors detected",
+        "No shared CFB sectors detected",
+        summary.shared_sector_evidence,
+    ));
+    indicators.push(boolean_or_count_indicator(
+        "cfb-live-unreachable",
+        summary.live_unreachable_evidence.len(),
+        ThreatLevel::High,
+        "Reachable graph misses live CFB entries",
+        "No unreachable live CFB entries detected",
+        summary.live_unreachable_evidence,
+    ));
+    indicators.push(boolean_or_count_indicator(
+        "cfb-short-cycles",
+        summary.short_cycle_evidence.len(),
+        ThreatLevel::High,
+        "Short directory cycles detected in CFB graph",
+        "No short directory cycles detected",
+        summary.short_cycle_evidence,
+    ));
+    indicators.push(boolean_or_count_indicator(
+        "cfb-truncated-chains",
+        summary.truncated_chain_evidence.len(),
+        ThreatLevel::High,
+        "Truncated CFB stream chains detected",
+        "No truncated CFB stream chains detected",
+        summary.truncated_chain_evidence,
+    ));
+    indicators.push(boolean_or_count_indicator(
+        "cfb-chain-health",
+        summary.chain_health_evidence.len(),
+        ThreatLevel::Medium,
+        "CFB chain health issues detected",
+        "No CFB chain health issues detected",
+        summary.chain_health_evidence.clone(),
+    ));
+    indicators.push(DocumentIndicator {
+        key: "cfb-directory-score".to_string(),
+        value: summary.directory_score.clone(),
+        risk: severity_to_threat_level(&summary.directory_score),
+        reason: "Aggregated directory-graph corruption score for the CFB container".to_string(),
+        evidence: summary
+            .all_evidence
+            .iter()
+            .filter(|entry| entry.starts_with("directory:"))
+            .cloned()
+            .collect(),
+    });
+    indicators.push(DocumentIndicator {
+        key: "cfb-sector-score".to_string(),
+        value: summary.sector_score.clone(),
+        risk: match summary.sector_score.as_str() {
+            "high" => ThreatLevel::High,
+            "medium" => ThreatLevel::Medium,
+            "low" => ThreatLevel::Low,
+            _ => ThreatLevel::None,
+        },
+        reason: "Aggregated sector-allocation corruption score for the CFB container".to_string(),
+        evidence: summary
+            .all_evidence
+            .iter()
+            .filter(|entry| entry.starts_with("sector:"))
+            .cloned()
+            .collect(),
+    });
+    indicators.push(DocumentIndicator {
+        key: "cfb-stream-score".to_string(),
+        value: summary.stream_score.clone(),
+        risk: match summary.stream_score.as_str() {
+            "high" => ThreatLevel::High,
+            "medium" => ThreatLevel::Medium,
+            "low" => ThreatLevel::Low,
+            _ => ThreatLevel::None,
+        },
+        reason: "Aggregated stream-level corruption score for the CFB container".to_string(),
+        evidence: summary.chain_health_evidence.clone(),
+    });
+    indicators.push(boolean_or_count_indicator(
+        "cfb-objectpool-corruption",
+        summary.objectpool_corruption_evidence.len(),
+        ThreatLevel::High,
+        "ObjectPool structural corruption detected",
+        "No ObjectPool structural corruption detected",
+        summary.objectpool_corruption_evidence,
+    ));
+    indicators.push(boolean_or_count_indicator(
+        "cfb-vba-structure-anomalies",
+        summary.vba_structure_anomalies_evidence.len(),
+        ThreatLevel::High,
+        "VBA-related structural anomalies detected",
+        "No VBA structural anomalies detected",
+        summary.vba_structure_anomalies_evidence,
+    ));
+    indicators.push(boolean_or_count_indicator(
+        "cfb-main-stream-corruption",
+        summary.main_stream_corruption_evidence.len(),
+        ThreatLevel::High,
+        "Main document stream corruption detected",
+        "No main document stream corruption detected",
+        summary.main_stream_corruption_evidence,
+    ));
+    indicators.push(DocumentIndicator {
+        key: "cfb-dominant-anomaly-class".to_string(),
+        value: summary.dominant_anomaly_class.clone(),
+        risk: if summary.dominant_anomaly_class == "none" {
+            ThreatLevel::None
+        } else {
+            ThreatLevel::Medium
+        },
+        reason: "Dominant low-level anomaly class across the CFB container".to_string(),
+        evidence: Vec::new(),
+    });
+    indicators.push(DocumentIndicator {
+        key: "cfb-structural-score".to_string(),
+        value: summary.structural_score.clone(),
+        risk: match summary.structural_score.as_str() {
+            "high" => ThreatLevel::High,
+            "medium" => ThreatLevel::Medium,
+            "low" => ThreatLevel::Low,
+            _ => ThreatLevel::None,
+        },
+        reason: "Aggregated structural corruption score for the CFB container".to_string(),
+        evidence: summary.all_evidence,
+    });
+    indicators
 }
 
 #[derive(Debug, Clone)]

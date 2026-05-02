@@ -384,6 +384,9 @@ mod tests {
         let summary = use_case
             .run(&parsed)
             .expect("word processing must be summarized");
-        assert_eq!(summary.security.threat_level, "NONE");
+        assert_eq!(
+            summary.security.threat_level,
+            docir_core::security::ThreatLevel::None
+        );
     }
 }
