@@ -59,19 +59,19 @@ pub(crate) struct Cli {
     #[arg(long, global = true, value_name = "COLS")]
     pub(crate) odf_fast_sample_cols: Option<u32>,
 
-    /// ODF maximum cells to parse (0 = unlimited)
+    /// ODF maximum cells to parse (0 = disable, i.e. allow nothing)
     #[arg(long, global = true, value_name = "COUNT")]
     pub(crate) odf_max_cells: Option<u64>,
 
-    /// ODF maximum rows to parse (0 = unlimited)
+    /// ODF maximum rows to parse (0 = disable, i.e. allow nothing)
     #[arg(long, global = true, value_name = "COUNT")]
     pub(crate) odf_max_rows: Option<u64>,
 
-    /// ODF maximum paragraphs to parse (0 = unlimited)
+    /// ODF maximum paragraphs to parse (0 = disable, i.e. allow nothing)
     #[arg(long, global = true, value_name = "COUNT")]
     pub(crate) odf_max_paragraphs: Option<u64>,
 
-    /// ODF maximum content.xml bytes (0 = unlimited)
+    /// ODF maximum content.xml bytes (0 = disable, i.e. allow nothing)
     #[arg(long, global = true, value_name = "BYTES")]
     pub(crate) odf_max_bytes: Option<u64>,
 

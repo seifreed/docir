@@ -195,6 +195,8 @@ fn classify_cfb_entry(path: &str, entry_type: CfbEntryType) -> Option<String> {
     None
 }
 
+use crate::artifacts::scan_rtf_objdata;
+
 fn classify_rtf_blob(blob: &[u8]) -> &'static str {
     if blob.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) {
         return "ole-object";
@@ -206,98 +208,6 @@ fn classify_rtf_blob(blob: &[u8]) -> &'static str {
         return "pdf";
     }
     "blob"
-}
-
-fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
-    let mut blobs = Vec::new();
-    let mut index = 0usize;
-    let mut depth = 0usize;
-    let mut capture_depth = None::<usize>;
-    let mut hex = Vec::new();
-
-    while index < data.len() {
-        match data[index] {
-            b'{' => {
-                depth = depth.saturating_add(1);
-                index += 1;
-            }
-            b'}' => {
-                if let Some(target_depth) = capture_depth {
-                    if depth <= target_depth {
-                        if let Some(blob) = decode_hex_blob(&hex) {
-                            blobs.push(blob);
-                        }
-                        hex.clear();
-                        capture_depth = None;
-                    }
-                }
-                depth = depth.saturating_sub(1);
-                index += 1;
-            }
-            b'\\' => {
-                index += 1;
-                let start = index;
-                while index < data.len() && data[index].is_ascii_alphabetic() {
-                    index += 1;
-                }
-                let word = std::str::from_utf8(&data[start..index]).unwrap_or("");
-                if word == "objdata" {
-                    capture_depth = Some(depth);
-                    hex.clear();
-                }
-                if index < data.len() && (data[index] == b'-' || data[index].is_ascii_digit()) {
-                    index += 1;
-                    while index < data.len() && data[index].is_ascii_digit() {
-                        index += 1;
-                    }
-                }
-                if index < data.len() && data[index] == b' ' {
-                    index += 1;
-                }
-            }
-            byte => {
-                if capture_depth.is_some() && byte.is_ascii_hexdigit() {
-                    hex.push(byte);
-                }
-                index += 1;
-            }
-        }
-    }
-
-    if capture_depth.is_some() {
-        if let Some(blob) = decode_hex_blob(&hex) {
-            blobs.push(blob);
-        }
-    }
-
-    blobs
-}
-
-const MAX_HEX_BLOB_SIZE: usize = 100 * 1024 * 1024;
-
-fn decode_hex_blob(hex: &[u8]) -> Option<Vec<u8>> {
-    if hex.len() < 2 || hex.len() > MAX_HEX_BLOB_SIZE {
-        return None;
-    }
-    let even_len = hex.len() - (hex.len() % 2);
-    let mut out = Vec::with_capacity(even_len / 2);
-    let mut index = 0usize;
-    while index + 1 < even_len {
-        let hi = hex_val(hex[index])?;
-        let lo = hex_val(hex[index + 1])?;
-        out.push((hi << 4) | lo);
-        index += 2;
-    }
-    Some(out)
-}
-
-fn hex_val(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

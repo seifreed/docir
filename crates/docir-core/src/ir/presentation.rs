@@ -159,9 +159,13 @@ pub struct SlideAnimation {
 #[derive(Debug, Clone)]
 pub struct PresentationProperties {
     pub id: NodeId,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub auto_compress_pictures: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub compat_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rtl: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub show_special_placeholders: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remove_personal_info_on_save: Option<bool>,

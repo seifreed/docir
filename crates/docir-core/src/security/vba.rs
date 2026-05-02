@@ -88,7 +88,7 @@ pub fn is_dangerous_xlm_function(name: &str) -> bool {
 pub fn analyze_vba_source(source: &str) -> VbaAnalysis {
     let mut analysis = VbaAnalysis::default();
 
-    for (idx, line) in source.lines().enumerate() {
+    for (line_num, line) in source.lines().enumerate() {
         let raw = line.trim();
         if raw.is_empty() {
             continue;
@@ -99,19 +99,34 @@ pub fn analyze_vba_source(source: &str) -> VbaAnalysis {
             analysis.procedures.push(procedure);
         }
 
-        let is_comment = raw.starts_with('\'') || raw.starts_with("Rem ");
+        let is_comment =
+            raw.starts_with('\'') || raw.starts_with("Rem ") || raw.starts_with("Rem:");
         if is_comment {
             continue;
         }
 
         for (pattern, category) in SUSPICIOUS_VBA_CALLS {
             let pattern_lower = pattern.to_ascii_lowercase();
-            if lower.contains(&pattern_lower) {
-                analysis.suspicious_calls.push(SuspiciousCall {
-                    name: (*pattern).to_string(),
-                    category: *category,
-                    line: Some(idx as u32 + 1),
-                });
+            for pos in lower.match_indices(&pattern_lower) {
+                let (idx, _) = pos;
+                let before_ok = idx == 0
+                    || !lower
+                        .as_bytes()
+                        .get(idx - 1)
+                        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
+                let after_ok = idx + pattern_lower.len() >= lower.len()
+                    || !lower
+                        .as_bytes()
+                        .get(idx + pattern_lower.len())
+                        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
+                if before_ok && after_ok {
+                    analysis.suspicious_calls.push(SuspiciousCall {
+                        name: (*pattern).to_string(),
+                        category: *category,
+                        line: Some(line_num as u32 + 1),
+                    });
+                    break;
+                }
             }
         }
 

@@ -68,7 +68,20 @@ pub(super) fn is_suspicious_formula(text: &str) -> bool {
         "DDEAUTO(",
     ];
     let code_only = strip_string_literals(&upper);
-    tokens.iter().any(|t| code_only.contains(t))
+    tokens.iter().any(|t| {
+        for pos in code_only.match_indices(t) {
+            let (idx, _) = pos;
+            let before_ok = idx == 0
+                || !code_only
+                    .as_bytes()
+                    .get(idx - 1)
+                    .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
+            if before_ok {
+                return true;
+            }
+        }
+        false
+    })
 }
 
 fn strip_string_literals(input: &str) -> String {

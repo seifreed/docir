@@ -72,7 +72,7 @@ pub(crate) fn parse_validation_definition(
     let show_input_message = attr_value(start, b"table:display-list")
         .map(|v| v == "true")
         .unwrap_or(false);
-    let show_error_message = attr_value(start, b"table:display-list")
+    let show_error_message = attr_value(start, b"table:display-error-message")
         .map(|v| v == "true")
         .unwrap_or(false);
     let def = ValidationDef {

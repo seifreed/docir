@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 pub struct ConnectionPart {
     pub id: NodeId,
     pub entries: Vec<ConnectionEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub span: Option<SourceSpan>,
 }
 

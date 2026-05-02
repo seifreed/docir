@@ -1,13 +1,18 @@
 pub(crate) fn normalize_docx_target(target: &str) -> String {
-    let mut t = target;
-    while t.starts_with("../") {
-        t = &t[3..];
+    let parts: Vec<&str> = target.split('/').collect();
+    let mut resolved: Vec<&str> = Vec::new();
+    for part in parts {
+        match part {
+            "." | "" => {}
+            ".." => {
+                resolved.pop();
+            }
+            s => resolved.push(s),
+        }
     }
-    if t.starts_with("./") {
-        t = &t[2..];
-    }
+    let t = resolved.join("/");
     if t.starts_with("word/") {
-        t.to_string()
+        t
     } else {
         format!("word/{}", t.trim_start_matches('/'))
     }

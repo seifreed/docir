@@ -392,7 +392,7 @@ fn is_zip_signature(data: &[u8]) -> bool {
 }
 
 fn is_rtf_signature(data: &[u8]) -> bool {
-    data.starts_with(b"{\\rtf") || data.starts_with(b"{\rtf")
+    data.starts_with(b"{\\rtf")
 }
 
 fn has_pe_signature(data: &[u8]) -> bool {

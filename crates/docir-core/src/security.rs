@@ -82,6 +82,7 @@ impl SecurityInfo {
             || !self.activex_controls.is_empty()
             || !self.dde_fields.is_empty()
             || !self.xlm_macros.is_empty()
+            || !self.threat_indicators.is_empty()
     }
 
     /// Returns true if the document has a VBA macro project.

@@ -79,6 +79,7 @@ pub struct RuleContext<'a> {
 /// Rule engine.
 pub struct RuleEngine {
     rules: Vec<Box<dyn Rule>>,
+    stored_profile: RuleProfile,
 }
 
 impl RuleEngine {
@@ -86,6 +87,7 @@ impl RuleEngine {
     pub fn with_default_rules() -> Self {
         Self {
             rules: default_rules(),
+            stored_profile: RuleProfile::default(),
         }
     }
 
@@ -93,6 +95,7 @@ impl RuleEngine {
     pub fn with_profile(profile: RuleProfile) -> Self {
         let mut engine = Self::with_default_rules();
         engine.rules = apply_profile(engine.rules, &profile);
+        engine.stored_profile = profile;
         engine
     }
 
@@ -103,7 +106,7 @@ impl RuleEngine {
 
     /// Runs the rules and returns findings.
     pub fn run(&self, store: &IrStore, root: NodeId) -> RuleReport {
-        self.run_with_profile(store, root, &RuleProfile::default())
+        self.run_with_profile(store, root, &self.stored_profile)
     }
 
     /// Runs the rules with a profile and returns findings.
@@ -263,7 +266,10 @@ mod tests {
     fn run_with_profile_applies_disable_and_severity_override() {
         let calls_disabled = Arc::new(AtomicU32::new(0));
         let calls_enabled = Arc::new(AtomicU32::new(0));
-        let mut engine = RuleEngine { rules: Vec::new() };
+        let mut engine = RuleEngine {
+            rules: Vec::new(),
+            stored_profile: RuleProfile::default(),
+        };
         engine.add_rule(Box::new(CountingRule {
             id: "R-ENABLED",
             calls: calls_enabled.clone(),

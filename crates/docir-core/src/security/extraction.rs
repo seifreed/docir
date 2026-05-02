@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Serializable extraction manifest shared by CLI, JSON exports, and downstream tooling.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ExtractionManifest {
     /// Schema identifier for downstream consumers.
     pub schema_version: String,
@@ -28,6 +28,12 @@ impl ExtractionManifest {
             artifacts: Vec::new(),
             warnings: Vec::new(),
         }
+    }
+}
+
+impl Default for ExtractionManifest {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

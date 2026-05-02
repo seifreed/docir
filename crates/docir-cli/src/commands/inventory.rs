@@ -24,9 +24,9 @@ pub fn run(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     let app = build_app(parser_config);
-    let parsed = app.parse_file(&input)?;
-    let bytes = fs::read(&input)?;
-    let inventory = app.build_inventory_with_bytes(&parsed, &bytes);
+    let source_bytes = fs::read(&input)?;
+    let parsed = app.parse_bytes(&source_bytes)?;
+    let inventory = app.build_inventory_with_bytes(&parsed, &source_bytes);
 
     if json {
         return write_json_output(&InventoryResult { inventory }, pretty, output);

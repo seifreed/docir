@@ -567,17 +567,15 @@ pub(crate) fn opt_u32(value: Option<u32>) -> String {
 }
 
 pub(crate) fn abbreviate(value: &str, max: usize) -> String {
-    if value.len() <= max {
+    if value.chars().count() <= max {
         return value.to_string();
     }
     let mut out = String::new();
-    let mut char_len = 0;
-    for ch in value.chars() {
-        if char_len + ch.len_utf8() > max {
+    for (i, ch) in value.chars().enumerate() {
+        if i + 1 > max {
             break;
         }
         out.push(ch);
-        char_len += ch.len_utf8();
     }
     out.push_str("...");
     out

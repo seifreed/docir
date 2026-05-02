@@ -51,12 +51,22 @@ pub fn run(
         let output_path = out_dir.join(&payload.relative_path);
         // Validate that the output path stays within the output directory
         // to prevent path traversal via malicious relative_path values.
+        // Use the parent directory (which must exist) for canonicalization,
+        // then check the relative path components for traversal patterns.
         let canonical_out = out_dir
             .canonicalize()
             .unwrap_or_else(|_| out_dir.to_path_buf());
-        if let Ok(canonical_target) = output_path.canonicalize() {
-            if !canonical_target.starts_with(&canonical_out) {
-                continue;
+        if output_path
+            .components()
+            .any(|c| std::path::Component::ParentDir == c)
+        {
+            continue;
+        }
+        if let Some(parent) = output_path.parent() {
+            if let Ok(canonical_target) = parent.canonicalize() {
+                if !canonical_target.starts_with(&canonical_out) {
+                    continue;
+                }
             }
         }
         if let Some(parent) = output_path.parent() {

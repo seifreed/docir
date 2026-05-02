@@ -33,7 +33,7 @@ pub fn populate_security_indicators(store: &mut IrStore, root_id: NodeId) {
         DocumentFormat::OdfText
         | DocumentFormat::OdfSpreadsheet
         | DocumentFormat::OdfPresentation => build_odf_indicators(store, &security),
-        DocumentFormat::Hwp => build_hwp_indicators(store, &security, false),
+        DocumentFormat::Hwp => build_hwp_indicators(store, &security, true),
         DocumentFormat::Hwpx => build_hwp_indicators(store, &security, true),
         DocumentFormat::Rtf => build_rtf_indicators(store, &security),
     };
@@ -54,35 +54,50 @@ fn rebuild_security_info(store: &IrStore, security: &mut docir_core::security::S
         }
     }
 
-    if security.ole_objects.is_empty() {
-        security.ole_objects = store
-            .iter()
-            .filter_map(|(id, node)| match node {
-                IRNode::OleObject(_) => Some(*id),
-                _ => None,
-            })
-            .collect();
-    }
+    let existing_ole: std::collections::HashSet<NodeId> =
+        security.ole_objects.iter().copied().collect();
+    let store_ole: Vec<NodeId> = store
+        .iter()
+        .filter_map(|(id, node)| match node {
+            IRNode::OleObject(_) => Some(*id),
+            _ => None,
+        })
+        .collect();
+    let missing_ole: Vec<NodeId> = store_ole
+        .into_iter()
+        .filter(|id| !existing_ole.contains(id))
+        .collect();
+    security.ole_objects.extend(missing_ole);
 
-    if security.external_refs.is_empty() {
-        security.external_refs = store
-            .iter()
-            .filter_map(|(id, node)| match node {
-                IRNode::ExternalReference(_) => Some(*id),
-                _ => None,
-            })
-            .collect();
-    }
+    let existing_refs: std::collections::HashSet<NodeId> =
+        security.external_refs.iter().copied().collect();
+    let store_refs: Vec<NodeId> = store
+        .iter()
+        .filter_map(|(id, node)| match node {
+            IRNode::ExternalReference(_) => Some(*id),
+            _ => None,
+        })
+        .collect();
+    let missing_refs: Vec<NodeId> = store_refs
+        .into_iter()
+        .filter(|id| !existing_refs.contains(id))
+        .collect();
+    security.external_refs.extend(missing_refs);
 
-    if security.activex_controls.is_empty() {
-        security.activex_controls = store
-            .iter()
-            .filter_map(|(id, node)| match node {
-                IRNode::ActiveXControl(_) => Some(*id),
-                _ => None,
-            })
-            .collect();
-    }
+    let existing_activex: std::collections::HashSet<NodeId> =
+        security.activex_controls.iter().copied().collect();
+    let store_activex: Vec<NodeId> = store
+        .iter()
+        .filter_map(|(id, node)| match node {
+            IRNode::ActiveXControl(_) => Some(*id),
+            _ => None,
+        })
+        .collect();
+    let missing_activex: Vec<NodeId> = store_activex
+        .into_iter()
+        .filter(|id| !existing_activex.contains(id))
+        .collect();
+    security.activex_controls.extend(missing_activex);
 
     if security.dde_fields.is_empty() {
         security.dde_fields = scan_dde_fields(store);
@@ -451,7 +466,7 @@ mod tests {
         }));
 
         let hwp = run_for_format(DocumentFormat::Hwp);
-        assert!(!hwp
+        assert!(hwp
             .threat_indicators
             .iter()
             .any(|i| i.indicator_type == ThreatIndicatorType::AutoExecMacro));

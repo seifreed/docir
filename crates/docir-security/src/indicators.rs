@@ -22,18 +22,35 @@ pub fn make_indicator(
 }
 
 /// Scans VBA source code for suspicious API calls.
+/// Uses word-boundary matching to avoid false positives from substring matches
+/// (e.g., "architecture" matching "Chr").
 pub fn scan_vba_source(source: &str) -> Vec<SuspiciousCall> {
     let mut calls = Vec::new();
 
     for (pattern, category) in SUSPICIOUS_VBA_CALLS {
         let pattern_upper = pattern.to_uppercase();
         for (i, line) in source.lines().enumerate() {
-            if line.to_uppercase().contains(&pattern_upper) {
-                calls.push(SuspiciousCall {
-                    name: pattern.to_string(),
-                    category: *category,
-                    line: Some(i as u32 + 1),
-                });
+            let line_upper = line.to_uppercase();
+            for pos in line_upper.match_indices(&pattern_upper) {
+                let (idx, _) = pos;
+                let before_ok = idx == 0
+                    || !line_upper
+                        .as_bytes()
+                        .get(idx - 1)
+                        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
+                let after_ok = idx + pattern_upper.len() >= line_upper.len()
+                    || !line_upper
+                        .as_bytes()
+                        .get(idx + pattern_upper.len())
+                        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
+                if before_ok && after_ok {
+                    calls.push(SuspiciousCall {
+                        name: pattern.to_string(),
+                        category: *category,
+                        line: Some(i as u32 + 1),
+                    });
+                    break;
+                }
             }
         }
     }
@@ -48,22 +65,22 @@ pub fn is_suspicious_url(url: &str) -> bool {
     // Decode percent-encoded sequences to detect evasion techniques.
     let decoded = percent_decode_lower(&url_lower);
 
-    // Check for suspicious TLDs against the decoded URL.
+    // Check for suspicious TLDs against the host portion of the decoded URL.
+    let host = extract_host(&decoded);
     let suspicious_tlds = [".ru", ".cn", ".tk", ".ml", ".ga", ".cf"];
     for tld in &suspicious_tlds {
-        if decoded.ends_with(tld) || decoded.contains(&format!("{}/", tld)) {
+        if host.ends_with(tld) {
             return true;
         }
     }
 
     // Check for IP addresses (potential C2) using the decoded host portion.
-    let host = extract_host(&decoded);
     if is_ip_address(&host) {
         return true;
     }
 
     // Check for UNC paths (\\server\share) commonly used in LNK attacks.
-    if url_lower.starts_with("\\\\") || url_lower.starts_with("//") {
+    if decoded.starts_with("\\\\") || decoded.starts_with("//") {
         return true;
     }
 

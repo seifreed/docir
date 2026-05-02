@@ -47,6 +47,8 @@ impl ExternalReference {
             || target_lower.starts_with("ldap://")
             || target_lower.starts_with("ldaps://")
             || target_lower.starts_with("file://")
+            || target_lower.starts_with("\\\\")
+            || target_lower.starts_with("//")
     }
 }
 

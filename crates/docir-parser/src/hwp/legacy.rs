@@ -380,18 +380,12 @@ fn push_external_refs_from_text(path: &str, text: &str, refs: &mut Vec<ExternalR
 fn read_len_string(data: &[u8], offset: usize) -> Option<(String, usize)> {
     let len = read_u32_le(data, offset)? as usize;
     let start = offset + 4;
-    let mut bytes_len = len;
-    if start + bytes_len > data.len() {
-        let alt = len * 2;
-        if start + alt <= data.len() {
-            bytes_len = alt;
-        } else {
-            return None;
-        }
+    if start + len > data.len() {
+        return None;
     }
-    let bytes = &data[start..start + bytes_len];
+    let bytes = &data[start..start + len];
     let text = decode_string_bytes(bytes);
-    Some((text, 4 + bytes_len))
+    Some((text, 4 + len))
 }
 
 fn decode_string_bytes(bytes: &[u8]) -> String {

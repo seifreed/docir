@@ -161,7 +161,14 @@ impl IrVisitor for SecurityAnalyzer {
             }
             ExternalRefType::Hyperlink => {
                 if ext_ref.is_remote() {
-                    (ThreatIndicatorType::SuspiciousLink, ThreatLevel::Low)
+                    let is_file = ext_ref.target.to_lowercase().starts_with("file://")
+                        || ext_ref.target.starts_with("\\\\");
+                    let severity = if is_file {
+                        ThreatLevel::Medium
+                    } else {
+                        ThreatLevel::Low
+                    };
+                    (ThreatIndicatorType::SuspiciousLink, severity)
                 } else {
                     return Ok(VisitControl::Continue);
                 }

@@ -59,6 +59,10 @@ pub struct NodeChange {
 }
 
 /// Node that was modified between two IR snapshots.
+///
+/// Note: `node_type` is taken from the left-hand (before) side. If the node type
+/// changes between revisions, the right-hand type is discarded. This is a known
+/// limitation of the current data model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeModification {
     /// Stable key used by the IR index and diff algorithm.

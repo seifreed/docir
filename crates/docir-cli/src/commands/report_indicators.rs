@@ -1,13 +1,13 @@
 //! Analyst-facing document indicator scorecard.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use docir_app::{IndicatorReport, ParserConfig};
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 
 use crate::commands::util::{
-    build_app_and_parse, push_bullet_line, push_labeled_line, write_json_output, write_text_output,
+    build_app, push_bullet_line, push_labeled_line, write_json_output, write_text_output,
 };
 
 #[derive(Debug, Serialize)]
@@ -23,8 +23,12 @@ pub fn run(
     output: Option<PathBuf>,
     parser_config: &ParserConfig,
 ) -> Result<()> {
-    let (app, parsed) = build_app_and_parse(&input, parser_config)?;
-    let source_bytes = fs::read(&input)?;
+    let app = build_app(parser_config);
+    let source_bytes =
+        fs::read(&input).with_context(|| format!("Failed to read {}", input.display()))?;
+    let parsed = app
+        .parse_bytes(&source_bytes)
+        .with_context(|| format!("Failed to parse {}", input.display()))?;
     let report = app.build_indicator_report_with_bytes(&parsed, &source_bytes);
 
     if json {

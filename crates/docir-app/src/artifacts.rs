@@ -571,7 +571,7 @@ fn read_c_string(data: &[u8], offset: &mut usize) -> Option<String> {
     Some(value)
 }
 
-fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
+pub(crate) fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
     let mut blobs = Vec::new();
     let mut index = 0usize;
     let mut depth = 0usize;
@@ -636,9 +636,9 @@ fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
     blobs
 }
 
-const MAX_HEX_BLOB_SIZE: usize = 100 * 1024 * 1024;
+pub(crate) const MAX_HEX_BLOB_SIZE: usize = 100 * 1024 * 1024;
 
-fn decode_hex_blob(hex: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn decode_hex_blob(hex: &[u8]) -> Option<Vec<u8>> {
     if hex.len() < 2 || hex.len() > MAX_HEX_BLOB_SIZE {
         return None;
     }
@@ -654,7 +654,7 @@ fn decode_hex_blob(hex: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
-fn hex_val(byte: u8) -> Option<u8> {
+pub(crate) fn hex_val(byte: u8) -> Option<u8> {
     match byte {
         b'0'..=b'9' => Some(byte - b'0'),
         b'a'..=b'f' => Some(byte - b'a' + 10),

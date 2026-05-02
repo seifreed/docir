@@ -16,6 +16,8 @@ pub(crate) struct NodeSnapshot {
 }
 
 pub(crate) fn build_index(store: &IrStore, root: NodeId) -> BTreeMap<String, NodeSnapshot> {
+    // Intentionally returns an empty index if the root node is missing from the store,
+    // rather than panicking. This makes diff robust against partially-loaded documents.
     let mut index = BTreeMap::new();
     let mut used = HashSet::new();
     let root_key = match store.get(root) {
