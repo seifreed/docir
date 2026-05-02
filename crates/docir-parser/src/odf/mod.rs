@@ -7,16 +7,13 @@ use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
 use crate::xml_utils::{attr_value, read_event, scan_xml_events, scan_xml_events_with_reader};
 use crate::zip_handler::SecureZipReader;
-#[allow(unused_imports)]
 use docir_core::ir::{
-    BookmarkEnd, BookmarkStart, Cell, CellFormula, CellValue, ChartData, Comment, CommentReference,
-    ConditionalFormat, ConditionalRule, DataValidation, DiagnosticSeverity, Diagnostics, Document,
-    Endnote, ExtensionPart, ExtensionPartKind, Field, FieldInstruction, FieldKind, Footer,
-    Footnote, Header, IRNode, MediaAsset, MediaType, MergedCellRange, NumberingInfo, Paragraph,
-    ParagraphProperties, PivotCache, PivotCacheRecords, PivotTable, Revision, RevisionType, Run,
-    Section, Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeType, Slide, SlideAnimation,
-    SlideTransition, Style, StyleSet, StyleType, Table, TableCell, TableCellProperties, TableRow,
-    Worksheet, WorksheetDrawing,
+    BookmarkEnd, BookmarkStart, Cell, CellFormula, CellValue, ChartData, CommentReference,
+    ConditionalFormat, DataValidation, DiagnosticSeverity, Diagnostics, Document, ExtensionPart,
+    ExtensionPartKind, Field, FieldInstruction, FieldKind, Footer, Header, IRNode, MediaAsset,
+    MediaType, NumberingInfo, Paragraph, ParagraphProperties, Run, Section, Shape, ShapeText,
+    ShapeTextParagraph, ShapeTextRun, ShapeType, Slide, SlideAnimation, SlideTransition, Style,
+    StyleSet, StyleType, Worksheet, WorksheetDrawing,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -27,7 +24,6 @@ use std::io::{Read, Seek};
 mod builder;
 mod container;
 mod formula;
-#[allow(clippy::single_match)]
 mod helpers;
 mod io;
 mod limits;

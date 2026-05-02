@@ -1,5 +1,3 @@
-#![allow(clippy::single_match)]
-
 use self::worksheet_parse_events::{
     handle_worksheet_common_tag, parse_conditional_formatting_empty, parse_data_validations,
 };

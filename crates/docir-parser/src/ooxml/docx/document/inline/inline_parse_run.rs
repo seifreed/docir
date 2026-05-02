@@ -257,8 +257,8 @@ fn parse_revision(
             )
         },
         |reader, event| {
-            match event {
-                Event::Start(e) => match mode {
+            if let Event::Start(e) = event {
+                match mode {
                     RevisionParseMode::Inline => {
                         if e.name().as_ref() == b"w:r" {
                             let run = parse_run(parser, reader, rels)?;
@@ -282,8 +282,7 @@ fn parse_revision(
                         }
                         _ => {}
                     },
-                },
-                _ => {}
+                }
             }
             Ok(XmlScanControl::Continue)
         },

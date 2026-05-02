@@ -1,5 +1,7 @@
 use super::*;
-use docir_core::ir::{LineNumberRestart, PageOrientation, SectionType};
+use docir_core::ir::{
+    LineNumberRestart, PageOrientation, RevisionType, SectionType, TextAlignment, UnderlineStyle,
+};
 
 #[test]
 fn test_parse_glossary_document() {

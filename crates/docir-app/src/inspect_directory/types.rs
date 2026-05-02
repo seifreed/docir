@@ -33,7 +33,7 @@ pub struct DirectoryAnomalySeverity {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct EntryAnomalyContext<'a> {
+pub(super) struct EntryAnomalyContext<'a> {
     pub state: &'a str,
     pub entry_type: &'a str,
     pub name_len_raw: u16,

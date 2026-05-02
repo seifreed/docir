@@ -1,7 +1,7 @@
 use super::super::{apply_section_refs, bool_from_val, parse_border, parse_numbering, SectionRef};
-use super::Paragraph;
 use crate::error::ParseError;
 use crate::xml_utils::attr_value;
+use docir_core::ir::Paragraph;
 use docir_core::ir::{LineSpacingRule, TextAlignment};
 use docir_core::types::NodeId;
 use quick_xml::events::Event;

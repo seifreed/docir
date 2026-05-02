@@ -4,13 +4,10 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{attr_value, reader_from_str, scan_xml_events_with_reader, XmlScanControl};
-#[allow(unused_imports)]
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
-    Footer, GlossaryDocument, Header, LineSpacingRule, NumberingInfo, PageBorders, Paragraph,
-    ParagraphBorders, ParagraphProperties, Revision, RevisionType, Run, RunProperties,
-    StyleParagraphProperties, StyleRunProperties, TextAlignment, UnderlineStyle,
-    VerticalTextAlignment, WebSettings, WordSettings,
+    Footer, GlossaryDocument, Header, PageBorders, ParagraphProperties, Run, RunProperties,
+    StyleParagraphProperties, StyleRunProperties, WebSettings, WordSettings,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -23,7 +20,6 @@ mod comments;
 mod drawing;
 mod font_table;
 mod glossary;
-#[allow(clippy::single_match)]
 mod inline;
 mod numbering;
 mod paragraph;

@@ -23,7 +23,6 @@ mod styles;
 mod tables;
 mod workbook;
 mod workbook_parts;
-#[allow(clippy::single_match)]
 mod worksheet;
 mod worksheet_parts;
 mod xlm;

@@ -2,11 +2,16 @@ use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
 use super::types::DirectoryEntry;
 
-type PathInfo = (String, String, String, Option<u32>, Option<u32>, Option<u32>);
+type PathInfo = (
+    String,
+    String,
+    String,
+    Option<u32>,
+    Option<u32>,
+    Option<u32>,
+);
 
-pub(super) fn build_path_by_index(
-    entries: &[DirectoryEntry],
-) -> BTreeMap<u32, PathInfo> {
+pub(super) fn build_path_by_index(entries: &[DirectoryEntry]) -> BTreeMap<u32, PathInfo> {
     entries
         .iter()
         .map(|entry| {
@@ -62,9 +67,7 @@ pub(super) fn detect_2_cycles(
     target: u32,
 ) -> Vec<String> {
     let mut cycles = Vec::new();
-    if let Some((_, _, _, target_left, target_right, target_child)) =
-        path_by_index.get(&target)
-    {
+    if let Some((_, _, _, target_left, target_right, target_child)) = path_by_index.get(&target) {
         let reverse_hits = [
             ("left", *target_left == Some(entry.entry_index)),
             ("right", *target_right == Some(entry.entry_index)),
@@ -100,27 +103,21 @@ pub(super) fn detect_3_cycles(
     target: u32,
 ) -> Vec<String> {
     let mut cycles = Vec::new();
-    if let Some((_, _, _, target_left, target_right, target_child)) =
-        path_by_index.get(&target)
-    {
+    if let Some((_, _, _, target_left, target_right, target_child)) = path_by_index.get(&target) {
         for (target_label, next_opt) in [
             ("left", *target_left),
             ("right", *target_right),
             ("child", *target_child),
         ] {
             let Some(next) = next_opt else { continue };
-            if let Some((_, _, _, next_left, next_right, next_child)) =
-                path_by_index.get(&next)
-            {
+            if let Some((_, _, _, next_left, next_right, next_child)) = path_by_index.get(&next) {
                 let closing_hits = [
                     ("left", *next_left == Some(entry.entry_index)),
                     ("right", *next_right == Some(entry.entry_index)),
                     ("child", *next_child == Some(entry.entry_index)),
                 ];
                 let same_bucket = match label {
-                    "child" if closing_hits.iter().any(|(_, hit)| *hit) => {
-                        Some("child-3-cycle")
-                    }
+                    "child" if closing_hits.iter().any(|(_, hit)| *hit) => Some("child-3-cycle"),
                     "left" | "right"
                         if closing_hits.iter().any(|(next_label, hit)| {
                             *hit && (*next_label == "left" || *next_label == "right")
@@ -194,7 +191,10 @@ pub(super) fn apply_incoming_refs_to_entries(
     use crate::severity::max_severity;
 
     for entry in entries.iter_mut() {
-        let refs = incoming.get(&entry.entry_index).cloned().unwrap_or_default();
+        let refs = incoming
+            .get(&entry.entry_index)
+            .cloned()
+            .unwrap_or_default();
         entry.fanout_count = [entry.left_sibling, entry.right_sibling, entry.child]
             .into_iter()
             .flatten()

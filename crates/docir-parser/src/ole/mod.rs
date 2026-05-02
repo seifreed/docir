@@ -1,77 +1,36 @@
 //! Minimal OLE Compound File Binary (CFB) parser for VBA extraction.
 
+mod directory;
+mod stream;
+mod types;
+
+use std::collections::HashMap;
+
 use crate::error::ParseError;
 use crate::ole_header::{
-    parse_header, read_difat_chain, read_fat_table, read_mini_fat_table, read_u16, read_u32,
-    END_OF_CHAIN, FAT_SECT, FREE_SECT, SIGNATURE,
+    parse_header, read_difat_chain, read_fat_table, read_mini_fat_table, END_OF_CHAIN, FAT_SECT,
+    FREE_SECT, SIGNATURE,
 };
 use crate::zip_handler::PackageReader;
-use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CfbEntryType {
-    RootStorage,
-    Storage,
-    Stream,
+pub use types::{CfbDirectorySlot, CfbDirectoryState, CfbEntryMetadata, CfbEntryType};
+
+pub struct CfbReader<'a> {
+    cfb: &'a Cfb,
 }
 
-#[derive(Debug, Clone)]
-pub struct CfbEntryMetadata {
-    pub entry_index: u32,
-    pub path: String,
-    pub entry_type: CfbEntryType,
-    pub object_type_raw: u8,
-    pub size: u64,
-    pub start_sector: u32,
-    pub left_sibling: Option<u32>,
-    pub right_sibling: Option<u32>,
-    pub child: Option<u32>,
-    pub created_filetime: Option<u64>,
-    pub modified_filetime: Option<u64>,
+impl<'a> CfbReader<'a> {
+    /// Public API entrypoint: new.
+    pub fn new(cfb: &'a Cfb) -> Self {
+        Self { cfb }
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CfbDirectoryState {
-    Normal,
-    Free,
-    Orphaned,
-}
-
-#[derive(Debug, Clone)]
-pub struct CfbDirectorySlot {
-    pub entry_index: u32,
-    pub path: String,
-    pub entry_type: Option<CfbEntryType>,
-    pub name_len_raw: u16,
-    pub object_type_raw: u8,
-    pub color_flag_raw: u8,
-    pub state: CfbDirectoryState,
-    pub size: u64,
-    pub start_sector: u32,
-    pub left_sibling_raw: u32,
-    pub right_sibling_raw: u32,
-    pub child_raw: u32,
-    pub left_sibling: Option<u32>,
-    pub right_sibling: Option<u32>,
-    pub child: Option<u32>,
-    pub created_filetime: Option<u64>,
-    pub modified_filetime: Option<u64>,
-}
-
-#[derive(Debug, Clone)]
-struct DirEntry {
-    name: String,
-    name_len_raw: u16,
-    object_type: u8,
-    color_flag: u8,
-    left: u32,
-    right: u32,
-    child: u32,
-    start_sector: u32,
-    size: u64,
-    created_filetime: Option<u64>,
-    modified_filetime: Option<u64>,
-}
+use directory::{
+    collect_directory_slots, collect_entry_metadata, read_directory_entries_and_root_stream,
+};
+use stream::{collect_chain_with_terminal, read_stream_from_mini};
+use types::{collect_stream_entries, DirEntry};
 
 /// Parsed CFB file with streams.
 pub struct Cfb {
@@ -336,41 +295,6 @@ impl Cfb {
     }
 }
 
-fn read_directory_entries_and_root_stream(
-    data: &[u8],
-    sector_size: u32,
-    fat: &[u32],
-    first_dir_sector: u32,
-) -> Result<(Vec<DirEntry>, Vec<u8>), ParseError> {
-    let dir_stream = read_stream_from_fat(data, sector_size, fat, first_dir_sector)?;
-    let entries = parse_dir_entries(&dir_stream)?;
-    let root = entries
-        .first()
-        .ok_or_else(|| ParseError::InvalidStructure("Missing root entry".to_string()))?;
-    let root_stream = read_stream_from_fat(data, sector_size, fat, root.start_sector)?;
-    Ok((entries, root_stream))
-}
-
-fn collect_stream_entries(entries: &[DirEntry]) -> HashMap<String, DirEntry> {
-    let mut streams = HashMap::new();
-    if let Some(child) = entries.first().map(|e| e.child) {
-        let mut visited = HashSet::new();
-        walk_siblings(child, "", entries, &mut streams, 0, &mut visited);
-    }
-    streams
-}
-
-pub struct CfbReader<'a> {
-    cfb: &'a Cfb,
-}
-
-impl<'a> CfbReader<'a> {
-    /// Public API entrypoint: new.
-    pub fn new(cfb: &'a Cfb) -> Self {
-        Self { cfb }
-    }
-}
-
 impl PackageReader for CfbReader<'_> {
     fn contains(&self, name: &str) -> bool {
         self.cfb.has_stream(name)
@@ -423,484 +347,25 @@ pub fn is_ole_container(data: &[u8]) -> bool {
     data.len() >= SIGNATURE.len() && data[..SIGNATURE.len()] == SIGNATURE
 }
 
-fn parse_dir_entries(data: &[u8]) -> Result<Vec<DirEntry>, ParseError> {
-    let mut entries = Vec::new();
-    for chunk in data.chunks(128) {
-        if chunk.len() < 128 {
-            break;
-        }
-        if entries.len() >= MAX_DIR_ENTRIES {
-            return Err(ParseError::ResourceLimit(
-                "OLE directory entry count exceeds maximum".to_string(),
-            ));
-        }
-        let name_len_raw = read_u16(chunk, 64)?;
-        let name_len = name_len_raw as usize;
-        let name_raw = &chunk[..64];
-        let name = if (2..=64).contains(&name_len) && name_len.is_multiple_of(2) {
-            let bytes = &name_raw[..name_len - 2];
-            utf16le_to_string(bytes)
-        } else {
-            String::new()
-        };
-        let object_type = chunk[66];
-        let color_flag = chunk[67];
-        let left = read_u32(chunk, 68)?;
-        let right = read_u32(chunk, 72)?;
-        let child = read_u32(chunk, 76)?;
-        let start_sector = read_u32(chunk, 116)?;
-        let size = read_u64(chunk, 120)?;
-        let created_filetime = normalize_filetime(read_u64(chunk, 100)?);
-        let modified_filetime = normalize_filetime(read_u64(chunk, 108)?);
-        entries.push(DirEntry {
-            name,
-            name_len_raw,
-            object_type,
-            color_flag,
-            left,
-            right,
-            child,
-            start_sector,
-            size,
-            created_filetime,
-            modified_filetime,
-        });
-    }
-    Ok(entries)
-}
-
-fn normalize_filetime(value: u64) -> Option<u64> {
-    if value == 0 {
-        None
-    } else {
-        Some(value)
-    }
-}
-
-fn entry_type_from_object_type(object_type: u8) -> Option<CfbEntryType> {
-    match object_type {
-        5 => Some(CfbEntryType::RootStorage),
-        1 => Some(CfbEntryType::Storage),
-        2 => Some(CfbEntryType::Stream),
-        _ => None,
-    }
-}
-
-fn walk_siblings(
-    idx: u32,
-    parent: &str,
-    entries: &[DirEntry],
-    out: &mut HashMap<String, DirEntry>,
-    depth: u32,
-    visited: &mut HashSet<u32>,
-) {
-    if idx == FREE_SECT || idx == END_OF_CHAIN || depth > MAX_RECURSION_DEPTH {
-        return;
-    }
-    if !visited.insert(idx) {
-        return;
-    }
-    let idx_usize = idx as usize;
-    if idx_usize >= entries.len() {
-        return;
-    }
-    let entry = &entries[idx_usize];
-    walk_siblings(entry.left, parent, entries, out, depth + 1, visited);
-    let mut path = String::new();
-    if !parent.is_empty() {
-        path.push_str(parent);
-        path.push('/');
-    }
-    path.push_str(&entry.name);
-    if entry.object_type == 2 {
-        out.insert(path.clone(), entry.clone());
-    }
-    if (entry.object_type == 1 || entry.object_type == 5) && entry.child != FREE_SECT {
-        walk_siblings(entry.child, &path, entries, out, depth + 1, visited);
-    }
-    walk_siblings(entry.right, parent, entries, out, depth + 1, visited);
-}
-
-fn collect_entry_metadata(entries: &[DirEntry]) -> HashMap<String, CfbEntryMetadata> {
-    let mut out = HashMap::new();
-    if let Some(root) = entries.first() {
-        let root_path = if root.name.is_empty() {
-            "Root Entry".to_string()
-        } else {
-            root.name.clone()
-        };
-        out.insert(
-            root_path.clone(),
-            CfbEntryMetadata {
-                entry_index: 0,
-                path: root_path,
-                entry_type: CfbEntryType::RootStorage,
-                object_type_raw: root.object_type,
-                size: root.size,
-                start_sector: root.start_sector,
-                left_sibling: normalize_tree_index(root.left),
-                right_sibling: normalize_tree_index(root.right),
-                child: normalize_tree_index(root.child),
-                created_filetime: root.created_filetime,
-                modified_filetime: root.modified_filetime,
-            },
-        );
-        if root.child != FREE_SECT {
-            walk_entry_metadata(root.child, "", entries, &mut out, 0);
-        }
-    }
-    out
-}
-
-fn collect_directory_slots(entries: &[DirEntry]) -> Vec<CfbDirectorySlot> {
-    let linked = collect_linked_indices(entries);
-    entries
-        .iter()
-        .enumerate()
-        .map(|(idx, entry)| {
-            let path = derive_entry_path(idx as u32, entries).unwrap_or_else(|| {
-                if idx == 0 {
-                    "Root Entry".to_string()
-                } else if entry.name.is_empty() {
-                    format!("Entry {idx}")
-                } else {
-                    entry.name.clone()
-                }
-            });
-            let entry_type = entry_type_from_object_type(entry.object_type);
-            let state = if entry.object_type == 0 {
-                CfbDirectoryState::Free
-            } else if linked.contains(&(idx as u32)) {
-                CfbDirectoryState::Normal
-            } else {
-                CfbDirectoryState::Orphaned
-            };
-            CfbDirectorySlot {
-                entry_index: idx as u32,
-                path,
-                entry_type,
-                name_len_raw: entry.name_len_raw,
-                object_type_raw: entry.object_type,
-                color_flag_raw: entry.color_flag,
-                state,
-                size: entry.size,
-                start_sector: entry.start_sector,
-                left_sibling_raw: entry.left,
-                right_sibling_raw: entry.right,
-                child_raw: entry.child,
-                left_sibling: normalize_tree_index(entry.left),
-                right_sibling: normalize_tree_index(entry.right),
-                child: normalize_tree_index(entry.child),
-                created_filetime: entry.created_filetime,
-                modified_filetime: entry.modified_filetime,
-            }
-        })
-        .collect()
-}
-
-fn collect_linked_indices(entries: &[DirEntry]) -> std::collections::HashSet<u32> {
-    let mut out = std::collections::HashSet::new();
-    if entries.is_empty() {
-        return out;
-    }
-    out.insert(0);
-    if let Some(root) = entries.first() {
-        if root.child != FREE_SECT {
-            walk_linked_indices(root.child, entries, &mut out, 0);
-        }
-    }
-    out
-}
-
-const MAX_LINKED_DEPTH: u32 = 256;
-
-fn walk_linked_indices(
-    idx: u32,
-    entries: &[DirEntry],
-    out: &mut std::collections::HashSet<u32>,
-    depth: u32,
-) {
-    if idx == FREE_SECT || idx == END_OF_CHAIN || depth > MAX_LINKED_DEPTH {
-        return;
-    }
-    if entries.is_empty() {
-        return;
-    }
-    let idx_usize = idx as usize;
-    if idx_usize >= entries.len() || !out.insert(idx) {
-        return;
-    }
-    let entry = &entries[idx_usize];
-    walk_linked_indices(entry.left, entries, out, depth + 1);
-    if (entry.object_type == 1 || entry.object_type == 5) && entry.child != FREE_SECT {
-        walk_linked_indices(entry.child, entries, out, depth + 1);
-    }
-    walk_linked_indices(entry.right, entries, out, depth + 1);
-}
-
-fn derive_entry_path(idx: u32, entries: &[DirEntry]) -> Option<String> {
-    if idx as usize >= entries.len() {
-        return None;
-    }
-    if idx == 0 {
-        return Some(if entries[0].name.is_empty() {
-            "Root Entry".to_string()
-        } else {
-            entries[0].name.clone()
-        });
-    }
-    let mut out = None;
-    if let Some(root) = entries.first() {
-        if root.child != FREE_SECT {
-            walk_find_path(root.child, "", idx, entries, &mut out, 0);
-        }
-    }
-    out
-}
-
-const MAX_RECURSION_DEPTH: u32 = 256;
-
-fn walk_find_path(
-    current: u32,
-    parent: &str,
-    target: u32,
-    entries: &[DirEntry],
-    out: &mut Option<String>,
-    depth: u32,
-) {
-    if current == FREE_SECT
-        || current == END_OF_CHAIN
-        || out.is_some()
-        || depth > MAX_RECURSION_DEPTH
-    {
-        return;
-    }
-    let current_usize = current as usize;
-    if current_usize >= entries.len() {
-        return;
-    }
-    let entry = &entries[current_usize];
-    walk_find_path(entry.left, parent, target, entries, out, depth + 1);
-    if out.is_some() {
-        return;
-    }
-    let mut path = String::new();
-    if !parent.is_empty() {
-        path.push_str(parent);
-        path.push('/');
-    }
-    path.push_str(&entry.name);
-    if current == target {
-        *out = Some(path);
-        return;
-    }
-    if (entry.object_type == 1 || entry.object_type == 5) && entry.child != FREE_SECT {
-        walk_find_path(entry.child, &path, target, entries, out, depth + 1);
-    }
-    if out.is_none() {
-        walk_find_path(entry.right, parent, target, entries, out, depth + 1);
-    }
-}
-
-fn walk_entry_metadata(
-    idx: u32,
-    parent: &str,
-    entries: &[DirEntry],
-    out: &mut HashMap<String, CfbEntryMetadata>,
-    depth: u32,
-) {
-    if idx == FREE_SECT || idx == END_OF_CHAIN || depth > MAX_RECURSION_DEPTH {
-        return;
-    }
-    let idx_usize = idx as usize;
-    if idx_usize >= entries.len() {
-        return;
-    }
-    let entry = &entries[idx_usize];
-    walk_entry_metadata(entry.left, parent, entries, out, depth + 1);
-
-    let mut path = String::new();
-    if !parent.is_empty() {
-        path.push_str(parent);
-        path.push('/');
-    }
-    path.push_str(&entry.name);
-
-    if let Some(entry_type) = entry_type_from_object_type(entry.object_type) {
-        out.insert(
-            path.clone(),
-            CfbEntryMetadata {
-                entry_index: idx,
-                path: path.clone(),
-                entry_type,
-                object_type_raw: entry.object_type,
-                size: entry.size,
-                start_sector: entry.start_sector,
-                left_sibling: normalize_tree_index(entry.left),
-                right_sibling: normalize_tree_index(entry.right),
-                child: normalize_tree_index(entry.child),
-                created_filetime: entry.created_filetime,
-                modified_filetime: entry.modified_filetime,
-            },
-        );
-    }
-
-    if (entry.object_type == 1 || entry.object_type == 5) && entry.child != FREE_SECT {
-        walk_entry_metadata(entry.child, &path, entries, out, depth + 1);
-    }
-    walk_entry_metadata(entry.right, parent, entries, out, depth + 1);
-}
-
-fn normalize_tree_index(value: u32) -> Option<u32> {
-    if value == FREE_SECT || value == END_OF_CHAIN {
-        None
-    } else {
-        Some(value)
-    }
-}
-
-const MAX_STREAM_SIZE: usize = 256 * 1024 * 1024; // 256 MiB limit for OLE streams
-const MAX_DIR_ENTRIES: usize = 65_536; // reasonable upper bound for directory entries
-
-pub(crate) fn read_stream_from_fat(
-    data: &[u8],
-    sector_size: u32,
-    fat: &[u32],
-    start_sector: u32,
-) -> Result<Vec<u8>, ParseError> {
-    let mut out = Vec::new();
-    let mut sector = start_sector;
-    let mut guard = 0usize;
-    while sector != END_OF_CHAIN && sector != FREE_SECT {
-        if guard >= fat.len() {
-            break;
-        }
-        if out.len() >= MAX_STREAM_SIZE {
-            return Err(ParseError::ResourceLimit(
-                "OLE stream exceeds maximum size".to_string(),
-            ));
-        }
-        let sec = read_sector(data, sector_size, sector)?;
-        out.extend_from_slice(&sec);
-        let next = *fat.get(sector as usize).unwrap_or(&END_OF_CHAIN);
-        sector = next;
-        guard += 1;
-    }
-    Ok(out)
-}
-
-fn read_stream_from_mini(
-    mini_stream: &[u8],
-    mini_sector_size: u32,
-    mini_fat: &[u32],
-    start_sector: u32,
-    size: usize,
-) -> Option<Vec<u8>> {
-    let mut out = Vec::new();
-    let mut sector = start_sector;
-    let mut guard = 0usize;
-    while sector != END_OF_CHAIN && sector != FREE_SECT && out.len() < size {
-        if guard >= mini_fat.len() {
-            break;
-        }
-        let offset = match (sector as usize).checked_mul(mini_sector_size as usize) {
-            Some(o) => o,
-            None => break,
-        };
-        let end = offset + mini_sector_size as usize;
-        if end > mini_stream.len() {
-            break;
-        }
-        out.extend_from_slice(&mini_stream[offset..end]);
-        let next = *mini_fat.get(sector as usize).unwrap_or(&END_OF_CHAIN);
-        sector = next;
-        guard += 1;
-    }
-    out.truncate(size);
-    Some(out)
-}
-
-fn collect_chain_with_terminal(table: &[u32], start_sector: u32) -> (Vec<u32>, u32) {
-    let mut out = Vec::new();
-    let mut sector = start_sector;
-    let mut guard = 0usize;
-    while sector != END_OF_CHAIN && sector != FREE_SECT {
-        if guard >= table.len() {
-            return (out, sector);
-        }
-        out.push(sector);
-        sector = *table.get(sector as usize).unwrap_or(&END_OF_CHAIN);
-        guard += 1;
-    }
-    (out, sector)
-}
-
-pub(crate) fn read_sector(
-    data: &[u8],
-    sector_size: u32,
-    sector: u32,
-) -> Result<Vec<u8>, ParseError> {
-    let sector_size_usize = sector_size as usize;
-    let sector_usize = sector as usize;
-    let offset = sector_usize
-        .checked_add(1)
-        .and_then(|s| s.checked_mul(sector_size_usize))
-        .ok_or_else(|| ParseError::InvalidStructure("OLE sector offset overflow".to_string()))?;
-    let end = offset
-        .checked_add(sector_size_usize)
-        .ok_or_else(|| ParseError::InvalidStructure("OLE sector end overflow".to_string()))?;
-    if end > data.len() {
-        return Err(ParseError::InvalidStructure(
-            "OLE sector out of bounds".to_string(),
-        ));
-    }
-    Ok(data[offset..end].to_vec())
-}
-
-fn read_u64(data: &[u8], offset: usize) -> Result<u64, ParseError> {
-    if offset + 8 > data.len() {
-        return Err(ParseError::InvalidStructure(
-            "OLE read_u64 out of bounds".to_string(),
-        ));
-    }
-    Ok(u64::from_le_bytes([
-        data[offset],
-        data[offset + 1],
-        data[offset + 2],
-        data[offset + 3],
-        data[offset + 4],
-        data[offset + 5],
-        data[offset + 6],
-        data[offset + 7],
-    ]))
-}
-
-fn utf16le_to_string(bytes: &[u8]) -> String {
-    let mut u16s = Vec::new();
-    for chunk in bytes.chunks(2) {
-        if chunk.len() == 2 {
-            u16s.push(u16::from_le_bytes([chunk[0], chunk[1]]));
-        }
-    }
-    String::from_utf16_lossy(&u16s)
-}
+pub(crate) use stream::{read_sector, read_stream_from_fat};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ole_header::{END_OF_CHAIN, FREE_SECT, SIGNATURE};
 
     fn valid_header_template() -> Vec<u8> {
         let mut data = vec![0u8; 512];
         data[..8].copy_from_slice(&SIGNATURE);
-        data[0x1E..0x20].copy_from_slice(&(9u16).to_le_bytes()); // sector_size=512
-        data[0x20..0x22].copy_from_slice(&(6u16).to_le_bytes()); // mini_sector_size=64
-        data[0x2C..0x30].copy_from_slice(&(1u32).to_le_bytes()); // num_fat_sectors
-        data[0x30..0x34].copy_from_slice(&(0u32).to_le_bytes()); // first_dir_sector
-        data[0x38..0x3C].copy_from_slice(&(4096u32).to_le_bytes()); // mini_cutoff
-        data[0x3C..0x40].copy_from_slice(&END_OF_CHAIN.to_le_bytes()); // first_mini_fat
-        data[0x40..0x44].copy_from_slice(&(0u32).to_le_bytes()); // num_mini_fat
-        data[0x44..0x48].copy_from_slice(&END_OF_CHAIN.to_le_bytes()); // first_difat
-        data[0x48..0x4C].copy_from_slice(&(0u32).to_le_bytes()); // num_difat
+        data[0x1E..0x20].copy_from_slice(&(9u16).to_le_bytes());
+        data[0x20..0x22].copy_from_slice(&(6u16).to_le_bytes());
+        data[0x2C..0x30].copy_from_slice(&(1u32).to_le_bytes());
+        data[0x30..0x34].copy_from_slice(&(0u32).to_le_bytes());
+        data[0x38..0x3C].copy_from_slice(&(4096u32).to_le_bytes());
+        data[0x3C..0x40].copy_from_slice(&END_OF_CHAIN.to_le_bytes());
+        data[0x40..0x44].copy_from_slice(&(0u32).to_le_bytes());
+        data[0x44..0x48].copy_from_slice(&END_OF_CHAIN.to_le_bytes());
+        data[0x48..0x4C].copy_from_slice(&(0u32).to_le_bytes());
         for i in 0..109usize {
             let off = 0x4C + i * 4;
             data[off..off + 4].copy_from_slice(&FREE_SECT.to_le_bytes());
@@ -944,7 +409,7 @@ mod tests {
 
     #[test]
     fn read_sector_and_stream_helpers_handle_bounds_and_chains() {
-        let mut data = vec![0u8; 1536]; // 3 sectors of 512 after header
+        let mut data = vec![0u8; 1536];
         data[512..1024].fill(1);
         data[1024..1536].fill(2);
 
@@ -968,19 +433,15 @@ mod tests {
 
     #[test]
     fn directory_parsing_and_tree_walk_collect_stream_paths() {
-        // Build three directory entries of 128 bytes each:
-        // root(storage) -> child index 1 ; entry 1 is stream "VBA" with right sibling 2 ("dir").
         let mut dir = vec![0u8; 128 * 3];
 
-        // root entry
-        dir[66] = 5; // root
-        dir[68..72].copy_from_slice(&FREE_SECT.to_le_bytes()); // left
-        dir[72..76].copy_from_slice(&FREE_SECT.to_le_bytes()); // right
-        dir[76..80].copy_from_slice(&(1u32).to_le_bytes()); // child=1
+        dir[66] = 5;
+        dir[68..72].copy_from_slice(&FREE_SECT.to_le_bytes());
+        dir[72..76].copy_from_slice(&FREE_SECT.to_le_bytes());
+        dir[76..80].copy_from_slice(&(1u32).to_le_bytes());
         dir[116..120].copy_from_slice(&(0u32).to_le_bytes());
         dir[120..128].copy_from_slice(&(0u64).to_le_bytes());
 
-        // entry 1: stream "VBA"
         let name1: Vec<u8> = "VBA"
             .encode_utf16()
             .flat_map(|u| u.to_le_bytes())
@@ -988,14 +449,13 @@ mod tests {
             .collect();
         dir[128..128 + name1.len()].copy_from_slice(&name1);
         dir[128 + 64..128 + 66].copy_from_slice(&((name1.len()) as u16).to_le_bytes());
-        dir[128 + 66] = 2; // stream
-        dir[128 + 68..128 + 72].copy_from_slice(&FREE_SECT.to_le_bytes()); // left
-        dir[128 + 72..128 + 76].copy_from_slice(&(2u32).to_le_bytes()); // right sibling
-        dir[128 + 76..128 + 80].copy_from_slice(&FREE_SECT.to_le_bytes()); // child
-        dir[128 + 116..128 + 120].copy_from_slice(&(1u32).to_le_bytes()); // start sector
-        dir[128 + 120..128 + 128].copy_from_slice(&(10u64).to_le_bytes()); // size
+        dir[128 + 66] = 2;
+        dir[128 + 68..128 + 72].copy_from_slice(&FREE_SECT.to_le_bytes());
+        dir[128 + 72..128 + 76].copy_from_slice(&(2u32).to_le_bytes());
+        dir[128 + 76..128 + 80].copy_from_slice(&FREE_SECT.to_le_bytes());
+        dir[128 + 116..128 + 120].copy_from_slice(&(1u32).to_le_bytes());
+        dir[128 + 120..128 + 128].copy_from_slice(&(10u64).to_le_bytes());
 
-        // entry 2: stream "dir"
         let name2: Vec<u8> = "dir"
             .encode_utf16()
             .flat_map(|u| u.to_le_bytes())
@@ -1003,21 +463,21 @@ mod tests {
             .collect();
         dir[256..256 + name2.len()].copy_from_slice(&name2);
         dir[256 + 64..256 + 66].copy_from_slice(&((name2.len()) as u16).to_le_bytes());
-        dir[256 + 66] = 2; // stream
+        dir[256 + 66] = 2;
         dir[256 + 68..256 + 72].copy_from_slice(&FREE_SECT.to_le_bytes());
         dir[256 + 72..256 + 76].copy_from_slice(&FREE_SECT.to_le_bytes());
         dir[256 + 76..256 + 80].copy_from_slice(&FREE_SECT.to_le_bytes());
         dir[256 + 116..256 + 120].copy_from_slice(&(2u32).to_le_bytes());
         dir[256 + 120..256 + 128].copy_from_slice(&(20u64).to_le_bytes());
 
-        let entries = parse_dir_entries(&dir).expect("dir entries");
+        let entries = directory::parse_dir_entries(&dir).expect("dir entries");
         assert_eq!(entries.len(), 3);
         assert_eq!(entries[1].name, "VBA");
         assert_eq!(entries[2].name, "dir");
 
         let mut out = HashMap::new();
-        let mut visited = HashSet::new();
-        walk_siblings(entries[0].child, "", &entries, &mut out, 0, &mut visited);
+        let mut visited = std::collections::HashSet::new();
+        types::walk_siblings(entries[0].child, "", &entries, &mut out, 0, &mut visited);
         assert!(out.contains_key("VBA"));
         assert!(out.contains_key("dir"));
 
@@ -1068,7 +528,7 @@ mod tests {
         dir[384 + 72..384 + 76].copy_from_slice(&FREE_SECT.to_le_bytes());
         dir[384 + 76..384 + 80].copy_from_slice(&FREE_SECT.to_le_bytes());
 
-        let entries = parse_dir_entries(&dir).expect("dir entries");
+        let entries = directory::parse_dir_entries(&dir).expect("dir entries");
         let slots = collect_directory_slots(&entries);
 
         assert!(slots
@@ -1256,7 +716,6 @@ mod tests {
             },
         );
 
-        // Sector 0 data starts at offset 512.
         let mut data = vec![0u8; 1024];
         data[512] = 0xFF;
         data[513] = 0xFE;
@@ -1282,7 +741,6 @@ mod tests {
         };
         let mut reader = CfbReader::new(&cfb);
 
-        // Backslash path should resolve via normalization.
         assert!(reader.contains("VBA\\Module1"));
         let err = reader
             .read_file_string("VBA\\Module1")
@@ -1292,13 +750,11 @@ mod tests {
 
     #[test]
     fn read_stream_from_mini_handles_out_of_bounds_and_chain_breaks() {
-        // start sector points beyond mini stream bounds -> loop breaks and returns empty payload.
         let mini_stream = b"abcdEFGH".to_vec();
         let mini_fat = vec![END_OF_CHAIN];
         let out = read_stream_from_mini(&mini_stream, 8, &mini_fat, 10, 4).expect("mini stream");
         assert!(out.is_empty());
 
-        // Chain points to index without entry in mini FAT -> unwrap_or(END_OF_CHAIN) path.
         let mini_stream = b"abcdefghijklmnop".to_vec();
         let out = read_stream_from_mini(&mini_stream, 8, &mini_fat, 0, 12).expect("mini stream");
         assert_eq!(out, b"abcdefgh".to_vec());
@@ -1321,7 +777,7 @@ mod tests {
         dir[128 + 100..128 + 108].copy_from_slice(&(123456u64).to_le_bytes());
         dir[128 + 108..128 + 116].copy_from_slice(&(654321u64).to_le_bytes());
 
-        let entries = parse_dir_entries(&dir).expect("dir entries");
+        let entries = directory::parse_dir_entries(&dir).expect("dir entries");
         assert_eq!(entries[1].created_filetime, Some(123456));
         assert_eq!(entries[1].modified_filetime, Some(654321));
     }
