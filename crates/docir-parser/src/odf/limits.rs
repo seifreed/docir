@@ -118,16 +118,28 @@ impl OdfAtomicLimits {
         limit: Option<u64>,
         label: &str,
     ) -> Result<(), ParseError> {
-        let next = counter
-            .fetch_add(add, Ordering::Relaxed)
-            .saturating_add(add);
         if let Some(max) = limit {
-            if next > max {
-                return Err(ParseError::ResourceLimit(format!(
-                    "ODF max {} exceeded: {} (max: {})",
-                    label, next, max
-                )));
+            let mut prev = counter.load(Ordering::Relaxed);
+            loop {
+                let next = prev.saturating_add(add);
+                if next > max {
+                    return Err(ParseError::ResourceLimit(format!(
+                        "ODF max {} exceeded: {} (max: {})",
+                        label, next, max
+                    )));
+                }
+                match counter.compare_exchange_weak(
+                    prev,
+                    next,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => break,
+                    Err(actual) => prev = actual,
+                }
             }
+        } else {
+            counter.fetch_add(add, Ordering::Relaxed);
         }
         Ok(())
     }

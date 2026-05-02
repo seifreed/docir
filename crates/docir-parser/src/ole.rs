@@ -429,10 +429,15 @@ fn parse_dir_entries(data: &[u8]) -> Result<Vec<DirEntry>, ParseError> {
         if chunk.len() < 128 {
             break;
         }
+        if entries.len() >= MAX_DIR_ENTRIES {
+            return Err(ParseError::ResourceLimit(
+                "OLE directory entry count exceeds maximum".to_string(),
+            ));
+        }
         let name_len_raw = read_u16(chunk, 64)?;
         let name_len = name_len_raw as usize;
         let name_raw = &chunk[..64];
-        let name = if (2..=64).contains(&name_len) {
+        let name = if (2..=64).contains(&name_len) && name_len.is_multiple_of(2) {
             let bytes = &name_raw[..name_len - 2];
             utf16le_to_string(bytes)
         } else {
@@ -754,6 +759,9 @@ fn normalize_tree_index(value: u32) -> Option<u32> {
     }
 }
 
+const MAX_STREAM_SIZE: usize = 256 * 1024 * 1024; // 256 MiB limit for OLE streams
+const MAX_DIR_ENTRIES: usize = 65_536; // reasonable upper bound for directory entries
+
 pub(crate) fn read_stream_from_fat(
     data: &[u8],
     sector_size: u32,
@@ -766,6 +774,11 @@ pub(crate) fn read_stream_from_fat(
     while sector != END_OF_CHAIN && sector != FREE_SECT {
         if guard >= fat.len() {
             break;
+        }
+        if out.len() >= MAX_STREAM_SIZE {
+            return Err(ParseError::ResourceLimit(
+                "OLE stream exceeds maximum size".to_string(),
+            ));
         }
         let sec = read_sector(data, sector_size, sector)?;
         out.extend_from_slice(&sec);

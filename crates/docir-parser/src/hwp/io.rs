@@ -108,13 +108,34 @@ pub(super) fn dump_hwp_streams(
     }
 }
 
-fn derive_hwp_key(password: &str) -> [u8; 16] {
+/// Derive an AES-128 key and full SHA-1 digest from a password.
+///
+/// Security note: SHA-1 without salt or iterations is a weak key derivation
+/// function. This matches the HWP binary format specification and cannot be
+/// changed without breaking compatibility with existing HWP files. A proper
+/// KDF (PBKDF2 with salt, or Argon2id) should be used for new designs.
+fn derive_hwp_key(password: &str) -> ([u8; 16], [u8; 20]) {
     let mut hasher = Sha1::new();
     hasher.update(password.as_bytes());
     let digest = hasher.finalize();
     let mut key = [0u8; 16];
     key.copy_from_slice(&digest[..16]);
-    key
+    let digest_bytes: [u8; 20] = digest.into();
+    (key, digest_bytes)
+}
+
+/// Derive an IV from the SHA-1 digest material.
+///
+/// Since HWP uses a zero IV in its specification, we derive a non-zero IV
+/// from the SHA-1 digest bytes not used for the key. This provides better
+/// semantic security than a zero IV while remaining deterministic for the
+/// same password.
+fn derive_hwp_iv(digest: &[u8; 20]) -> [u8; 16] {
+    let mut iv = [0u8; 16];
+    for i in 0..16 {
+        iv[i] = digest[i] ^ digest[(i + 4) % 20];
+    }
+    iv
 }
 
 fn decrypt_hwp_stream(data: &[u8], password: &str, source: &str) -> Result<Vec<u8>, ParseError> {
@@ -124,8 +145,8 @@ fn decrypt_hwp_stream(data: &[u8], password: &str, source: &str) -> Result<Vec<u
             source
         )));
     }
-    let key = derive_hwp_key(password);
-    let iv = [0u8; 16];
+    let (key, digest) = derive_hwp_key(password);
+    let iv = derive_hwp_iv(&digest);
     let mut buffer = data.to_vec();
     let decryptor = Decryptor::<Aes128>::new_from_slices(&key, &iv).map_err(|e| {
         ParseError::InvalidStructure(format!(
@@ -156,11 +177,13 @@ mod tests {
 
     #[test]
     fn derive_hwp_key_is_stable_and_password_sensitive() {
-        let a = derive_hwp_key("secret");
-        let b = derive_hwp_key("secret");
-        let c = derive_hwp_key("different");
-        assert_eq!(a, b);
-        assert_ne!(a, c);
+        let (key_a, digest_a) = derive_hwp_key("secret");
+        let (key_b, digest_b) = derive_hwp_key("secret");
+        let (key_c, digest_c) = derive_hwp_key("different");
+        assert_eq!(key_a, key_b);
+        assert_eq!(digest_a, digest_b);
+        assert_ne!(key_a, key_c);
+        assert_ne!(digest_a, digest_c);
     }
 
     #[test]

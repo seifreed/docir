@@ -275,6 +275,9 @@ fn decrypt_odf_part(
     }
 
     let mut key = vec![0u8; key_len];
+    // Security note: PBKDF2 with SHA-1 is required by the ODF specification
+    // (OpenDocument 1.3, section 4.4). SHA-1 is deprecated for cryptographic
+    // use but must be used here for spec compliance.
     pbkdf2_hmac::<Sha1>(password.as_bytes(), salt, iterations, &mut key);
 
     let mut buffer = encrypted;

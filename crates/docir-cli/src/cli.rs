@@ -84,7 +84,13 @@ pub(crate) struct Cli {
     pub(crate) odf_parallel_max_threads: Option<usize>,
 
     /// Password for decrypting encrypted ODF parts
-    #[arg(long, global = true, value_name = "PASSWORD")]
+    /// (prefer DOCIR_ODF_PASSWORD env var to avoid exposing in process list)
+    #[arg(
+        long,
+        global = true,
+        value_name = "PASSWORD",
+        env = "DOCIR_ODF_PASSWORD"
+    )]
     pub(crate) odf_password: Option<String>,
 
     /// Force parse encrypted HWP streams
@@ -92,7 +98,13 @@ pub(crate) struct Cli {
     pub(crate) hwp_force_parse_encrypted: bool,
 
     /// Password for decrypting encrypted HWP streams
-    #[arg(long, global = true, value_name = "PASSWORD")]
+    /// (prefer DOCIR_HWP_PASSWORD env var to avoid exposing in process list)
+    #[arg(
+        long,
+        global = true,
+        value_name = "PASSWORD",
+        env = "DOCIR_HWP_PASSWORD"
+    )]
     pub(crate) hwp_password: Option<String>,
 
     /// Dump HWP stream metadata (hash, size, compression)

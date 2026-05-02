@@ -63,9 +63,10 @@ fn find_matching_paren(s: &str, open_pos: usize) -> Option<usize> {
     let mut depth = 1usize;
     let mut in_quotes = false;
     let mut quote_char = '\0';
+    let mut prev_ch = '\0';
     for (i, &ch) in chars.iter().enumerate().skip(open_pos + 1) {
         if !in_quotes {
-            if ch == '"' || ch == '\'' {
+            if (ch == '"' || ch == '\'') && (quote_char == '\0' || ch == quote_char) {
                 in_quotes = true;
                 quote_char = ch;
             } else if ch == '(' {
@@ -77,8 +78,22 @@ fn find_matching_paren(s: &str, open_pos: usize) -> Option<usize> {
                 }
             }
         } else if ch == quote_char {
-            in_quotes = false;
+            // Doubled quotes ("") inside a quoted string are escape sequences, not closers
+            if prev_ch == ch {
+                // Already handled: the previous char was the same quote, so this is a doubled quote
+                // that we already skipped. Do nothing.
+            } else {
+                // Look ahead: if next char is same quote, it's a doubled quote (escaped)
+                let next_is_same = chars.get(i + 1) == Some(&ch);
+                if next_is_same {
+                    // This is the opening quote of a doubled pair; stay in quotes
+                } else {
+                    in_quotes = false;
+                    quote_char = '\0';
+                }
+            }
         }
+        prev_ch = ch;
     }
     None
 }

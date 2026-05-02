@@ -36,10 +36,10 @@ impl Default for OdfConfig {
             force_fast: false,
             fast_sample_rows: 0,
             fast_sample_cols: 0,
-            max_cells: None,
-            max_rows: None,
-            max_paragraphs: None,
-            max_bytes: None,
+            max_cells: Some(10_000_000),
+            max_rows: Some(1_000_000),
+            max_paragraphs: Some(1_000_000),
+            max_bytes: Some(200 * 1024 * 1024),
             parallel_sheets: false,
             parallel_max_threads: None,
             password: None,
@@ -60,7 +60,7 @@ impl Default for RtfConfig {
     fn default() -> Self {
         Self {
             max_group_depth: 256,
-            max_object_hex_len: 64 * 1024 * 1024,
+            max_object_hex_len: 4 * 1024 * 1024,
         }
     }
 }

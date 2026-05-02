@@ -19,5 +19,5 @@ pub enum CoreError {
 
     /// Visitor error during traversal.
     #[error("Visitor error: {0}")]
-    VisitorError(String),
+    VisitorError(#[source] Box<dyn std::error::Error + Send + Sync>),
 }

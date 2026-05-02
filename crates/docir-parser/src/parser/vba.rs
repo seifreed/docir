@@ -129,10 +129,10 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
                 }
             }
         }
-        out.extend_from_slice(&chunk_out);
-        if out.len() > MAX_DECOMPRESSED_SIZE {
+        if out.len().saturating_add(chunk_out.len()) > MAX_DECOMPRESSED_SIZE {
             return None;
         }
+        out.extend_from_slice(&chunk_out);
     }
 
     Some(out)

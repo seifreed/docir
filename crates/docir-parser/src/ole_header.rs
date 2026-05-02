@@ -17,6 +17,10 @@ pub(crate) struct OleHeader {
     pub(crate) num_difat: u32,
 }
 
+const MAX_SECTOR_SHIFT: u32 = 12; // CFB spec: only 9 (512 bytes, v3) and 12 (4096 bytes, v4) are valid
+const MAX_FAT_SECTORS: u32 = 1 << 20; // reasonable upper bound
+const MAX_DIFAT_CHAIN: u32 = 1 << 16; // reasonable upper bound for DIFAT chain iterations
+
 pub(crate) fn parse_header(data: &[u8]) -> Result<OleHeader, ParseError> {
     if data.len() < 512 || data[..8] != SIGNATURE {
         return Err(ParseError::InvalidStructure(
@@ -30,27 +34,44 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<OleHeader, ParseError> {
             "OLE header sector shift overflow".to_string(),
         ));
     }
-    // CFB spec: sector_shift must be 9 (v3) or 12 (v4); mini_sector_shift must be 6.
+    // CFB spec: sector_shift must be 9 (v3) or 12 (v4); reject suspiciously large values
     if sector_shift < 9 {
         return Err(ParseError::InvalidStructure(
             "OLE header sector shift too small (minimum 9)".to_string(),
         ));
+    }
+    if sector_shift > MAX_SECTOR_SHIFT {
+        return Err(ParseError::InvalidStructure(format!(
+            "OLE header sector shift {sector_shift} exceeds maximum ({MAX_SECTOR_SHIFT})"
+        )));
     }
     if mini_sector_shift < 6 {
         return Err(ParseError::InvalidStructure(
             "OLE header mini sector shift too small (minimum 6)".to_string(),
         ));
     }
+    let num_fat_sectors = read_u32(data, 0x2C)?;
+    if num_fat_sectors > MAX_FAT_SECTORS {
+        return Err(ParseError::ResourceLimit(format!(
+            "OLE header num_fat_sectors {num_fat_sectors} exceeds maximum ({MAX_FAT_SECTORS})"
+        )));
+    }
+    let num_difat = read_u32(data, 0x48)?;
+    if num_difat > MAX_DIFAT_CHAIN {
+        return Err(ParseError::ResourceLimit(format!(
+            "OLE header num_difat {num_difat} exceeds maximum ({MAX_DIFAT_CHAIN})"
+        )));
+    }
     Ok(OleHeader {
         sector_size: 1u32 << sector_shift,
         mini_sector_size: 1u32 << mini_sector_shift,
-        num_fat_sectors: read_u32(data, 0x2C)?,
+        num_fat_sectors,
         first_dir_sector: read_u32(data, 0x30)?,
         mini_cutoff: read_u32(data, 0x38)?,
         first_mini_fat: read_u32(data, 0x3C)?,
         num_mini_fat: read_u32(data, 0x40)?,
         first_difat: read_u32(data, 0x44)?,
-        num_difat: read_u32(data, 0x48)?,
+        num_difat,
     })
 }
 

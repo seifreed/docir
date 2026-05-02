@@ -44,10 +44,7 @@ mod ooxml;
 mod types;
 
 use analysis::{hex, map_calamine_error, parse_activex_xml, parse_chart_data, parse_smartart_part};
-#[allow(unused_imports)]
-pub(crate) use contracts::{
-    run_parser_pipeline, NormalizeStage, ParseStage, ParserPipeline, PostprocessStage,
-};
+pub(crate) use contracts::{run_parser_pipeline, NormalizeStage, ParseStage, PostprocessStage};
 pub use document::DocumentParser;
 pub use ooxml::OoxmlParser;
 pub(crate) use security::SecurityScanner as OoxmlSecurityScanner;

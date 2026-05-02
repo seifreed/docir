@@ -43,6 +43,8 @@ pub fn is_hwpx_mimetype(value: &str) -> bool {
 
 /// Parser for legacy HWP (OLE/CFB).
 pub struct HwpParser {
+    // Field used by HwpBuilder via self.config access; dead_code allow is
+    // needed because the compiler cannot see the usage through builder deref.
     #[allow(dead_code)]
     config: ParserConfig,
 }

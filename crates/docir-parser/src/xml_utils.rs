@@ -148,6 +148,8 @@ pub(crate) enum XmlScanControl {
     Break,
 }
 
+const MAX_XML_NESTING_DEPTH: usize = 512;
+
 pub(crate) fn scan_xml_events<R, F>(
     reader: &mut Reader<R>,
     buf: &mut Vec<u8>,
@@ -182,6 +184,12 @@ where
         }
 
         if let Some(name) = push_open {
+            if start_elements.len() >= MAX_XML_NESTING_DEPTH {
+                return Err(xml_error(
+                    file,
+                    format!("XML nesting depth exceeded maximum ({MAX_XML_NESTING_DEPTH})"),
+                ));
+            }
             start_elements.push(name);
         }
         if let Some(name) = check_close {

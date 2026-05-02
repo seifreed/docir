@@ -94,6 +94,12 @@ fn parse_property_stream(
         )));
     }
     let section_count = read_u32(data, 24)? as usize;
+    const MAX_SECTIONS: usize = 1024;
+    if section_count > MAX_SECTIONS {
+        return Err(ParserParseError::InvalidStructure(format!(
+            "OLE property set has too many sections ({section_count}, max {MAX_SECTIONS})"
+        )));
+    }
     if section_count == 0 {
         return Ok(MetadataSection {
             name: name.to_string(),

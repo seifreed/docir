@@ -128,11 +128,11 @@ fn extract_switches(instr: &str) -> Vec<String> {
 
 fn unescape_xml_entities(value: &str) -> String {
     value
+        .replace("&amp;", "&")
         .replace("&quot;", "\"")
         .replace("&apos;", "'")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
-        .replace("&amp;", "&")
 }
 
 fn normalize_switch(value: &str) -> String {

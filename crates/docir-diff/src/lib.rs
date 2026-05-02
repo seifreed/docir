@@ -6,6 +6,7 @@ use docir_core::types::{NodeId, NodeType};
 use docir_core::visitor::IrStore;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use thiserror::Error;
 
 mod index;
 mod summary;
@@ -35,25 +36,16 @@ impl DiffResult {
     }
 }
 
-/// Diff-specific error type for production pathways.
-#[derive(Debug)]
+/// Diff-specific error type.
+#[derive(Debug, Error)]
 pub enum DiffError {
     /// Could not build an index for one of the input stores.
+    #[error("diff node indexing failed: {0}")]
     NodeIndexing(String),
     /// Could not build a test ZIP for parser-driven diff fixtures.
+    #[error("diff test zip build failed: {0}")]
     TestZipBuild(String),
 }
-
-impl std::fmt::Display for DiffError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NodeIndexing(message) => write!(f, "diff node indexing failed: {message}"),
-            Self::TestZipBuild(message) => write!(f, "diff test zip build failed: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for DiffError {}
 
 /// Node that was added or removed.
 #[derive(Debug, Clone, Serialize, Deserialize)]

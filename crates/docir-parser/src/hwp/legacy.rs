@@ -188,6 +188,8 @@ fn decode_utf16le(data: &[u8]) -> String {
     String::from_utf16_lossy(&units)
 }
 
+const MAX_HWP_DECOMPRESSED_SIZE: usize = 50 * 1024 * 1024; // 50 MiB safety limit
+
 pub(super) fn maybe_decompress_stream(
     data: &[u8],
     compressed: bool,
@@ -205,6 +207,11 @@ pub(super) fn maybe_decompress_stream(
         decoder.read_to_end(&mut out)
     };
     if zlib_result.is_ok() {
+        if out.len() > MAX_HWP_DECOMPRESSED_SIZE {
+            return Err(ParseError::ResourceLimit(
+                "HWP decompressed stream exceeds size limit".to_string(),
+            ));
+        }
         return Ok(out);
     }
     out.clear();
@@ -212,6 +219,11 @@ pub(super) fn maybe_decompress_stream(
     decoder.read_to_end(&mut out).map_err(|e| {
         ParseError::InvalidStructure(format!("Failed to decompress HWP stream {}: {e}", source))
     })?;
+    if out.len() > MAX_HWP_DECOMPRESSED_SIZE {
+        return Err(ParseError::ResourceLimit(
+            "HWP decompressed stream exceeds size limit".to_string(),
+        ));
+    }
     Ok(out)
 }
 

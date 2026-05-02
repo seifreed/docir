@@ -102,13 +102,10 @@ impl<R: Read + Seek> SecureZipReader<R> {
             if compressed_size > 0 {
                 let ratio = uncompressed_size as f64 / compressed_size as f64;
                 if ratio > config.max_compression_ratio {
-                    let allow_small = uncompressed_size <= 2 * 1024 * 1024;
-                    if !allow_small {
-                        return Err(ParseError::ResourceLimit(format!(
-                            "Suspicious compression ratio for {}: {:.1}:1 (max: {:.1}:1)",
-                            name, ratio, config.max_compression_ratio
-                        )));
-                    }
+                    return Err(ParseError::ResourceLimit(format!(
+                        "Suspicious compression ratio for {}: {:.1}:1 (max: {:.1}:1)",
+                        name, ratio, config.max_compression_ratio
+                    )));
                 }
             }
 
@@ -133,8 +130,19 @@ impl<R: Read + Seek> SecureZipReader<R> {
 
     /// Checks if a path attempts directory traversal.
     fn is_path_traversal(path: &str) -> bool {
-        // Check for parent directory references
+        // Check for parent directory references (including URL-encoded variants)
         if path.contains("..") {
+            return true;
+        }
+
+        // Check for URL-encoded path traversal attempts
+        let lower = path.to_ascii_lowercase();
+        if lower.contains("%2e") || lower.contains("%2f") || lower.contains("%5c") {
+            return true;
+        }
+
+        // Check for null byte injection
+        if path.contains('\0') {
             return true;
         }
 
@@ -144,7 +152,6 @@ impl<R: Read + Seek> SecureZipReader<R> {
         }
 
         // Check for Windows-style absolute paths (C:\, D:\, etc.)
-        // Windows drive letters are always ASCII letters, so we can safely check bytes
         let bytes = path.as_bytes();
         if bytes.len() >= 3 {
             let first = bytes[0];

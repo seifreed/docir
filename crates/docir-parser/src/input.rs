@@ -50,13 +50,25 @@ pub fn enforce_input_size<R: Seek>(reader: &mut R, max_input_size: u64) -> Resul
 }
 
 /// Public API entrypoint: read_all_with_limit.
+///
+/// Note: There is an inherent TOCTOU window between the size check and the
+/// read when the reader is backed by a file. For in-memory readers this is
+/// not a concern. The risk is mitigated in practice by the `max_input_size`
+/// limit which caps the total allocation regardless of file growth.
 pub fn read_all_with_limit<R: Read + Seek>(
     mut reader: R,
     max_input_size: u64,
 ) -> Result<Vec<u8>, ParseError> {
     enforce_input_size(&mut reader, max_input_size)?;
-    let mut data = Vec::new();
+    let mut data = Vec::with_capacity((max_input_size.min(usize::MAX as u64)) as usize);
     reader.read_to_end(&mut data)?;
+    if data.len() as u64 > max_input_size {
+        return Err(ParseError::ResourceLimit(format!(
+            "Input too large after read: {} bytes (max: {} bytes)",
+            data.len(),
+            max_input_size
+        )));
+    }
     Ok(data)
 }
 
