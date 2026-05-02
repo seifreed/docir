@@ -1,6 +1,8 @@
 use super::*;
+use crate::artifacts::ole::parse_ole10_native;
 use crate::{test_support::build_test_cfb, DocirApp, ParserConfig};
-use std::io::Write;
+use docir_core::ExtractedArtifactKind;
+use std::io::{Cursor, Write};
 use zip::write::SimpleFileOptions;
 
 fn build_minimal_docx(extra_entries: &[(&str, &[u8])]) -> Vec<u8> {
