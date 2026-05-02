@@ -40,13 +40,13 @@ fn format_inspection_text(inspection: &DirectoryInspection) -> String {
     if !inspection.role_counts.is_empty() {
         out.push_str("\nRole Counts:\n");
         for entry in &inspection.role_counts {
-            push_bullet_line(&mut out, 2, &entry.role, entry.count);
+            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
         }
     }
     if !inspection.anomaly_counts.is_empty() {
         out.push_str("\nAnomalies:\n");
         for entry in &inspection.anomaly_counts {
-            push_bullet_line(&mut out, 2, &entry.anomaly, entry.count);
+            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
         }
     }
     if !inspection.anomaly_catalog.is_empty() {
@@ -58,7 +58,7 @@ fn format_inspection_text(inspection: &DirectoryInspection) -> String {
     if !inspection.anomaly_severity_counts.is_empty() {
         out.push_str("\nAnomaly Severity Summary:\n");
         for entry in &inspection.anomaly_severity_counts {
-            push_bullet_line(&mut out, 2, &entry.severity, entry.count);
+            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
         }
     }
     if !inspection.reference_counts.is_empty() {
@@ -220,12 +220,7 @@ mod tests {
     use super::{format_inspection_text, run};
     use docir_app::{
         test_support::{build_test_cfb, build_test_cfb_with_times},
-        DirectoryAnomalyCount, DirectoryAnomalySeverity, DirectoryAnomalySeverityCount,
-        DirectoryCycleCount, DirectoryDeadReferenceCount, DirectoryEntry, DirectoryFanoutCount,
-        DirectoryIncomingSourceCount, DirectoryIncomingSourceTypeCount, DirectoryInspection,
-        DirectoryPointerCount, DirectoryPointerStateCount, DirectoryReachabilityCount,
-        DirectoryReferenceCount, DirectoryRoleCount, DirectorySelfReferenceCount,
-        DirectoryTreeDensityCount, ParserConfig,
+        BucketCount, DirectoryAnomalySeverity, DirectoryEntry, DirectoryInspection, ParserConfig,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -335,97 +330,97 @@ mod tests {
             entry_count: 1,
             directory_score: "medium".to_string(),
             role_counts: vec![
-                DirectoryRoleCount {
-                    role: "state:normal".to_string(),
+                BucketCount {
+                    bucket: "state:normal".to_string(),
                     count: 1,
                 },
-                DirectoryRoleCount {
-                    role: "classification:word-main-stream".to_string(),
+                BucketCount {
+                    bucket: "classification:word-main-stream".to_string(),
                     count: 1,
                 },
             ],
-            anomaly_counts: vec![DirectoryAnomalyCount {
-                anomaly: "orphaned-entry".to_string(),
+            anomaly_counts: vec![BucketCount {
+                bucket: "orphaned-entry".to_string(),
                 count: 1,
             }],
             anomaly_catalog: vec![DirectoryAnomalySeverity {
                 anomaly: "orphaned-entry".to_string(),
                 severity: "medium".to_string(),
             }],
-            anomaly_severity_counts: vec![DirectoryAnomalySeverityCount {
-                severity: "medium".to_string(),
+            anomaly_severity_counts: vec![BucketCount {
+                bucket: "medium".to_string(),
                 count: 1,
             }],
             reference_counts: vec![
-                DirectoryReferenceCount {
+                BucketCount {
                     bucket: "incoming:many".to_string(),
                     count: 1,
                 },
-                DirectoryReferenceCount {
+                BucketCount {
                     bucket: "live-incoming:many".to_string(),
                     count: 1,
                 },
             ],
             pointer_counts: vec![
-                DirectoryPointerCount {
+                BucketCount {
                     bucket: "right:present".to_string(),
                     count: 1,
                 },
-                DirectoryPointerCount {
+                BucketCount {
                     bucket: "right:dangling".to_string(),
                     count: 1,
                 },
             ],
             tree_density_counts: vec![
-                DirectoryTreeDensityCount {
+                BucketCount {
                     bucket: "right:state:normal".to_string(),
                     count: 1,
                 },
-                DirectoryTreeDensityCount {
+                BucketCount {
                     bucket: "right:entry-type:stream".to_string(),
                     count: 1,
                 },
             ],
-            dangling_state_counts: vec![DirectoryPointerStateCount {
+            dangling_state_counts: vec![BucketCount {
                 bucket: "right:state:normal".to_string(),
                 count: 1,
             }],
-            self_reference_counts: vec![DirectorySelfReferenceCount {
+            self_reference_counts: vec![BucketCount {
                 bucket: "self-right-sibling".to_string(),
                 count: 1,
             }],
-            short_cycle_counts: vec![DirectoryCycleCount {
+            short_cycle_counts: vec![BucketCount {
                 bucket: "sibling-2-cycle".to_string(),
                 count: 1,
             }],
-            reachability_counts: vec![DirectoryReachabilityCount {
+            reachability_counts: vec![BucketCount {
                 bucket: "live-reachable".to_string(),
                 count: 1,
             }],
-            incoming_source_counts: vec![DirectoryIncomingSourceCount {
+            incoming_source_counts: vec![BucketCount {
                 bucket: "incoming:state:normal".to_string(),
                 count: 2,
             }],
             incoming_source_type_counts: vec![
-                DirectoryIncomingSourceTypeCount {
+                BucketCount {
                     bucket: "incoming:source-type:root-storage".to_string(),
                     count: 1,
                 },
-                DirectoryIncomingSourceTypeCount {
+                BucketCount {
                     bucket: "incoming:source-type:storage".to_string(),
                     count: 1,
                 },
             ],
-            dead_reference_counts: vec![DirectoryDeadReferenceCount {
+            dead_reference_counts: vec![BucketCount {
                 bucket: "dead-reference:state:orphaned".to_string(),
                 count: 1,
             }],
             fanout_counts: vec![
-                DirectoryFanoutCount {
+                BucketCount {
                     bucket: "fanout:0".to_string(),
                     count: 1,
                 },
-                DirectoryFanoutCount {
+                BucketCount {
                     bucket: "fanout:2".to_string(),
                     count: 1,
                 },

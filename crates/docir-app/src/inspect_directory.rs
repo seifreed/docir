@@ -1,3 +1,5 @@
+use crate::bucket_count::BucketCount;
+use crate::severity::max_severity;
 use crate::{AppResult, ParserConfig};
 use docir_parser::ole::{Cfb, CfbDirectoryState, CfbEntryType};
 use docir_parser::ParseError as ParserParseError;
@@ -11,112 +13,29 @@ pub struct DirectoryInspection {
     pub container: String,
     pub entry_count: usize,
     pub directory_score: String,
-    pub role_counts: Vec<DirectoryRoleCount>,
-    pub anomaly_counts: Vec<DirectoryAnomalyCount>,
+    pub role_counts: Vec<BucketCount>,
+    pub anomaly_counts: Vec<BucketCount>,
     pub anomaly_catalog: Vec<DirectoryAnomalySeverity>,
-    pub anomaly_severity_counts: Vec<DirectoryAnomalySeverityCount>,
-    pub reference_counts: Vec<DirectoryReferenceCount>,
-    pub pointer_counts: Vec<DirectoryPointerCount>,
-    pub tree_density_counts: Vec<DirectoryTreeDensityCount>,
-    pub dangling_state_counts: Vec<DirectoryPointerStateCount>,
-    pub self_reference_counts: Vec<DirectorySelfReferenceCount>,
-    pub short_cycle_counts: Vec<DirectoryCycleCount>,
-    pub reachability_counts: Vec<DirectoryReachabilityCount>,
-    pub incoming_source_counts: Vec<DirectoryIncomingSourceCount>,
-    pub incoming_source_type_counts: Vec<DirectoryIncomingSourceTypeCount>,
-    pub dead_reference_counts: Vec<DirectoryDeadReferenceCount>,
-    pub fanout_counts: Vec<DirectoryFanoutCount>,
+    pub anomaly_severity_counts: Vec<BucketCount>,
+    pub reference_counts: Vec<BucketCount>,
+    pub pointer_counts: Vec<BucketCount>,
+    pub tree_density_counts: Vec<BucketCount>,
+    pub dangling_state_counts: Vec<BucketCount>,
+    pub self_reference_counts: Vec<BucketCount>,
+    pub short_cycle_counts: Vec<BucketCount>,
+    pub reachability_counts: Vec<BucketCount>,
+    pub incoming_source_counts: Vec<BucketCount>,
+    pub incoming_source_type_counts: Vec<BucketCount>,
+    pub dead_reference_counts: Vec<BucketCount>,
+    pub fanout_counts: Vec<BucketCount>,
     pub entries: Vec<DirectoryEntry>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryRoleCount {
-    pub role: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryAnomalyCount {
-    pub anomaly: String,
-    pub count: usize,
-}
-
+/// An anomaly entry with its severity classification.
 #[derive(Debug, Clone, Serialize)]
 pub struct DirectoryAnomalySeverity {
     pub anomaly: String,
     pub severity: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryAnomalySeverityCount {
-    pub severity: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryReferenceCount {
-    pub bucket: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryPointerCount {
-    pub bucket: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryTreeDensityCount {
-    pub bucket: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryPointerStateCount {
-    pub bucket: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectorySelfReferenceCount {
-    pub bucket: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryCycleCount {
-    pub bucket: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryReachabilityCount {
-    pub bucket: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryIncomingSourceCount {
-    pub bucket: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryIncomingSourceTypeCount {
-    pub bucket: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryDeadReferenceCount {
-    pub bucket: String,
-    pub count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct DirectoryFanoutCount {
-    pub bucket: String,
-    pub count: usize,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -350,7 +269,7 @@ fn classify_entry(path: &str, entry_type: CfbEntryType) -> String {
     }
 }
 
-fn build_role_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryRoleCount> {
+fn build_role_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         *counts.entry(format!("state:{}", entry.state)).or_insert(0) += 1;
@@ -363,11 +282,11 @@ fn build_role_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryRoleCount> {
     }
     counts
         .into_iter()
-        .map(|(role, count)| DirectoryRoleCount { role, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_anomaly_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryAnomalyCount> {
+fn build_anomaly_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         for anomaly in &entry.anomaly_tags {
@@ -376,7 +295,7 @@ fn build_anomaly_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryAnomalyCount
     }
     counts
         .into_iter()
-        .map(|(anomaly, count)| DirectoryAnomalyCount { anomaly, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
@@ -420,7 +339,7 @@ fn build_anomaly_catalog(entries: &[DirectoryEntry]) -> Vec<DirectoryAnomalySeve
         .collect()
 }
 
-fn build_anomaly_severity_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryAnomalySeverityCount> {
+fn build_anomaly_severity_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         for anomaly in &entry.anomaly_tags {
@@ -431,40 +350,8 @@ fn build_anomaly_severity_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryAno
     }
     counts
         .into_iter()
-        .map(|(severity, count)| DirectoryAnomalySeverityCount { severity, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
-}
-
-fn severity_rank(value: &str) -> u8 {
-    match value {
-        "high" => 3,
-        "medium" => 2,
-        "low" => 1,
-        _ => 0,
-    }
-}
-
-fn severity_label(rank: u8) -> &'static str {
-    match rank {
-        3 => "high",
-        2 => "medium",
-        1 => "low",
-        _ => "none",
-    }
-}
-
-fn max_severity<I>(values: I) -> String
-where
-    I: IntoIterator<Item = String>,
-{
-    let mut best_rank = 0;
-    for value in values {
-        let rank = severity_rank(&value);
-        if rank > best_rank {
-            best_rank = rank;
-        }
-    }
-    severity_label(best_rank).to_string()
 }
 
 fn build_directory_score(entries: &[DirectoryEntry]) -> String {
@@ -476,7 +363,7 @@ fn build_directory_score(entries: &[DirectoryEntry]) -> String {
     )
 }
 
-fn build_reference_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryReferenceCount> {
+fn build_reference_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         let bucket = match entry.incoming_reference_count {
@@ -497,11 +384,11 @@ fn build_reference_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryReferenceC
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectoryReferenceCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_pointer_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryPointerCount> {
+fn build_pointer_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         for (kind, pointer, dangling_tag) in [
@@ -519,11 +406,11 @@ fn build_pointer_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryPointerCount
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectoryPointerCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_tree_density_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryTreeDensityCount> {
+fn build_tree_density_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         for (kind, pointer) in [
@@ -543,11 +430,11 @@ fn build_tree_density_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryTreeDen
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectoryTreeDensityCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_dangling_state_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryPointerStateCount> {
+fn build_dangling_state_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         for (tag, kind) in [
@@ -564,11 +451,11 @@ fn build_dangling_state_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryPoint
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectoryPointerStateCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_self_reference_counts(entries: &[DirectoryEntry]) -> Vec<DirectorySelfReferenceCount> {
+fn build_self_reference_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         for bucket in ["self-left-sibling", "self-right-sibling", "self-child"] {
@@ -579,11 +466,11 @@ fn build_self_reference_counts(entries: &[DirectoryEntry]) -> Vec<DirectorySelfR
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectorySelfReferenceCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_short_cycle_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryCycleCount> {
+fn build_short_cycle_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         for bucket in &entry.short_cycles {
@@ -592,11 +479,11 @@ fn build_short_cycle_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryCycleCou
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectoryCycleCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_reachability_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryReachabilityCount> {
+fn build_reachability_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         let bucket = if entry.state == "normal" && entry.entry_type != "root-storage" {
@@ -614,11 +501,11 @@ fn build_reachability_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryReachab
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectoryReachabilityCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_incoming_source_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryIncomingSourceCount> {
+fn build_incoming_source_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         *counts
@@ -630,13 +517,11 @@ fn build_incoming_source_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryInco
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectoryIncomingSourceCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_incoming_source_type_counts(
-    entries: &[DirectoryEntry],
-) -> Vec<DirectoryIncomingSourceTypeCount> {
+fn build_incoming_source_type_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         *counts
@@ -651,11 +536,11 @@ fn build_incoming_source_type_counts(
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectoryIncomingSourceTypeCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_dead_reference_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryDeadReferenceCount> {
+fn build_dead_reference_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         if (entry.state == "free" || entry.state == "orphaned")
@@ -677,11 +562,11 @@ fn build_dead_reference_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryDeadR
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectoryDeadReferenceCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
-fn build_fanout_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryFanoutCount> {
+fn build_fanout_counts(entries: &[DirectoryEntry]) -> Vec<BucketCount> {
     let mut counts = std::collections::BTreeMap::<String, usize>::new();
     for entry in entries {
         *counts
@@ -695,7 +580,7 @@ fn build_fanout_counts(entries: &[DirectoryEntry]) -> Vec<DirectoryFanoutCount> 
     }
     counts
         .into_iter()
-        .map(|(bucket, count)| DirectoryFanoutCount { bucket, count })
+        .map(|(bucket, count)| BucketCount { bucket, count })
         .collect()
 }
 
@@ -1007,11 +892,11 @@ mod tests {
         assert!(inspection
             .role_counts
             .iter()
-            .any(|entry| entry.role == "state:normal" && entry.count >= 1));
+            .any(|entry| entry.bucket == "state:normal" && entry.count >= 1));
         assert!(inspection
             .role_counts
             .iter()
-            .any(|entry| entry.role == "classification:word-main-stream" && entry.count == 1));
+            .any(|entry| entry.bucket == "classification:word-main-stream" && entry.count == 1));
         assert!(inspection
             .entries
             .iter()
@@ -1126,16 +1011,16 @@ mod tests {
 
         assert!(anomalies
             .iter()
-            .any(|entry| entry.anomaly == "free-slot" && entry.count == 1));
+            .any(|entry| entry.bucket == "free-slot" && entry.count == 1));
         assert!(anomalies
             .iter()
-            .any(|entry| entry.anomaly == "orphaned-entry" && entry.count == 1));
+            .any(|entry| entry.bucket == "orphaned-entry" && entry.count == 1));
         assert!(anomalies
             .iter()
-            .any(|entry| entry.anomaly == "unknown-entry-type" && entry.count == 1));
+            .any(|entry| entry.bucket == "unknown-entry-type" && entry.count == 1));
         assert!(anomalies
             .iter()
-            .any(|entry| entry.anomaly == "zero-name-length" && entry.count == 1));
+            .any(|entry| entry.bucket == "zero-name-length" && entry.count == 1));
     }
 
     #[test]
@@ -1986,7 +1871,7 @@ mod tests {
         let severity_counts = build_anomaly_severity_counts(&entries);
         assert!(severity_counts
             .iter()
-            .any(|entry| entry.severity == "high" && entry.count >= 1));
+            .any(|entry| entry.bucket == "high" && entry.count >= 1));
     }
 
     #[test]

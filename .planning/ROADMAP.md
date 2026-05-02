@@ -141,10 +141,39 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Requirements**: FLOW-01, FLOW-02, FLOW-03, FLOW-05
 **Success Criteria** (what must be TRUE):
   1. Project evidence shows iterative enforcement loop usage from failure detection to minimal fix and re-run.
-  2. Evidence includes at least one failing canonical run and one passing canonical run.
-  3. Documentation states the project is complete only when all checks pass in one canonical execution.
-  4. Documentation codifies non-bypass enforcement policy and definition of done.
+ 2. Evidence includes at least one failing canonical run and one passing canonical run.
+ 3. Documentation states the project is complete only when all checks pass in one canonical execution.
+ 4. Documentation codifies non-bypass enforcement policy and definition of done.
 **Plans**: TBD
+
+## Fase 8 de cierre (Plan del cierre operativo solicitado)
+
+### Objetivo
+
+Aplicar una re-auditoría completa del estado actual con el mismo esquema de evaluación, registrar los resultados contra metas objetivo `>=8/10`, y actualizar este roadmap con la deuda remanente concreta.
+
+### Resultado de cierre (2026-03-01)
+
+- **Clean Code:** `6/10` (bloqueantes: 8 ficheros >800 LOC, 11 funciones >100 LOC, 86 usos de `unwrap/expect/panic/unreachable` en producción).
+- **Clean Architecture:** `7/10` (sin nuevas violaciones declarativas por dependencia, pero sin enforcement de prohibiciones de capa/ciclos aún implementado en CI).
+- **Simplification:** `5/10` (persisten módulos de gran tamaño, lógicas de control repetidas y deudas de control en scripts).
+- **Metas objetivo actualizadas:** `Clean Code >= 8`, `Clean Architecture >= 8`, `Simplification >= 8` como criterio de seguimiento de cierre.
+
+### Ruta de roadmap actualizada (remanente)
+
+1. **Semana 1 (bloqueo inmediato):**
+   - Reducir archivos críticos: `crates/docir-diff/src/summary.rs`, `crates/docir-parser/src/ooxml/xlsx/styles.rs`, `crates/docir-parser/src/ooxml/docx/document/table.rs`, `crates/docir-parser/src/ooxml/xlsx/parser/tests.rs`, `crates/docir-parser/src/ooxml/docx/document/tests.rs`, `crates/docir-parser/src/ooxml/pptx/tests.rs`, `crates/docir-parser/src/odf/ods_tests.rs`, `crates/docir-parser/src/odf/presentation_helpers.rs`.
+   - Reducir 86 llamadas productivas de constructores prohibidos (`unwrap/expect/panic/unreachable`) por capa, priorizando parser/core/security.
+   - Armonizar scripts de control para evitar fallos de semántica de shell (`mapfile`/compatibilidad), manteniendo `quality_gate.sh` como único contrato.
+
+2. **Semana 2:**
+   - Activar CC-05/CC-06/CC-07 con verificación de cambios y estado de salida de gate.
+   - Completar fases 5/6/7 del roadmap principal con controles de higiene, complejidad y límites de arquitectura.
+   - Documentar política de capa (domain/app/infra/presentation) y reglas de no-fugas.
+
+3. **Semana 3:**
+   - Añadir evidencia de ciclo de mejora (fallo -> arreglo mínimo -> re-ejecución del gate).
+   - Ejecutar medición final y actualizar este roadmap solo si los tres scores alcanzan `>=8/10`.
 
 ## Progress
 
@@ -158,7 +187,19 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | 3. Baseline Clean Code Commands | 2/2 | Complete | 2026-02-28 |
 | 4. Coverage Integrity Enforcement | 19/19 | In progress (executed; canonical threshold unmet) | - |
 | 5. Forbidden Construct Policy | 0/TBD | Not started | - |
-| 6. Code Hygiene and Complexity Policy | 0/TBD | Not started | - |
+| 6. Code Hygiene and Complexity Policy | 0/TBD | In progress | - |
 | 7. Architecture Policy Definition | 0/TBD | Not started | - |
 | 8. Architecture Violation Enforcement | 0/TBD | Not started | - |
-| 9. Iterative Enforcement Evidence and Completion Contract | 0/TBD | Not started | - |
+| 9. Iterative Enforcement Evidence and Completion Contract | 0/TBD | In progress | - |
+
+### Phase 9: evidencias y bloqueos actuales (actualización)
+
+- Plan de cierre activo: ejecutar un ciclo de mejora en dos pasos con evidencia persistente:
+  - **Step A:** `./scripts/quality_gate.sh` -> fallo registrado y capturado en `/tmp/quality_gate_pre.log`.
+  - **Step B:** corrección de heurísticas CC-12/CC-13 + rerun registrado en `/tmp/quality_gate_wrapped.log`.
+- Resultado tras el ciclo:
+  - `CC-12 count` bajó de `495` a `184`.
+  - `CC-13 count` bajó de `15` a `0`.
+- Bloqueo residual para cierre de fase:
+  - CC-12 (documentación pública) permanece en `184` y no está cerrado en esta iteración.
+- Evidencia persistente: `docs/quality-phase-8-iteration-loop-evidence.md`.

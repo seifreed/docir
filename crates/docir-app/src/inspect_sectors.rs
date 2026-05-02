@@ -1,3 +1,4 @@
+use crate::severity::max_severity;
 use crate::{AppResult, ParserConfig};
 use docir_parser::ole::Cfb;
 use docir_parser::ParseError as ParserParseError;
@@ -742,31 +743,6 @@ fn build_chain_health_counts_by_allocation(
         .into_iter()
         .map(|(bucket, count)| ChainHealthCount { bucket, count })
         .collect()
-}
-
-fn severity_label(rank: u8) -> &'static str {
-    match rank {
-        3 => "high",
-        2 => "medium",
-        1 => "low",
-        _ => "none",
-    }
-}
-
-fn max_severity(values: impl IntoIterator<Item = String>) -> String {
-    let mut best_rank = 0u8;
-    for value in values {
-        let rank = match value.as_str() {
-            "high" => 3,
-            "medium" => 2,
-            "low" => 1,
-            _ => 0,
-        };
-        if rank > best_rank {
-            best_rank = rank;
-        }
-    }
-    severity_label(best_rank).to_string()
 }
 
 fn build_sector_score(streams: &[StreamSectorMap], anomalies: &[SectorAnomaly]) -> String {

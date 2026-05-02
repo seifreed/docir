@@ -1,3 +1,4 @@
+use crate::severity::severity_to_threat_level;
 use crate::{
     inspect_directory_bytes, inspect_sectors_bytes, ArtifactInventory, ContainerKind,
     ParsedDocument, VbaRecognitionReport,
@@ -317,12 +318,7 @@ impl IndicatorReport {
                 indicators.push(DocumentIndicator {
                     key: "cfb-directory-score".to_string(),
                     value: summary.directory_score.clone(),
-                    risk: match summary.directory_score.as_str() {
-                        "high" => ThreatLevel::High,
-                        "medium" => ThreatLevel::Medium,
-                        "low" => ThreatLevel::Low,
-                        _ => ThreatLevel::None,
-                    },
+                    risk: severity_to_threat_level(&summary.directory_score),
                     reason: "Aggregated directory-graph corruption score for the CFB container"
                         .to_string(),
                     evidence: summary

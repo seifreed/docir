@@ -17,6 +17,7 @@ use thiserror::Error;
 
 mod adapters;
 mod artifacts;
+mod bucket_count;
 mod config;
 mod container;
 mod export;
@@ -31,6 +32,7 @@ mod list_times;
 mod metadata;
 mod probe;
 mod report_indicators;
+mod severity;
 mod summary;
 pub mod test_support;
 mod use_cases;
@@ -42,6 +44,7 @@ pub use artifacts::{
     extract_artifacts_from_bytes, ArtifactExtractionBundle, ArtifactExtractionOptions,
     ExtractedPayload,
 };
+pub use bucket_count::BucketCount;
 /// Parser-related CLI configuration bundle.
 pub use config::{HwpConfig, OdfConfig, ParseMetrics, ParserConfig, RtfConfig, ZipConfig};
 pub use container::{ContainerDump, ContainerEntry, ContainerEntryKind};
@@ -57,13 +60,8 @@ pub use extract_flash::{
 };
 pub use extract_links::{LinkArtifact, LinkExtractionReport};
 pub use inspect_directory::{
-    inspect_directory_bytes, inspect_directory_path, DirectoryAnomalyCount,
-    DirectoryAnomalySeverity, DirectoryAnomalySeverityCount, DirectoryCycleCount,
-    DirectoryDeadReferenceCount, DirectoryEntry, DirectoryFanoutCount,
-    DirectoryIncomingSourceCount, DirectoryIncomingSourceTypeCount, DirectoryInspection,
-    DirectoryPointerCount, DirectoryPointerStateCount, DirectoryReachabilityCount,
-    DirectoryReferenceCount, DirectoryRoleCount, DirectorySelfReferenceCount,
-    DirectoryTreeDensityCount,
+    inspect_directory_bytes, inspect_directory_path, DirectoryAnomalySeverity, DirectoryEntry,
+    DirectoryInspection,
 };
 pub use inspect_sectors::{
     inspect_sectors_bytes, inspect_sectors_path, ChainHealthCount, ChainStep, RoleCount,
