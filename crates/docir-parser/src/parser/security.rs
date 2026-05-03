@@ -8,7 +8,8 @@ use crate::zip_handler::PackageReader;
 use docir_core::ir::IRNode;
 use docir_core::security::analyze_vba_source;
 use docir_core::security::{
-    ExternalRefType, ExternalReference, MacroExtractionState, MacroProject, OleObject,
+    ExternalRefType, ExternalReference, MacroExtractionState, MacroModuleType, MacroProject,
+    OleObject,
 };
 use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
@@ -276,6 +277,25 @@ impl<'a> SecurityScanner<'a> {
         project.references = references;
         project.is_protected = is_protected;
 
+        let (modules_out, auto_exec) =
+            self.extract_vba_modules(cfb, &streams, container_path, storage_root, &module_defs);
+
+        if !auto_exec.is_empty() {
+            project.has_auto_exec = true;
+            project.auto_exec_procedures = auto_exec;
+        }
+
+        Ok((project, modules_out))
+    }
+
+    fn extract_vba_modules(
+        &self,
+        cfb: &Cfb,
+        streams: &[String],
+        container_path: &str,
+        storage_root: &str,
+        module_defs: &[(String, MacroModuleType)],
+    ) -> (Vec<docir_core::security::MacroModule>, Vec<String>) {
         let mut auto_exec = Vec::new();
         let mut modules_out = Vec::new();
         for (module_name, module_type) in module_defs {
@@ -285,13 +305,13 @@ impl<'a> SecurityScanner<'a> {
                 format!("{storage_root}/{module_name}")
             };
             let mut module =
-                docir_core::security::MacroModule::new(module_name.clone(), module_type);
+                docir_core::security::MacroModule::new(module_name.clone(), *module_type);
             module.stream_name = Some(module_name.clone());
             module.stream_path = Some(stream_path.clone());
             module.span = Some(SourceSpan::new(container_path));
 
             let raw_stream =
-                find_stream_case(&streams, &stream_path).and_then(|p| cfb.read_stream(p));
+                find_stream_case(streams, &stream_path).and_then(|p| cfb.read_stream(p));
             match raw_stream {
                 Some(raw) => {
                     module.compressed_size = Some(raw.len() as u64);
@@ -333,13 +353,7 @@ impl<'a> SecurityScanner<'a> {
 
             modules_out.push(module);
         }
-
-        if !auto_exec.is_empty() {
-            project.has_auto_exec = true;
-            project.auto_exec_procedures = auto_exec;
-        }
-
-        Ok((project, modules_out))
+        (modules_out, auto_exec)
     }
 
     fn detect_ole_object(
