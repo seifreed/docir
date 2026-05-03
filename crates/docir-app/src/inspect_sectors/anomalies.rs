@@ -10,8 +10,27 @@ pub(super) fn collect_cfb_anomalies(
     structural_incoherence_counts: &[StructuralIncoherenceCount],
 ) -> Vec<SectorAnomaly> {
     let mut anomalies = Vec::new();
+    if let Some(anomaly) = check_difat_mismatch(cfb) {
+        anomalies.push(anomaly);
+    }
+    if let Some(anomaly) = check_fat_short(cfb, fat_entry_count) {
+        anomalies.push(anomaly);
+    }
+    if let Some(anomaly) = check_mini_fat_without_consumers(cfb, streams) {
+        anomalies.push(anomaly);
+    }
+    anomalies.extend(collect_shared_sector_anomalies(shared_sector_claims));
+    anomalies.extend(collect_shared_chain_anomalies(shared_chain_overlaps));
+    anomalies.extend(collect_start_sector_reuse_anomalies(start_sector_reuse));
+    anomalies.extend(collect_structural_incoherence_anomalies(
+        structural_incoherence_counts,
+    ));
+    anomalies
+}
+
+fn check_difat_mismatch(cfb: &docir_parser::ole::Cfb) -> Option<SectorAnomaly> {
     if cfb.num_fat_sectors() as usize > cfb.difat_entry_count() {
-        anomalies.push(SectorAnomaly {
+        Some(SectorAnomaly {
             kind: "difat-mismatch".to_string(),
             severity: "medium".to_string(),
             message: format!(
@@ -19,10 +38,15 @@ pub(super) fn collect_cfb_anomalies(
                 cfb.num_fat_sectors(),
                 cfb.difat_entry_count()
             ),
-        });
+        })
+    } else {
+        None
     }
+}
+
+fn check_fat_short(cfb: &docir_parser::ole::Cfb, fat_entry_count: usize) -> Option<SectorAnomaly> {
     if fat_entry_count < cfb.sector_count() as usize {
-        anomalies.push(SectorAnomaly {
+        Some(SectorAnomaly {
             kind: "fat-shorter-than-sector-count".to_string(),
             severity: "high".to_string(),
             message: format!(
@@ -30,20 +54,34 @@ pub(super) fn collect_cfb_anomalies(
                 fat_entry_count,
                 cfb.sector_count()
             ),
-        });
+        })
+    } else {
+        None
     }
+}
+
+fn check_mini_fat_without_consumers(
+    cfb: &docir_parser::ole::Cfb,
+    streams: &[StreamSectorMap],
+) -> Option<SectorAnomaly> {
     if cfb.mini_fat_entry_count() > 0
         && !streams.iter().any(|stream| stream.allocation == "mini-fat")
     {
-        anomalies.push(SectorAnomaly {
+        Some(SectorAnomaly {
             kind: "mini-fat-without-consumers".to_string(),
             severity: "medium".to_string(),
             message: "mini FAT is present but no stream currently resolves through mini-fat"
                 .to_string(),
-        });
+        })
+    } else {
+        None
     }
-    for claim in shared_sector_claims {
-        anomalies.push(SectorAnomaly {
+}
+
+fn collect_shared_sector_anomalies(claims: &[SharedSectorClaim]) -> Vec<SectorAnomaly> {
+    claims
+        .iter()
+        .map(|claim| SectorAnomaly {
             kind: "shared-sector".to_string(),
             severity: "high".to_string(),
             message: format!(
@@ -51,10 +89,14 @@ pub(super) fn collect_cfb_anomalies(
                 claim.sector,
                 claim.owners.join(", ")
             ),
-        });
-    }
-    for overlap in shared_chain_overlaps {
-        anomalies.push(SectorAnomaly {
+        })
+        .collect()
+}
+
+fn collect_shared_chain_anomalies(overlaps: &[SharedChainOverlap]) -> Vec<SectorAnomaly> {
+    overlaps
+        .iter()
+        .map(|overlap| SectorAnomaly {
             kind: "shared-chain".to_string(),
             severity: "high".to_string(),
             message: format!(
@@ -62,10 +104,14 @@ pub(super) fn collect_cfb_anomalies(
                 overlap.owners.join(", "),
                 overlap.sectors
             ),
-        });
-    }
-    for reuse in start_sector_reuse {
-        anomalies.push(SectorAnomaly {
+        })
+        .collect()
+}
+
+fn collect_start_sector_reuse_anomalies(reuse: &[StartSectorReuse]) -> Vec<SectorAnomaly> {
+    reuse
+        .iter()
+        .map(|reuse| SectorAnomaly {
             kind: "start-sector-reuse".to_string(),
             severity: "medium".to_string(),
             message: format!(
@@ -73,14 +119,19 @@ pub(super) fn collect_cfb_anomalies(
                 reuse.sector,
                 reuse.owners.join(", ")
             ),
-        });
-    }
-    for entry in structural_incoherence_counts {
-        anomalies.push(SectorAnomaly {
+        })
+        .collect()
+}
+
+fn collect_structural_incoherence_anomalies(
+    counts: &[StructuralIncoherenceCount],
+) -> Vec<SectorAnomaly> {
+    counts
+        .iter()
+        .map(|entry| SectorAnomaly {
             kind: entry.bucket.clone(),
             severity: entry.severity.clone(),
             message: format!("{}: {}", entry.bucket, entry.count),
-        });
-    }
-    anomalies
+        })
+        .collect()
 }

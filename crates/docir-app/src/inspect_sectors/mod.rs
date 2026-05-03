@@ -61,8 +61,6 @@ pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
     );
 
     let fat_entry_count = cfb.fat_entry_count();
-    let fat_free_count = cfb.fat_free_count();
-    let occupied_fat_entries = fat_entry_count.saturating_sub(fat_free_count);
     let structural_incoherence_counts =
         build_structural_incoherence_counts(&sector_overview, &streams, cfb.mini_fat_entry_count());
     anomalies.extend(collect_cfb_anomalies(
@@ -82,8 +80,10 @@ pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
         &shared_sector_claims,
         &start_sector_reuse,
     );
+    let fat_free_count = cfb.fat_free_count();
+    let fat_entry_count = cfb.fat_entry_count();
+    let occupied_fat_entries = fat_entry_count.saturating_sub(fat_free_count);
     let sector_score = build_sector_score(&streams, &anomalies);
-
     Ok(SectorInspection {
         container: "cfb-ole".to_string(),
         sector_score,

@@ -220,7 +220,6 @@ pub(crate) fn push_bullet_line(
 
 /// Render a section heading followed by one bullet line per entry, each showing
 /// a label and a numeric count. Skipped entirely when `entries` is empty.
-#[cfg(test)]
 pub(crate) fn push_count_section<T>(
     out: &mut String,
     heading: &str,

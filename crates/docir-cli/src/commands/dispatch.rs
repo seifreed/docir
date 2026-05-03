@@ -5,6 +5,7 @@ use super::dispatch_inspect::{
     cmd_inspect_directory, cmd_inspect_metadata, cmd_inspect_sectors, cmd_inspect_sheet_records,
     cmd_inspect_slide_records,
 };
+use super::dispatch_query::{cmd_diff, cmd_grep, cmd_query, cmd_rules};
 use crate::{Cli, Commands};
 use anyhow::Result;
 use docir_app::ParserConfig;
@@ -396,74 +397,6 @@ fn cmd_dump_node(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     super::dump_node::run(input, &node_id, format, parser_config)
-}
-
-fn cmd_diff(
-    left: PathBuf,
-    right: PathBuf,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::diff::run(left, right, pretty, output, parser_config)
-}
-
-fn cmd_rules(
-    input: PathBuf,
-    pretty: bool,
-    output: Option<PathBuf>,
-    profile: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::rules::run(input, pretty, output, profile, parser_config)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn cmd_query(
-    input: PathBuf,
-    node_type: Option<String>,
-    contains: Option<String>,
-    format: Option<String>,
-    has_external_refs: Option<bool>,
-    has_macros: Option<bool>,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::query::run_with_filters(
-        input,
-        super::query::QueryFilters {
-            node_type,
-            contains,
-            format,
-            has_external_refs,
-            has_macros,
-        },
-        pretty,
-        output,
-        parser_config,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn cmd_grep(
-    input: PathBuf,
-    pattern: String,
-    node_type: Option<String>,
-    format: Option<String>,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::grep::run(
-        input,
-        pattern,
-        node_type,
-        format,
-        pretty,
-        output,
-        parser_config,
-    )
 }
 
 #[cfg(test)]
