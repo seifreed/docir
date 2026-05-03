@@ -123,55 +123,45 @@ fn scan_dde_fields(store: &IrStore) -> Vec<DdeField> {
     out
 }
 
-fn build_ooxml_indicators(
+fn macro_indicator(
     store: &IrStore,
-    security: &docir_core::security::SecurityInfo,
+    macro_id: NodeId,
+) -> (ThreatIndicatorType, ThreatLevel, String, Option<String>) {
+    match store.get(macro_id) {
+        Some(IRNode::MacroProject(project)) => {
+            let details = macro_project_details(project);
+            if project.has_auto_exec {
+                (
+                    ThreatIndicatorType::AutoExecMacro,
+                    ThreatLevel::Critical,
+                    details.1,
+                    details.0,
+                )
+            } else {
+                (
+                    ThreatIndicatorType::MacroProject,
+                    ThreatLevel::High,
+                    details.1,
+                    details.0,
+                )
+            }
+        }
+        _ => (
+            ThreatIndicatorType::MacroProject,
+            ThreatLevel::High,
+            "VBA macro project found".to_string(),
+            None,
+        ),
+    }
+}
+
+fn ole_object_indicators(
+    store: &IrStore,
+    ole_objects: &[NodeId],
+    reported_activex_ids: &mut std::collections::HashSet<NodeId>,
 ) -> Vec<ThreatIndicator> {
     let mut indicators = Vec::new();
-
-    if let Some(macro_id) = security.macro_project {
-        let (indicator_type, severity, description, location) = match store.get(macro_id) {
-            Some(IRNode::MacroProject(project)) => {
-                let details = macro_project_details(project);
-                if project.has_auto_exec {
-                    (
-                        ThreatIndicatorType::AutoExecMacro,
-                        ThreatLevel::Critical,
-                        details.1,
-                        details.0,
-                    )
-                } else {
-                    (
-                        ThreatIndicatorType::MacroProject,
-                        ThreatLevel::High,
-                        details.1,
-                        details.0,
-                    )
-                }
-            }
-            _ => (
-                ThreatIndicatorType::MacroProject,
-                ThreatLevel::High,
-                "VBA macro project found".to_string(),
-                None,
-            ),
-        };
-        indicators.push(make_indicator(
-            indicator_type,
-            severity,
-            description,
-            location,
-            Some(macro_id),
-        ));
-    }
-
-    // Track which OLE object IDs have already been reported as ActiveX
-    // to avoid duplicate indicators when both ole_objects and activex_controls
-    // reference the same entity.
-    let mut reported_activex_ids: std::collections::HashSet<NodeId> =
-        std::collections::HashSet::new();
-
-    for id in &security.ole_objects {
+    for id in ole_objects {
         let Some(IRNode::OleObject(ole)) = store.get(*id) else {
             continue;
         };
@@ -201,8 +191,16 @@ fn build_ooxml_indicators(
             ));
         }
     }
+    indicators
+}
 
-    for id in &security.activex_controls {
+fn activex_control_indicators(
+    store: &IrStore,
+    activex_controls: &[NodeId],
+    reported_activex_ids: &std::collections::HashSet<NodeId>,
+) -> Vec<ThreatIndicator> {
+    let mut indicators = Vec::new();
+    for id in activex_controls {
         if reported_activex_ids.contains(id) {
             continue;
         }
@@ -218,7 +216,37 @@ fn build_ooxml_indicators(
             Some(*id),
         ));
     }
+    indicators
+}
 
+fn build_ooxml_indicators(
+    store: &IrStore,
+    security: &docir_core::security::SecurityInfo,
+) -> Vec<ThreatIndicator> {
+    let mut indicators = Vec::new();
+
+    if let Some(macro_id) = security.macro_project {
+        let (indicator_type, severity, description, location) = macro_indicator(store, macro_id);
+        indicators.push(make_indicator(
+            indicator_type,
+            severity,
+            description,
+            location,
+            Some(macro_id),
+        ));
+    }
+
+    let mut reported_activex_ids = std::collections::HashSet::new();
+    indicators.extend(ole_object_indicators(
+        store,
+        &security.ole_objects,
+        &mut reported_activex_ids,
+    ));
+    indicators.extend(activex_control_indicators(
+        store,
+        &security.activex_controls,
+        &reported_activex_ids,
+    ));
     indicators.extend(build_xlm_indicators(store, security));
 
     indicators

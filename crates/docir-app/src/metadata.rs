@@ -71,6 +71,68 @@ pub fn inspect_metadata_bytes(data: &[u8]) -> AppResult<MetadataInspection> {
     })
 }
 
+fn parse_section_entries(
+    name: &str,
+    data: &[u8],
+    section_index: usize,
+    path: &str,
+) -> Result<Vec<MetadataProperty>, ParserParseError> {
+    let descriptor_offset = match 28usize.checked_add(section_index.saturating_mul(20)) {
+        Some(off) => off,
+        None => return Ok(Vec::new()),
+    };
+    if descriptor_offset + 20 > data.len() {
+        return Ok(Vec::new());
+    }
+    let section_offset = read_u32(data, descriptor_offset + 16)? as usize;
+    if section_offset + 8 > data.len() {
+        return Err(ParserParseError::InvalidStructure(format!(
+            "OLE property set section offset is out of bounds for {}",
+            path
+        )));
+    }
+
+    let section_size = read_u32(data, section_offset)? as usize;
+    let property_count = read_u32(data, section_offset + 4)? as usize;
+    let section_end = section_offset.saturating_add(section_size).min(data.len());
+
+    let mut entries = Vec::new();
+    for index in 0..property_count {
+        let entry_offset = match section_offset
+            .checked_add(8)
+            .and_then(|base| base.checked_add(index.saturating_mul(8)))
+        {
+            Some(off) => off,
+            None => break,
+        };
+        if entry_offset + 8 > section_end {
+            break;
+        }
+        let property_id = read_u32(data, entry_offset)?;
+        let value_offset = read_u32(data, entry_offset + 4)? as usize;
+        let absolute_offset = match section_offset.checked_add(value_offset) {
+            Some(off) => off,
+            None => continue,
+        };
+        if absolute_offset + 4 > section_end {
+            continue;
+        }
+        let value_type = read_u32(data, absolute_offset)?;
+        if let Some((type_name, value, display_value)) =
+            parse_property_value(&data[absolute_offset..section_end], value_type)
+        {
+            entries.push(MetadataProperty {
+                id: property_id,
+                name: property_name(name, property_id).to_string(),
+                value_type: type_name.to_string(),
+                value,
+                display_value,
+            });
+        }
+    }
+    Ok(entries)
+}
+
 fn parse_property_stream(
     name: &str,
     path: &str,
@@ -100,58 +162,7 @@ fn parse_property_stream(
 
     let mut properties = Vec::new();
     for section_index in 0..section_count {
-        let descriptor_offset = match 28usize.checked_add(section_index.saturating_mul(20)) {
-            Some(off) => off,
-            None => break,
-        };
-        if descriptor_offset + 20 > data.len() {
-            break;
-        }
-        let section_offset = read_u32(data, descriptor_offset + 16)? as usize;
-        if section_offset + 8 > data.len() {
-            return Err(ParserParseError::InvalidStructure(format!(
-                "OLE property set section offset is out of bounds for {}",
-                path
-            )));
-        }
-
-        let section_size = read_u32(data, section_offset)? as usize;
-        let property_count = read_u32(data, section_offset + 4)? as usize;
-        let section_end = section_offset.saturating_add(section_size).min(data.len());
-
-        for index in 0..property_count {
-            let entry_offset = match section_offset
-                .checked_add(8)
-                .and_then(|base| base.checked_add(index.saturating_mul(8)))
-            {
-                Some(off) => off,
-                None => break,
-            };
-            if entry_offset + 8 > section_end {
-                break;
-            }
-            let property_id = read_u32(data, entry_offset)?;
-            let value_offset = read_u32(data, entry_offset + 4)? as usize;
-            let absolute_offset = match section_offset.checked_add(value_offset) {
-                Some(off) => off,
-                None => continue,
-            };
-            if absolute_offset + 4 > section_end {
-                continue;
-            }
-            let value_type = read_u32(data, absolute_offset)?;
-            if let Some((type_name, value, display_value)) =
-                parse_property_value(&data[absolute_offset..section_end], value_type)
-            {
-                properties.push(MetadataProperty {
-                    id: property_id,
-                    name: property_name(name, property_id).to_string(),
-                    value_type: type_name.to_string(),
-                    value,
-                    display_value,
-                });
-            }
-        }
+        properties.extend(parse_section_entries(name, data, section_index, path)?);
     }
 
     Ok(MetadataSection {
