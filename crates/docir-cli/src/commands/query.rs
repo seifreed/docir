@@ -71,30 +71,15 @@ pub(crate) fn run_with_filters(
 #[cfg(test)]
 mod tests {
     use super::{run_with_filters, QueryFilters};
+    use crate::test_support;
     use docir_app::ParserConfig;
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn fixture(name: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/ooxml")
-            .join(name)
-    }
-
-    fn temp_file(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_query_{name}_{nanos}.json"))
-    }
 
     #[test]
     fn query_run_with_filters_writes_matches_json() {
-        let output = temp_file("filters");
+        let output = test_support::temp_file("filters", "json");
         run_with_filters(
-            fixture("minimal.docx"),
+            test_support::fixture("minimal.docx"),
             QueryFilters {
                 node_type: Some("Paragraph".to_string()),
                 contains: Some("Hello".to_string()),

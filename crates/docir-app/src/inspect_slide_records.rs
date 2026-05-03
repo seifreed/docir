@@ -1,4 +1,4 @@
-use crate::io_support::read_bounded_file;
+use crate::io_support::with_file_bytes;
 use crate::{AppResult, ParserConfig};
 use docir_parser::ole::Cfb;
 use docir_parser::ppt_records::{read_ppt_records, PptRecordScan};
@@ -51,8 +51,7 @@ pub fn inspect_slide_records_path<P: AsRef<Path>>(
     path: P,
     config: &ParserConfig,
 ) -> AppResult<SlideRecordInspection> {
-    let bytes = read_bounded_file(path, config.max_input_size)?;
-    inspect_slide_records_bytes(&bytes)
+    with_file_bytes(path, config.max_input_size, inspect_slide_records_bytes)
 }
 
 pub fn inspect_slide_records_bytes(data: &[u8]) -> AppResult<SlideRecordInspection> {

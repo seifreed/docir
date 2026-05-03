@@ -2,18 +2,10 @@
 
 use anyhow::Result;
 use docir_app::{ArtifactInventory, ParserConfig};
-use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::commands::util::{
-    build_app, push_bullet_line, push_labeled_line, write_json_output, write_text_output,
-};
-
-#[derive(Debug, Serialize)]
-struct InventoryResult {
-    inventory: ArtifactInventory,
-}
+use crate::commands::util::{build_app, push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -27,13 +19,14 @@ pub fn run(
     let source_bytes = fs::read(&input)?;
     let parsed = app.parse_bytes(&source_bytes)?;
     let inventory = app.build_inventory_with_bytes(&parsed, &source_bytes);
-
-    if json {
-        return write_json_output(&InventoryResult { inventory }, pretty, output);
-    }
-
-    let text = format_inventory_text(&inventory);
-    write_text_output(&text, output)
+    run_dual_output(
+        &inventory,
+        "inventory",
+        json,
+        pretty,
+        output,
+        format_inventory_text,
+    )
 }
 
 fn format_inventory_text(inventory: &ArtifactInventory) -> String {
@@ -125,41 +118,18 @@ fn inventory_kind_label(kind: docir_app::InventoryArtifactKind) -> &'static str 
 #[cfg(test)]
 mod tests {
     use super::{format_inventory_text, run};
+    use crate::test_support;
     use docir_app::{
         test_support::build_test_cfb, ArtifactInventory, ContainerKind, InventoryArtifact,
         InventoryArtifactKind, ParserConfig,
     };
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn fixture(name: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/ooxml")
-            .join(name)
-    }
-
-    fn temp_file(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_inventory_{name}_{nanos}.json"))
-    }
-
-    fn temp_input(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_inventory_{name}_{nanos}.{ext}"))
-    }
 
     #[test]
     fn inventory_run_writes_json() {
-        let output = temp_file("json");
+        let output = test_support::temp_file("json", "json");
         run(
-            fixture("minimal.docx"),
+            test_support::fixture("minimal.docx"),
             true,
             true,
             Some(output.clone()),
@@ -173,9 +143,9 @@ mod tests {
 
     #[test]
     fn inventory_run_writes_text() {
-        let output = temp_file("text");
+        let output = test_support::temp_file("text", "json");
         run(
-            fixture("minimal.docx"),
+            test_support::fixture("minimal.docx"),
             false,
             false,
             Some(output.clone()),
@@ -190,8 +160,8 @@ mod tests {
 
     #[test]
     fn inventory_run_reports_vba_evidence_for_legacy_doc() {
-        let input = temp_input("legacy_vba", "doc");
-        let output = temp_file("legacy_vba");
+        let input = test_support::temp_file("legacy_vba", "doc");
+        let output = test_support::temp_file("legacy_vba", "json");
         let bytes = build_test_cfb(&[
             ("WordDocument", b"doc"),
             (

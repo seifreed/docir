@@ -8,6 +8,7 @@ pub use json::JsonSerializer;
 
 use docir_core::ir::IRNode;
 use docir_core::visitor::IrStore;
+use docir_core::CoreError;
 use docir_core::NodeId;
 use thiserror::Error;
 
@@ -20,8 +21,8 @@ pub enum SerializationError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Node not found: {0}")]
-    NodeNotFound(String),
+    #[error(transparent)]
+    Core(#[from] CoreError),
 }
 
 /// Trait for IR serializers.

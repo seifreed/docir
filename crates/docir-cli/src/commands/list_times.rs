@@ -2,17 +2,9 @@
 
 use anyhow::Result;
 use docir_app::{list_times_path, ParserConfig, TimeListing};
-use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::commands::util::{
-    push_bullet_line, push_labeled_line, write_json_output, write_text_output,
-};
-
-#[derive(Debug, Serialize)]
-struct ListTimesResult {
-    listing: TimeListing,
-}
+use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -23,13 +15,14 @@ pub fn run(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     let listing = list_times_path(&input, parser_config)?;
-
-    if json {
-        return write_json_output(&ListTimesResult { listing }, pretty, output);
-    }
-
-    let text = format_listing_text(&listing);
-    write_text_output(&text, output)
+    run_dual_output(
+        &listing,
+        "listing",
+        json,
+        pretty,
+        output,
+        format_listing_text,
+    )
 }
 
 fn format_listing_text(listing: &TimeListing) -> String {
@@ -54,25 +47,16 @@ fn format_listing_text(listing: &TimeListing) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_listing_text, run};
+    use crate::test_support;
     use docir_app::{
         test_support::build_test_cfb_with_times, ParserConfig, TimeEntry, TimeListing,
     };
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_file(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_list_times_{name}_{nanos}.{ext}"))
-    }
 
     #[test]
     fn list_times_run_writes_json() {
-        let input = temp_file("legacy", "doc");
-        let output = temp_file("legacy", "json");
+        let input = test_support::temp_file("legacy", "doc");
+        let output = test_support::temp_file("legacy", "json");
         fs::write(
             &input,
             build_test_cfb_with_times(&[("WordDocument", b"doc")], &[("WordDocument", 10, 20)]),
@@ -99,8 +83,8 @@ mod tests {
 
     #[test]
     fn list_times_run_writes_text() {
-        let input = temp_file("legacy_text", "doc");
-        let output = temp_file("legacy_text", "txt");
+        let input = test_support::temp_file("legacy_text", "doc");
+        let output = test_support::temp_file("legacy_text", "txt");
         fs::write(
             &input,
             build_test_cfb_with_times(

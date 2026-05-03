@@ -2,18 +2,10 @@
 
 use anyhow::{Context, Result};
 use docir_app::{IndicatorReport, ParserConfig};
-use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::commands::util::{
-    build_app, push_bullet_line, push_labeled_line, write_json_output, write_text_output,
-};
-
-#[derive(Debug, Serialize)]
-struct ReportIndicatorsResult {
-    report: IndicatorReport,
-}
+use crate::commands::util::{build_app, push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -30,13 +22,7 @@ pub fn run(
         .parse_bytes(&source_bytes)
         .with_context(|| format!("Failed to parse {}", input.display()))?;
     let report = app.build_indicator_report_with_bytes(&parsed, &source_bytes);
-
-    if json {
-        return write_json_output(&ReportIndicatorsResult { report }, pretty, output);
-    }
-
-    let text = format_report_text(&report);
-    write_text_output(&text, output)
+    run_dual_output(&report, "report", json, pretty, output, format_report_text)
 }
 
 fn format_report_text(report: &IndicatorReport) -> String {
@@ -93,6 +79,7 @@ fn format_report_text(report: &IndicatorReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_report_text, run};
+    use crate::test_support;
     use docir_app::{
         inspect_directory_bytes,
         test_support::{build_test_cfb, patch_test_cfb_directory_entry, TestCfbDirectoryPatch},
@@ -101,21 +88,11 @@ mod tests {
     use docir_core::security::ThreatLevel;
     use serde_json::Value;
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_file(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_report_indicators_{name}_{nanos}.{ext}"))
-    }
 
     #[test]
     fn report_indicators_run_writes_json() {
-        let input = temp_file("legacy", "doc");
-        let output = temp_file("legacy", "json");
+        let input = test_support::temp_file("legacy", "doc");
+        let output = test_support::temp_file("legacy", "json");
         let base = build_test_cfb(&[
             ("WordDocument", b"doc"),
             (

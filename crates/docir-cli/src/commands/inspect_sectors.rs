@@ -2,17 +2,9 @@
 
 use anyhow::Result;
 use docir_app::{inspect_sectors_path, ParserConfig, SectorInspection};
-use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::commands::util::{
-    push_bullet_line, push_labeled_line, write_json_output, write_text_output,
-};
-
-#[derive(Debug, Serialize)]
-struct InspectSectorsResult {
-    inspection: SectorInspection,
-}
+use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -23,13 +15,14 @@ pub fn run(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     let inspection = inspect_sectors_path(&input, parser_config)?;
-
-    if json {
-        return write_json_output(&InspectSectorsResult { inspection }, pretty, output);
-    }
-
-    let text = format_inspection_text(&inspection);
-    write_text_output(&text, output)
+    run_dual_output(
+        &inspection,
+        "inspection",
+        json,
+        pretty,
+        output,
+        format_inspection_text,
+    )
 }
 
 fn format_inspection_text(inspection: &SectorInspection) -> String {
@@ -227,6 +220,7 @@ fn format_inspection_text(inspection: &SectorInspection) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_inspection_text, run};
+    use crate::test_support;
     use docir_app::{
         test_support::build_test_cfb, ChainHealthCount, ChainStep, ParserConfig, RoleCount,
         SectorAnomaly, SectorInspection, SectorOverviewEntry, SharedChainOverlap,
@@ -234,21 +228,11 @@ mod tests {
         TruncatedChainCount,
     };
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_file(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_inspect_sectors_{name}_{nanos}.{ext}"))
-    }
 
     #[test]
     fn inspect_sectors_run_writes_json() {
-        let input = temp_file("legacy", "doc");
-        let output = temp_file("legacy", "json");
+        let input = test_support::temp_file("legacy", "doc");
+        let output = test_support::temp_file("legacy", "json");
         fs::write(
             &input,
             build_test_cfb(&[("WordDocument", b"doc"), ("VBA/PROJECT", b"meta")]),
@@ -296,8 +280,8 @@ mod tests {
 
     #[test]
     fn inspect_sectors_run_writes_text() {
-        let input = temp_file("legacy_text", "doc");
-        let output = temp_file("legacy_text", "txt");
+        let input = test_support::temp_file("legacy_text", "doc");
+        let output = test_support::temp_file("legacy_text", "txt");
         fs::write(&input, build_test_cfb(&[("WordDocument", b"doc")])).expect("fixture");
 
         run(

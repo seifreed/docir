@@ -2,17 +2,9 @@
 
 use anyhow::Result;
 use docir_app::{probe_format_path, FormatProbe, ParserConfig};
-use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::commands::util::{
-    push_bullet_line, push_labeled_line, write_json_output, write_text_output,
-};
-
-#[derive(Debug, Serialize)]
-struct ProbeFormatResult {
-    probe: FormatProbe,
-}
+use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -23,13 +15,7 @@ pub fn run(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     let probe = probe_format_path(&input, parser_config)?;
-
-    if json {
-        return write_json_output(&ProbeFormatResult { probe }, pretty, output);
-    }
-
-    let text = format_probe_text(&probe);
-    write_text_output(&text, output)
+    run_dual_output(&probe, "probe", json, pretty, output, format_probe_text)
 }
 
 fn format_probe_text(probe: &FormatProbe) -> String {
@@ -56,51 +42,14 @@ fn format_probe_text(probe: &FormatProbe) -> String {
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::test_support;
     use docir_app::{test_support::build_test_cfb, FormatProbe, ParserConfig};
     use std::fs;
-    use std::io::Write;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-    use zip::write::FileOptions;
-
-    fn temp_file(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_probe_format_{name}_{nanos}.{ext}"))
-    }
-
-    fn temp_output(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_probe_format_out_{name}_{nanos}.{ext}"))
-    }
-
-    fn write_docx(path: &PathBuf) {
-        let file = fs::File::create(path).expect("create docx");
-        let mut zip = zip::ZipWriter::new(file);
-        let options = FileOptions::<()>::default();
-        let content_types = r#"
-            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-              <Default Extension="xml" ContentType="application/xml"/>
-              <Override PartName="/word/document.xml"
-                ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-            </Types>"#;
-        zip.start_file("[Content_Types].xml", options).unwrap();
-        zip.write_all(content_types.trim().as_bytes()).unwrap();
-        zip.add_directory("word/", options).unwrap();
-        zip.start_file("word/document.xml", options).unwrap();
-        zip.write_all(b"<w:document/>").unwrap();
-        zip.finish().unwrap();
-    }
 
     #[test]
     fn probe_format_run_writes_json_for_pdf() {
-        let input = temp_file("pdf", "bin");
-        let output = temp_output("pdf", "json");
+        let input = test_support::temp_file("pdf", "bin");
+        let output = test_support::temp_file("pdf_out", "json");
         fs::write(&input, b"%PDF-1.7\n").expect("fixture");
 
         run(
@@ -122,9 +71,9 @@ mod tests {
 
     #[test]
     fn probe_format_run_writes_text_for_docx() {
-        let input = temp_file("docx", "docx");
-        let output = temp_output("docx", "txt");
-        write_docx(&input);
+        let input = test_support::temp_file("docx", "docx");
+        let output = test_support::temp_file("docx_out", "txt");
+        test_support::write_docx(&input);
 
         run(
             input.clone(),
@@ -146,8 +95,8 @@ mod tests {
 
     #[test]
     fn probe_format_run_writes_text_for_legacy_doc() {
-        let input = temp_file("legacy_doc", "doc");
-        let output = temp_output("legacy_doc", "txt");
+        let input = test_support::temp_file("legacy_doc", "doc");
+        let output = test_support::temp_file("legacy_doc_out", "txt");
         fs::write(&input, build_test_cfb(&[("WordDocument", b"doc")])).expect("fixture");
 
         run(

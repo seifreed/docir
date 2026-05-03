@@ -3,6 +3,7 @@
 use crate::{IrSerializer, SerializationError};
 use docir_core::ir::{IRNode, IrNode};
 use docir_core::visitor::IrStore;
+use docir_core::CoreError;
 use docir_core::NodeId;
 use serde::Serialize;
 use serde_json::Value;
@@ -47,7 +48,7 @@ impl JsonSerializer {
     fn build_tree(store: &IrStore, root_id: NodeId) -> Result<TreeNode, SerializationError> {
         let node = store
             .get(root_id)
-            .ok_or_else(|| SerializationError::NodeNotFound(format!("{}", root_id)))?;
+            .ok_or_else(|| CoreError::NodeNotFound(format!("{}", root_id)))?;
 
         let mut children = Vec::new();
         for child_id in node.children() {
@@ -269,7 +270,9 @@ mod tests {
         let store = IrStore::new();
         let err = to_json(&store, NodeId::from_raw(999_999), false).expect_err("missing root");
         match err {
-            SerializationError::NodeNotFound(id) => assert!(id.contains("node_")),
+            SerializationError::Core(CoreError::NodeNotFound(id)) => {
+                assert!(id.contains("node_"))
+            }
             other => panic!("unexpected error: {other:?}"),
         }
     }

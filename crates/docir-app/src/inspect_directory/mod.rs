@@ -7,7 +7,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-use crate::io_support::read_bounded_file;
+use crate::io_support::with_file_bytes;
 use crate::{AppResult, ParserConfig};
 use std::path::Path;
 
@@ -32,8 +32,7 @@ pub fn inspect_directory_path<P: AsRef<Path>>(
     path: P,
     config: &ParserConfig,
 ) -> AppResult<DirectoryInspection> {
-    let bytes = read_bounded_file(path, config.max_input_size)?;
-    inspect_directory_bytes(&bytes)
+    with_file_bytes(path, config.max_input_size, inspect_directory_bytes)
 }
 
 /// Inspect directory entries from raw CFB/OLE bytes.

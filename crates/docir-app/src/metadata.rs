@@ -1,4 +1,4 @@
-use crate::io_support::read_bounded_file;
+use crate::io_support::with_file_bytes;
 use crate::{AppResult, ParserConfig};
 use docir_parser::ole::Cfb;
 use docir_parser::ParseError as ParserParseError;
@@ -41,8 +41,7 @@ pub fn inspect_metadata_path<P: AsRef<Path>>(
     path: P,
     config: &ParserConfig,
 ) -> AppResult<MetadataInspection> {
-    let bytes = read_bounded_file(path, config.max_input_size)?;
-    inspect_metadata_bytes(&bytes)
+    with_file_bytes(path, config.max_input_size, inspect_metadata_bytes)
 }
 
 /// Inspect metadata from raw CFB/OLE bytes.

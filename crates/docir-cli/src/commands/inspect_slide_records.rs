@@ -2,17 +2,9 @@
 
 use anyhow::Result;
 use docir_app::{inspect_slide_records_path, ParserConfig, SlideRecordInspection};
-use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::commands::util::{
-    push_bullet_line, push_labeled_line, write_json_output, write_text_output,
-};
-
-#[derive(Debug, Serialize)]
-struct InspectSlideRecordsResult {
-    inspection: SlideRecordInspection,
-}
+use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
 
 pub fn run(
     input: PathBuf,
@@ -22,13 +14,14 @@ pub fn run(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     let inspection = inspect_slide_records_path(&input, parser_config)?;
-
-    if json {
-        return write_json_output(&InspectSlideRecordsResult { inspection }, pretty, output);
-    }
-
-    let text = format_inspection_text(&inspection);
-    write_text_output(&text, output)
+    run_dual_output(
+        &inspection,
+        "inspection",
+        json,
+        pretty,
+        output,
+        format_inspection_text,
+    )
 }
 
 fn format_inspection_text(inspection: &SlideRecordInspection) -> String {
@@ -88,23 +81,12 @@ fn format_inspection_text(inspection: &SlideRecordInspection) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_inspection_text, run};
+    use crate::test_support;
     use docir_app::{
         test_support::build_test_cfb, ParserConfig, SlideRecordAnomaly, SlideRecordCount,
         SlideRecordEntry, SlideRecordInspection,
     };
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_file(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!(
-            "docir_cli_inspect_slide_records_{name}_{nanos}.{ext}"
-        ))
-    }
 
     fn record(version: u8, instance: u16, record_type: u16, payload: &[u8]) -> Vec<u8> {
         let mut out = Vec::with_capacity(8 + payload.len());
@@ -118,8 +100,8 @@ mod tests {
 
     #[test]
     fn inspect_slide_records_run_writes_json() {
-        let input = temp_file("legacy", "ppt");
-        let output = temp_file("legacy", "json");
+        let input = test_support::temp_file("legacy", "ppt");
+        let output = test_support::temp_file("legacy", "json");
         let leaf = record(0x00, 0, 0x0409, &[1, 2]);
         let slide = record(0x0F, 0, 0x03F0, &leaf);
         let container = record(0x0F, 0, 0x03E8, &slide);
@@ -150,8 +132,8 @@ mod tests {
 
     #[test]
     fn inspect_slide_records_run_writes_text() {
-        let input = temp_file("legacy", "ppt");
-        let output = temp_file("legacy", "txt");
+        let input = test_support::temp_file("legacy", "ppt");
+        let output = test_support::temp_file("legacy", "txt");
         let atom = record(0x00, 0, 0x03E9, &[1, 2, 3, 4]);
         fs::write(
             &input,
@@ -175,8 +157,8 @@ mod tests {
 
     #[test]
     fn inspect_slide_records_run_handles_more_realistic_nested_fixture() {
-        let input = temp_file("legacy_nested", "ppt");
-        let output = temp_file("legacy_nested", "txt");
+        let input = test_support::temp_file("legacy_nested", "ppt");
+        let output = test_support::temp_file("legacy_nested", "txt");
         let text_header = record(0x00, 0, 0x0409, &[1, 2]);
         let text_chars = record(0x00, 0, 0x03FA, &[0x41, 0x00, 0x42, 0x00]);
         let text_props = record(0x00, 0, 0x03FB, &[0; 4]);
@@ -218,8 +200,8 @@ mod tests {
 
     #[test]
     fn inspect_slide_records_run_reports_prog_tags_fixture() {
-        let input = temp_file("legacy_prog_tags", "ppt");
-        let output = temp_file("legacy_prog_tags", "json");
+        let input = test_support::temp_file("legacy_prog_tags", "ppt");
+        let output = test_support::temp_file("legacy_prog_tags", "json");
         let prog_binary = record(0x00, 0, 0x0FF6, &[0; 4]);
         let prog_tags = record(0x0F, 0, 0x0FF5, &prog_binary);
         let doc = record(0x0F, 0, 0x03E8, &prog_tags);
@@ -245,8 +227,8 @@ mod tests {
 
     #[test]
     fn inspect_slide_records_run_reports_roundtrip_theme_fixture() {
-        let input = temp_file("legacy_roundtrip", "ppt");
-        let output = temp_file("legacy_roundtrip", "txt");
+        let input = test_support::temp_file("legacy_roundtrip", "ppt");
+        let output = test_support::temp_file("legacy_roundtrip", "txt");
         let theme = record(0x00, 0, 0x1772, &[0; 4]);
         let slide = record(0x0F, 0, 0x03F0, &theme);
         let doc = record(0x0F, 0, 0x03E8, &slide);
@@ -272,8 +254,8 @@ mod tests {
 
     #[test]
     fn inspect_slide_records_run_reports_user_edit_atom_in_json() {
-        let input = temp_file("legacy_user_edit", "ppt");
-        let output = temp_file("legacy_user_edit", "json");
+        let input = test_support::temp_file("legacy_user_edit", "ppt");
+        let output = test_support::temp_file("legacy_user_edit", "json");
         let user_edit = record(0x00, 0, 0x0F9F, &[0; 4]);
         let doc = record(0x0F, 0, 0x03E8, &user_edit);
         fs::write(
@@ -297,8 +279,8 @@ mod tests {
 
     #[test]
     fn inspect_slide_records_run_reports_environment_and_slide_json() {
-        let input = temp_file("legacy_env_slide", "ppt");
-        let output = temp_file("legacy_env_slide", "json");
+        let input = test_support::temp_file("legacy_env_slide", "ppt");
+        let output = test_support::temp_file("legacy_env_slide", "json");
         let env = record(0x0F, 0, 0x03FF, &record(0x00, 0, 0x03ED, &[0; 4]));
         let slide = record(0x0F, 0, 0x03F0, &record(0x00, 0, 0x03FA, &[0x41, 0x00]));
         let doc = record(0x0F, 0, 0x03E8, &[env, slide].concat());
@@ -325,8 +307,8 @@ mod tests {
 
     #[test]
     fn inspect_slide_records_run_reports_document_atom_and_notes_text() {
-        let input = temp_file("legacy_notes", "ppt");
-        let output = temp_file("legacy_notes", "txt");
+        let input = test_support::temp_file("legacy_notes", "ppt");
+        let output = test_support::temp_file("legacy_notes", "txt");
         let notes = record(0x00, 0, 0x03EC, &[0; 4]);
         let atom = record(0x00, 0, 0x03E9, &[0; 4]);
         let doc = record(0x0F, 0, 0x03E8, &[atom, notes].concat());

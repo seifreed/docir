@@ -2,17 +2,11 @@
 
 use anyhow::Result;
 use docir_app::{LinkExtractionReport, ParserConfig};
-use serde::Serialize;
 use std::path::PathBuf;
 
 use crate::commands::util::{
-    build_app_and_parse, push_bullet_line, push_labeled_line, write_json_output, write_text_output,
+    build_app_and_parse, push_bullet_line, push_labeled_line, run_dual_output,
 };
-
-#[derive(Debug, Serialize)]
-struct ExtractLinksResult {
-    report: LinkExtractionReport,
-}
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -24,13 +18,7 @@ pub fn run(
 ) -> Result<()> {
     let (app, parsed) = build_app_and_parse(&input, parser_config)?;
     let report = app.build_link_extraction_report(&parsed);
-
-    if json {
-        return write_json_output(&ExtractLinksResult { report }, pretty, output);
-    }
-
-    let text = format_report_text(&report);
-    write_text_output(&text, output)
+    run_dual_output(&report, "report", json, pretty, output, format_report_text)
 }
 
 fn format_report_text(report: &LinkExtractionReport) -> String {
@@ -58,23 +46,14 @@ fn format_report_text(report: &LinkExtractionReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_report_text, run};
+    use crate::test_support;
     use docir_app::{LinkArtifact, LinkExtractionReport, ParserConfig};
     use docir_core::security::ThreatLevel;
     use std::fs;
     use std::io::Write;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
     use zip::write::SimpleFileOptions;
     use zip::CompressionMethod;
     use zip::ZipWriter;
-
-    fn temp_file(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_extract_links_{name}_{nanos}.{ext}"))
-    }
 
     fn build_test_ods_with_dde() -> Vec<u8> {
         let mut cursor = std::io::Cursor::new(Vec::new());
@@ -148,8 +127,8 @@ mod tests {
 
     #[test]
     fn extract_links_run_writes_json_for_odf_dde_fixture() {
-        let input = temp_file("dde_fixture", "ods");
-        let output = temp_file("dde", "json");
+        let input = test_support::temp_file("dde_fixture", "ods");
+        let output = test_support::temp_file("dde", "json");
         fs::write(&input, build_test_ods_with_dde()).expect("fixture");
 
         run(

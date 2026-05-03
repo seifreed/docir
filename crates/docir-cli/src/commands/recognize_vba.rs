@@ -105,13 +105,12 @@ fn format_report_text(report: &VbaRecognitionReport) -> String {
 mod tests {
     use super::format_report_text;
     use crate::commands::util::write_json_output;
+    use crate::test_support;
     use docir_app::{
         ExportDocumentRef, Phase0VbaExport, VbaModuleReport, VbaProjectReport,
         VbaRecognitionReport, VbaRecognitionStatus,
     };
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn format_report_text_includes_partial_project_metadata() {
@@ -285,7 +284,7 @@ mod tests {
             },
             ExportDocumentRef::new("sample.doc", "doc", Some("/tmp/sample.doc".to_string())),
         );
-        let output = temp_file("recognize_vba_export", "json");
+        let output = test_support::temp_file("recognize_vba_export", "json");
 
         write_json_output(&export, true, Some(output.clone())).expect("write recognize export");
 
@@ -299,13 +298,5 @@ mod tests {
         assert!(json.contains("Failed to decompress VBA/ThisDocument"));
 
         let _ = fs::remove_file(output);
-    }
-
-    fn temp_file(name: &str, extension: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_{name}_{nanos}.{extension}"))
     }
 }

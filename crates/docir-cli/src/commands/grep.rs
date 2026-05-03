@@ -37,29 +37,14 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::test_support;
     use docir_app::ParserConfig;
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn fixture(name: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/ooxml")
-            .join(name)
-    }
-
-    fn temp_file(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_grep_{name}_{nanos}.json"))
-    }
 
     #[test]
     fn grep_run_rejects_empty_pattern() {
         let err = run(
-            fixture("minimal.docx"),
+            test_support::fixture("minimal.docx"),
             "   ".to_string(),
             None,
             None,
@@ -73,9 +58,9 @@ mod tests {
 
     #[test]
     fn grep_run_outputs_results_file() {
-        let output = temp_file("results");
+        let output = test_support::temp_file("results", "json");
         run(
-            fixture("minimal.docx"),
+            test_support::fixture("minimal.docx"),
             "Hello".to_string(),
             None,
             None,

@@ -13,6 +13,20 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+pub(crate) fn prepare_output_dir(path: &Path, overwrite: bool) -> Result<()> {
+    if path.exists() {
+        if !overwrite {
+            anyhow::bail!(
+                "Output directory {} already exists; pass --overwrite to reuse it",
+                path.display()
+            );
+        }
+    } else {
+        fs::create_dir_all(path).with_context(|| format!("Failed to create {}", path.display()))?;
+    }
+    Ok(())
+}
+
 /// Public API entrypoint: parse_node_type.
 pub fn parse_node_type(input: &str) -> Result<NodeType> {
     parse_core_node_type(input).map_err(|e| anyhow!(e))
@@ -147,6 +161,36 @@ pub fn write_text_output(value: &str, output: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn run_dual_output<T, F>(
+    result: &T,
+    json_key: &str,
+    json: bool,
+    pretty: bool,
+    output: Option<PathBuf>,
+    format_text: F,
+) -> Result<()>
+where
+    T: Serialize,
+    F: FnOnce(&T) -> String,
+{
+    if json {
+        let wrapped = wrap_json(json_key, result);
+        write_json_output(&wrapped, pretty, output)
+    } else {
+        let text = format_text(result);
+        write_text_output(&text, output)
+    }
+}
+
+fn wrap_json<T: Serialize>(key: &str, value: &T) -> serde_json::Value {
+    let mut map = serde_json::Map::new();
+    map.insert(
+        key.to_string(),
+        serde_json::to_value(value).unwrap_or(serde_json::Value::Null),
+    );
+    serde_json::Value::Object(map)
+}
+
 pub(crate) fn push_labeled_line(
     out: &mut String,
     indent: usize,
@@ -188,18 +232,9 @@ mod tests {
     use super::{
         parse_node_id, push_bullet_line, push_labeled_line, write_json_output, write_text_output,
     };
+    use crate::test_support;
     use serde::Serialize;
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_file(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_{name}_{nanos}.tmp"))
-    }
 
     #[test]
     fn parse_node_id_supports_raw_and_prefixed_values() {
@@ -217,7 +252,7 @@ mod tests {
 
     #[test]
     fn write_text_output_writes_to_file() {
-        let path = temp_file("text_output");
+        let path = test_support::temp_file("text_output", "tmp");
         write_text_output("hello", Some(path.clone())).expect("write output");
         let written = fs::read_to_string(&path).expect("read output");
         assert_eq!(written, "hello\n");
@@ -231,7 +266,7 @@ mod tests {
 
     #[test]
     fn write_json_output_writes_json_document() {
-        let path = temp_file("json_output");
+        let path = test_support::temp_file("json_output", "tmp");
         write_json_output(&JsonProbe { ok: true }, true, Some(path.clone())).expect("json write");
         let written = fs::read_to_string(&path).expect("read json");
         assert!(written.contains("\"ok\": true"));

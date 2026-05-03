@@ -6,6 +6,10 @@ mod cli;
 mod commands;
 mod parser_config;
 
+#[cfg(test)]
+#[cfg(test)]
+mod test_support;
+
 use anyhow::Result;
 use clap::Parser;
 

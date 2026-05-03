@@ -1,4 +1,4 @@
-use crate::io_support::read_bounded_file;
+use crate::io_support::with_file_bytes;
 use crate::{AppResult, ParserConfig};
 use docir_parser::ole::{Cfb, CfbEntryType};
 use serde::Serialize;
@@ -25,8 +25,7 @@ pub struct TimeEntry {
 
 /// Lists FILETIMEs from a legacy CFB/OLE container on disk.
 pub fn list_times_path<P: AsRef<Path>>(path: P, config: &ParserConfig) -> AppResult<TimeListing> {
-    let bytes = read_bounded_file(path, config.max_input_size)?;
-    list_times_bytes(&bytes)
+    with_file_bytes(path, config.max_input_size, list_times_bytes)
 }
 
 /// Lists FILETIMEs from raw CFB bytes.

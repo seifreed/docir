@@ -39,6 +39,41 @@ impl std::fmt::Display for ThreatLevel {
     }
 }
 
+impl std::str::FromStr for ThreatLevel {
+    type Err = ParseThreatLevelError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "none" | "NONE" => Ok(Self::None),
+            "low" | "LOW" => Ok(Self::Low),
+            "medium" | "MEDIUM" => Ok(Self::Medium),
+            "high" | "HIGH" => Ok(Self::High),
+            "critical" | "CRITICAL" => Ok(Self::Critical),
+            _ => Err(ParseThreatLevelError {
+                input: s.to_string(),
+            }),
+        }
+    }
+}
+
+/// Error returned when a string cannot be parsed as a [`ThreatLevel`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseThreatLevelError {
+    input: String,
+}
+
+impl std::fmt::Display for ParseThreatLevelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "invalid threat level: {:?} (expected none/low/medium/high/critical)",
+            self.input
+        )
+    }
+}
+
+impl std::error::Error for ParseThreatLevelError {}
+
 /// A specific threat indicator.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
@@ -118,5 +153,51 @@ mod tests {
             max_indicator_threat_level(&indicators),
             ThreatLevel::Critical
         );
+    }
+
+    #[test]
+    fn display_produces_uppercase() {
+        assert_eq!(ThreatLevel::None.to_string(), "NONE");
+        assert_eq!(ThreatLevel::Low.to_string(), "LOW");
+        assert_eq!(ThreatLevel::Medium.to_string(), "MEDIUM");
+        assert_eq!(ThreatLevel::High.to_string(), "HIGH");
+        assert_eq!(ThreatLevel::Critical.to_string(), "CRITICAL");
+    }
+
+    #[test]
+    fn from_str_parses_lowercase() {
+        assert_eq!("critical".parse::<ThreatLevel>(), Ok(ThreatLevel::Critical));
+        assert_eq!("high".parse::<ThreatLevel>(), Ok(ThreatLevel::High));
+        assert_eq!("medium".parse::<ThreatLevel>(), Ok(ThreatLevel::Medium));
+        assert_eq!("low".parse::<ThreatLevel>(), Ok(ThreatLevel::Low));
+        assert_eq!("none".parse::<ThreatLevel>(), Ok(ThreatLevel::None));
+    }
+
+    #[test]
+    fn from_str_parses_uppercase() {
+        assert_eq!("CRITICAL".parse::<ThreatLevel>(), Ok(ThreatLevel::Critical));
+        assert_eq!("HIGH".parse::<ThreatLevel>(), Ok(ThreatLevel::High));
+        assert_eq!("MEDIUM".parse::<ThreatLevel>(), Ok(ThreatLevel::Medium));
+        assert_eq!("LOW".parse::<ThreatLevel>(), Ok(ThreatLevel::Low));
+        assert_eq!("NONE".parse::<ThreatLevel>(), Ok(ThreatLevel::None));
+    }
+
+    #[test]
+    fn from_str_rejects_unknown() {
+        assert!("unknown".parse::<ThreatLevel>().is_err());
+        assert!("".parse::<ThreatLevel>().is_err());
+    }
+
+    #[test]
+    fn display_from_str_round_trip() {
+        for level in [
+            ThreatLevel::None,
+            ThreatLevel::Low,
+            ThreatLevel::Medium,
+            ThreatLevel::High,
+            ThreatLevel::Critical,
+        ] {
+            assert_eq!(level.to_string().parse::<ThreatLevel>(), Ok(level));
+        }
     }
 }

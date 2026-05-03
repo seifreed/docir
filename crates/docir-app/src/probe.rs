@@ -1,4 +1,4 @@
-use crate::io_support::read_bounded_file;
+use crate::io_support::with_file_bytes_and_config;
 use crate::{AppResult, ParserConfig};
 use docir_parser::hwp::is_hwpx_mimetype;
 use docir_parser::legacy_office::probe_legacy_office_format;
@@ -23,8 +23,9 @@ pub struct FormatProbe {
 
 /// Probes an on-disk file without running the full parser pipeline.
 pub fn probe_format_path<P: AsRef<Path>>(path: P, config: &ParserConfig) -> AppResult<FormatProbe> {
-    let bytes = read_bounded_file(path, config.max_input_size)?;
-    Ok(probe_format_bytes(&bytes, config))
+    with_file_bytes_and_config(path, config, |bytes, cfg| {
+        Ok(probe_format_bytes(bytes, cfg))
+    })
 }
 
 /// Probes raw bytes and returns a lightweight format classification.

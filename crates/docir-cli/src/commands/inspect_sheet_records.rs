@@ -2,17 +2,9 @@
 
 use anyhow::Result;
 use docir_app::{inspect_sheet_records_path, ParserConfig, SheetRecordInspection};
-use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::commands::util::{
-    push_bullet_line, push_labeled_line, write_json_output, write_text_output,
-};
-
-#[derive(Debug, Serialize)]
-struct InspectSheetRecordsResult {
-    inspection: SheetRecordInspection,
-}
+use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
 
 pub fn run(
     input: PathBuf,
@@ -22,13 +14,14 @@ pub fn run(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     let inspection = inspect_sheet_records_path(&input, parser_config)?;
-
-    if json {
-        return write_json_output(&InspectSheetRecordsResult { inspection }, pretty, output);
-    }
-
-    let text = format_inspection_text(&inspection);
-    write_text_output(&text, output)
+    run_dual_output(
+        &inspection,
+        "inspection",
+        json,
+        pretty,
+        output,
+        format_inspection_text,
+    )
 }
 
 fn format_inspection_text(inspection: &SheetRecordInspection) -> String {
@@ -80,23 +73,12 @@ fn format_inspection_text(inspection: &SheetRecordInspection) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_inspection_text, run};
+    use crate::test_support;
     use docir_app::{
         test_support::build_test_cfb, ParserConfig, SheetRecordAnomaly, SheetRecordCount,
         SheetRecordEntry, SheetRecordInspection,
     };
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_file(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!(
-            "docir_cli_inspect_sheet_records_{name}_{nanos}.{ext}"
-        ))
-    }
 
     fn record(record_type: u16, payload: &[u8]) -> Vec<u8> {
         let mut out = Vec::with_capacity(4 + payload.len());
@@ -115,8 +97,8 @@ mod tests {
 
     #[test]
     fn inspect_sheet_records_run_writes_json() {
-        let input = temp_file("legacy", "xls");
-        let output = temp_file("legacy", "json");
+        let input = test_support::temp_file("legacy", "xls");
+        let output = test_support::temp_file("legacy", "json");
         let mut workbook = Vec::new();
         workbook.extend(record(0x0809, &bof_payload(0x0005)));
         workbook.extend(record(0x0085, b"Sheet1"));
@@ -147,8 +129,8 @@ mod tests {
 
     #[test]
     fn inspect_sheet_records_run_writes_text() {
-        let input = temp_file("legacy", "xls");
-        let output = temp_file("legacy", "txt");
+        let input = test_support::temp_file("legacy", "xls");
+        let output = test_support::temp_file("legacy", "txt");
         let mut workbook = Vec::new();
         workbook.extend(record(0x0809, &bof_payload(0x0005)));
         workbook.extend(record(0x000A, &[]));
@@ -171,8 +153,8 @@ mod tests {
 
     #[test]
     fn inspect_sheet_records_run_supports_book_stream_and_truncation() {
-        let input = temp_file("legacy_book", "xls");
-        let output = temp_file("legacy_book", "json");
+        let input = test_support::temp_file("legacy_book", "xls");
+        let output = test_support::temp_file("legacy_book", "json");
         let mut workbook = Vec::new();
         workbook.extend(record(0x0809, &bof_payload(0x0020)));
         workbook.extend_from_slice(&0x0085u16.to_le_bytes());
@@ -197,8 +179,8 @@ mod tests {
 
     #[test]
     fn inspect_sheet_records_run_handles_more_realistic_workbook_fixture() {
-        let input = temp_file("legacy_realistic", "xls");
-        let output = temp_file("legacy_realistic", "txt");
+        let input = test_support::temp_file("legacy_realistic", "xls");
+        let output = test_support::temp_file("legacy_realistic", "txt");
         let mut workbook = Vec::new();
         workbook.extend(record(0x0809, &bof_payload(0x0005)));
         workbook.extend(record(0x0042, &1200u16.to_le_bytes()));
@@ -234,8 +216,8 @@ mod tests {
 
     #[test]
     fn inspect_sheet_records_run_reports_dialog_sheet_substream() {
-        let input = temp_file("legacy_dialog", "xls");
-        let output = temp_file("legacy_dialog", "json");
+        let input = test_support::temp_file("legacy_dialog", "xls");
+        let output = test_support::temp_file("legacy_dialog", "json");
         let mut workbook = Vec::new();
         workbook.extend(record(0x0809, &bof_payload(0x0005)));
         workbook.extend(record(0x0085, b"Dialog1"));
@@ -262,8 +244,8 @@ mod tests {
 
     #[test]
     fn inspect_sheet_records_run_reports_macro_sheet_substream() {
-        let input = temp_file("legacy_macro", "xls");
-        let output = temp_file("legacy_macro", "txt");
+        let input = test_support::temp_file("legacy_macro", "xls");
+        let output = test_support::temp_file("legacy_macro", "txt");
         let mut workbook = Vec::new();
         workbook.extend(record(0x0809, &bof_payload(0x0005)));
         workbook.extend(record(0x0085, b"Macro1"));
@@ -290,8 +272,8 @@ mod tests {
 
     #[test]
     fn inspect_sheet_records_run_reports_chart_substream_in_json() {
-        let input = temp_file("legacy_chart", "xls");
-        let output = temp_file("legacy_chart", "json");
+        let input = test_support::temp_file("legacy_chart", "xls");
+        let output = test_support::temp_file("legacy_chart", "json");
         let mut workbook = Vec::new();
         workbook.extend(record(0x0809, &bof_payload(0x0005)));
         workbook.extend(record(0x0085, b"Chart1"));
@@ -317,8 +299,8 @@ mod tests {
 
     #[test]
     fn inspect_sheet_records_run_reports_workbook_globals_and_worksheet_json() {
-        let input = temp_file("legacy_globals_ws", "xls");
-        let output = temp_file("legacy_globals_ws", "json");
+        let input = test_support::temp_file("legacy_globals_ws", "xls");
+        let output = test_support::temp_file("legacy_globals_ws", "json");
         let mut workbook = Vec::new();
         workbook.extend(record(0x0809, &bof_payload(0x0005)));
         workbook.extend(record(0x0042, &1200u16.to_le_bytes()));
@@ -349,8 +331,8 @@ mod tests {
 
     #[test]
     fn inspect_sheet_records_run_reports_boundsheet_and_sst_in_text() {
-        let input = temp_file("legacy_boundsheet_sst", "xls");
-        let output = temp_file("legacy_boundsheet_sst", "txt");
+        let input = test_support::temp_file("legacy_boundsheet_sst", "xls");
+        let output = test_support::temp_file("legacy_boundsheet_sst", "txt");
         let mut workbook = Vec::new();
         workbook.extend(record(0x0809, &bof_payload(0x0005)));
         workbook.extend(record(0x0085, b"Sheet1"));

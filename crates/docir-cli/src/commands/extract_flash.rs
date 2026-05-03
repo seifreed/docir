@@ -2,18 +2,12 @@
 
 use anyhow::{Context, Result};
 use docir_app::{extract_flash_path, FlashExtractionReport, ParserConfig};
-use serde::Serialize;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::commands::util::{
-    push_bullet_line, push_labeled_line, write_json_output, write_text_output,
+    prepare_output_dir, push_bullet_line, push_labeled_line, run_dual_output,
 };
-
-#[derive(Debug, Serialize)]
-struct ExtractFlashResult {
-    report: FlashExtractionReport,
-}
 
 pub fn run(
     input: PathBuf,
@@ -37,23 +31,7 @@ pub fn run(
         }
     }
 
-    if json {
-        return write_json_output(&ExtractFlashResult { report }, pretty, output);
-    }
-
-    let text = format_report_text(&report);
-    write_text_output(&text, output)
-}
-
-fn prepare_output_dir(path: &Path, overwrite: bool) -> Result<()> {
-    if path.exists() {
-        if !overwrite {
-            anyhow::bail!("Output directory {} already exists", path.display());
-        }
-    } else {
-        fs::create_dir_all(path).with_context(|| format!("Failed to create {}", path.display()))?;
-    }
-    Ok(())
+    run_dual_output(&report, "report", json, pretty, output, format_report_text)
 }
 
 fn format_report_text(report: &FlashExtractionReport) -> String {
@@ -86,27 +64,10 @@ fn format_report_text(report: &FlashExtractionReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_report_text, run};
+    use crate::test_support;
     use docir_app::{FlashExtractionReport, FlashObject, ParserConfig};
     use std::fs;
     use std::io::Write;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_file(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_extract_flash_{name}_{nanos}.{ext}"))
-    }
-
-    fn temp_dir(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_extract_flash_{name}_{nanos}"))
-    }
 
     fn swf(signature: &[u8; 3], version: u8, body: &[u8]) -> Vec<u8> {
         let mut out = Vec::new();
@@ -119,8 +80,8 @@ mod tests {
 
     #[test]
     fn extract_flash_run_writes_json_for_zip_payload() {
-        let input = temp_file("flash_zip", "docx");
-        let output = temp_file("flash_zip", "json");
+        let input = test_support::temp_file("flash_zip", "docx");
+        let output = test_support::temp_file("flash_zip", "json");
         let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
         {
             let mut zip = zip::ZipWriter::new(&mut cursor);
@@ -151,8 +112,8 @@ mod tests {
 
     #[test]
     fn extract_flash_run_writes_payload_to_out_dir() {
-        let input = temp_file("flash_out", "docx");
-        let out_dir = temp_dir("flash_out");
+        let input = test_support::temp_file("flash_out", "docx");
+        let out_dir = test_support::temp_dir("flash_out");
         let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
         {
             let mut zip = zip::ZipWriter::new(&mut cursor);
@@ -182,8 +143,8 @@ mod tests {
 
     #[test]
     fn extract_flash_run_writes_json_for_cfb_payload() {
-        let input = temp_file("flash_cfb", "doc");
-        let output = temp_file("flash_cfb", "json");
+        let input = test_support::temp_file("flash_cfb", "doc");
+        let output = test_support::temp_file("flash_cfb", "json");
         fs::write(
             &input,
             docir_app::test_support::build_test_cfb(&[(
@@ -212,8 +173,8 @@ mod tests {
 
     #[test]
     fn extract_flash_run_reports_truncated_cws_from_zip_entry() {
-        let input = temp_file("flash_truncated_zip", "pptx");
-        let output = temp_file("flash_truncated_zip", "json");
+        let input = test_support::temp_file("flash_truncated_zip", "pptx");
+        let output = test_support::temp_file("flash_truncated_zip", "json");
         let mut payload = swf(b"CWS", 10, b"payload");
         payload[4..8].copy_from_slice(&128u32.to_le_bytes());
         let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
@@ -247,8 +208,8 @@ mod tests {
 
     #[test]
     fn extract_flash_run_writes_text_for_truncated_cws_zip_entry() {
-        let input = temp_file("flash_truncated_zip_text", "pptx");
-        let output = temp_file("flash_truncated_zip_text", "txt");
+        let input = test_support::temp_file("flash_truncated_zip_text", "pptx");
+        let output = test_support::temp_file("flash_truncated_zip_text", "txt");
         let mut payload = swf(b"CWS", 11, b"payload");
         payload[4..8].copy_from_slice(&128u32.to_le_bytes());
         let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
@@ -282,8 +243,8 @@ mod tests {
 
     #[test]
     fn extract_flash_run_reports_raw_zws_payload_in_text() {
-        let input = temp_file("flash_raw_zws", "bin");
-        let output = temp_file("flash_raw_zws", "txt");
+        let input = test_support::temp_file("flash_raw_zws", "bin");
+        let output = test_support::temp_file("flash_raw_zws", "txt");
         fs::write(&input, swf(b"ZWS", 13, b"payload")).expect("fixture");
 
         run(
@@ -306,8 +267,8 @@ mod tests {
 
     #[test]
     fn extract_flash_run_reports_truncated_cws_from_cfb_text() {
-        let input = temp_file("flash_cfb_truncated", "doc");
-        let output = temp_file("flash_cfb_truncated", "txt");
+        let input = test_support::temp_file("flash_cfb_truncated", "doc");
+        let output = test_support::temp_file("flash_cfb_truncated", "txt");
         let mut payload = swf(b"CWS", 9, b"payload");
         payload[4..8].copy_from_slice(&256u32.to_le_bytes());
         fs::write(
@@ -336,8 +297,8 @@ mod tests {
 
     #[test]
     fn extract_flash_run_reports_fws_from_zip_json() {
-        let input = temp_file("flash_fws_zip", "docx");
-        let output = temp_file("flash_fws_zip", "json");
+        let input = test_support::temp_file("flash_fws_zip", "docx");
+        let output = test_support::temp_file("flash_fws_zip", "json");
         let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
         {
             let mut zip = zip::ZipWriter::new(&mut cursor);
@@ -368,8 +329,8 @@ mod tests {
 
     #[test]
     fn extract_flash_run_reports_zws_from_cfb_json() {
-        let input = temp_file("flash_zws_cfb", "doc");
-        let output = temp_file("flash_zws_cfb", "json");
+        let input = test_support::temp_file("flash_zws_cfb", "doc");
+        let output = test_support::temp_file("flash_zws_cfb", "json");
         fs::write(
             &input,
             docir_app::test_support::build_test_cfb(&[(
@@ -398,8 +359,8 @@ mod tests {
 
     #[test]
     fn extract_flash_run_reports_cws_from_zip_text() {
-        let input = temp_file("flash_cws_zip_text", "docx");
-        let output = temp_file("flash_cws_zip_text", "txt");
+        let input = test_support::temp_file("flash_cws_zip_text", "docx");
+        let output = test_support::temp_file("flash_cws_zip_text", "txt");
         let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
         {
             let mut zip = zip::ZipWriter::new(&mut cursor);

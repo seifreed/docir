@@ -40,19 +40,13 @@ pub fn run(
 mod tests {
     use super::run;
     use crate::commands::util::parse_document;
+    use crate::test_support;
     use crate::OutputFormat;
     use docir_app::ParserConfig;
-    use std::path::PathBuf;
-
-    fn fixture(name: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/ooxml")
-            .join(name)
-    }
 
     #[test]
     fn dump_node_run_reports_missing_node_for_valid_but_stale_id() {
-        let input = fixture("minimal.docx");
+        let input = test_support::fixture("minimal.docx");
         let parsed = parse_document(&input, &ParserConfig::default()).expect("parse document");
         let node_id = parsed.root_id().to_string();
         let err = run(
@@ -68,7 +62,7 @@ mod tests {
     #[test]
     fn dump_node_run_rejects_invalid_id() {
         let err = run(
-            fixture("minimal.docx"),
+            test_support::fixture("minimal.docx"),
             "not-a-node-id",
             OutputFormat::Json,
             &ParserConfig::default(),

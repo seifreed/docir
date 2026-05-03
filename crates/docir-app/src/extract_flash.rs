@@ -1,4 +1,4 @@
-use crate::io_support::read_bounded_file;
+use crate::io_support::with_file_bytes_and_config;
 use crate::{AppResult, ParserConfig};
 use docir_parser::ole::{is_ole_container, Cfb};
 use docir_parser::zip_handler::SecureZipReader;
@@ -35,8 +35,7 @@ pub fn extract_flash_path<P: AsRef<Path>>(
     path: P,
     config: &ParserConfig,
 ) -> AppResult<FlashExtractionReport> {
-    let bytes = read_bounded_file(path, config.max_input_size)?;
-    extract_flash_bytes(&bytes, config)
+    with_file_bytes_and_config(path, config, extract_flash_bytes)
 }
 
 pub fn extract_flash_bytes(data: &[u8], config: &ParserConfig) -> AppResult<FlashExtractionReport> {

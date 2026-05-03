@@ -35,30 +35,15 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::test_support;
     use crate::OutputFormat;
     use docir_app::ParserConfig;
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn fixture(name: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/ooxml")
-            .join(name)
-    }
-
-    fn temp_file(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_parse_{name}_{nanos}.json"))
-    }
 
     #[test]
     fn parse_run_writes_json_output_file() {
-        let input = fixture("minimal.docx");
-        let output = temp_file("minimal");
+        let input = test_support::fixture("minimal.docx");
+        let output = test_support::temp_file("minimal", "json");
         run(
             input,
             OutputFormat::Json,

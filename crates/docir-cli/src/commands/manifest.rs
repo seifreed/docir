@@ -32,34 +32,12 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::test_support;
     use docir_app::{test_support::build_test_cfb, ParserConfig};
     use std::fs;
     use std::io::Write;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
     use zip::write::FileOptions;
-
-    fn fixture(name: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/ooxml")
-            .join(name)
-    }
-
-    fn temp_file(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_manifest_{name}_{nanos}.json"))
-    }
-
-    fn temp_input(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_manifest_{name}_{nanos}.{ext}"))
-    }
 
     fn write_docx_with_media(path: &PathBuf) {
         let file = fs::File::create(path).expect("create docx");
@@ -103,9 +81,9 @@ mod tests {
 
     #[test]
     fn manifest_run_writes_schema_like_json() {
-        let output = temp_file("json");
+        let output = test_support::temp_file("json", "json");
         run(
-            fixture("minimal.docx"),
+            test_support::fixture("minimal.docx"),
             true,
             Some(output.clone()),
             &ParserConfig::default(),
@@ -119,8 +97,8 @@ mod tests {
 
     #[test]
     fn manifest_run_writes_vba_inventory_details_for_legacy_doc() {
-        let input = temp_input("legacy_vba", "doc");
-        let output = temp_file("legacy_vba");
+        let input = test_support::temp_file("legacy_vba", "doc");
+        let output = test_support::temp_file("legacy_vba", "json");
         let bytes = build_test_cfb(&[
             ("WordDocument", b"doc"),
             (
@@ -173,8 +151,8 @@ Reference=*\G{000204EF-0000-0000-C000-000000000046}#2.0#0#..\stdole2.tlb#OLE Aut
         ole10.extend_from_slice(&4u32.to_le_bytes());
         ole10.extend_from_slice(b"MZ!!");
 
-        let input = temp_input("legacy_ole_hash", "doc");
-        let output = temp_file("legacy_ole_hash");
+        let input = test_support::temp_file("legacy_ole_hash", "doc");
+        let output = test_support::temp_file("legacy_ole_hash", "json");
         fs::write(
             &input,
             build_test_cfb(&[("WordDocument", b"doc"), ("Ole10Native", &ole10)]),
@@ -201,8 +179,8 @@ Reference=*\G{000204EF-0000-0000-C000-000000000046}#2.0#0#..\stdole2.tlb#OLE Aut
 
     #[test]
     fn manifest_run_preserves_media_asset_type_and_sha256_for_docx() {
-        let input = temp_input("docx_media", "docx");
-        let output = temp_file("docx_media");
+        let input = test_support::temp_file("docx_media", "docx");
+        let output = test_support::temp_file("docx_media", "json");
         write_docx_with_media(&input);
 
         run(
@@ -227,8 +205,8 @@ Reference=*\G{000204EF-0000-0000-C000-000000000046}#2.0#0#..\stdole2.tlb#OLE Aut
 
     #[test]
     fn manifest_run_omits_sha256_when_hashes_are_disabled() {
-        let input = temp_input("docx_media_no_hashes", "docx");
-        let output = temp_file("docx_media_no_hashes");
+        let input = test_support::temp_file("docx_media_no_hashes", "docx");
+        let output = test_support::temp_file("docx_media_no_hashes", "json");
         write_docx_with_media(&input);
 
         let config = ParserConfig {

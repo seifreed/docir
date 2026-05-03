@@ -1,14 +1,14 @@
 //! Extract embedded artifacts and write a canonical manifest to disk.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use docir_app::{
     extract_artifacts_from_bytes, ArtifactExtractionOptions, ExportDocumentRef, ParserConfig,
     Phase0ArtifactManifestExport,
 };
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use crate::commands::util::{build_app, source_format_label};
+use crate::commands::util::{build_app, prepare_output_dir, source_format_label};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ExtractArtifactsOptions {
@@ -99,48 +99,15 @@ pub fn run(
     Ok(())
 }
 
-fn prepare_output_dir(out_dir: &Path, overwrite: bool) -> Result<()> {
-    if out_dir.exists() {
-        if !overwrite {
-            bail!(
-                "Output directory {} already exists; pass --overwrite to reuse it",
-                out_dir.display()
-            );
-        }
-    } else {
-        fs::create_dir_all(out_dir)
-            .with_context(|| format!("Failed to create {}", out_dir.display()))?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{run, ExtractArtifactsOptions};
+    use crate::test_support;
     use docir_app::{test_support::build_test_cfb, ParserConfig};
     use std::fs;
     use std::io::Write;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
     use zip::write::FileOptions;
-
-    fn temp_dir(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_extract_artifacts_{name}_{nanos}"))
-    }
-
-    fn temp_file(name: &str, extension: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!(
-            "docir_cli_extract_artifacts_{name}_{nanos}.{extension}"
-        ))
-    }
 
     fn write_docx_with_media(path: &PathBuf) {
         let file = fs::File::create(path).expect("create docx");
@@ -184,9 +151,9 @@ mod tests {
 
     #[test]
     fn extract_artifacts_rtf_writes_manifest_and_blob() {
-        let input = temp_file("rtf_objdata", "rtf");
+        let input = test_support::temp_file("rtf_objdata", "rtf");
         fs::write(&input, br"{\rtf1{\object{\objdata 4d5a9000}}}").expect("write rtf");
-        let out = temp_dir("rtf");
+        let out = test_support::temp_dir("rtf");
 
         run(
             input.clone(),
@@ -213,9 +180,9 @@ mod tests {
 
     #[test]
     fn extract_artifacts_docx_media_writes_manifest_with_media_type_and_sha256() {
-        let input = temp_file("docx_media", "docx");
+        let input = test_support::temp_file("docx_media", "docx");
         write_docx_with_media(&input);
-        let out = temp_dir("docx_media");
+        let out = test_support::temp_dir("docx_media");
 
         run(
             input.clone(),
@@ -245,9 +212,9 @@ mod tests {
 
     #[test]
     fn extract_artifacts_docx_media_respects_no_media_flag() {
-        let input = temp_file("docx_media_skip", "docx");
+        let input = test_support::temp_file("docx_media_skip", "docx");
         write_docx_with_media(&input);
-        let out = temp_dir("docx_media_skip");
+        let out = test_support::temp_dir("docx_media_skip");
 
         run(
             input.clone(),
@@ -274,9 +241,9 @@ mod tests {
 
     #[test]
     fn extract_artifacts_docx_media_omits_sha256_when_hashes_are_disabled() {
-        let input = temp_file("docx_media_no_hashes", "docx");
+        let input = test_support::temp_file("docx_media_no_hashes", "docx");
         write_docx_with_media(&input);
-        let out = temp_dir("docx_media_no_hashes");
+        let out = test_support::temp_dir("docx_media_no_hashes");
         let config = ParserConfig {
             compute_hashes: false,
             ..ParserConfig::default()
@@ -322,13 +289,13 @@ mod tests {
         ole10.extend_from_slice(&4u32.to_le_bytes());
         ole10.extend_from_slice(b"MZ!!");
 
-        let input = temp_file("legacy_doc", "doc");
+        let input = test_support::temp_file("legacy_doc", "doc");
         fs::write(
             &input,
             build_test_cfb(&[("WordDocument", b"doc"), ("Ole10Native", &ole10)]),
         )
         .expect("write legacy doc");
-        let out = temp_dir("legacy_doc");
+        let out = test_support::temp_dir("legacy_doc");
 
         run(
             input.clone(),
@@ -363,13 +330,13 @@ mod tests {
 
     #[test]
     fn extract_artifacts_legacy_xls_package_writes_pdf_payload() {
-        let input = temp_file("legacy_xls_package", "xls");
+        let input = test_support::temp_file("legacy_xls_package", "xls");
         fs::write(
             &input,
             build_test_cfb(&[("Workbook", b"wb"), ("Package", b"%PDF-1.7")]),
         )
         .expect("write legacy xls");
-        let out = temp_dir("legacy_xls_package");
+        let out = test_support::temp_dir("legacy_xls_package");
 
         run(
             input.clone(),
@@ -397,7 +364,7 @@ mod tests {
 
     #[test]
     fn extract_artifacts_legacy_ppt_package_writes_pdf_payload() {
-        let input = temp_file("legacy_ppt_package", "ppt");
+        let input = test_support::temp_file("legacy_ppt_package", "ppt");
         fs::write(
             &input,
             build_test_cfb(&[
@@ -407,7 +374,7 @@ mod tests {
             ]),
         )
         .expect("write legacy ppt");
-        let out = temp_dir("legacy_ppt_package");
+        let out = test_support::temp_dir("legacy_ppt_package");
 
         run(
             input.clone(),
@@ -435,7 +402,7 @@ mod tests {
 
     #[test]
     fn extract_artifacts_objectpool_package_writes_pdf_payload() {
-        let input = temp_file("objectpool_package", "doc");
+        let input = test_support::temp_file("objectpool_package", "doc");
         fs::write(
             &input,
             build_test_cfb(&[
@@ -444,7 +411,7 @@ mod tests {
             ]),
         )
         .expect("write objectpool package doc");
-        let out = temp_dir("objectpool_package");
+        let out = test_support::temp_dir("objectpool_package");
 
         run(
             input.clone(),
@@ -483,7 +450,7 @@ mod tests {
         ole10.extend_from_slice(&4u32.to_le_bytes());
         ole10.extend_from_slice(b"MZ!!");
 
-        let input = temp_file("objectpool_ole10", "doc");
+        let input = test_support::temp_file("objectpool_ole10", "doc");
         fs::write(
             &input,
             build_test_cfb(&[
@@ -492,7 +459,7 @@ mod tests {
             ]),
         )
         .expect("write objectpool ole10 doc");
-        let out = temp_dir("objectpool_ole10");
+        let out = test_support::temp_dir("objectpool_ole10");
 
         run(
             input.clone(),

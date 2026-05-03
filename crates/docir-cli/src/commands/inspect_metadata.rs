@@ -2,17 +2,9 @@
 
 use anyhow::Result;
 use docir_app::{inspect_metadata_path, MetadataInspection, ParserConfig};
-use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::commands::util::{
-    push_bullet_line, push_labeled_line, write_json_output, write_text_output,
-};
-
-#[derive(Debug, Serialize)]
-struct InspectMetadataResult {
-    metadata: MetadataInspection,
-}
+use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -23,13 +15,14 @@ pub fn run(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     let metadata = inspect_metadata_path(&input, parser_config)?;
-
-    if json {
-        return write_json_output(&InspectMetadataResult { metadata }, pretty, output);
-    }
-
-    let text = format_metadata_text(&metadata);
-    write_text_output(&text, output)
+    run_dual_output(
+        &metadata,
+        "metadata",
+        json,
+        pretty,
+        output,
+        format_metadata_text,
+    )
 }
 
 fn format_metadata_text(metadata: &MetadataInspection) -> String {
@@ -62,29 +55,20 @@ fn format_metadata_text(metadata: &MetadataInspection) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_metadata_text, run};
+    use crate::test_support;
     use docir_app::test_support::{
         build_test_cfb, build_test_property_set_stream, TestPropertyValue,
     };
     use docir_app::{MetadataInspection, MetadataProperty, MetadataSection, ParserConfig};
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     const SUMMARY_INFO_STREAM: &str = "\u{0005}SummaryInformation";
     const DOC_SUMMARY_INFO_STREAM: &str = "\u{0005}DocumentSummaryInformation";
 
-    fn temp_file(name: &str, ext: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_inspect_metadata_{name}_{nanos}.{ext}"))
-    }
-
     #[test]
     fn inspect_metadata_run_writes_json() {
-        let input = temp_file("legacy", "doc");
-        let output = temp_file("legacy", "json");
+        let input = test_support::temp_file("legacy", "doc");
+        let output = test_support::temp_file("legacy", "json");
         let summary = build_test_property_set_stream(&[
             (2, TestPropertyValue::Str("Specimen")),
             (3, TestPropertyValue::Str("Specimen subject")),
@@ -155,8 +139,8 @@ mod tests {
 
     #[test]
     fn inspect_metadata_run_writes_text() {
-        let input = temp_file("legacy_text", "doc");
-        let output = temp_file("legacy_text", "txt");
+        let input = test_support::temp_file("legacy_text", "doc");
+        let output = test_support::temp_file("legacy_text", "txt");
         let summary = build_test_property_set_stream(&[
             (4, TestPropertyValue::Str("Analyst")),
             (3, TestPropertyValue::Str("Specimen subject")),

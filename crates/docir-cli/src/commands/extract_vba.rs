@@ -8,8 +8,7 @@ use docir_core::{ExtractedArtifact, ExtractedArtifactKind, ExtractionManifest, E
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::commands::util::build_app_and_parse;
-use crate::commands::util::source_format_label;
+use crate::commands::util::{build_app_and_parse, prepare_output_dir, source_format_label};
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -38,21 +37,6 @@ pub fn run(
     let manifest_json = serde_json::to_string_pretty(&export)?;
     fs::write(&manifest_path, manifest_json)
         .with_context(|| format!("Failed to write {}", manifest_path.display()))?;
-    Ok(())
-}
-
-fn prepare_output_dir(out_dir: &Path, overwrite: bool) -> Result<()> {
-    if out_dir.exists() {
-        if !overwrite {
-            bail!(
-                "Output directory {} already exists; pass --overwrite to reuse it",
-                out_dir.display()
-            );
-        }
-    } else {
-        fs::create_dir_all(out_dir)
-            .with_context(|| format!("Failed to create {}", out_dir.display()))?;
-    }
     Ok(())
 }
 
@@ -150,30 +134,15 @@ fn sanitize_name(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::test_support;
     use docir_app::{test_support::build_test_cfb, ParserConfig};
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn fixture(name: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/ooxml")
-            .join(name)
-    }
-
-    fn temp_dir(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_extract_vba_{name}_{nanos}"))
-    }
 
     #[test]
     fn extract_vba_without_macros_still_writes_manifest_in_best_effort_mode() {
-        let out = temp_dir("manifest");
+        let out = test_support::temp_dir("manifest");
         run(
-            fixture("minimal.docx"),
+            test_support::fixture("minimal.docx"),
             out.clone(),
             false,
             true,
@@ -186,7 +155,7 @@ mod tests {
 
     #[test]
     fn extract_vba_legacy_doc_writes_manifest_and_module_files() {
-        let input = temp_file("legacy_vba", "doc");
+        let input = test_support::temp_file("legacy_vba", "doc");
         fs::write(
             &input,
             build_test_cfb(&[
@@ -203,7 +172,7 @@ Document=ThisDocument/&H00000000
             ]),
         )
         .expect("write legacy vba doc");
-        let out = temp_dir("legacy_vba");
+        let out = test_support::temp_dir("legacy_vba");
 
         run(
             input.clone(),
@@ -235,7 +204,7 @@ Document=ThisDocument/&H00000000
 
     #[test]
     fn extract_vba_legacy_xls_writes_manifest_and_module_files() {
-        let input = temp_file("legacy_vba_xls", "xls");
+        let input = test_support::temp_file("legacy_vba_xls", "xls");
         fs::write(
             &input,
             build_test_cfb(&[
@@ -255,7 +224,7 @@ Document=ThisWorkbook/&H00000000
             ]),
         )
         .expect("write legacy vba xls");
-        let out = temp_dir("legacy_vba_xls");
+        let out = test_support::temp_dir("legacy_vba_xls");
 
         run(
             input.clone(),
@@ -288,7 +257,7 @@ Document=ThisWorkbook/&H00000000
 
     #[test]
     fn extract_vba_legacy_ppt_writes_manifest_and_module_files() {
-        let input = temp_file("legacy_vba_ppt", "ppt");
+        let input = test_support::temp_file("legacy_vba_ppt", "ppt");
         fs::write(
             &input,
             build_test_cfb(&[
@@ -309,7 +278,7 @@ Document=ThisPresentation/&H00000000
             ]),
         )
         .expect("write legacy vba ppt");
-        let out = temp_dir("legacy_vba_ppt");
+        let out = test_support::temp_dir("legacy_vba_ppt");
 
         run(
             input.clone(),
@@ -342,7 +311,7 @@ Document=ThisPresentation/&H00000000
 
     #[test]
     fn extract_vba_legacy_partial_requires_best_effort() {
-        let input = temp_file("legacy_vba_partial_fail", "doc");
+        let input = test_support::temp_file("legacy_vba_partial_fail", "doc");
         fs::write(
             &input,
             build_test_cfb(&[
@@ -358,7 +327,7 @@ Module=MissingMod/MissingMod
             ]),
         )
         .expect("write partial legacy vba doc");
-        let out = temp_dir("legacy_vba_partial_fail");
+        let out = test_support::temp_dir("legacy_vba_partial_fail");
 
         let err = run(
             input.clone(),
@@ -378,7 +347,7 @@ Module=MissingMod/MissingMod
 
     #[test]
     fn extract_vba_legacy_partial_best_effort_writes_manifest_and_partial_bundle() {
-        let input = temp_file("legacy_vba_partial_ok", "doc");
+        let input = test_support::temp_file("legacy_vba_partial_ok", "doc");
         fs::write(
             &input,
             build_test_cfb(&[
@@ -395,7 +364,7 @@ DPB="AAAA"
             ]),
         )
         .expect("write partial legacy vba doc");
-        let out = temp_dir("legacy_vba_partial_ok");
+        let out = test_support::temp_dir("legacy_vba_partial_ok");
 
         run(
             input.clone(),
@@ -427,7 +396,7 @@ DPB="AAAA"
 
     #[test]
     fn extract_vba_legacy_mixed_module_kinds_writes_bas_and_cls_files() {
-        let input = temp_file("legacy_vba_mixed", "doc");
+        let input = test_support::temp_file("legacy_vba_mixed", "doc");
         fs::write(
             &input,
             build_test_cfb(&[
@@ -449,7 +418,7 @@ Document=ThisDocument/&H00000000
             ]),
         )
         .expect("write mixed legacy vba doc");
-        let out = temp_dir("legacy_vba_mixed");
+        let out = test_support::temp_dir("legacy_vba_mixed");
 
         run(
             input.clone(),
@@ -499,13 +468,5 @@ Document=ThisDocument/&H00000000
 
         let _ = fs::remove_file(input);
         let _ = fs::remove_dir_all(out);
-    }
-
-    fn temp_file(name: &str, extension: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_extract_vba_{name}_{nanos}.{extension}"))
     }
 }

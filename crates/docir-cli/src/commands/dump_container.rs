@@ -2,17 +2,9 @@
 
 use anyhow::Result;
 use docir_app::{ContainerDump, ParserConfig};
-use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::commands::util::{
-    build_app, push_bullet_line, push_labeled_line, write_json_output, write_text_output,
-};
-
-#[derive(Debug, Serialize)]
-struct DumpContainerResult {
-    container: ContainerDump,
-}
+use crate::commands::util::{build_app, push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -25,12 +17,14 @@ pub fn run(
     let app = build_app(parser_config);
     let (parsed, bytes) = app.parse_file_with_bytes(&input)?;
     let dump = app.build_container_dump(&parsed, &bytes)?;
-
-    if json {
-        return write_json_output(&DumpContainerResult { container: dump }, pretty, output);
-    }
-
-    write_text_output(&format_container_text(&dump), output)
+    run_dual_output(
+        &dump,
+        "container",
+        json,
+        pretty,
+        output,
+        format_container_text,
+    )
 }
 
 fn format_container_text(dump: &ContainerDump) -> String {
@@ -83,33 +77,18 @@ fn container_entry_label(kind: docir_app::ContainerEntryKind) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{format_container_text, run};
+    use crate::test_support;
     use docir_app::{
         test_support::build_test_cfb, ContainerDump, ContainerEntry, ContainerEntryKind,
         ContainerKind, ParserConfig,
     };
     use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn fixture(name: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/ooxml")
-            .join(name)
-    }
-
-    fn temp_file(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        std::env::temp_dir().join(format!("docir_cli_dump_container_{name}_{nanos}.json"))
-    }
 
     #[test]
     fn dump_container_run_writes_json() {
-        let output = temp_file("json");
+        let output = test_support::temp_file("json", "json");
         run(
-            fixture("minimal.docx"),
+            test_support::fixture("minimal.docx"),
             true,
             true,
             Some(output.clone()),
@@ -123,9 +102,9 @@ mod tests {
 
     #[test]
     fn dump_container_run_writes_text() {
-        let output = temp_file("text");
+        let output = test_support::temp_file("text", "json");
         run(
-            fixture("minimal.docx"),
+            test_support::fixture("minimal.docx"),
             false,
             false,
             Some(output.clone()),
@@ -140,7 +119,7 @@ mod tests {
 
     #[test]
     fn dump_container_run_writes_text_for_legacy_cfb_fixture() {
-        let input = temp_file("legacy_text").with_extension("doc");
+        let input = test_support::temp_file("legacy_text", "doc");
         fs::write(
             &input,
             build_test_cfb(&[
@@ -150,7 +129,7 @@ mod tests {
             ]),
         )
         .expect("write legacy fixture");
-        let output = temp_file("legacy_text_out");
+        let output = test_support::temp_file("legacy_text_out", "json");
         run(
             input.clone(),
             false,
