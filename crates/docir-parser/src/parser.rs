@@ -38,6 +38,7 @@ mod security;
 mod shared_parts;
 mod utils;
 mod vba;
+mod vba_scanner;
 
 mod document;
 mod ooxml;
