@@ -4,7 +4,9 @@ use anyhow::Result;
 use docir_app::{inspect_directory_path, DirectoryInspection, ParserConfig};
 use std::path::PathBuf;
 
-use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
+use crate::commands::util::{
+    push_bullet_line, push_count_section, push_labeled_line, run_dual_output,
+};
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -27,185 +29,207 @@ pub fn run(
 
 fn format_inspection_text(inspection: &DirectoryInspection) -> String {
     let mut out = String::new();
-    push_labeled_line(&mut out, 0, "Container", &inspection.container);
-    push_labeled_line(&mut out, 0, "Entries", inspection.entry_count);
-    push_labeled_line(&mut out, 0, "Directory Score", &inspection.directory_score);
-    if !inspection.role_counts.is_empty() {
-        out.push_str("\nRole Counts:\n");
-        for entry in &inspection.role_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
-    }
-    if !inspection.anomaly_counts.is_empty() {
-        out.push_str("\nAnomalies:\n");
-        for entry in &inspection.anomaly_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
-    }
+    format_header_and_summary(&mut out, inspection);
+    format_entries_section(&mut out, &inspection.entries);
+    out
+}
+
+fn format_header_and_summary(out: &mut String, inspection: &DirectoryInspection) {
+    push_labeled_line(out, 0, "Container", &inspection.container);
+    push_labeled_line(out, 0, "Entries", inspection.entry_count);
+    push_labeled_line(out, 0, "Directory Score", &inspection.directory_score);
+    push_count_section(
+        out,
+        "Role Counts",
+        &inspection.role_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Anomalies",
+        &inspection.anomaly_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
     if !inspection.anomaly_catalog.is_empty() {
         out.push_str("\nAnomaly Severity Catalog:\n");
         for entry in &inspection.anomaly_catalog {
-            push_bullet_line(&mut out, 2, &entry.anomaly, &entry.severity);
+            push_bullet_line(out, 2, &entry.anomaly, &entry.severity);
         }
     }
-    if !inspection.anomaly_severity_counts.is_empty() {
-        out.push_str("\nAnomaly Severity Summary:\n");
-        for entry in &inspection.anomaly_severity_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
+    push_count_section(
+        out,
+        "Anomaly Severity Summary",
+        &inspection.anomaly_severity_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Reference Summary",
+        &inspection.reference_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Pointer Summary",
+        &inspection.pointer_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Tree Density Summary",
+        &inspection.tree_density_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Dangling By State",
+        &inspection.dangling_state_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Self References",
+        &inspection.self_reference_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Short Cycles",
+        &inspection.short_cycle_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Reachability Summary",
+        &inspection.reachability_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Incoming Source Summary",
+        &inspection.incoming_source_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Incoming Source Types",
+        &inspection.incoming_source_type_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Dead But Referenced",
+        &inspection.dead_reference_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        out,
+        "Fanout Summary",
+        &inspection.fanout_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+}
+
+fn format_entries_section(out: &mut String, entries: &[docir_app::DirectoryEntry]) {
+    if entries.is_empty() {
+        return;
     }
-    if !inspection.reference_counts.is_empty() {
-        out.push_str("\nReference Summary:\n");
-        for entry in &inspection.reference_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
+    out.push_str("\nDirectory:\n");
+    for entry in entries {
+        format_directory_entry(out, entry);
     }
-    if !inspection.pointer_counts.is_empty() {
-        out.push_str("\nPointer Summary:\n");
-        for entry in &inspection.pointer_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
+}
+
+fn format_directory_entry(out: &mut String, entry: &docir_app::DirectoryEntry) {
+    push_bullet_line(out, 2, &entry.entry_type, &entry.path);
+    push_labeled_line(out, 4, "Entry Index", entry.entry_index);
+    push_labeled_line(out, 4, "Name Length Raw", entry.name_len_raw);
+    push_labeled_line(out, 4, "Object Type Raw", entry.object_type_raw);
+    push_labeled_line(out, 4, "Color Flag Raw", entry.color_flag_raw);
+    push_labeled_line(out, 4, "State", &entry.state);
+    push_labeled_line(out, 4, "Classification", &entry.classification);
+    push_labeled_line(out, 4, "Anomaly Severity", &entry.anomaly_severity);
+    if !entry.anomaly_tags.is_empty() {
+        push_labeled_line(out, 4, "Anomaly Tags", entry.anomaly_tags.join(", "));
     }
-    if !inspection.tree_density_counts.is_empty() {
-        out.push_str("\nTree Density Summary:\n");
-        for entry in &inspection.tree_density_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
+    if !entry.short_cycles.is_empty() {
+        push_labeled_line(out, 4, "Short Cycles", entry.short_cycles.join(", "));
     }
-    if !inspection.dangling_state_counts.is_empty() {
-        out.push_str("\nDangling By State:\n");
-        for entry in &inspection.dangling_state_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
+    push_labeled_line(out, 4, "Reachable From Root", entry.reachable_from_root);
+    push_labeled_line(
+        out,
+        4,
+        "Incoming References",
+        entry.incoming_reference_count,
+    );
+    push_labeled_line(
+        out,
+        4,
+        "Incoming From Normal",
+        entry.incoming_normal_reference_count,
+    );
+    push_labeled_line(
+        out,
+        4,
+        "Incoming From Anomalous",
+        entry.incoming_anomalous_reference_count,
+    );
+    push_labeled_line(
+        out,
+        4,
+        "Incoming From Root Storage",
+        entry.incoming_from_root_storage_count,
+    );
+    push_labeled_line(
+        out,
+        4,
+        "Incoming From Storage",
+        entry.incoming_from_storage_count,
+    );
+    push_labeled_line(
+        out,
+        4,
+        "Incoming From Stream",
+        entry.incoming_from_stream_count,
+    );
+    push_labeled_line(out, 4, "Fanout", entry.fanout_count);
+    if !entry.incoming_from.is_empty() {
+        push_labeled_line(out, 4, "Incoming From", entry.incoming_from.join(", "));
     }
-    if !inspection.self_reference_counts.is_empty() {
-        out.push_str("\nSelf References:\n");
-        for entry in &inspection.self_reference_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
+    push_labeled_line(out, 4, "Size", format!("{} bytes", entry.size_bytes));
+    push_labeled_line(out, 4, "Sector", entry.start_sector);
+    push_labeled_line(out, 4, "Left Sibling Raw", entry.left_sibling_raw);
+    push_labeled_line(out, 4, "Right Sibling Raw", entry.right_sibling_raw);
+    push_labeled_line(out, 4, "Child Raw", entry.child_raw);
+    if let Some(left) = entry.left_sibling {
+        push_labeled_line(out, 4, "Left Sibling", left);
     }
-    if !inspection.short_cycle_counts.is_empty() {
-        out.push_str("\nShort Cycles:\n");
-        for entry in &inspection.short_cycle_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
+    if let Some(right) = entry.right_sibling {
+        push_labeled_line(out, 4, "Right Sibling", right);
     }
-    if !inspection.reachability_counts.is_empty() {
-        out.push_str("\nReachability Summary:\n");
-        for entry in &inspection.reachability_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
+    if let Some(child) = entry.child {
+        push_labeled_line(out, 4, "Child", child);
     }
-    if !inspection.incoming_source_counts.is_empty() {
-        out.push_str("\nIncoming Source Summary:\n");
-        for entry in &inspection.incoming_source_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
+    if let Some(created) = entry.created_filetime {
+        push_labeled_line(out, 4, "Created", created);
     }
-    if !inspection.incoming_source_type_counts.is_empty() {
-        out.push_str("\nIncoming Source Types:\n");
-        for entry in &inspection.incoming_source_type_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
+    if let Some(modified) = entry.modified_filetime {
+        push_labeled_line(out, 4, "Modified", modified);
     }
-    if !inspection.dead_reference_counts.is_empty() {
-        out.push_str("\nDead But Referenced:\n");
-        for entry in &inspection.dead_reference_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
-    }
-    if !inspection.fanout_counts.is_empty() {
-        out.push_str("\nFanout Summary:\n");
-        for entry in &inspection.fanout_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
-    }
-    if !inspection.entries.is_empty() {
-        out.push_str("\nDirectory:\n");
-        for entry in &inspection.entries {
-            push_bullet_line(&mut out, 2, &entry.entry_type, &entry.path);
-            push_labeled_line(&mut out, 4, "Entry Index", entry.entry_index);
-            push_labeled_line(&mut out, 4, "Name Length Raw", entry.name_len_raw);
-            push_labeled_line(&mut out, 4, "Object Type Raw", entry.object_type_raw);
-            push_labeled_line(&mut out, 4, "Color Flag Raw", entry.color_flag_raw);
-            push_labeled_line(&mut out, 4, "State", &entry.state);
-            push_labeled_line(&mut out, 4, "Classification", &entry.classification);
-            push_labeled_line(&mut out, 4, "Anomaly Severity", &entry.anomaly_severity);
-            if !entry.anomaly_tags.is_empty() {
-                push_labeled_line(&mut out, 4, "Anomaly Tags", entry.anomaly_tags.join(", "));
-            }
-            if !entry.short_cycles.is_empty() {
-                push_labeled_line(&mut out, 4, "Short Cycles", entry.short_cycles.join(", "));
-            }
-            push_labeled_line(
-                &mut out,
-                4,
-                "Reachable From Root",
-                entry.reachable_from_root,
-            );
-            push_labeled_line(
-                &mut out,
-                4,
-                "Incoming References",
-                entry.incoming_reference_count,
-            );
-            push_labeled_line(
-                &mut out,
-                4,
-                "Incoming From Normal",
-                entry.incoming_normal_reference_count,
-            );
-            push_labeled_line(
-                &mut out,
-                4,
-                "Incoming From Anomalous",
-                entry.incoming_anomalous_reference_count,
-            );
-            push_labeled_line(
-                &mut out,
-                4,
-                "Incoming From Root Storage",
-                entry.incoming_from_root_storage_count,
-            );
-            push_labeled_line(
-                &mut out,
-                4,
-                "Incoming From Storage",
-                entry.incoming_from_storage_count,
-            );
-            push_labeled_line(
-                &mut out,
-                4,
-                "Incoming From Stream",
-                entry.incoming_from_stream_count,
-            );
-            push_labeled_line(&mut out, 4, "Fanout", entry.fanout_count);
-            if !entry.incoming_from.is_empty() {
-                push_labeled_line(&mut out, 4, "Incoming From", entry.incoming_from.join(", "));
-            }
-            push_labeled_line(&mut out, 4, "Size", format!("{} bytes", entry.size_bytes));
-            push_labeled_line(&mut out, 4, "Sector", entry.start_sector);
-            push_labeled_line(&mut out, 4, "Left Sibling Raw", entry.left_sibling_raw);
-            push_labeled_line(&mut out, 4, "Right Sibling Raw", entry.right_sibling_raw);
-            push_labeled_line(&mut out, 4, "Child Raw", entry.child_raw);
-            if let Some(left) = entry.left_sibling {
-                push_labeled_line(&mut out, 4, "Left Sibling", left);
-            }
-            if let Some(right) = entry.right_sibling {
-                push_labeled_line(&mut out, 4, "Right Sibling", right);
-            }
-            if let Some(child) = entry.child {
-                push_labeled_line(&mut out, 4, "Child", child);
-            }
-            if let Some(created) = entry.created_filetime {
-                push_labeled_line(&mut out, 4, "Created", created);
-            }
-            if let Some(modified) = entry.modified_filetime {
-                push_labeled_line(&mut out, 4, "Modified", modified);
-            }
-        }
-    }
-    out
 }
 
 #[cfg(test)]

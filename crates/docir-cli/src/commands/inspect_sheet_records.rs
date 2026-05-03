@@ -4,7 +4,9 @@ use anyhow::Result;
 use docir_app::{inspect_sheet_records_path, ParserConfig, SheetRecordInspection};
 use std::path::PathBuf;
 
-use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
+use crate::commands::util::{
+    push_bullet_line, push_count_section, push_labeled_line, run_dual_output,
+};
 
 pub fn run(
     input: PathBuf,
@@ -31,18 +33,20 @@ fn format_inspection_text(inspection: &SheetRecordInspection) -> String {
     push_labeled_line(&mut out, 0, "Records", inspection.record_count);
     push_labeled_line(&mut out, 0, "Substreams", inspection.substream_count);
     push_labeled_line(&mut out, 0, "Anomalies", inspection.anomaly_count);
-    if !inspection.record_type_counts.is_empty() {
-        out.push_str("\nRecord Types:\n");
-        for entry in &inspection.record_type_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
-    }
-    if !inspection.substream_counts.is_empty() {
-        out.push_str("\nSubstreams:\n");
-        for entry in &inspection.substream_counts {
-            push_bullet_line(&mut out, 2, &entry.bucket, entry.count);
-        }
-    }
+    push_count_section(
+        &mut out,
+        "Record Types",
+        &inspection.record_type_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
+    push_count_section(
+        &mut out,
+        "Substreams",
+        &inspection.substream_counts,
+        |e| &e.bucket,
+        |e| e.count,
+    );
     if !inspection.records.is_empty() {
         out.push_str("\nRecords:\n");
         for record in &inspection.records {

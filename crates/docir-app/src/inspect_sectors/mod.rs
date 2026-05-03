@@ -33,10 +33,8 @@ pub fn inspect_sectors_path<P: AsRef<Path>>(
 pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
     let cfb = Cfb::parse(data.to_vec())?;
     let mut anomalies = Vec::new();
-
     let mut streams = build_stream_maps(&cfb, &mut anomalies);
     streams.sort_by(|left, right| left.path.cmp(&right.path));
-
     let (sector_owners, referenced_sectors) = build_sector_owner_map(&streams);
     let (directory_sectors, mini_fat_sectors, difat_sectors) = collect_system_chains(&cfb);
     let sector_overview = build_sector_overview_entries(
@@ -47,7 +45,6 @@ pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
         &difat_sectors,
         sector_owners,
     );
-
     let role_counts = build_role_counts(&sector_overview);
     let shared_sector_claims = build_shared_sector_claims(&sector_overview);
     let shared_chain_overlaps = build_shared_chain_overlaps(&sector_overview);
@@ -59,7 +56,6 @@ pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
         &shared_chain_overlaps,
         &start_sector_reuse,
     );
-
     let fat_entry_count = cfb.fat_entry_count();
     let structural_incoherence_counts =
         build_structural_incoherence_counts(&sector_overview, &streams, cfb.mini_fat_entry_count());
@@ -72,7 +68,6 @@ pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
         &start_sector_reuse,
         &structural_incoherence_counts,
     ));
-
     let chain_health_by_root =
         build_chain_health_counts_by_root(&streams, &shared_sector_claims, &start_sector_reuse);
     let chain_health_by_allocation = build_chain_health_counts_by_allocation(
@@ -80,10 +75,9 @@ pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
         &shared_sector_claims,
         &start_sector_reuse,
     );
-    let fat_free_count = cfb.fat_free_count();
-    let fat_entry_count = cfb.fat_entry_count();
-    let occupied_fat_entries = fat_entry_count.saturating_sub(fat_free_count);
     let sector_score = build_sector_score(&streams, &anomalies);
+    let fat_free_count = cfb.fat_free_count();
+    let occupied_fat_entries = fat_entry_count.saturating_sub(fat_free_count);
     Ok(SectorInspection {
         container: "cfb-ole".to_string(),
         sector_score,
