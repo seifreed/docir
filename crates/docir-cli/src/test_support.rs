@@ -48,3 +48,44 @@ pub fn write_docx(path: &PathBuf) {
     zip.write_all(b"<w:document/>").unwrap();
     zip.finish().unwrap();
 }
+
+/// Create a DOCX file with media (relationships and image) at the given path.
+pub fn write_docx_with_media(path: &PathBuf) {
+    let file = fs::File::create(path).expect("create docx");
+    let mut zip = zip::ZipWriter::new(file);
+    let options = SimpleFileOptions::default();
+
+    let content_types = r#"
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="png" ContentType="image/png"/>
+              <Override PartName="/word/document.xml"
+                ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+            </Types>"#;
+    let rels = r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1"
+                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+                Target="word/document.xml"/>
+            </Relationships>"#;
+    let document = r#"
+            <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:body>
+                <w:p><w:r><w:t>Hi</w:t></w:r></w:p>
+              </w:body>
+            </w:document>"#;
+
+    zip.start_file("[Content_Types].xml", options).unwrap();
+    zip.write_all(content_types.trim().as_bytes()).unwrap();
+    zip.add_directory("_rels/", options).unwrap();
+    zip.start_file("_rels/.rels", options).unwrap();
+    zip.write_all(rels.trim().as_bytes()).unwrap();
+    zip.add_directory("word/", options).unwrap();
+    zip.start_file("word/document.xml", options).unwrap();
+    zip.write_all(document.trim().as_bytes()).unwrap();
+    zip.add_directory("word/media/", options).unwrap();
+    zip.start_file("word/media/image1.png", options).unwrap();
+    zip.write_all(b"PNG").unwrap();
+    zip.finish().unwrap();
+}

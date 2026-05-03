@@ -2,6 +2,8 @@ use anyhow::Result;
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
+use super::extract_artifacts::ExtractArtifactsOptions;
+
 pub(crate) fn cmd_extract_links(
     input: PathBuf,
     json: bool,
@@ -12,7 +14,6 @@ pub(crate) fn cmd_extract_links(
     super::extract_links::run(input, json, pretty, output, parser_config)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn cmd_extract_flash(
     input: PathBuf,
     out: Option<PathBuf>,
@@ -35,29 +36,13 @@ pub(crate) fn cmd_extract_vba(
     super::extract_vba::run(input, out, overwrite, best_effort, parser_config)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn cmd_extract_artifacts(
     input: PathBuf,
     out: PathBuf,
-    overwrite: bool,
-    with_raw: bool,
-    no_media: bool,
-    only_ole: bool,
-    only_rtf_objects: bool,
+    options: ExtractArtifactsOptions,
     parser_config: &ParserConfig,
 ) -> Result<()> {
-    super::extract_artifacts::run(
-        input,
-        out,
-        super::extract_artifacts::ExtractArtifactsOptions {
-            overwrite,
-            with_raw,
-            no_media,
-            only_ole,
-            only_rtf_objects,
-        },
-        parser_config,
-    )
+    super::extract_artifacts::run(input, out, options, parser_config)
 }
 
 pub(crate) fn cmd_extract(

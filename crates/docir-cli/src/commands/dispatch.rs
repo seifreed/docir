@@ -9,7 +9,6 @@ use super::dispatch_query::{cmd_diff, cmd_grep, cmd_query, cmd_rules};
 use crate::{Cli, Commands};
 use anyhow::Result;
 use docir_app::ParserConfig;
-use std::path::PathBuf;
 
 pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
     run_command(cli.command, parser_config)
@@ -21,14 +20,14 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             input,
             format,
             output_opts,
-        } => cmd_parse(
+        } => super::parse::run(
             input,
             format,
             output_opts.pretty,
             output_opts.output,
             parser_config,
         ),
-        Commands::Summary { input } => cmd_summary(input, parser_config),
+        Commands::Summary { input } => super::summary::run(input, parser_config),
         Commands::Coverage {
             input,
             json,
@@ -38,32 +37,34 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             export,
             export_format,
             export_mode,
-        } => cmd_coverage(
+        } => super::coverage::run(
             input,
-            json,
-            details,
-            inventory,
-            unknown,
-            export,
-            export_format,
-            export_mode,
+            super::coverage::CoverageOptions {
+                json,
+                details,
+                inventory,
+                unknown,
+                export,
+                export_format,
+                export_mode,
+            },
             parser_config,
         ),
-        Commands::Inventory { input, output_opts } => cmd_inventory(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
-        Commands::ProbeFormat { input, output_opts } => cmd_probe_format(
+        Commands::Inventory { input, output_opts } => super::inventory::run(
             input,
             output_opts.json,
             output_opts.pretty,
             output_opts.output,
             parser_config,
         ),
-        Commands::ListTimes { input, output_opts } => cmd_list_times(
+        Commands::ProbeFormat { input, output_opts } => super::probe_format::run(
+            input,
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::ListTimes { input, output_opts } => super::list_times::run(
             input,
             output_opts.json,
             output_opts.pretty,
@@ -105,7 +106,7 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             output_opts.output,
             parser_config,
         ),
-        Commands::ReportIndicators { input, output_opts } => cmd_report_indicators(
+        Commands::ReportIndicators { input, output_opts } => super::report_indicators::run(
             input,
             output_opts.json,
             output_opts.pretty,
@@ -134,9 +135,9 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             parser_config,
         ),
         Commands::Manifest { input, output_opts } => {
-            cmd_manifest(input, output_opts.pretty, output_opts.output, parser_config)
+            super::manifest::run(input, output_opts.pretty, output_opts.output, parser_config)
         }
-        Commands::DumpContainer { input, output_opts } => cmd_dump_container(
+        Commands::DumpContainer { input, output_opts } => super::dump_container::run(
             input,
             output_opts.json,
             output_opts.pretty,
@@ -147,7 +148,7 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             input,
             include_source,
             output_opts,
-        } => cmd_recognize_vba(
+        } => super::recognize_vba::run(
             input,
             include_source,
             output_opts.json,
@@ -172,23 +173,25 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
         } => cmd_extract_artifacts(
             input,
             out,
-            overwrite,
-            with_raw,
-            no_media,
-            only_ole,
-            only_rtf_objects,
+            super::extract_artifacts::ExtractArtifactsOptions {
+                overwrite,
+                with_raw,
+                no_media,
+                only_ole,
+                only_rtf_objects,
+            },
             parser_config,
         ),
         Commands::Security {
             input,
             json,
             verbose,
-        } => cmd_security(input, json, verbose, parser_config),
+        } => super::security::run(input, json, verbose, parser_config),
         Commands::DumpNode {
             input,
             node_id,
             format,
-        } => cmd_dump_node(input, node_id, format, parser_config),
+        } => super::dump_node::run(input, &node_id, format, parser_config),
         Commands::Diff {
             left,
             right,
@@ -230,11 +233,13 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             output_opts,
         } => cmd_query(
             input,
-            node_type,
-            contains,
-            format,
-            has_external_refs,
-            has_macros,
+            super::query::QueryFilters {
+                node_type,
+                contains,
+                format,
+                has_external_refs,
+                has_macros,
+            },
             output_opts.pretty,
             output_opts.output,
             parser_config,
@@ -268,135 +273,6 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             parser_config,
         ),
     }
-}
-
-fn cmd_parse(
-    input: PathBuf,
-    format: crate::OutputFormat,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::parse::run(input, format, pretty, output, parser_config)
-}
-
-fn cmd_summary(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
-    super::summary::run(input, parser_config)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn cmd_coverage(
-    input: PathBuf,
-    json: bool,
-    details: bool,
-    inventory: bool,
-    unknown: bool,
-    export: Option<PathBuf>,
-    export_format: crate::CoverageExportFormat,
-    export_mode: crate::CoverageExportMode,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::coverage::run(
-        input,
-        super::coverage::CoverageOptions {
-            json,
-            details,
-            inventory,
-            unknown,
-            export,
-            export_format,
-            export_mode,
-        },
-        parser_config,
-    )
-}
-
-fn cmd_inventory(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::inventory::run(input, json, pretty, output, parser_config)
-}
-
-fn cmd_probe_format(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::probe_format::run(input, json, pretty, output, parser_config)
-}
-
-fn cmd_list_times(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::list_times::run(input, json, pretty, output, parser_config)
-}
-
-fn cmd_report_indicators(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::report_indicators::run(input, json, pretty, output, parser_config)
-}
-
-fn cmd_manifest(
-    input: PathBuf,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::manifest::run(input, pretty, output, parser_config)
-}
-
-fn cmd_dump_container(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::dump_container::run(input, json, pretty, output, parser_config)
-}
-
-fn cmd_recognize_vba(
-    input: PathBuf,
-    include_source: bool,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::recognize_vba::run(input, include_source, json, pretty, output, parser_config)
-}
-
-fn cmd_security(
-    input: PathBuf,
-    json: bool,
-    verbose: bool,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::security::run(input, json, verbose, parser_config)
-}
-
-fn cmd_dump_node(
-    input: PathBuf,
-    node_id: String,
-    format: crate::OutputFormat,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::dump_node::run(input, &node_id, format, parser_config)
 }
 
 #[cfg(test)]

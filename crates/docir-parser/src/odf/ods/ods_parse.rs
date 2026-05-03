@@ -19,6 +19,30 @@ use crate::xml_utils::{
 use quick_xml::events::BytesStart;
 use std::collections::HashMap;
 
+struct FullTableContext<'a> {
+    store: &'a mut IrStore,
+    limits: &'a dyn OdfLimitCounter,
+    style_map: &'a mut HashMap<String, u32>,
+    next_style_id: &'a mut u32,
+    row_idx: &'a mut u32,
+    worksheet: &'a mut Worksheet,
+    validation_ranges: &'a mut HashMap<String, Vec<String>>,
+    cell_values: &'a mut HashMap<(u32, u32), CellValue>,
+    formula_cells: &'a mut Vec<(NodeId, u32, u32, String)>,
+    formula_map: &'a mut HashMap<(u32, u32), String>,
+    shapes: &'a mut Vec<NodeId>,
+}
+
+struct FastTableContext<'a> {
+    store: &'a mut IrStore,
+    limits: &'a dyn OdfLimitCounter,
+    style_map: &'a mut HashMap<String, u32>,
+    next_style_id: &'a mut u32,
+    row_idx: &'a mut u32,
+    worksheet: &'a mut Worksheet,
+    validation_ranges: &'a mut HashMap<String, Vec<String>>,
+}
+
 pub(crate) fn parse_ods_table(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
@@ -51,17 +75,19 @@ pub(crate) fn parse_ods_table(
                 handle_table_start_full(
                     reader,
                     e,
-                    store,
-                    limits,
-                    &mut style_map,
-                    &mut next_style_id,
-                    &mut row_idx,
-                    &mut worksheet,
-                    &mut validation_ranges,
-                    &mut cell_values,
-                    &mut formula_cells,
-                    &mut formula_map,
-                    &mut shapes,
+                    FullTableContext {
+                        store,
+                        limits,
+                        style_map: &mut style_map,
+                        next_style_id: &mut next_style_id,
+                        row_idx: &mut row_idx,
+                        worksheet: &mut worksheet,
+                        validation_ranges: &mut validation_ranges,
+                        cell_values: &mut cell_values,
+                        formula_cells: &mut formula_cells,
+                        formula_map: &mut formula_map,
+                        shapes: &mut shapes,
+                    },
                 )
             } else {
                 handle_table_empty_full(
@@ -122,16 +148,18 @@ pub(crate) fn parse_ods_table_fast(
                 handle_table_start_fast(
                     reader,
                     e,
-                    store,
-                    limits,
                     sample_rows,
                     sample_cols,
                     sample_enabled,
-                    &mut style_map,
-                    &mut next_style_id,
-                    &mut row_idx,
-                    &mut worksheet,
-                    &mut validation_ranges,
+                    FastTableContext {
+                        store,
+                        limits,
+                        style_map: &mut style_map,
+                        next_style_id: &mut next_style_id,
+                        row_idx: &mut row_idx,
+                        worksheet: &mut worksheet,
+                        validation_ranges: &mut validation_ranges,
+                    },
                 )
             } else {
                 handle_table_empty_fast(e, limits, &mut row_idx)
@@ -151,22 +179,24 @@ pub(crate) fn parse_ods_table_fast(
     Ok(worksheet)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn handle_table_start_full(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
-    store: &mut IrStore,
-    limits: &dyn OdfLimitCounter,
-    style_map: &mut HashMap<String, u32>,
-    next_style_id: &mut u32,
-    row_idx: &mut u32,
-    worksheet: &mut Worksheet,
-    validation_ranges: &mut HashMap<String, Vec<String>>,
-    cell_values: &mut HashMap<(u32, u32), CellValue>,
-    formula_cells: &mut Vec<(NodeId, u32, u32, String)>,
-    formula_map: &mut HashMap<(u32, u32), String>,
-    shapes: &mut Vec<NodeId>,
+    ctx: FullTableContext<'_>,
 ) -> Result<(), ParseError> {
+    let FullTableContext {
+        store,
+        limits,
+        style_map,
+        next_style_id,
+        row_idx,
+        worksheet,
+        validation_ranges,
+        cell_values,
+        formula_cells,
+        formula_map,
+        shapes,
+    } = ctx;
     match start.name().as_ref() {
         b"table:table-row" => {
             let row_repeat = row_repeat_from(start);
@@ -240,21 +270,23 @@ fn handle_table_empty_full(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn handle_table_start_fast(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
-    store: &mut IrStore,
-    limits: &dyn OdfLimitCounter,
     sample_rows: u32,
     sample_cols: u32,
     sample_enabled: bool,
-    style_map: &mut HashMap<String, u32>,
-    next_style_id: &mut u32,
-    row_idx: &mut u32,
-    worksheet: &mut Worksheet,
-    validation_ranges: &mut HashMap<String, Vec<String>>,
+    ctx: FastTableContext<'_>,
 ) -> Result<(), ParseError> {
+    let FastTableContext {
+        store,
+        limits,
+        style_map,
+        next_style_id,
+        row_idx,
+        worksheet,
+        validation_ranges,
+    } = ctx;
     match start.name().as_ref() {
         b"table:table-row" => {
             let row_repeat = row_repeat_from(start);

@@ -2,6 +2,8 @@ use anyhow::Result;
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
+use super::query::QueryFilters;
+
 pub(crate) fn cmd_diff(
     left: PathBuf,
     right: PathBuf,
@@ -22,34 +24,16 @@ pub(crate) fn cmd_rules(
     super::rules::run(input, pretty, output, profile, parser_config)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn cmd_query(
     input: PathBuf,
-    node_type: Option<String>,
-    contains: Option<String>,
-    format: Option<String>,
-    has_external_refs: Option<bool>,
-    has_macros: Option<bool>,
+    filters: QueryFilters,
     pretty: bool,
     output: Option<PathBuf>,
     parser_config: &ParserConfig,
 ) -> Result<()> {
-    super::query::run_with_filters(
-        input,
-        super::query::QueryFilters {
-            node_type,
-            contains,
-            format,
-            has_external_refs,
-            has_macros,
-        },
-        pretty,
-        output,
-        parser_config,
-    )
+    super::query::run_with_filters(input, filters, pretty, output, parser_config)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn cmd_grep(
     input: PathBuf,
     pattern: String,

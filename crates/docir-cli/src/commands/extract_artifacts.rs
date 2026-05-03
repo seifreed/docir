@@ -105,49 +105,6 @@ mod tests {
     use crate::test_support;
     use docir_app::{test_support::build_test_cfb, ParserConfig};
     use std::fs;
-    use std::io::Write;
-    use std::path::PathBuf;
-    use zip::write::FileOptions;
-
-    fn write_docx_with_media(path: &PathBuf) {
-        let file = fs::File::create(path).expect("create docx");
-        let mut zip = zip::ZipWriter::new(file);
-        let options = FileOptions::<()>::default();
-
-        let content_types = r#"
-            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-              <Default Extension="xml" ContentType="application/xml"/>
-              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-              <Default Extension="png" ContentType="image/png"/>
-              <Override PartName="/word/document.xml"
-                ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-            </Types>"#;
-        let rels = r#"
-            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-              <Relationship Id="rId1"
-                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
-                Target="word/document.xml"/>
-            </Relationships>"#;
-        let document = r#"
-            <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-              <w:body>
-                <w:p><w:r><w:t>Hi</w:t></w:r></w:p>
-              </w:body>
-            </w:document>"#;
-
-        zip.start_file("[Content_Types].xml", options).unwrap();
-        zip.write_all(content_types.trim().as_bytes()).unwrap();
-        zip.add_directory("_rels/", options).unwrap();
-        zip.start_file("_rels/.rels", options).unwrap();
-        zip.write_all(rels.trim().as_bytes()).unwrap();
-        zip.add_directory("word/", options).unwrap();
-        zip.start_file("word/document.xml", options).unwrap();
-        zip.write_all(document.trim().as_bytes()).unwrap();
-        zip.add_directory("word/media/", options).unwrap();
-        zip.start_file("word/media/image1.png", options).unwrap();
-        zip.write_all(b"PNG").unwrap();
-        zip.finish().unwrap();
-    }
 
     #[test]
     fn extract_artifacts_rtf_writes_manifest_and_blob() {
@@ -181,7 +138,7 @@ mod tests {
     #[test]
     fn extract_artifacts_docx_media_writes_manifest_with_media_type_and_sha256() {
         let input = test_support::temp_file("docx_media", "docx");
-        write_docx_with_media(&input);
+        test_support::write_docx_with_media(&input);
         let out = test_support::temp_dir("docx_media");
 
         run(
@@ -213,7 +170,7 @@ mod tests {
     #[test]
     fn extract_artifacts_docx_media_respects_no_media_flag() {
         let input = test_support::temp_file("docx_media_skip", "docx");
-        write_docx_with_media(&input);
+        test_support::write_docx_with_media(&input);
         let out = test_support::temp_dir("docx_media_skip");
 
         run(
@@ -242,7 +199,7 @@ mod tests {
     #[test]
     fn extract_artifacts_docx_media_omits_sha256_when_hashes_are_disabled() {
         let input = test_support::temp_file("docx_media_no_hashes", "docx");
-        write_docx_with_media(&input);
+        test_support::write_docx_with_media(&input);
         let out = test_support::temp_dir("docx_media_no_hashes");
         let config = ParserConfig {
             compute_hashes: false,
