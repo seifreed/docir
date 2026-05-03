@@ -6,9 +6,11 @@ use super::dispatch_inspect::{
     cmd_inspect_slide_records,
 };
 use super::dispatch_query::{cmd_diff, cmd_grep, cmd_query, cmd_rules};
+use crate::cli::JsonOutputOpts;
 use crate::{Cli, Commands};
 use anyhow::Result;
 use docir_app::ParserConfig;
+use std::path::PathBuf;
 
 pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
     run_command(cli.command, parser_config)
@@ -71,41 +73,21 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             output_opts.output,
             parser_config,
         ),
-        Commands::InspectMetadata { input, output_opts } => cmd_inspect_metadata(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
-        Commands::InspectSheetRecords { input, output_opts } => cmd_inspect_sheet_records(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
-        Commands::InspectSlideRecords { input, output_opts } => cmd_inspect_slide_records(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
-        Commands::InspectDirectory { input, output_opts } => cmd_inspect_directory(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
-        Commands::InspectSectors { input, output_opts } => cmd_inspect_sectors(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
+        Commands::InspectMetadata { input, output_opts } => {
+            dispatch_inspect_metadata(input, output_opts, parser_config)
+        }
+        Commands::InspectSheetRecords { input, output_opts } => {
+            dispatch_inspect_sheet_records(input, output_opts, parser_config)
+        }
+        Commands::InspectSlideRecords { input, output_opts } => {
+            dispatch_inspect_slide_records(input, output_opts, parser_config)
+        }
+        Commands::InspectDirectory { input, output_opts } => {
+            dispatch_inspect_directory(input, output_opts, parser_config)
+        }
+        Commands::InspectSectors { input, output_opts } => {
+            dispatch_inspect_sectors(input, output_opts, parser_config)
+        }
         Commands::ReportIndicators { input, output_opts } => super::report_indicators::run(
             input,
             output_opts.json,
@@ -273,6 +255,76 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             parser_config,
         ),
     }
+}
+
+fn dispatch_inspect_metadata(
+    input: PathBuf,
+    output_opts: JsonOutputOpts,
+    parser_config: &ParserConfig,
+) -> Result<()> {
+    cmd_inspect_metadata(
+        input,
+        output_opts.json,
+        output_opts.pretty,
+        output_opts.output,
+        parser_config,
+    )
+}
+
+fn dispatch_inspect_sheet_records(
+    input: PathBuf,
+    output_opts: JsonOutputOpts,
+    parser_config: &ParserConfig,
+) -> Result<()> {
+    cmd_inspect_sheet_records(
+        input,
+        output_opts.json,
+        output_opts.pretty,
+        output_opts.output,
+        parser_config,
+    )
+}
+
+fn dispatch_inspect_slide_records(
+    input: PathBuf,
+    output_opts: JsonOutputOpts,
+    parser_config: &ParserConfig,
+) -> Result<()> {
+    cmd_inspect_slide_records(
+        input,
+        output_opts.json,
+        output_opts.pretty,
+        output_opts.output,
+        parser_config,
+    )
+}
+
+fn dispatch_inspect_directory(
+    input: PathBuf,
+    output_opts: JsonOutputOpts,
+    parser_config: &ParserConfig,
+) -> Result<()> {
+    cmd_inspect_directory(
+        input,
+        output_opts.json,
+        output_opts.pretty,
+        output_opts.output,
+        parser_config,
+    )
+}
+
+fn dispatch_inspect_sectors(
+    input: PathBuf,
+    output_opts: JsonOutputOpts,
+    parser_config: &ParserConfig,
+) -> Result<()> {
+    cmd_inspect_sectors(
+        input,
+        output_opts.json,
+        output_opts.pretty,
+        output_opts.output,
+        parser_config,
+    )
 }
 
 #[cfg(test)]

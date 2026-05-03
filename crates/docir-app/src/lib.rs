@@ -35,6 +35,7 @@ mod probe;
 mod report_indicators;
 mod severity;
 mod summary;
+#[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 mod use_cases;
 mod vba;

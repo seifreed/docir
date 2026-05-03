@@ -6,6 +6,9 @@ authors.workspace = true
 license.workspace = true
 description = "Application layer for docir workflows"
 
+[features]
+test-support = []
+
 [dependencies]
 docir-core = { workspace = true }
 docir-parser = { workspace = true }

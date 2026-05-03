@@ -174,13 +174,69 @@ struct StructuralCfbSummary {
 fn structural_cfb_summary(source_bytes: &[u8]) -> Option<StructuralCfbSummary> {
     let directory = inspect_directory_bytes(source_bytes).ok()?;
     let sectors = inspect_sectors_bytes(source_bytes).ok()?;
-    let mut all_evidence = Vec::new();
-    let shared_sector_evidence = sectors
+
+    let shared_sector_evidence = collect_shared_sector_evidence(&sectors);
+    let live_unreachable_evidence = collect_live_unreachable_evidence(&directory);
+    let short_cycle_evidence = collect_short_cycle_evidence(&directory);
+    let truncated_chain_evidence = collect_truncated_chain_evidence(&sectors);
+    let chain_health_evidence = collect_chain_health_evidence(&sectors);
+    let objectpool_corruption_evidence =
+        collect_objectpool_corruption_evidence(&directory, &sectors);
+    let vba_structure_anomalies_evidence =
+        collect_vba_structure_anomalies_evidence(&directory, &sectors);
+    let main_stream_corruption_evidence = collect_main_stream_corruption_evidence(&sectors);
+    let all_evidence = collect_all_evidence(&directory, &sectors);
+
+    let directory_score = directory.directory_score.clone();
+    let sector_score = sectors.sector_score.clone();
+    let stream_score = compute_stream_score(&sectors);
+    let dominant_anomaly_class = dominant_anomaly_class(
+        &shared_sector_evidence,
+        &short_cycle_evidence,
+        &live_unreachable_evidence,
+        &sectors,
+    );
+    let structural_score = compute_structural_score(
+        &sectors,
+        &shared_sector_evidence,
+        &short_cycle_evidence,
+        &live_unreachable_evidence,
+        &truncated_chain_evidence,
+        &all_evidence,
+    );
+
+    Some(StructuralCfbSummary {
+        all_evidence,
+        shared_sector_evidence,
+        live_unreachable_evidence,
+        short_cycle_evidence,
+        truncated_chain_evidence,
+        chain_health_evidence,
+        directory_score,
+        sector_score,
+        stream_score: stream_score.to_string(),
+        structural_score: structural_score.to_string(),
+        dominant_anomaly_class: dominant_anomaly_class.to_string(),
+        objectpool_corruption_evidence,
+        vba_structure_anomalies_evidence,
+        main_stream_corruption_evidence,
+    })
+}
+
+fn collect_shared_sector_evidence(
+    sectors: &crate::inspect_sectors::SectorInspection,
+) -> Vec<String> {
+    sectors
         .shared_sector_claims
         .iter()
         .map(|claim| format!("shared-sector:{}={}", claim.sector, claim.owners.join(",")))
-        .collect::<Vec<_>>();
-    let live_unreachable_evidence = directory
+        .collect()
+}
+
+fn collect_live_unreachable_evidence(
+    directory: &crate::inspect_directory::DirectoryInspection,
+) -> Vec<String> {
+    directory
         .entries
         .iter()
         .filter(|entry| {
@@ -189,8 +245,13 @@ fn structural_cfb_summary(source_bytes: &[u8]) -> Option<StructuralCfbSummary> {
                 && !entry.reachable_from_root
         })
         .map(|entry| format!("{} [{}]", entry.path, entry.anomaly_severity))
-        .collect::<Vec<_>>();
-    let short_cycle_evidence = directory
+        .collect()
+}
+
+fn collect_short_cycle_evidence(
+    directory: &crate::inspect_directory::DirectoryInspection,
+) -> Vec<String> {
+    directory
         .entries
         .iter()
         .flat_map(|entry| {
@@ -199,28 +260,40 @@ fn structural_cfb_summary(source_bytes: &[u8]) -> Option<StructuralCfbSummary> {
                 .iter()
                 .map(move |cycle| format!("{}:{cycle} [{}]", entry.path, entry.anomaly_severity))
         })
-        .collect::<Vec<_>>();
-    let truncated_chain_evidence = sectors
+        .collect()
+}
+
+fn collect_truncated_chain_evidence(
+    sectors: &crate::inspect_sectors::SectorInspection,
+) -> Vec<String> {
+    sectors
         .truncated_chain_counts
         .iter()
         .map(|entry| format!("{}={}", entry.bucket, entry.count))
-        .collect::<Vec<_>>();
-    let chain_health_evidence = sectors
+        .collect()
+}
+
+fn collect_chain_health_evidence(
+    sectors: &crate::inspect_sectors::SectorInspection,
+) -> Vec<String> {
+    sectors
         .chain_health_by_root
         .iter()
         .map(|entry| format!("{}={}", entry.bucket, entry.count))
-        .collect::<Vec<_>>();
-    let objectpool_corruption_evidence =
-        collect_objectpool_corruption_evidence(&directory, &sectors);
-    let vba_structure_anomalies_evidence =
-        collect_vba_structure_anomalies_evidence(&directory, &sectors);
-    let main_stream_corruption_evidence = collect_main_stream_corruption_evidence(&sectors);
+        .collect()
+}
+
+fn collect_all_evidence(
+    directory: &crate::inspect_directory::DirectoryInspection,
+    sectors: &crate::inspect_sectors::SectorInspection,
+) -> Vec<String> {
+    let mut evidence = Vec::new();
     for entry in &directory.short_cycle_counts {
-        all_evidence.push(format!("directory:cycle:{}={}", entry.bucket, entry.count));
+        evidence.push(format!("directory:cycle:{}={}", entry.bucket, entry.count));
     }
     for entry in &directory.reachability_counts {
         if entry.bucket == "live-unreachable" && entry.count > 0 {
-            all_evidence.push(format!(
+            evidence.push(format!(
                 "directory:reachability:{}={}",
                 entry.bucket, entry.count
             ));
@@ -228,7 +301,7 @@ fn structural_cfb_summary(source_bytes: &[u8]) -> Option<StructuralCfbSummary> {
     }
     for entry in &directory.incoming_source_counts {
         if entry.bucket == "incoming:state:anomalous" && entry.count > 0 {
-            all_evidence.push(format!(
+            evidence.push(format!(
                 "directory:incoming:{}={}",
                 entry.bucket, entry.count
             ));
@@ -240,34 +313,36 @@ fn structural_cfb_summary(source_bytes: &[u8]) -> Option<StructuralCfbSummary> {
             .iter()
             .any(|tag| tag == "invalid-start-sector")
         {
-            all_evidence.push(format!(
+            evidence.push(format!(
                 "directory:invalid-start:{} [{}]",
                 entry.path, entry.anomaly_severity
             ));
         }
     }
     for claim in &sectors.shared_sector_claims {
-        all_evidence.push(format!(
+        evidence.push(format!(
             "sector:shared-sector:{}={}",
             claim.sector,
             claim.owners.join(",")
         ));
     }
     for entry in &sectors.truncated_chain_counts {
-        all_evidence.push(format!(
+        evidence.push(format!(
             "sector:truncated-chain:{}={}",
             entry.bucket, entry.count
         ));
     }
     for entry in &sectors.structural_incoherence_counts {
-        all_evidence.push(format!(
+        evidence.push(format!(
             "sector:structural-incoherence:{}={} [{}]",
             entry.bucket, entry.count, entry.severity
         ));
     }
-    let directory_score = directory.directory_score.clone();
-    let sector_score = sectors.sector_score.clone();
-    let stream_score = if sectors
+    evidence
+}
+
+fn compute_stream_score(sectors: &crate::inspect_sectors::SectorInspection) -> &'static str {
+    if sectors
         .streams
         .iter()
         .any(|stream| stream.stream_risk == "high")
@@ -287,14 +362,18 @@ fn structural_cfb_summary(source_bytes: &[u8]) -> Option<StructuralCfbSummary> {
         "low"
     } else {
         "none"
-    };
-    let dominant_anomaly_class = dominant_anomaly_class(
-        &shared_sector_evidence,
-        &short_cycle_evidence,
-        &live_unreachable_evidence,
-        &sectors,
-    );
-    let structural_score = if sectors
+    }
+}
+
+fn compute_structural_score(
+    sectors: &crate::inspect_sectors::SectorInspection,
+    shared_sector_evidence: &[String],
+    short_cycle_evidence: &[String],
+    live_unreachable_evidence: &[String],
+    truncated_chain_evidence: &[String],
+    all_evidence: &[String],
+) -> &'static str {
+    if sectors
         .anomalies
         .iter()
         .any(|anomaly| anomaly.severity == "high")
@@ -314,23 +393,7 @@ fn structural_cfb_summary(source_bytes: &[u8]) -> Option<StructuralCfbSummary> {
         "low"
     } else {
         "none"
-    };
-    Some(StructuralCfbSummary {
-        all_evidence,
-        shared_sector_evidence,
-        live_unreachable_evidence,
-        short_cycle_evidence,
-        truncated_chain_evidence,
-        chain_health_evidence,
-        directory_score,
-        sector_score,
-        stream_score: stream_score.to_string(),
-        structural_score: structural_score.to_string(),
-        dominant_anomaly_class: dominant_anomaly_class.to_string(),
-        objectpool_corruption_evidence,
-        vba_structure_anomalies_evidence,
-        main_stream_corruption_evidence,
-    })
+    }
 }
 
 fn collect_objectpool_corruption_evidence(
