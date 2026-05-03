@@ -218,6 +218,27 @@ pub(crate) fn push_bullet_line(
     out.push('\n');
 }
 
+/// Render a section heading followed by one bullet line per entry, each showing
+/// a label and a numeric count. Skipped entirely when `entries` is empty.
+#[cfg(test)]
+pub(crate) fn push_count_section<T>(
+    out: &mut String,
+    heading: &str,
+    entries: &[T],
+    get_label: impl Fn(&T) -> &str,
+    get_count: impl Fn(&T) -> usize,
+) {
+    if entries.is_empty() {
+        return;
+    }
+    out.push('\n');
+    out.push_str(heading);
+    out.push_str(":\n");
+    for entry in entries {
+        push_bullet_line(out, 2, get_label(entry), get_count(entry));
+    }
+}
+
 pub(crate) fn source_format_label(input: &Path, fallback: &str) -> String {
     input
         .extension()
@@ -230,7 +251,8 @@ pub(crate) fn source_format_label(input: &Path, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_node_id, push_bullet_line, push_labeled_line, write_json_output, write_text_output,
+        parse_node_id, push_bullet_line, push_count_section, push_labeled_line, write_json_output,
+        write_text_output,
     };
     use crate::test_support;
     use serde::Serialize;
@@ -279,5 +301,22 @@ mod tests {
         push_labeled_line(&mut out, 2, "Path", "VBA/PROJECT");
         push_bullet_line(&mut out, 4, "CFB Stream", "VBA/PROJECT");
         assert_eq!(out, "  Path: VBA/PROJECT\n    - CFB Stream: VBA/PROJECT\n");
+    }
+
+    #[test]
+    fn push_count_section_renders_heading_and_entries() {
+        use docir_app::BucketCount;
+        let mut out = String::new();
+        let entries = vec![BucketCount::new("type:a", 3), BucketCount::new("type:b", 1)];
+        push_count_section(&mut out, "Summary", &entries, |e| &e.bucket, |e| e.count);
+        assert_eq!(out, "\nSummary:\n  - type:a: 3\n  - type:b: 1\n");
+    }
+
+    #[test]
+    fn push_count_section_skips_empty_entries() {
+        let mut out = String::new();
+        let entries: Vec<docir_app::BucketCount> = vec![];
+        push_count_section(&mut out, "Summary", &entries, |e| &e.bucket, |e| e.count);
+        assert!(out.is_empty());
     }
 }

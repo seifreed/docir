@@ -1,7 +1,35 @@
 //! CLI types and configuration wiring.
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
+
+/// Common output flags for commands that produce JSON output.
+#[derive(Args, Clone)]
+pub(crate) struct JsonOutputOpts {
+    /// Output as JSON
+    #[arg(long)]
+    pub(crate) json: bool,
+
+    /// Pretty-print JSON output
+    #[arg(long, short)]
+    pub(crate) pretty: bool,
+
+    /// Output file (stdout if not specified)
+    #[arg(long, short)]
+    pub(crate) output: Option<PathBuf>,
+}
+
+/// Common output flags for commands that always produce structured output.
+#[derive(Args, Clone)]
+pub(crate) struct PrettyOutputOpts {
+    /// Pretty-print output
+    #[arg(long, short)]
+    pub(crate) pretty: bool,
+
+    /// Output file (stdout if not specified)
+    #[arg(long, short)]
+    pub(crate) output: Option<PathBuf>,
+}
 
 #[derive(Parser)]
 #[command(name = "docir")]
@@ -134,13 +162,8 @@ pub(crate) enum Commands {
         #[arg(long, short, default_value = "json")]
         format: OutputFormat,
 
-        /// Pretty-print output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: PrettyOutputOpts,
     },
 
     /// Display a high-level summary of the document
@@ -188,17 +211,8 @@ pub(crate) enum Commands {
         /// Path to the input document
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Probe the real format/container of a file without full parsing
@@ -207,17 +221,8 @@ pub(crate) enum Commands {
         /// Path to the input file
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// List CFB storage and stream FILETIMEs
@@ -226,17 +231,8 @@ pub(crate) enum Commands {
         /// Path to the input file
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Inspect classic OLE metadata property sets
@@ -245,17 +241,8 @@ pub(crate) enum Commands {
         /// Path to the input file
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Inspect low-level BIFF records from a legacy XLS workbook stream
@@ -264,17 +251,8 @@ pub(crate) enum Commands {
         /// Path to the input file
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Inspect low-level binary records from a legacy PPT presentation stream
@@ -283,17 +261,8 @@ pub(crate) enum Commands {
         /// Path to the input file
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Inspect normal CFB directory entries and their structural metadata
@@ -302,17 +271,8 @@ pub(crate) enum Commands {
         /// Path to the input file
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Inspect CFB sector allocation and stream chains
@@ -321,17 +281,8 @@ pub(crate) enum Commands {
         /// Path to the input file
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Build an analyst-facing indicator scorecard for the document
@@ -340,17 +291,8 @@ pub(crate) enum Commands {
         /// Path to the input document
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Extract DDE-style active links into a dedicated report
@@ -359,17 +301,8 @@ pub(crate) enum Commands {
         /// Path to the input document
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Detect and optionally export embedded SWF/Flash payloads
@@ -386,17 +319,8 @@ pub(crate) enum Commands {
         #[arg(long)]
         overwrite: bool,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Emit the canonical Phase 0 artifact manifest as JSON
@@ -404,13 +328,8 @@ pub(crate) enum Commands {
         /// Path to the input document
         input: PathBuf,
 
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: PrettyOutputOpts,
     },
 
     /// Dump low-level container entries for OOXML, CFB, or RTF inputs
@@ -419,17 +338,8 @@ pub(crate) enum Commands {
         /// Path to the input document
         input: PathBuf,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Recognize VBA projects and modules without AST or deobfuscation
@@ -442,17 +352,8 @@ pub(crate) enum Commands {
         #[arg(long)]
         include_source: bool,
 
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-
-        /// Pretty-print JSON output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: JsonOutputOpts,
     },
 
     /// Extract VBA modules to disk and emit a manifest
@@ -542,13 +443,8 @@ pub(crate) enum Commands {
         /// Path to the right (compare) OOXML file
         right: PathBuf,
 
-        /// Pretty-print output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: PrettyOutputOpts,
     },
 
     /// Run rule engine on a document
@@ -556,13 +452,8 @@ pub(crate) enum Commands {
         /// Path to the OOXML file
         input: PathBuf,
 
-        /// Pretty-print output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: PrettyOutputOpts,
 
         /// Rule profile JSON file
         #[arg(long)]
@@ -594,13 +485,8 @@ pub(crate) enum Commands {
         #[arg(long)]
         has_macros: Option<bool>,
 
-        /// Pretty-print output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: PrettyOutputOpts,
     },
 
     /// Select nodes (alias for query)
@@ -628,13 +514,8 @@ pub(crate) enum Commands {
         #[arg(long)]
         has_macros: Option<bool>,
 
-        /// Pretty-print output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: PrettyOutputOpts,
     },
 
     /// Grep-like semantic search (text contains)
@@ -653,13 +534,8 @@ pub(crate) enum Commands {
         #[arg(long)]
         format: Option<String>,
 
-        /// Pretty-print output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: PrettyOutputOpts,
     },
 
     /// Extract nodes by ID or type
@@ -675,13 +551,8 @@ pub(crate) enum Commands {
         #[arg(long)]
         node_type: Option<String>,
 
-        /// Pretty-print output
-        #[arg(long, short)]
-        pretty: bool,
-
-        /// Output file (stdout if not specified)
-        #[arg(long, short)]
-        output: Option<PathBuf>,
+        #[command(flatten)]
+        output_opts: PrettyOutputOpts,
     },
 }
 

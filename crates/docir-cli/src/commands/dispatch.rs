@@ -1,3 +1,10 @@
+use super::dispatch_extract::{
+    cmd_extract, cmd_extract_artifacts, cmd_extract_flash, cmd_extract_links, cmd_extract_vba,
+};
+use super::dispatch_inspect::{
+    cmd_inspect_directory, cmd_inspect_metadata, cmd_inspect_sectors, cmd_inspect_sheet_records,
+    cmd_inspect_slide_records,
+};
 use crate::{Cli, Commands};
 use anyhow::Result;
 use docir_app::ParserConfig;
@@ -12,9 +19,14 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
         Commands::Parse {
             input,
             format,
-            pretty,
-            output,
-        } => cmd_parse(input, format, pretty, output, parser_config),
+            output_opts,
+        } => cmd_parse(
+            input,
+            format,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
         Commands::Summary { input } => cmd_summary(input, parser_config),
         Commands::Coverage {
             input,
@@ -36,92 +48,112 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             export_mode,
             parser_config,
         ),
-        Commands::Inventory {
+        Commands::Inventory { input, output_opts } => cmd_inventory(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_inventory(input, json, pretty, output, parser_config),
-        Commands::ProbeFormat {
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::ProbeFormat { input, output_opts } => cmd_probe_format(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_probe_format(input, json, pretty, output, parser_config),
-        Commands::ListTimes {
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::ListTimes { input, output_opts } => cmd_list_times(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_list_times(input, json, pretty, output, parser_config),
-        Commands::InspectMetadata {
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::InspectMetadata { input, output_opts } => cmd_inspect_metadata(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_inspect_metadata(input, json, pretty, output, parser_config),
-        Commands::InspectSheetRecords {
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::InspectSheetRecords { input, output_opts } => cmd_inspect_sheet_records(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_inspect_sheet_records(input, json, pretty, output, parser_config),
-        Commands::InspectSlideRecords {
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::InspectSlideRecords { input, output_opts } => cmd_inspect_slide_records(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_inspect_slide_records(input, json, pretty, output, parser_config),
-        Commands::InspectDirectory {
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::InspectDirectory { input, output_opts } => cmd_inspect_directory(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_inspect_directory(input, json, pretty, output, parser_config),
-        Commands::InspectSectors {
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::InspectSectors { input, output_opts } => cmd_inspect_sectors(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_inspect_sectors(input, json, pretty, output, parser_config),
-        Commands::ReportIndicators {
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::ReportIndicators { input, output_opts } => cmd_report_indicators(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_report_indicators(input, json, pretty, output, parser_config),
-        Commands::ExtractLinks {
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::ExtractLinks { input, output_opts } => cmd_extract_links(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_extract_links(input, json, pretty, output, parser_config),
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
         Commands::ExtractFlash {
             input,
             out,
             overwrite,
-            json,
-            pretty,
-            output,
-        } => cmd_extract_flash(input, out, overwrite, json, pretty, output, parser_config),
-        Commands::Manifest {
+            output_opts,
+        } => cmd_extract_flash(
             input,
-            pretty,
-            output,
-        } => cmd_manifest(input, pretty, output, parser_config),
-        Commands::DumpContainer {
+            out,
+            overwrite,
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
+        Commands::Manifest { input, output_opts } => {
+            cmd_manifest(input, output_opts.pretty, output_opts.output, parser_config)
+        }
+        Commands::DumpContainer { input, output_opts } => cmd_dump_container(
             input,
-            json,
-            pretty,
-            output,
-        } => cmd_dump_container(input, json, pretty, output, parser_config),
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
         Commands::RecognizeVba {
             input,
             include_source,
-            json,
-            pretty,
-            output,
-        } => cmd_recognize_vba(input, include_source, json, pretty, output, parser_config),
+            output_opts,
+        } => cmd_recognize_vba(
+            input,
+            include_source,
+            output_opts.json,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
         Commands::ExtractVba {
             input,
             out,
@@ -159,15 +191,25 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
         Commands::Diff {
             left,
             right,
-            pretty,
-            output,
-        } => cmd_diff(left, right, pretty, output, parser_config),
+            output_opts,
+        } => cmd_diff(
+            left,
+            right,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
         Commands::Rules {
             input,
-            pretty,
-            output,
+            output_opts,
             profile,
-        } => cmd_rules(input, pretty, output, profile, parser_config),
+        } => cmd_rules(
+            input,
+            output_opts.pretty,
+            output_opts.output,
+            profile,
+            parser_config,
+        ),
         Commands::Query {
             input,
             node_type,
@@ -175,8 +217,7 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             format,
             has_external_refs,
             has_macros,
-            pretty,
-            output,
+            output_opts,
         }
         | Commands::Select {
             input,
@@ -185,8 +226,7 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             format,
             has_external_refs,
             has_macros,
-            pretty,
-            output,
+            output_opts,
         } => cmd_query(
             input,
             node_type,
@@ -194,8 +234,8 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             format,
             has_external_refs,
             has_macros,
-            pretty,
-            output,
+            output_opts.pretty,
+            output_opts.output,
             parser_config,
         ),
         Commands::Grep {
@@ -203,24 +243,29 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             pattern,
             node_type,
             format,
-            pretty,
-            output,
+            output_opts,
         } => cmd_grep(
             input,
             pattern,
             node_type,
             format,
-            pretty,
-            output,
+            output_opts.pretty,
+            output_opts.output,
             parser_config,
         ),
         Commands::Extract {
             input,
             node_id,
             node_type,
-            pretty,
-            output,
-        } => cmd_extract(input, node_id, node_type, pretty, output, parser_config),
+            output_opts,
+        } => cmd_extract(
+            input,
+            node_id,
+            node_type,
+            output_opts.pretty,
+            output_opts.output,
+            parser_config,
+        ),
     }
 }
 
@@ -295,56 +340,6 @@ fn cmd_list_times(
     super::list_times::run(input, json, pretty, output, parser_config)
 }
 
-fn cmd_inspect_metadata(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::inspect_metadata::run(input, json, pretty, output, parser_config)
-}
-
-fn cmd_inspect_sheet_records(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::inspect_sheet_records::run(input, json, pretty, output, parser_config)
-}
-
-fn cmd_inspect_slide_records(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::inspect_slide_records::run(input, json, pretty, output, parser_config)
-}
-
-fn cmd_inspect_directory(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::inspect_directory::run(input, json, pretty, output, parser_config)
-}
-
-fn cmd_inspect_sectors(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::inspect_sectors::run(input, json, pretty, output, parser_config)
-}
-
 fn cmd_report_indicators(
     input: PathBuf,
     json: bool,
@@ -353,29 +348,6 @@ fn cmd_report_indicators(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     super::report_indicators::run(input, json, pretty, output, parser_config)
-}
-
-fn cmd_extract_links(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::extract_links::run(input, json, pretty, output, parser_config)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn cmd_extract_flash(
-    input: PathBuf,
-    out: Option<PathBuf>,
-    overwrite: bool,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::extract_flash::run(input, out, overwrite, json, pretty, output, parser_config)
 }
 
 fn cmd_manifest(
@@ -406,41 +378,6 @@ fn cmd_recognize_vba(
     parser_config: &ParserConfig,
 ) -> Result<()> {
     super::recognize_vba::run(input, include_source, json, pretty, output, parser_config)
-}
-
-fn cmd_extract_vba(
-    input: PathBuf,
-    out: PathBuf,
-    overwrite: bool,
-    best_effort: bool,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::extract_vba::run(input, out, overwrite, best_effort, parser_config)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn cmd_extract_artifacts(
-    input: PathBuf,
-    out: PathBuf,
-    overwrite: bool,
-    with_raw: bool,
-    no_media: bool,
-    only_ole: bool,
-    only_rtf_objects: bool,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::extract_artifacts::run(
-        input,
-        out,
-        super::extract_artifacts::ExtractArtifactsOptions {
-            overwrite,
-            with_raw,
-            no_media,
-            only_ole,
-            only_rtf_objects,
-        },
-        parser_config,
-    )
 }
 
 fn cmd_security(
@@ -529,22 +466,14 @@ fn cmd_grep(
     )
 }
 
-fn cmd_extract(
-    input: PathBuf,
-    node_id: Vec<String>,
-    node_type: Option<String>,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    super::extract::run(input, node_id, node_type, pretty, output, parser_config)
-}
-
 #[cfg(test)]
 mod tests {
     use super::run_command;
     use crate::test_support;
-    use crate::{Commands, CoverageExportFormat, CoverageExportMode, OutputFormat};
+    use crate::{
+        Commands, CoverageExportFormat, CoverageExportMode, JsonOutputOpts, OutputFormat,
+        PrettyOutputOpts,
+    };
     use docir_app::{
         test_support::{
             build_test_cfb, build_test_cfb_with_times, build_test_property_set_stream,
@@ -593,8 +522,10 @@ mod tests {
             Commands::Parse {
                 input: test_support::fixture("minimal.docx"),
                 format: OutputFormat::Json,
-                pretty: true,
-                output: Some(parse_out.clone()),
+                output_opts: PrettyOutputOpts {
+                    pretty: true,
+                    output: Some(parse_out.clone()),
+                },
             },
             &config,
         )
@@ -612,9 +543,11 @@ mod tests {
         run_command(
             Commands::ProbeFormat {
                 input: test_support::fixture("minimal.docx"),
-                json: true,
-                pretty: true,
-                output: None,
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -623,9 +556,11 @@ mod tests {
         run_command(
             Commands::Inventory {
                 input: test_support::fixture("minimal.docx"),
-                json: true,
-                pretty: true,
-                output: None,
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -634,9 +569,11 @@ mod tests {
         run_command(
             Commands::ListTimes {
                 input: list_times_input.clone(),
-                json: true,
-                pretty: true,
-                output: None,
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -645,8 +582,10 @@ mod tests {
         run_command(
             Commands::Manifest {
                 input: test_support::fixture("minimal.docx"),
-                pretty: true,
-                output: None,
+                output_opts: PrettyOutputOpts {
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -655,9 +594,11 @@ mod tests {
         run_command(
             Commands::InspectMetadata {
                 input: metadata_input.clone(),
-                json: true,
-                pretty: true,
-                output: None,
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -666,9 +607,11 @@ mod tests {
         run_command(
             Commands::InspectDirectory {
                 input: inspect_directory_input.clone(),
-                json: true,
-                pretty: true,
-                output: None,
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -677,9 +620,11 @@ mod tests {
         run_command(
             Commands::InspectSectors {
                 input: inspect_sectors_input.clone(),
-                json: true,
-                pretty: true,
-                output: None,
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -688,9 +633,11 @@ mod tests {
         run_command(
             Commands::ReportIndicators {
                 input: test_support::fixture("minimal.docx"),
-                json: true,
-                pretty: true,
-                output: None,
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -699,9 +646,11 @@ mod tests {
         run_command(
             Commands::ExtractLinks {
                 input: test_support::fixture("minimal.docx"),
-                json: true,
-                pretty: true,
-                output: None,
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -710,9 +659,11 @@ mod tests {
         run_command(
             Commands::DumpContainer {
                 input: test_support::fixture("minimal.docx"),
-                json: true,
-                pretty: true,
-                output: None,
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -722,9 +673,11 @@ mod tests {
             Commands::RecognizeVba {
                 input: test_support::fixture("minimal.docx"),
                 include_source: false,
-                json: true,
-                pretty: true,
-                output: None,
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
             },
             &config,
         )
@@ -744,8 +697,10 @@ mod tests {
         run_command(
             Commands::Rules {
                 input: test_support::fixture("minimal.docx"),
-                pretty: true,
-                output: Some(rules_out.clone()),
+                output_opts: PrettyOutputOpts {
+                    pretty: true,
+                    output: Some(rules_out.clone()),
+                },
                 profile: None,
             },
             &config,
@@ -758,8 +713,10 @@ mod tests {
             Commands::Diff {
                 left: test_support::fixture("minimal.docx"),
                 right: test_support::fixture("minimal.docx"),
-                pretty: true,
-                output: Some(diff_out.clone()),
+                output_opts: PrettyOutputOpts {
+                    pretty: true,
+                    output: Some(diff_out.clone()),
+                },
             },
             &config,
         )
@@ -819,8 +776,10 @@ mod tests {
                 format: Some("docx".to_string()),
                 has_external_refs: None,
                 has_macros: None,
-                pretty: true,
-                output: Some(query_out.clone()),
+                output_opts: PrettyOutputOpts {
+                    pretty: true,
+                    output: Some(query_out.clone()),
+                },
             },
             &config,
         )
@@ -836,8 +795,10 @@ mod tests {
                 format: None,
                 has_external_refs: None,
                 has_macros: None,
-                pretty: true,
-                output: Some(select_out.clone()),
+                output_opts: PrettyOutputOpts {
+                    pretty: true,
+                    output: Some(select_out.clone()),
+                },
             },
             &config,
         )
@@ -851,8 +812,10 @@ mod tests {
                 pattern: "Hello".to_string(),
                 node_type: None,
                 format: None,
-                pretty: true,
-                output: Some(grep_out.clone()),
+                output_opts: PrettyOutputOpts {
+                    pretty: true,
+                    output: Some(grep_out.clone()),
+                },
             },
             &config,
         )
@@ -865,8 +828,10 @@ mod tests {
                 input: test_support::fixture("minimal.docx"),
                 node_id: Vec::new(),
                 node_type: Some("Paragraph".to_string()),
-                pretty: true,
-                output: Some(extract_out.clone()),
+                output_opts: PrettyOutputOpts {
+                    pretty: true,
+                    output: Some(extract_out.clone()),
+                },
             },
             &config,
         )

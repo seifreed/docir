@@ -7,13 +7,14 @@ mod commands;
 mod parser_config;
 
 #[cfg(test)]
-#[cfg(test)]
 mod test_support;
 
 use anyhow::Result;
 use clap::Parser;
 
 pub(crate) use cli::{Cli, Commands, CoverageExportFormat, CoverageExportMode, OutputFormat};
+#[cfg(test)]
+pub(crate) use cli::{JsonOutputOpts, PrettyOutputOpts};
 pub(crate) use parser_config::build_parser_config;
 
 fn main() -> Result<()> {

@@ -3,6 +3,8 @@
 pub mod coverage;
 pub mod diff;
 pub mod dispatch;
+pub(crate) mod dispatch_extract;
+pub(crate) mod dispatch_inspect;
 pub mod dump_container;
 pub mod dump_node;
 pub mod extract;
