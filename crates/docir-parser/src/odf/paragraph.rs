@@ -2,6 +2,7 @@ use super::{
     attr_value, text, BookmarkEnd, BookmarkStart, Field, FieldInstruction, FieldKind, IRNode,
     IrStore, NodeId, NumberingInfo, OdfLimitCounter, OdfReader, ParseError,
 };
+use crate::xml_utils::xml_error;
 use quick_xml::events::{BytesStart, Event};
 
 pub(crate) fn parse_paragraph(
@@ -32,12 +33,7 @@ pub(crate) fn parse_paragraph(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();

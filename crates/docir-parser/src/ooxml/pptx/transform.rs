@@ -1,5 +1,5 @@
 use super::{ParseError, Reader, ShapeTransform};
-use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::{lossy_attr_value, xml_error};
 use quick_xml::events::Event;
 
 pub(super) fn parse_transform(
@@ -79,10 +79,7 @@ pub(super) fn parse_transform(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: slide_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(slide_path, e));
             }
             _ => {}
         }

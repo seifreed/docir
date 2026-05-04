@@ -45,6 +45,11 @@ pub trait SecurityScannerPort {
     fn scan_security_bytes(&self, data: &[u8], store: &mut IrStore) -> AppResult<()>;
 }
 
+pub(crate) trait CfbStreamReaderPort {
+    fn read_streams(&self, data: &[u8], stream_names: &[&str])
+        -> AppResult<Vec<(String, Vec<u8>)>>;
+}
+
 /// Security analysis port for application workflows.
 ///
 /// Implementations compute security conclusions from an existing IR.

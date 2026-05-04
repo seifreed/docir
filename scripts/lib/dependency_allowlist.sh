@@ -15,14 +15,14 @@ is_allowed_dependency() {
       ;;
     docir-parser)
       case "$dep" in
-        docir-core|zip|quick-xml|encoding_rs|flate2|calamine|sha2|sha1|pbkdf2|base64|aes|cbc|log|serde|thiserror)
+        docir-core|docir-security|zip|quick-xml|encoding_rs|flate2|calamine|sha2|sha1|pbkdf2|base64|aes|cbc|log|serde|thiserror)
           return 0
           ;;
       esac
       ;;
     docir-app)
       case "$dep" in
-        docir-core|docir-parser|docir-security|docir-serialization|docir-diff|docir-rules|thiserror)
+        docir-core|docir-parser|docir-security|docir-serialization|docir-diff|docir-rules|serde|thiserror)
           return 0
           ;;
       esac
@@ -50,7 +50,7 @@ is_allowed_dependency() {
       ;;
     docir-diff)
       case "$dep" in
-        docir-core|serde|serde_json|sha2)
+        docir-core|serde|serde_json|sha2|thiserror)
           return 0
           ;;
       esac

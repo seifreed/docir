@@ -8,7 +8,7 @@ use crate::odf::{
     utils::parse_frame_transform, OdfReader,
 };
 use crate::xml_utils::{
-    attr_value, scan_xml_events_until_end, scan_xml_events_with_reader, XmlScanControl,
+    attr_value, scan_xml_events_until_end, scan_xml_events_with_reader, xml_error, XmlScanControl,
 };
 use docir_core::ir::*;
 use docir_core::types::*;
@@ -119,17 +119,13 @@ pub(crate) fn parse_ods_conditional_formatting(
                 depth = depth.saturating_sub(1);
             }
             Ok(Event::Eof) => {
-                return Err(ParseError::Xml {
-                    file: ODF_CONTENT_XML.to_string(),
-                    message: "unexpected end-of-file while parsing conditional formatting"
-                        .to_string(),
-                });
+                return Err(xml_error(
+                    ODF_CONTENT_XML,
+                    "unexpected end-of-file while parsing conditional formatting",
+                ));
             }
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: ODF_CONTENT_XML.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(ODF_CONTENT_XML, e));
             }
             _ => {}
         }

@@ -38,7 +38,11 @@ impl Default for ZipConfig {
 pub trait PackageReader {
     fn contains(&self, name: &str) -> bool;
     fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError>;
-    fn read_file_string(&mut self, name: &str) -> Result<String, ParseError>;
+    fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
+        let bytes = self.read_file(name)?;
+        String::from_utf8(bytes)
+            .map_err(|e| ParseError::Encoding(format!("Invalid UTF-8 in {name}: {e}")))
+    }
     fn file_size(&mut self, name: &str) -> Result<u64, ParseError>;
     fn file_names(&self) -> Vec<String>;
     fn list_prefix(&self, prefix: &str) -> Vec<String>;
@@ -259,10 +263,6 @@ impl<R: Read + Seek> PackageReader for SecureZipReader<R> {
 
     fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError> {
         SecureZipReader::read_file(self, name)
-    }
-
-    fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
-        SecureZipReader::read_file_string(self, name)
     }
 
     fn file_size(&mut self, name: &str) -> Result<u64, ParseError> {

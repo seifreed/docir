@@ -5,10 +5,10 @@ use crate::ole::Cfb;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::IRNode;
 use docir_core::ir::IrBuilder;
-use docir_core::security::analyze_vba_source;
 use docir_core::security::{MacroExtractionState, MacroModuleType, MacroProject};
 use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
+use docir_security::analyze_vba_source;
 
 pub(super) struct VbaScanner<'a> {
     config: &'a ParserConfig,

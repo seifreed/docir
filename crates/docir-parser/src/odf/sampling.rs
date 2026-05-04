@@ -2,7 +2,7 @@ use super::helpers::{parse_ods_covered_cell, parse_ods_covered_cell_empty, OdsRo
 use super::ods::{parse_ods_cell, parse_ods_cell_empty};
 use super::{spreadsheet, OdfReader};
 use crate::error::ParseError;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, xml_error};
 use docir_core::visitor::IrStore;
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
@@ -82,12 +82,7 @@ pub(super) fn parse_ods_row_sample(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();

@@ -5,6 +5,7 @@ use super::{parse_field_instruction, parse_run, DOC_XML_PATH};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::relationships::TargetMode;
+use crate::xml_utils::xml_error;
 use docir_core::ir::RunProperties;
 use docir_core::ir::{Hyperlink, NumberingInfo, UnderlineStyle, VerticalTextAlignment};
 use docir_core::types::NodeId;
@@ -37,10 +38,7 @@ pub(crate) fn parse_numbering(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: DOC_XML_PATH.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }
@@ -130,10 +128,7 @@ pub(crate) fn parse_run_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: DOC_XML_PATH.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(DOC_XML_PATH, e));
             }
             _ => {}
         }

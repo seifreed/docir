@@ -59,6 +59,32 @@ impl IndicatorReport {
     }
 }
 
+fn collect_dde_evidence(security: Option<&docir_core::security::SecurityInfo>) -> Vec<String> {
+    security
+        .map(|info| {
+            info.dde_fields
+                .iter()
+                .map(|dde| {
+                    dde.location
+                        .as_ref()
+                        .map(|span| format!("{}: {}", span.file_path, dde.instruction))
+                        .unwrap_or_else(|| dde.instruction.clone())
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn collect_object_pool_evidence(inventory: &ArtifactInventory) -> Vec<String> {
+    inventory
+        .artifacts
+        .iter()
+        .filter_map(|artifact| artifact.path.as_ref())
+        .filter(|path| path.contains("ObjectPool/"))
+        .cloned()
+        .collect()
+}
+
 fn collect_indicators(
     parsed: &ParsedDocument,
     inventory: &ArtifactInventory,
@@ -95,45 +121,22 @@ fn collect_indicators(
         "No external references detected",
         embeddings.external_reference_evidence,
     ));
-
-    let dde_evidence = security
-        .map(|info| {
-            info.dde_fields
-                .iter()
-                .map(|dde| {
-                    dde.location
-                        .as_ref()
-                        .map(|span| format!("{}: {}", span.file_path, dde.instruction))
-                        .unwrap_or_else(|| dde.instruction.clone())
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
     indicators.push(helpers::boolean_or_count_indicator(
         "dde",
-        dde_evidence.len(),
+        collect_dde_evidence(security).len(),
         ThreatLevel::High,
         "Dynamic Data Exchange instructions detected",
         "No Dynamic Data Exchange instructions detected",
-        dde_evidence,
+        collect_dde_evidence(security),
     ));
-
-    let object_pool_evidence = inventory
-        .artifacts
-        .iter()
-        .filter_map(|artifact| artifact.path.as_ref())
-        .filter(|path| path.contains("ObjectPool/"))
-        .cloned()
-        .collect::<Vec<_>>();
     indicators.push(helpers::boolean_or_count_indicator(
         "object-pool",
-        object_pool_evidence.len(),
+        collect_object_pool_evidence(inventory).len(),
         ThreatLevel::High,
         "Legacy ObjectPool storage entries detected",
         "No ObjectPool entries detected",
-        object_pool_evidence,
+        collect_object_pool_evidence(inventory),
     ));
-
     indicators.push(helpers::boolean_or_count_indicator(
         "native-payloads",
         embeddings.native_payload_evidence.len(),
@@ -142,15 +145,12 @@ fn collect_indicators(
         "No Ole10Native or Package-style payloads detected",
         embeddings.native_payload_evidence,
     ));
-
     indicators.push(embedding_indicators::collect_suspicious_relationships(
         security,
     ));
-
     if let Some(bytes) = source_bytes {
         indicators.extend(cfb_structural::collect_cfb_structural_indicators(bytes));
     }
-
     indicators
 }
 

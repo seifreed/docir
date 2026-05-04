@@ -1,3 +1,9 @@
+//! File-system adapter for reading document files.
+//!
+//! These functions are infrastructure adapters that bridge filesystem IO
+//! to the application's byte-level functions. They belong at the edges
+//! of the architecture, not in the domain or application core.
+
 use crate::AppResult;
 use docir_parser::ParseError as ParserParseError;
 use std::fs;

@@ -1,7 +1,7 @@
 use super::XlsxParser;
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{scan_xml_events_with_reader, XmlScanControl};
+use crate::xml_utils::{scan_xml_events_with_reader, xml_error, XmlScanControl};
 use docir_core::ir::{Cell, CellFormula, CellValue};
 use docir_core::types::SourceSpan;
 use quick_xml::events::{BytesStart, Event};
@@ -52,10 +52,9 @@ impl XlsxParser {
             match event {
                 Event::Start(e) => match e.name().as_ref() {
                     b"v" => {
-                        let text = reader.read_text(e.name()).map_err(|e| ParseError::Xml {
-                            file: sheet_path.to_string(),
-                            message: e.to_string(),
-                        })?;
+                        let text = reader
+                            .read_text(e.name())
+                            .map_err(|e| xml_error(sheet_path, e))?;
                         value_text = Some(text.to_string());
                     }
                     b"f" => {

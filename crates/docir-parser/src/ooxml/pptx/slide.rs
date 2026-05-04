@@ -6,6 +6,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
+use crate::xml_utils::xml_error;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{IRNode, Shape, ShapeType, Slide, SlideAnimation, SlideTransition};
 use docir_core::security::ExternalRefType;
@@ -40,10 +41,7 @@ impl PptxParser {
                 )?,
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(slide_path, e));
                 }
                 _ => {}
             }
@@ -232,10 +230,7 @@ impl PptxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(slide_path, e));
                 }
                 _ => {}
             }
@@ -369,10 +364,7 @@ impl PptxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(slide_path, e));
                 }
                 _ => {}
             }
@@ -433,10 +425,7 @@ impl PptxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(slide_path, e));
                 }
                 _ => {}
             }
@@ -493,10 +482,7 @@ impl PptxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(slide_path, e));
                 }
                 _ => {}
             }

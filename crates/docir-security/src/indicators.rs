@@ -1,7 +1,10 @@
 //! Security indicator detection utilities.
 
+use crate::vba::{
+    contains_dangerous_xlm as detect_dangerous_xlm, is_auto_exec_procedure as is_auto_exec_name,
+    scan_vba_source as scan_vba_calls,
+};
 use docir_core::security::{SuspiciousCall, ThreatIndicator, ThreatIndicatorType, ThreatLevel};
-use docir_core::security::{AUTO_EXEC_PROCEDURES, DANGEROUS_XLM_FUNCTIONS, SUSPICIOUS_VBA_CALLS};
 use docir_core::types::NodeId;
 
 /// Builds a threat indicator with standardized fields.
@@ -25,37 +28,7 @@ pub fn make_indicator(
 /// Uses word-boundary matching to avoid false positives from substring matches
 /// (e.g., "architecture" matching "Chr").
 pub fn scan_vba_source(source: &str) -> Vec<SuspiciousCall> {
-    let mut calls = Vec::new();
-
-    for (pattern, category) in SUSPICIOUS_VBA_CALLS {
-        let pattern_upper = pattern.to_uppercase();
-        for (i, line) in source.lines().enumerate() {
-            let line_upper = line.to_uppercase();
-            for pos in line_upper.match_indices(&pattern_upper) {
-                let (idx, _) = pos;
-                let before_ok = idx == 0
-                    || !line_upper
-                        .as_bytes()
-                        .get(idx - 1)
-                        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
-                let after_ok = idx + pattern_upper.len() >= line_upper.len()
-                    || !line_upper
-                        .as_bytes()
-                        .get(idx + pattern_upper.len())
-                        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
-                if before_ok && after_ok {
-                    calls.push(SuspiciousCall {
-                        name: pattern.to_string(),
-                        category: *category,
-                        line: Some(i as u32 + 1),
-                    });
-                    break;
-                }
-            }
-        }
-    }
-
-    calls
+    scan_vba_calls(source)
 }
 
 /// Checks if a URL is potentially suspicious.
@@ -164,41 +137,13 @@ fn is_ip_address(host: &str) -> bool {
 
 /// Checks if a procedure name is an auto-execute trigger.
 pub fn is_auto_exec_procedure(name: &str) -> bool {
-    AUTO_EXEC_PROCEDURES
-        .iter()
-        .any(|p| p.eq_ignore_ascii_case(name))
+    is_auto_exec_name(name)
 }
 
 /// Checks if a formula contains dangerous XLM functions.
 /// Uses word-boundary matching to avoid false positives from substring matches.
 pub fn contains_dangerous_xlm(formula: &str) -> Vec<String> {
-    let formula_upper = formula.to_uppercase();
-    DANGEROUS_XLM_FUNCTIONS
-        .iter()
-        .filter(|f| {
-            let name = f.to_uppercase();
-            // Check that the function name appears at a word boundary:
-            // either at the start, after =, after (, after ,, or after a space.
-            for pos in formula_upper.match_indices(&name) {
-                let (idx, _) = pos;
-                let before_ok = idx == 0
-                    || matches!(
-                        formula_upper.as_bytes().get(idx - 1),
-                        Some(b'=' | b'(' | b',' | b' ' | b'\t')
-                    );
-                let after_ok = idx + name.len() >= formula_upper.len()
-                    || matches!(
-                        formula_upper.as_bytes().get(idx + name.len()),
-                        Some(b'(' | b',' | b')' | b' ' | b'\t' | b'.' | b'!')
-                    );
-                if before_ok && after_ok {
-                    return true;
-                }
-            }
-            false
-        })
-        .map(|f| f.to_string())
-        .collect()
+    detect_dangerous_xlm(formula)
 }
 
 #[cfg(test)]

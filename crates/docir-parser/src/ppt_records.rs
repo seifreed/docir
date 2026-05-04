@@ -27,6 +27,7 @@ pub struct PptRecordAnomaly {
     pub message: String,
 }
 
+/// Reads a legacy PowerPoint stream into flat record headers and anomalies.
 pub fn read_ppt_records(data: &[u8]) -> Result<PptRecordScan, ParseError> {
     let mut records = Vec::new();
     let mut anomalies = Vec::new();

@@ -18,7 +18,6 @@ docir-diff = { workspace = true }
 docir-rules = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
-sha2 = { workspace = true }
 
 [dev-dependencies]
 zip = { workspace = true }

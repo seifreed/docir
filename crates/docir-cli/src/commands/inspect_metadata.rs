@@ -5,22 +5,16 @@ use docir_app::{inspect_metadata_path, MetadataInspection, ParserConfig};
 use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
-use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
+use crate::commands::util::{push_bullet_line, push_labeled_line, run_app_path_dual_output};
 
 /// Public API entrypoint: run.
 pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
-    let JsonOutputOpts {
-        json,
-        pretty,
-        output,
-    } = opts;
-    let metadata = inspect_metadata_path(&input, parser_config)?;
-    run_dual_output(
-        &metadata,
+    run_app_path_dual_output(
+        input,
+        opts,
+        parser_config,
         "metadata",
-        json,
-        pretty,
-        output,
+        inspect_metadata_path,
         format_metadata_text,
     )
 }

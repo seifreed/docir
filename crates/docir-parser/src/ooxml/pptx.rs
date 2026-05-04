@@ -6,7 +6,7 @@ use crate::ooxml::part_utils::{
     parse_xml_part_with_span, read_xml_part_and_rels, read_xml_part_and_rels_optional,
 };
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
-use crate::xml_utils::{attr_u32, attr_u64_from_bytes, attr_value, read_event};
+use crate::xml_utils::{attr_u32, attr_u64_from_bytes, attr_value, read_event, xml_error};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     Diagnostics, Document, GridColumn, IRNode, NotesSlide, Paragraph, PptxCommentAuthor,
@@ -119,10 +119,7 @@ impl PptxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(slide_path, e));
                 }
                 _ => {}
             }
@@ -158,10 +155,7 @@ impl PptxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(slide_path, e));
                 }
                 _ => {}
             }
@@ -205,10 +199,7 @@ impl PptxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(slide_path, e));
                 }
                 _ => {}
             }
@@ -243,10 +234,7 @@ fn parse_slide_list(xml: &str) -> Result<Vec<String>, ParseError> {
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "ppt/presentation.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("ppt/presentation.xml", e));
             }
             _ => {}
         }
@@ -345,10 +333,7 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -411,10 +396,7 @@ fn parse_notes_slide(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }

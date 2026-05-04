@@ -1,6 +1,7 @@
 //! ODF presentation parsing helpers extracted from the main module.
 
 use super::helpers::{parse_notes, parse_text_element};
+use crate::xml_utils::xml_error;
 #[path = "presentation_helpers_utils.rs"]
 mod presentation_helpers_utils;
 use super::{
@@ -236,12 +237,7 @@ fn parse_shape_text(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -306,12 +302,7 @@ pub(super) fn parse_odf_chart(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();

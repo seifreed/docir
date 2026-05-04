@@ -44,6 +44,7 @@ pub struct SheetRecordAnomaly {
     pub message: String,
 }
 
+/// Inspects low-level BIFF records from a legacy XLS file path.
 pub fn inspect_sheet_records_path<P: AsRef<Path>>(
     path: P,
     config: &ParserConfig,
@@ -51,6 +52,7 @@ pub fn inspect_sheet_records_path<P: AsRef<Path>>(
     with_file_bytes(path, config.max_input_size, inspect_sheet_records_bytes)
 }
 
+/// Inspects low-level BIFF records from raw CFB/OLE bytes.
 pub fn inspect_sheet_records_bytes(data: &[u8]) -> AppResult<SheetRecordInspection> {
     let cfb = Cfb::parse(data.to_vec())?;
     let workbook_stream = if cfb.has_stream("Workbook") {

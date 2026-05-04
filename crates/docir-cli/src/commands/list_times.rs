@@ -5,22 +5,16 @@ use docir_app::{list_times_path, ParserConfig, TimeListing};
 use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
-use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
+use crate::commands::util::{push_bullet_line, push_labeled_line, run_app_path_dual_output};
 
 /// Public API entrypoint: run.
 pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
-    let JsonOutputOpts {
-        json,
-        pretty,
-        output,
-    } = opts;
-    let listing = list_times_path(&input, parser_config)?;
-    run_dual_output(
-        &listing,
+    run_app_path_dual_output(
+        input,
+        opts,
+        parser_config,
         "listing",
-        json,
-        pretty,
-        output,
+        list_times_path,
         format_listing_text,
     )
 }

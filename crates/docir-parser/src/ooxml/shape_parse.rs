@@ -3,6 +3,7 @@ use super::{
     read_event, PackageReader, ParseError, PptxParser, Reader, Relationships, Shape, ShapeType,
     SourceSpan, TargetMode,
 };
+use crate::xml_utils::xml_error;
 use docir_core::ir::IRNode;
 use docir_core::types::NodeId;
 use quick_xml::events::{BytesStart, Event};
@@ -116,10 +117,7 @@ impl PptxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(slide_path, e));
                 }
                 _ => {}
             }
@@ -169,10 +167,7 @@ impl PptxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error(slide_path, e));
                 }
                 _ => {}
             }
@@ -240,10 +235,7 @@ fn parse_group_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: slide_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(slide_path, e));
             }
             _ => {}
         }

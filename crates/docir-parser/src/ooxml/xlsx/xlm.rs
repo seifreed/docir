@@ -2,8 +2,8 @@
 
 use super::XlsxParser;
 use crate::ooxml::xlsx::workbook::SheetInfo;
-use docir_core::security::is_dangerous_xlm_function;
 use docir_core::security::{XlmFunction, XlmMacro, XlmMacroCell};
+use docir_security::is_dangerous_xlm_function;
 
 impl XlsxParser {
     pub(super) fn begin_macro_sheet(&mut self, sheet: &SheetInfo) {

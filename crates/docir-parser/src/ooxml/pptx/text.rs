@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::{lossy_attr_value, xml_error};
 use docir_core::ir::{ShapeText, ShapeTextParagraph, ShapeTextRun, TextAlignment};
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -41,10 +41,7 @@ fn parse_text_body_with_end(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: slide_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(slide_path, e));
             }
             _ => {}
         }
@@ -107,10 +104,7 @@ fn parse_text_paragraph(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: slide_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(slide_path, e));
             }
             _ => {}
         }
@@ -145,10 +139,9 @@ fn parse_text_run(
                     }
                 }
                 b"a:t" => {
-                    let value = reader.read_text(e.name()).map_err(|e| ParseError::Xml {
-                        file: slide_path.to_string(),
-                        message: e.to_string(),
-                    })?;
+                    let value = reader
+                        .read_text(e.name())
+                        .map_err(|e| xml_error(slide_path, e))?;
                     text.push_str(&value);
                 }
                 b"a:latin" => {
@@ -167,10 +160,7 @@ fn parse_text_run(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: slide_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(slide_path, e));
             }
             _ => {}
         }

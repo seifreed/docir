@@ -10,6 +10,7 @@ use crate::commands::util::{
     prepare_output_dir, push_bullet_line, push_labeled_line, run_dual_output,
 };
 
+/// Runs the `extract-flash` command.
 pub fn run(
     input: PathBuf,
     out: Option<PathBuf>,

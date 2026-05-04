@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::{lossy_attr_value, xml_error};
 use docir_core::ir::{PptxComment, PptxCommentAuthor};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::events::Event;
@@ -43,10 +43,7 @@ pub(crate) fn parse_comment_authors(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -128,10 +125,7 @@ pub(crate) fn parse_comments(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }

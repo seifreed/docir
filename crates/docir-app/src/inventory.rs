@@ -90,7 +90,7 @@ impl ArtifactInventory {
     pub fn from_parsed(parsed: &ParsedDocument) -> Self {
         let mut inventory = Self {
             document_format: parsed.format().extension().to_string(),
-            container_kind: classify_container(parsed),
+            container_kind: classify_container_kind(parsed),
             artifact_count: 0,
             macro_project_count: 0,
             macro_module_count: 0,
@@ -370,7 +370,7 @@ impl ArtifactInventory {
     }
 }
 
-fn classify_container(parsed: &ParsedDocument) -> ContainerKind {
+pub(crate) fn classify_container_kind(parsed: &ParsedDocument) -> ContainerKind {
     if parsed
         .document()
         .and_then(|doc| doc.span.as_ref())

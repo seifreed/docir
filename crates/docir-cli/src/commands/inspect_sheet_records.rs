@@ -6,22 +6,17 @@ use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
 use crate::commands::util::{
-    push_bullet_line, push_count_section, push_labeled_line, run_dual_output,
+    push_bullet_line, push_count_section, push_labeled_line, run_app_path_dual_output,
 };
 
+/// Runs the `inspect-sheet-records` command.
 pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
-    let JsonOutputOpts {
-        json,
-        pretty,
-        output,
-    } = opts;
-    let inspection = inspect_sheet_records_path(&input, parser_config)?;
-    run_dual_output(
-        &inspection,
+    run_app_path_dual_output(
+        input,
+        opts,
+        parser_config,
         "inspection",
-        json,
-        pretty,
-        output,
+        inspect_sheet_records_path,
         format_inspection_text,
     )
 }

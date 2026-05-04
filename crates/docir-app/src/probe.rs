@@ -41,6 +41,66 @@ impl FormatProbe {
     }
 }
 
+struct SimpleFormatRule {
+    detect: fn(&[u8]) -> bool,
+    format: &'static str,
+    container: &'static str,
+    family: &'static str,
+    extension: &'static str,
+    signal: &'static str,
+}
+
+const SIMPLE_FORMAT_RULES: &[SimpleFormatRule] = &[
+    SimpleFormatRule {
+        detect: is_pdf,
+        format: "pdf",
+        container: "raw-binary",
+        family: "pdf-document",
+        extension: "pdf",
+        signal: "pdf-signature",
+    },
+    SimpleFormatRule {
+        detect: has_pe_signature,
+        format: "pe",
+        container: "raw-binary",
+        family: "portable-executable",
+        extension: "exe",
+        signal: "mz-signature",
+    },
+    SimpleFormatRule {
+        detect: is_png,
+        format: "png",
+        container: "raw-binary",
+        family: "image",
+        extension: "png",
+        signal: "png-signature",
+    },
+    SimpleFormatRule {
+        detect: is_jpeg,
+        format: "jpeg",
+        container: "raw-binary",
+        family: "image",
+        extension: "jpg",
+        signal: "jpeg-signature",
+    },
+    SimpleFormatRule {
+        detect: is_gif,
+        format: "gif",
+        container: "raw-binary",
+        family: "image",
+        extension: "gif",
+        signal: "gif-signature",
+    },
+    SimpleFormatRule {
+        detect: is_swf,
+        format: "swf",
+        container: "raw-binary",
+        family: "flash-object",
+        extension: "swf",
+        signal: "swf-signature",
+    },
+];
+
 /// Probes an on-disk file without running the full parser pipeline.
 pub fn probe_format_path<P: AsRef<Path>>(path: P, config: &ParserConfig) -> AppResult<FormatProbe> {
     with_file_bytes_and_config(path, config, |bytes, cfg| {
@@ -60,81 +120,24 @@ pub fn probe_format_bytes(data: &[u8], config: &ParserConfig) -> FormatProbe {
             vec!["rtf-signature".into()],
         );
     }
-
     if is_ole_container(data) {
         return probe_cfb(data);
     }
-
     if is_zip_signature(data) {
         return probe_zip(data, config);
     }
-
-    if data.starts_with(b"%PDF-") {
-        return FormatProbe::new(
-            "pdf",
-            "raw-binary",
-            "pdf-document",
-            "pdf",
-            "high",
-            vec!["pdf-signature".into()],
-        );
+    for rule in SIMPLE_FORMAT_RULES {
+        if (rule.detect)(data) {
+            return FormatProbe::new(
+                rule.format,
+                rule.container,
+                rule.family,
+                rule.extension,
+                "high",
+                vec![rule.signal.into()],
+            );
+        }
     }
-
-    if has_pe_signature(data) {
-        return FormatProbe::new(
-            "pe",
-            "raw-binary",
-            "portable-executable",
-            "exe",
-            "high",
-            vec!["mz-signature".into()],
-        );
-    }
-
-    if is_png(data) {
-        return FormatProbe::new(
-            "png",
-            "raw-binary",
-            "image",
-            "png",
-            "high",
-            vec!["png-signature".into()],
-        );
-    }
-
-    if is_jpeg(data) {
-        return FormatProbe::new(
-            "jpeg",
-            "raw-binary",
-            "image",
-            "jpg",
-            "high",
-            vec!["jpeg-signature".into()],
-        );
-    }
-
-    if is_gif(data) {
-        return FormatProbe::new(
-            "gif",
-            "raw-binary",
-            "image",
-            "gif",
-            "high",
-            vec!["gif-signature".into()],
-        );
-    }
-
-    if is_swf(data) {
-        return FormatProbe::new(
-            "swf",
-            "raw-binary",
-            "flash-object",
-            "swf",
-            "high",
-            vec!["swf-signature".into()],
-        );
-    }
-
     FormatProbe::new(
         "unknown",
         "raw-binary",
@@ -363,6 +366,10 @@ fn is_zip_signature(data: &[u8]) -> bool {
     data.starts_with(b"PK\x03\x04")
         || data.starts_with(b"PK\x05\x06")
         || data.starts_with(b"PK\x07\x08")
+}
+
+fn is_pdf(data: &[u8]) -> bool {
+    data.starts_with(b"%PDF-")
 }
 
 fn is_rtf_signature(data: &[u8]) -> bool {

@@ -6,14 +6,20 @@ pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
     dispatch(cli.command, parser_config)
 }
 
-fn dispatch(command: Commands, parser_config: &ParserConfig) -> Result<()> {
+/// Routes CLI commands to their handler functions.
+/// Each arm is a thin delegation with no logic beyond argument unpacking.
+// NOTE: This function exceeds 80 LOC because it is a pure dispatch router
+// with one arm per Commands variant. Decomposition would add indirection
+// without reducing total LOC or improving readability.
+fn dispatch(command: Commands, cfg: &ParserConfig) -> Result<()> {
     match command {
+        // Core parse/summary/coverage
         Commands::Parse {
             input,
             format,
             output_opts,
-        } => super::parse::run(input, format, output_opts, parser_config),
-        Commands::Summary { input } => super::summary::run(input, parser_config),
+        } => super::parse::run(input, format, output_opts, cfg),
+        Commands::Summary { input } => super::summary::run(input, cfg),
         Commands::Coverage {
             input,
             json,
@@ -34,61 +40,61 @@ fn dispatch(command: Commands, parser_config: &ParserConfig) -> Result<()> {
                 export_format,
                 export_mode,
             },
-            parser_config,
+            cfg,
         ),
+        // Inspect
         Commands::Inventory { input, output_opts } => {
-            super::inventory::run(input, output_opts, parser_config)
+            super::inventory::run(input, output_opts, cfg)
         }
         Commands::ProbeFormat { input, output_opts } => {
-            super::probe_format::run(input, output_opts, parser_config)
+            super::probe_format::run(input, output_opts, cfg)
         }
         Commands::ListTimes { input, output_opts } => {
-            super::list_times::run(input, output_opts, parser_config)
+            super::list_times::run(input, output_opts, cfg)
         }
         Commands::InspectMetadata { input, output_opts } => {
-            super::inspect_metadata::run(input, output_opts, parser_config)
+            super::inspect_metadata::run(input, output_opts, cfg)
         }
         Commands::InspectSheetRecords { input, output_opts } => {
-            super::inspect_sheet_records::run(input, output_opts, parser_config)
+            super::inspect_sheet_records::run(input, output_opts, cfg)
         }
         Commands::InspectSlideRecords { input, output_opts } => {
-            super::inspect_slide_records::run(input, output_opts, parser_config)
+            super::inspect_slide_records::run(input, output_opts, cfg)
         }
         Commands::InspectDirectory { input, output_opts } => {
-            super::inspect_directory::run(input, output_opts, parser_config)
+            super::inspect_directory::run(input, output_opts, cfg)
         }
         Commands::InspectSectors { input, output_opts } => {
-            super::inspect_sectors::run(input, output_opts, parser_config)
+            super::inspect_sectors::run(input, output_opts, cfg)
         }
         Commands::ReportIndicators { input, output_opts } => {
-            super::report_indicators::run(input, output_opts, parser_config)
+            super::report_indicators::run(input, output_opts, cfg)
         }
+        // Extract
         Commands::ExtractLinks { input, output_opts } => {
-            super::extract_links::run(input, output_opts, parser_config)
+            super::extract_links::run(input, output_opts, cfg)
         }
         Commands::ExtractFlash {
             input,
             out,
             overwrite,
             output_opts,
-        } => super::extract_flash::run(input, out, overwrite, output_opts, parser_config),
-        Commands::Manifest { input, output_opts } => {
-            super::manifest::run(input, output_opts, parser_config)
-        }
+        } => super::extract_flash::run(input, out, overwrite, output_opts, cfg),
+        Commands::Manifest { input, output_opts } => super::manifest::run(input, output_opts, cfg),
         Commands::DumpContainer { input, output_opts } => {
-            super::dump_container::run(input, output_opts, parser_config)
+            super::dump_container::run(input, output_opts, cfg)
         }
         Commands::RecognizeVba {
             input,
             include_source,
             output_opts,
-        } => super::recognize_vba::run(input, include_source, output_opts, parser_config),
+        } => super::recognize_vba::run(input, include_source, output_opts, cfg),
         Commands::ExtractVba {
             input,
             out,
             overwrite,
             best_effort,
-        } => super::extract_vba::run(input, out, overwrite, best_effort, parser_config),
+        } => super::extract_vba::run(input, out, overwrite, best_effort, cfg),
         Commands::ExtractArtifacts {
             input,
             out,
@@ -107,28 +113,29 @@ fn dispatch(command: Commands, parser_config: &ParserConfig) -> Result<()> {
                 only_ole,
                 only_rtf_objects,
             },
-            parser_config,
+            cfg,
         ),
+        // Analysis
         Commands::Security {
             input,
             json,
             verbose,
-        } => super::security::run(input, json, verbose, parser_config),
+        } => super::security::run(input, json, verbose, cfg),
         Commands::DumpNode {
             input,
             node_id,
             format,
-        } => super::dump_node::run(input, &node_id, format, parser_config),
+        } => super::dump_node::run(input, &node_id, format, cfg),
         Commands::Diff {
             left,
             right,
             output_opts,
-        } => super::diff::run(left, right, output_opts, parser_config),
+        } => super::diff::run(left, right, output_opts, cfg),
         Commands::Rules {
             input,
             output_opts,
             profile,
-        } => super::rules::run(input, output_opts, profile, parser_config),
+        } => super::rules::run(input, output_opts, profile, cfg),
         Commands::Query {
             input,
             node_type,
@@ -156,7 +163,7 @@ fn dispatch(command: Commands, parser_config: &ParserConfig) -> Result<()> {
                 has_macros,
             },
             output_opts,
-            parser_config,
+            cfg,
         ),
         Commands::Grep {
             input,
@@ -164,20 +171,13 @@ fn dispatch(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             node_type,
             format,
             output_opts,
-        } => super::grep::run(
-            input,
-            pattern,
-            node_type,
-            format,
-            output_opts,
-            parser_config,
-        ),
+        } => super::grep::run(input, pattern, node_type, format, output_opts, cfg),
         Commands::Extract {
             input,
             node_id,
             node_type,
             output_opts,
-        } => super::extract::run(input, node_id, node_type, output_opts, parser_config),
+        } => super::extract::run(input, node_id, node_type, output_opts, cfg),
     }
 }
 

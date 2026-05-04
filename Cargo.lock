@@ -381,7 +381,6 @@ dependencies = [
  "docir-security",
  "docir-serialization",
  "serde",
- "sha2",
  "thiserror 1.0.69",
  "zip 2.4.2",
 ]

@@ -3,7 +3,6 @@ use crate::{AppResult, ParserConfig};
 use docir_parser::ole::{is_ole_container, Cfb};
 use docir_parser::zip_handler::SecureZipReader;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::io::Cursor;
 use std::path::Path;
 
@@ -31,6 +30,7 @@ pub struct FlashObject {
     pub output_path: Option<String>,
 }
 
+/// Extracts embedded SWF/Flash payloads from a file path.
 pub fn extract_flash_path<P: AsRef<Path>>(
     path: P,
     config: &ParserConfig,
@@ -38,6 +38,7 @@ pub fn extract_flash_path<P: AsRef<Path>>(
     with_file_bytes_and_config(path, config, extract_flash_bytes)
 }
 
+/// Extracts embedded SWF/Flash payloads from raw container bytes.
 pub fn extract_flash_bytes(data: &[u8], config: &ParserConfig) -> AppResult<FlashExtractionReport> {
     if is_ole_container(data) {
         return extract_flash_from_cfb(data);
@@ -124,7 +125,7 @@ fn find_flash_objects_in_bytes(data: &[u8], source_path: &str) -> Vec<FlashObjec
                 "ZWS" => "lzma",
                 _ => "unknown",
             };
-            let sha256 = format!("{:x}", Sha256::digest(payload));
+            let sha256 = docir_security::sha256_hex(payload);
             objects.push(FlashObject {
                 source_path: source_path.to_string(),
                 offset,

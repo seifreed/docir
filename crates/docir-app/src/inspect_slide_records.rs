@@ -47,6 +47,7 @@ pub struct SlideRecordAnomaly {
     pub message: String,
 }
 
+/// Inspects low-level PPT records from a legacy PowerPoint file path.
 pub fn inspect_slide_records_path<P: AsRef<Path>>(
     path: P,
     config: &ParserConfig,
@@ -54,6 +55,7 @@ pub fn inspect_slide_records_path<P: AsRef<Path>>(
     with_file_bytes(path, config.max_input_size, inspect_slide_records_bytes)
 }
 
+/// Inspects low-level PPT records from raw CFB/OLE bytes.
 pub fn inspect_slide_records_bytes(data: &[u8]) -> AppResult<SlideRecordInspection> {
     let cfb = Cfb::parse(data.to_vec())?;
     let presentation_stream = "PowerPoint Document";

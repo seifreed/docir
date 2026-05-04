@@ -20,11 +20,10 @@ pub use error::CoreError;
 pub use ir::*;
 pub use query::Query;
 pub use security::{
-    analyze_vba_source, is_dangerous_xlm_function, ActiveXControl, DdeField,
-    DigitalSignature as SecurityDigitalSignature, ExternalReference, ExtractedArtifact,
-    ExtractedArtifactKind, ExtractionManifest, ExtractionWarning, MacroExtractionState,
-    MacroModule, MacroProject, MacroReference, OleObject, SecurityInfo, SuspiciousCall,
-    SuspiciousCallCategory, ThreatIndicator, ThreatIndicatorType, ThreatLevel, VbaAnalysis,
-    XlmMacro, AUTO_EXEC_PROCEDURES, DANGEROUS_XLM_FUNCTIONS, SUSPICIOUS_VBA_CALLS,
+    ActiveXControl, DdeField, DigitalSignature as SecurityDigitalSignature, ExternalReference,
+    ExtractedArtifact, ExtractedArtifactKind, ExtractionManifest, ExtractionWarning,
+    MacroExtractionState, MacroModule, MacroProject, MacroReference, OleObject, SecurityInfo,
+    SuspiciousCall, SuspiciousCallCategory, ThreatIndicator, ThreatIndicatorType, ThreatLevel,
+    XlmMacro,
 };
 pub use types::*;

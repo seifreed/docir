@@ -12,6 +12,7 @@ pub struct BucketCount {
 }
 
 impl BucketCount {
+    /// Creates a new bucket-count pair.
     pub fn new(bucket: impl Into<String>, count: usize) -> Self {
         Self {
             bucket: bucket.into(),

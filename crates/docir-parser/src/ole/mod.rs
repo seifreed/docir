@@ -306,15 +306,6 @@ impl PackageReader for CfbReader<'_> {
             .ok_or_else(|| ParseError::MissingPart(name.to_string()))
     }
 
-    fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
-        let bytes = self
-            .cfb
-            .read_stream(name)
-            .ok_or_else(|| ParseError::MissingPart(name.to_string()))?;
-        String::from_utf8(bytes)
-            .map_err(|e| ParseError::Encoding(format!("Invalid UTF-8 in {}: {}", name, e)))
-    }
-
     fn file_size(&mut self, name: &str) -> Result<u64, ParseError> {
         self.cfb
             .stream_size(name)

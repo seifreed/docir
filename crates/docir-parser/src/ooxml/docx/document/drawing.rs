@@ -238,10 +238,9 @@ fn parse_drawing_text_run(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"a:t" => {
-                    let t = reader.read_text(e.name()).map_err(|e| ParseError::Xml {
-                        file: doc_path.to_string(),
-                        message: e.to_string(),
-                    })?;
+                    let t = reader
+                        .read_text(e.name())
+                        .map_err(|e| xml_error(doc_path, e))?;
                     text.push_str(&t);
                 }
                 b"a:rPr" => {

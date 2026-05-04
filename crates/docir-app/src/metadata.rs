@@ -1,6 +1,6 @@
 use crate::io_support::with_file_bytes;
-use crate::{AppResult, ParserConfig};
-use docir_parser::ole::Cfb;
+use crate::ports::CfbStreamReaderPort;
+use crate::{adapters, AppResult, ParserConfig};
 use docir_parser::ParseError as ParserParseError;
 use serde::Serialize;
 use std::path::Path;
@@ -46,22 +46,25 @@ pub fn inspect_metadata_path<P: AsRef<Path>>(
 
 /// Inspect metadata from raw CFB/OLE bytes.
 pub fn inspect_metadata_bytes(data: &[u8]) -> AppResult<MetadataInspection> {
-    let cfb = Cfb::parse(data.to_vec())?;
+    let reader = adapters::default_cfb_stream_reader();
+    inspect_metadata_with_reader(data, &reader)
+}
+
+fn inspect_metadata_with_reader(
+    data: &[u8],
+    reader: &impl CfbStreamReaderPort,
+) -> AppResult<MetadataInspection> {
     let mut sections = Vec::new();
 
-    if let Some(bytes) = cfb.read_stream(SUMMARY_INFO_STREAM) {
-        sections.push(parse_property_stream(
-            "summary-information",
-            SUMMARY_INFO_STREAM,
-            &bytes,
-        )?);
-    }
-    if let Some(bytes) = cfb.read_stream(DOC_SUMMARY_INFO_STREAM) {
-        sections.push(parse_property_stream(
-            "document-summary-information",
-            DOC_SUMMARY_INFO_STREAM,
-            &bytes,
-        )?);
+    for (path, bytes) in
+        reader.read_streams(data, &[SUMMARY_INFO_STREAM, DOC_SUMMARY_INFO_STREAM])?
+    {
+        let name = match path.as_str() {
+            SUMMARY_INFO_STREAM => "summary-information",
+            DOC_SUMMARY_INFO_STREAM => "document-summary-information",
+            _ => continue,
+        };
+        sections.push(parse_property_stream(name, &path, &bytes)?);
     }
 
     Ok(MetadataInspection {
@@ -309,103 +312,47 @@ fn property_name(section: &str, property_id: u32) -> &'static str {
 }
 
 fn read_i16(data: &[u8], offset: usize) -> Result<i16, ParserParseError> {
-    if offset + 2 > data.len() {
-        return Err(ParserParseError::InvalidStructure(
-            "OLE metadata read_i16 out of bounds".to_string(),
-        ));
-    }
-    Ok(i16::from_le_bytes([data[offset], data[offset + 1]]))
+    Ok(i16::from_le_bytes(read_le_bytes(data, offset, "read_i16")?))
 }
 
 fn read_u16(data: &[u8], offset: usize) -> Result<u16, ParserParseError> {
-    if offset + 2 > data.len() {
-        return Err(ParserParseError::InvalidStructure(
-            "OLE metadata read_u16 out of bounds".to_string(),
-        ));
-    }
-    Ok(u16::from_le_bytes([data[offset], data[offset + 1]]))
+    Ok(u16::from_le_bytes(read_le_bytes(data, offset, "read_u16")?))
 }
 
 fn read_u32(data: &[u8], offset: usize) -> Result<u32, ParserParseError> {
-    if offset + 4 > data.len() {
-        return Err(ParserParseError::InvalidStructure(
-            "OLE metadata read_u32 out of bounds".to_string(),
-        ));
-    }
-    Ok(u32::from_le_bytes([
-        data[offset],
-        data[offset + 1],
-        data[offset + 2],
-        data[offset + 3],
-    ]))
+    Ok(u32::from_le_bytes(read_le_bytes(data, offset, "read_u32")?))
 }
 
 fn read_i32(data: &[u8], offset: usize) -> Result<i32, ParserParseError> {
-    if offset + 4 > data.len() {
-        return Err(ParserParseError::InvalidStructure(
-            "OLE metadata read_i32 out of bounds".to_string(),
-        ));
-    }
-    Ok(i32::from_le_bytes([
-        data[offset],
-        data[offset + 1],
-        data[offset + 2],
-        data[offset + 3],
-    ]))
+    Ok(i32::from_le_bytes(read_le_bytes(data, offset, "read_i32")?))
 }
 
 fn read_u64(data: &[u8], offset: usize) -> Result<u64, ParserParseError> {
-    if offset + 8 > data.len() {
-        return Err(ParserParseError::InvalidStructure(
-            "OLE metadata read_u64 out of bounds".to_string(),
-        ));
-    }
-    Ok(u64::from_le_bytes([
-        data[offset],
-        data[offset + 1],
-        data[offset + 2],
-        data[offset + 3],
-        data[offset + 4],
-        data[offset + 5],
-        data[offset + 6],
-        data[offset + 7],
-    ]))
+    Ok(u64::from_le_bytes(read_le_bytes(data, offset, "read_u64")?))
 }
 
 fn read_i64(data: &[u8], offset: usize) -> Result<i64, ParserParseError> {
-    if offset + 8 > data.len() {
-        return Err(ParserParseError::InvalidStructure(
-            "OLE metadata read_i64 out of bounds".to_string(),
-        ));
-    }
-    Ok(i64::from_le_bytes([
-        data[offset],
-        data[offset + 1],
-        data[offset + 2],
-        data[offset + 3],
-        data[offset + 4],
-        data[offset + 5],
-        data[offset + 6],
-        data[offset + 7],
-    ]))
+    Ok(i64::from_le_bytes(read_le_bytes(data, offset, "read_i64")?))
 }
 
 fn read_f64(data: &[u8], offset: usize) -> Result<f64, ParserParseError> {
-    if offset + 8 > data.len() {
-        return Err(ParserParseError::InvalidStructure(
-            "OLE metadata read_f64 out of bounds".to_string(),
-        ));
-    }
-    Ok(f64::from_le_bytes([
-        data[offset],
-        data[offset + 1],
-        data[offset + 2],
-        data[offset + 3],
-        data[offset + 4],
-        data[offset + 5],
-        data[offset + 6],
-        data[offset + 7],
-    ]))
+    Ok(f64::from_le_bytes(read_le_bytes(data, offset, "read_f64")?))
+}
+
+fn read_le_bytes<const N: usize>(
+    data: &[u8],
+    offset: usize,
+    operation: &str,
+) -> Result<[u8; N], ParserParseError> {
+    let end = offset.checked_add(N).ok_or_else(|| {
+        ParserParseError::InvalidStructure(format!("OLE metadata {operation} out of bounds"))
+    })?;
+    let bytes = data.get(offset..end).ok_or_else(|| {
+        ParserParseError::InvalidStructure(format!("OLE metadata {operation} out of bounds"))
+    })?;
+    bytes.try_into().map_err(|_| {
+        ParserParseError::InvalidStructure(format!("OLE metadata {operation} out of bounds"))
+    })
 }
 
 #[cfg(test)]

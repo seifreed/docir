@@ -2,7 +2,7 @@ use super::{
     ParseError, PresentationProperties, PresentationTag, ShapeType, SmartArtPart, SourceSpan,
     TableStyle, TableStyleSet, ViewProperties,
 };
-use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::{lossy_attr_value, xml_error};
 use docir_core::types::NodeId;
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -59,10 +59,7 @@ pub(super) fn parse_presentation_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -129,10 +126,7 @@ pub(super) fn parse_view_properties(xml: &str, path: &str) -> Result<ViewPropert
             },
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -180,10 +174,7 @@ pub(super) fn parse_table_styles(xml: &str, path: &str) -> Result<TableStyleSet,
             },
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -227,10 +218,7 @@ pub(super) fn parse_presentation_tags(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -276,10 +264,7 @@ pub(super) fn parse_smartart_part(xml: &str, path: &str) -> Result<SmartArtPart,
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -358,10 +343,7 @@ pub(super) fn parse_slide_master_meta(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -416,10 +398,7 @@ pub(super) fn parse_slide_layout_meta(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }

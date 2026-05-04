@@ -193,10 +193,6 @@ mod tests {
             Err(ParseError::MissingPart(name.to_string()))
         }
 
-        fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
-            Err(ParseError::MissingPart(name.to_string()))
-        }
-
         fn file_size(&mut self, name: &str) -> Result<u64, ParseError> {
             Err(ParseError::MissingPart(name.to_string()))
         }

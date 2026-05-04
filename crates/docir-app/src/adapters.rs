@@ -1,5 +1,6 @@
 //! Infrastructure adapters for application ports.
 
+use crate::ports::CfbStreamReaderPort;
 use crate::summary::DocumentSummary;
 use crate::{
     AppError, AppResult, ParsedDocument, ParserConfig, ParserPort, RuleProfile, RuleReport,
@@ -7,6 +8,7 @@ use crate::{
     SerializerPort, SummaryPresenterPort,
 };
 use docir_core::visitor::IrStore;
+use docir_parser::ole::Cfb;
 use docir_parser::parser::ParsedDocument as ParserParsedDocument;
 use docir_parser::{scan_security_bytes as scan_parser_bytes, DocumentParser, ParseError};
 use docir_rules::RuleEngine;
@@ -53,6 +55,25 @@ impl SerializerPort for DefaultJsonSerializer {
 }
 
 struct DefaultSummaryPresenter;
+
+pub(crate) struct ParserCfbStreamReader;
+
+impl CfbStreamReaderPort for ParserCfbStreamReader {
+    fn read_streams(
+        &self,
+        data: &[u8],
+        stream_names: &[&str],
+    ) -> AppResult<Vec<(String, Vec<u8>)>> {
+        let cfb = Cfb::parse(data.to_vec())?;
+        Ok(stream_names
+            .iter()
+            .filter_map(|name| {
+                cfb.read_stream(name)
+                    .map(|bytes| ((*name).to_string(), bytes))
+            })
+            .collect())
+    }
+}
 
 impl SummaryPresenterPort for DefaultSummaryPresenter {
     fn format_summary(&self, summary: &DocumentSummary, source: Option<&str>) -> String {
@@ -218,6 +239,10 @@ pub(crate) fn default_json_serializer() -> Box<dyn SerializerPort> {
 
 pub(crate) fn default_summary_presenter() -> Box<dyn SummaryPresenterPort> {
     Box::new(DefaultSummaryPresenter)
+}
+
+pub(crate) fn default_cfb_stream_reader() -> ParserCfbStreamReader {
+    ParserCfbStreamReader
 }
 
 impl AppParser {

@@ -1,7 +1,7 @@
 use super::super::{parse_border, parse_paragraph_simple, span_from_reader, DocxParser};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, xml_error};
 use docir_core::ir::{
     CellMargins, CellVerticalAlignment, MergeType, RowHeight, RowHeightRule, Table, TableAlignment,
     TableBorders, TableCell, TableCellProperties, TableRow, TableWidth, TableWidthType,
@@ -40,10 +40,7 @@ pub(crate) fn parse_table(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -83,10 +80,7 @@ pub(crate) fn parse_table_row(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -130,10 +124,7 @@ pub(crate) fn parse_table_cell(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -163,10 +154,7 @@ pub(crate) fn parse_table_cell_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -265,10 +253,7 @@ pub(crate) fn parse_table_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -332,10 +317,7 @@ pub(crate) fn parse_table_grid(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -385,10 +367,7 @@ pub(crate) fn parse_table_row_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -446,10 +425,7 @@ fn parse_table_borders(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -497,10 +473,7 @@ fn parse_cell_margins(reader: &mut Reader<&[u8]>) -> Result<Option<CellMargins>,
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }

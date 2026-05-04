@@ -93,20 +93,21 @@ check_forbidden_imports() {
 check_frontier_contracts() {
   local status=0
   local app_lib="${REPO_ROOT}/crates/docir-app/src/lib.rs"
+  local app_ports="${REPO_ROOT}/crates/docir-app/src/ports.rs"
   local app_adapters="${REPO_ROOT}/crates/docir-app/src/adapters.rs"
 
-  if ! rg -q "pub trait ParserPort" "${app_lib}"; then
-    echo "Missing boundary contract: ParserPort in crates/docir-app/src/lib.rs"
+  if ! rg -q "pub trait ParserPort" "${app_ports}"; then
+    echo "Missing boundary contract: ParserPort in crates/docir-app/src/ports.rs"
     status=1
   fi
 
-  if ! rg -q "pub trait SerializerPort" "${app_lib}"; then
-    echo "Missing boundary contract: SerializerPort in crates/docir-app/src/lib.rs"
+  if ! rg -q "pub trait SerializerPort" "${app_ports}"; then
+    echo "Missing boundary contract: SerializerPort in crates/docir-app/src/ports.rs"
     status=1
   fi
 
-  if ! rg -q "pub trait SummaryPresenterPort" "${app_lib}"; then
-    echo "Missing boundary contract: SummaryPresenterPort in crates/docir-app/src/lib.rs"
+  if ! rg -q "pub trait SummaryPresenterPort" "${app_ports}"; then
+    echo "Missing boundary contract: SummaryPresenterPort in crates/docir-app/src/ports.rs"
     status=1
   fi
 

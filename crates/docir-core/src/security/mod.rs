@@ -13,7 +13,6 @@ mod security_macros;
 mod security_ole;
 mod security_references;
 mod threat_level;
-mod vba;
 
 pub use extraction::{
     ExtractedArtifact, ExtractedArtifactKind, ExtractionManifest, ExtractionWarning,
@@ -28,10 +27,6 @@ pub use security_references::{
 };
 use threat_level::max_indicator_threat_level;
 pub use threat_level::{ThreatIndicator, ThreatIndicatorType, ThreatLevel};
-pub use vba::{
-    analyze_vba_source, is_dangerous_xlm_function, VbaAnalysis, AUTO_EXEC_PROCEDURES,
-    DANGEROUS_XLM_FUNCTIONS, SUSPICIOUS_VBA_CALLS,
-};
 
 /// Aggregate security information for a document.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

@@ -1,5 +1,3 @@
-use sha2::{Digest, Sha256};
-
 pub(super) fn preferred_output_name(
     suggested_name: Option<&str>,
     index: usize,
@@ -43,9 +41,7 @@ pub(super) fn file_name_from_path(path: &str) -> String {
 }
 
 pub(super) fn sha256_hex(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    format!("{:x}", hasher.finalize())
+    docir_security::sha256_hex(data)
 }
 
 pub(super) fn assign_sha256(target: &mut Option<String>, data: &[u8], compute_hashes: bool) {

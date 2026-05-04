@@ -82,12 +82,6 @@ mod tests {
                 .ok_or_else(|| ParseError::MissingPart(name.to_string()))
         }
 
-        fn read_file_string(&mut self, name: &str) -> Result<String, ParseError> {
-            let bytes = self.read_file(name)?;
-            String::from_utf8(bytes)
-                .map_err(|e| ParseError::Encoding(format!("Invalid UTF-8 in {name}: {e}")))
-        }
-
         fn file_size(&mut self, name: &str) -> Result<u64, ParseError> {
             Ok(self.read_file(name)?.len() as u64)
         }

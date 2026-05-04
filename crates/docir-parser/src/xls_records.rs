@@ -38,6 +38,7 @@ pub enum XlsSubstreamKind {
 }
 
 impl XlsSubstreamKind {
+    /// Returns the stable display label for this BIFF substream kind.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Unknown => "unknown",
@@ -52,6 +53,7 @@ impl XlsSubstreamKind {
     }
 }
 
+/// Reads a legacy XLS workbook stream into BIFF record headers and anomalies.
 pub fn read_xls_records(data: &[u8]) -> Result<XlsRecordScan, ParseError> {
     let mut offset = 0usize;
     let mut records = Vec::new();

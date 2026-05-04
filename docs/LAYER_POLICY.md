@@ -21,12 +21,12 @@ This policy defines the allowed dependencies and boundary responsibilities for t
 | Crate | Allowed direct dependencies |
 |---|---|
 | `docir-core` | `serde` (optional), `thiserror` |
-| `docir-parser` | `docir-core`, `zip`, `quick-xml`, `encoding_rs`, `flate2`, `calamine`, `sha2`, `sha1`, `pbkdf2`, `base64`, `aes`, `cbc`, `log`, `serde`, `thiserror` |
-| `docir-app` | `docir-core`, `docir-parser`, `docir-security`, `docir-serialization`, `docir-rules`, `docir-diff`, `thiserror` |
+| `docir-parser` | `docir-core`, `docir-security`, `zip`, `quick-xml`, `encoding_rs`, `flate2`, `calamine`, `sha2`, `sha1`, `pbkdf2`, `base64`, `aes`, `cbc`, `log`, `serde`, `thiserror` |
+| `docir-app` | `docir-core`, `docir-parser`, `docir-security`, `docir-serialization`, `docir-rules`, `docir-diff`, `serde`, `thiserror` |
 | `docir-security` | `docir-core`, `sha2`, `log`, `thiserror` |
 | `docir-serialization` | `docir-core`, `serde`, `serde_json`, `thiserror` |
 | `docir-rules` | `docir-core`, `serde` |
-| `docir-diff` | `docir-core`, `serde`, `serde_json`, `sha2` |
+| `docir-diff` | `docir-core`, `serde`, `serde_json`, `sha2`, `thiserror` |
 | `docir-cli` | `docir-core`, `docir-app`, `clap`, `anyhow`, `env_logger`, `log`, `serde`, `serde_json` |
 | `docir-python` | `docir-core`, `docir-app`, `pyo3`, `serde`, `serde_json`, `anyhow` |
 
@@ -41,7 +41,7 @@ This policy defines the allowed dependencies and boundary responsibilities for t
 - `docir-cli` must not declare direct dependencies on `docir-parser` or `docir-security`.
 - `docir-app` and `docir-core` must not import or depend on presentation/output
   format crates (for example `serde_json`) in domain-facing code.
-- `docir-parser` may consume `docir-core` only; it must not depend on `docir-app`.
+- `docir-parser` may consume `docir-core` and focused security signature services; it must not depend on `docir-app`.
 - `docir-python` is an adapter boundary and must not depend directly on parser, rules,
   or serialization infrastructure crates.
 - Shared mutable state should cross boundaries through domain objects and explicit ports, not
@@ -69,6 +69,7 @@ This policy defines the allowed dependencies and boundary responsibilities for t
   - `crates/docir-cli/src/commands/util.rs`: `build_app_and_parse`.
   - `crates/docir-app/src/lib.rs`: `parse_file`, `parse_bytes`, `parse_reader`.
 - **App → Parser adapter frontier**
+  - `crates/docir-app/src/ports.rs`: application port contracts.
   - `crates/docir-app/src/adapters.rs`: `ParserPort` implementation by `AppParser`.
 - **App → Core frontier**
   - `crates/docir-app/src/summary.rs`: domain summary is built from `docir_core` IR nodes.

@@ -1,6 +1,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::xml_error;
 use docir_core::ir::{CellError, IRNode};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -105,10 +106,7 @@ pub(super) fn parse_smartart_part(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -228,10 +226,7 @@ pub(super) fn parse_chart_data(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: chart_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(chart_path, e));
             }
             _ => {}
         }

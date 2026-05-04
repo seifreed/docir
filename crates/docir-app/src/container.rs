@@ -1,11 +1,10 @@
 use crate::{AppError, ParsedDocument};
-use docir_core::types::DocumentFormat;
 use docir_parser::ole::{Cfb, CfbEntryType};
 use docir_parser::zip_handler::{SecureZipReader, ZipConfig};
 use serde::Serialize;
 use std::io::Cursor;
 
-use crate::inventory::ContainerKind;
+use crate::inventory::{classify_container_kind, ContainerKind};
 
 /// Serializable dump of low-level container entries for analyst-facing inspection.
 #[derive(Debug, Clone, Serialize)]
@@ -53,7 +52,7 @@ impl ContainerDump {
     ) -> Result<Self, AppError> {
         let mut dump = Self {
             document_format: parsed.format().extension().to_string(),
-            container_kind: classify_container(parsed),
+            container_kind: classify_container_kind(parsed),
             entry_count: 0,
             entries: Vec::new(),
         };
@@ -126,29 +125,6 @@ impl ContainerDump {
 
         dump.entry_count = dump.entries.len();
         Ok(dump)
-    }
-}
-
-fn classify_container(parsed: &ParsedDocument) -> ContainerKind {
-    if parsed
-        .document()
-        .and_then(|doc| doc.span.as_ref())
-        .map(|span| span.file_path.starts_with("cfb:/"))
-        .unwrap_or(false)
-    {
-        return ContainerKind::CfbOle;
-    }
-
-    match parsed.format() {
-        DocumentFormat::WordProcessing
-        | DocumentFormat::Spreadsheet
-        | DocumentFormat::Presentation => ContainerKind::ZipOoxml,
-        DocumentFormat::OdfText
-        | DocumentFormat::OdfSpreadsheet
-        | DocumentFormat::OdfPresentation => ContainerKind::ZipOdf,
-        DocumentFormat::Hwpx => ContainerKind::ZipHwpx,
-        DocumentFormat::Hwp => ContainerKind::CfbOle,
-        DocumentFormat::Rtf => ContainerKind::Rtf,
     }
 }
 

@@ -54,10 +54,7 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -280,10 +277,7 @@ pub(super) fn parse_inline_string(
             }
             Ok(Event::Text(e)) => {
                 if in_t {
-                    let t = e.unescape().map_err(|err| ParseError::Xml {
-                        file: sheet_path.to_string(),
-                        message: err.to_string(),
-                    })?;
+                    let t = e.unescape().map_err(|err| xml_error(sheet_path, err))?;
                     text.push_str(&t);
                 }
             }
@@ -296,10 +290,7 @@ pub(super) fn parse_inline_string(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: sheet_path.to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error(sheet_path, e));
             }
             _ => {}
         }

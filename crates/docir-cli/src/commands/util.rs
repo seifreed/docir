@@ -1,7 +1,8 @@
 //! Shared CLI helpers.
 
+use crate::cli::JsonOutputOpts;
 use anyhow::{anyhow, Context, Result};
-use docir_app::ParserConfig;
+use docir_app::{AppResult, ParserConfig};
 use docir_app::{DocirApp, ParsedDocument};
 use docir_core::types::{
     parse_document_format as parse_core_document_format, parse_node_type as parse_core_node_type,
@@ -180,6 +181,28 @@ where
         let text = format_text(result);
         write_text_output(&text, output)
     }
+}
+
+pub(crate) fn run_app_path_dual_output<T, I, F>(
+    input: PathBuf,
+    opts: JsonOutputOpts,
+    parser_config: &ParserConfig,
+    json_key: &str,
+    inspect: I,
+    format_text: F,
+) -> Result<()>
+where
+    T: Serialize,
+    I: FnOnce(PathBuf, &ParserConfig) -> AppResult<T>,
+    F: FnOnce(&T) -> String,
+{
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
+    let result = inspect(input, parser_config)?;
+    run_dual_output(&result, json_key, json, pretty, output, format_text)
 }
 
 fn wrap_json<T: Serialize>(key: &str, value: &T) -> serde_json::Value {

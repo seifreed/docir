@@ -5,7 +5,7 @@ mod paragraph_props;
 use super::SectionRef;
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, xml_error};
 use docir_core::ir::RevisionType;
 use docir_core::ir::{CommentRangeEnd, CommentRangeStart, CommentReference, Field, Paragraph};
 use docir_core::types::NodeId;
@@ -41,10 +41,7 @@ pub(super) fn parse_paragraph(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }

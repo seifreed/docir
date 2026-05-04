@@ -1,7 +1,7 @@
 use super::{parse_block_until, DocxParser, NoteKind};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, xml_error};
 use docir_core::ir::{
     Comment, CommentExtension, CommentExtensionSet, CommentIdMap, CommentIdMapEntry, Endnote,
     Footnote, IRNode,
@@ -54,10 +54,7 @@ impl DocxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: "word/commentsExtended.xml".to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error("word/commentsExtended.xml", e));
                 }
                 _ => {}
             }
@@ -90,10 +87,7 @@ impl DocxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: "word/commentsIds.xml".to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error("word/commentsIds.xml", e));
                 }
                 _ => {}
             }
@@ -164,10 +158,7 @@ fn parse_comments_like(
             },
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/comments.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/comments.xml", e));
             }
             _ => {}
         }

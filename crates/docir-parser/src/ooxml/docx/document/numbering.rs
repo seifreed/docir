@@ -1,6 +1,6 @@
 use super::DocxParser;
 use crate::error::ParseError;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, xml_error};
 use docir_core::ir::{NumberingLevel, NumberingSet, Paragraph, RunProperties, TextAlignment};
 use docir_core::types::NodeId;
 use quick_xml::events::{BytesStart, Event};
@@ -49,10 +49,7 @@ impl DocxParser {
                 },
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(ParseError::Xml {
-                        file: "word/numbering.xml".to_string(),
-                        message: e.to_string(),
-                    });
+                    return Err(xml_error("word/numbering.xml", e));
                 }
                 _ => {}
             }

@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{scan_xml_events, XmlScanControl};
+use crate::xml_utils::{scan_xml_events, xml_error, XmlScanControl};
 use docir_core::ir::{SharedStringItem, SharedStringTable};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -43,10 +43,9 @@ pub(crate) fn parse_shared_strings_table(
             },
             Event::Text(e) => {
                 if in_si && in_t {
-                    let text = e.unescape().map_err(|err| ParseError::Xml {
-                        file: "xl/sharedStrings.xml".to_string(),
-                        message: err.to_string(),
-                    })?;
+                    let text = e
+                        .unescape()
+                        .map_err(|err| xml_error("xl/sharedStrings.xml", err))?;
                     current.push_str(&text);
                     if in_run {
                         current_run.push_str(&text);

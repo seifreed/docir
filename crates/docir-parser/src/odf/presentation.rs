@@ -4,6 +4,7 @@ use super::{
     attr_value, parse_draw_page, parse_odp_transition, IRNode, IrStore, OdfContentResult,
     OdfLimitCounter, ParseError, Slide,
 };
+use crate::xml_utils::xml_error;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
@@ -50,12 +51,7 @@ pub(super) fn parse_content_presentation(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "content.xml".to_string(),
-                    message: e.to_string(),
-                })
-            }
+            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();

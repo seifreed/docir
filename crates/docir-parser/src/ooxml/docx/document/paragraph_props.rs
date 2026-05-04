@@ -1,6 +1,6 @@
 use super::super::{apply_section_refs, bool_from_val, parse_border, parse_numbering, SectionRef};
 use crate::error::ParseError;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, xml_error};
 use docir_core::ir::Paragraph;
 use docir_core::ir::{LineSpacingRule, TextAlignment};
 use docir_core::types::NodeId;
@@ -112,10 +112,7 @@ pub(crate) fn parse_paragraph_properties(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
@@ -164,10 +161,7 @@ pub(crate) fn parse_paragraph_borders(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(ParseError::Xml {
-                    file: "word/document.xml".to_string(),
-                    message: e.to_string(),
-                });
+                return Err(xml_error("word/document.xml", e));
             }
             _ => {}
         }
