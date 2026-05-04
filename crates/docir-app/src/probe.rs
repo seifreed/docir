@@ -21,6 +21,26 @@ pub struct FormatProbe {
     pub signals: Vec<String>,
 }
 
+impl FormatProbe {
+    fn new(
+        format: &str,
+        container: &str,
+        family: &str,
+        extension: &str,
+        confidence: &str,
+        signals: Vec<String>,
+    ) -> Self {
+        Self {
+            format: format.to_string(),
+            container: container.to_string(),
+            family: family.to_string(),
+            suggested_extension: extension.to_string(),
+            confidence: confidence.to_string(),
+            signals,
+        }
+    }
+}
+
 /// Probes an on-disk file without running the full parser pipeline.
 pub fn probe_format_path<P: AsRef<Path>>(path: P, config: &ParserConfig) -> AppResult<FormatProbe> {
     with_file_bytes_and_config(path, config, |bytes, cfg| {
@@ -31,14 +51,14 @@ pub fn probe_format_path<P: AsRef<Path>>(path: P, config: &ParserConfig) -> AppR
 /// Probes raw bytes and returns a lightweight format classification.
 pub fn probe_format_bytes(data: &[u8], config: &ParserConfig) -> FormatProbe {
     if is_rtf_signature(data) {
-        return FormatProbe {
-            format: "rtf".to_string(),
-            container: "rtf".to_string(),
-            family: "rich-text-document".to_string(),
-            suggested_extension: "rtf".to_string(),
-            confidence: "high".to_string(),
-            signals: vec!["rtf-signature".to_string()],
-        };
+        return FormatProbe::new(
+            "rtf",
+            "rtf",
+            "rich-text-document",
+            "rtf",
+            "high",
+            vec!["rtf-signature".into()],
+        );
     }
 
     if is_ole_container(data) {
@@ -50,189 +70,147 @@ pub fn probe_format_bytes(data: &[u8], config: &ParserConfig) -> FormatProbe {
     }
 
     if data.starts_with(b"%PDF-") {
-        return FormatProbe {
-            format: "pdf".to_string(),
-            container: "raw-binary".to_string(),
-            family: "pdf-document".to_string(),
-            suggested_extension: "pdf".to_string(),
-            confidence: "high".to_string(),
-            signals: vec!["pdf-signature".to_string()],
-        };
+        return FormatProbe::new(
+            "pdf",
+            "raw-binary",
+            "pdf-document",
+            "pdf",
+            "high",
+            vec!["pdf-signature".into()],
+        );
     }
 
     if has_pe_signature(data) {
-        return FormatProbe {
-            format: "pe".to_string(),
-            container: "raw-binary".to_string(),
-            family: "portable-executable".to_string(),
-            suggested_extension: "exe".to_string(),
-            confidence: "high".to_string(),
-            signals: vec!["mz-signature".to_string()],
-        };
+        return FormatProbe::new(
+            "pe",
+            "raw-binary",
+            "portable-executable",
+            "exe",
+            "high",
+            vec!["mz-signature".into()],
+        );
     }
 
     if is_png(data) {
-        return FormatProbe {
-            format: "png".to_string(),
-            container: "raw-binary".to_string(),
-            family: "image".to_string(),
-            suggested_extension: "png".to_string(),
-            confidence: "high".to_string(),
-            signals: vec!["png-signature".to_string()],
-        };
+        return FormatProbe::new(
+            "png",
+            "raw-binary",
+            "image",
+            "png",
+            "high",
+            vec!["png-signature".into()],
+        );
     }
 
     if is_jpeg(data) {
-        return FormatProbe {
-            format: "jpeg".to_string(),
-            container: "raw-binary".to_string(),
-            family: "image".to_string(),
-            suggested_extension: "jpg".to_string(),
-            confidence: "high".to_string(),
-            signals: vec!["jpeg-signature".to_string()],
-        };
+        return FormatProbe::new(
+            "jpeg",
+            "raw-binary",
+            "image",
+            "jpg",
+            "high",
+            vec!["jpeg-signature".into()],
+        );
     }
 
     if is_gif(data) {
-        return FormatProbe {
-            format: "gif".to_string(),
-            container: "raw-binary".to_string(),
-            family: "image".to_string(),
-            suggested_extension: "gif".to_string(),
-            confidence: "high".to_string(),
-            signals: vec!["gif-signature".to_string()],
-        };
+        return FormatProbe::new(
+            "gif",
+            "raw-binary",
+            "image",
+            "gif",
+            "high",
+            vec!["gif-signature".into()],
+        );
     }
 
     if is_swf(data) {
-        return FormatProbe {
-            format: "swf".to_string(),
-            container: "raw-binary".to_string(),
-            family: "flash-object".to_string(),
-            suggested_extension: "swf".to_string(),
-            confidence: "high".to_string(),
-            signals: vec!["swf-signature".to_string()],
-        };
+        return FormatProbe::new(
+            "swf",
+            "raw-binary",
+            "flash-object",
+            "swf",
+            "high",
+            vec!["swf-signature".into()],
+        );
     }
 
-    FormatProbe {
-        format: "unknown".to_string(),
-        container: "raw-binary".to_string(),
-        family: "unknown".to_string(),
-        suggested_extension: "bin".to_string(),
-        confidence: "low".to_string(),
-        signals: vec!["no-known-signature".to_string()],
-    }
+    FormatProbe::new(
+        "unknown",
+        "raw-binary",
+        "unknown",
+        "bin",
+        "low",
+        vec!["no-known-signature".into()],
+    )
 }
 
 fn probe_cfb(data: &[u8]) -> FormatProbe {
     let mut signals = vec!["cfb-signature".to_string()];
     let Ok(cfb) = Cfb::parse(data.to_vec()) else {
         signals.push("cfb-open-failed".to_string());
-        return FormatProbe {
-            format: "ole".to_string(),
-            container: "cfb-ole".to_string(),
-            family: "compound-file".to_string(),
-            suggested_extension: "ole".to_string(),
-            confidence: "medium".to_string(),
-            signals,
-        };
+        return FormatProbe::new("ole", "cfb-ole", "compound-file", "ole", "medium", signals);
     };
 
     if cfb.has_stream("FileHeader") {
         signals.push("stream:FileHeader".to_string());
-        return FormatProbe {
-            format: "hwp".to_string(),
-            container: "cfb-ole".to_string(),
-            family: "hangul-word-processor".to_string(),
-            suggested_extension: "hwp".to_string(),
-            confidence: "high".to_string(),
+        return FormatProbe::new(
+            "hwp",
+            "cfb-ole",
+            "hangul-word-processor",
+            "hwp",
+            "high",
             signals,
-        };
+        );
     }
 
     if cfb.has_stream("WordDocument") {
         signals.push("stream:WordDocument".to_string());
-        return FormatProbe {
-            format: "doc".to_string(),
-            container: "cfb-ole".to_string(),
-            family: "word-processing".to_string(),
-            suggested_extension: "doc".to_string(),
-            confidence: "high".to_string(),
-            signals,
-        };
+        return FormatProbe::new("doc", "cfb-ole", "word-processing", "doc", "high", signals);
     }
 
     if cfb.has_stream("Workbook") || cfb.has_stream("Book") {
         signals.push("stream:Workbook".to_string());
-        return FormatProbe {
-            format: "xls".to_string(),
-            container: "cfb-ole".to_string(),
-            family: "spreadsheet".to_string(),
-            suggested_extension: "xls".to_string(),
-            confidence: "high".to_string(),
-            signals,
-        };
+        return FormatProbe::new("xls", "cfb-ole", "spreadsheet", "xls", "high", signals);
     }
 
     if cfb.has_stream("PowerPoint Document") {
         signals.push("stream:PowerPoint Document".to_string());
-        return FormatProbe {
-            format: "ppt".to_string(),
-            container: "cfb-ole".to_string(),
-            family: "presentation".to_string(),
-            suggested_extension: "ppt".to_string(),
-            confidence: "high".to_string(),
-            signals,
-        };
+        return FormatProbe::new("ppt", "cfb-ole", "presentation", "ppt", "high", signals);
     }
 
     if probe_legacy_office_format(&cfb).is_some() {
         signals.push("legacy-office-layout".to_string());
-        return FormatProbe {
-            format: "office-legacy".to_string(),
-            container: "cfb-ole".to_string(),
-            family: "office-legacy".to_string(),
-            suggested_extension: "ole".to_string(),
-            confidence: "medium".to_string(),
+        return FormatProbe::new(
+            "office-legacy",
+            "cfb-ole",
+            "office-legacy",
+            "ole",
+            "medium",
             signals,
-        };
+        );
     }
 
     if cfb.has_stream("!_StringData") || cfb.has_stream("!_StringPool") {
         signals.push("stream:!_StringData".to_string());
-        return FormatProbe {
-            format: "msi".to_string(),
-            container: "cfb-ole".to_string(),
-            family: "installer-package".to_string(),
-            suggested_extension: "msi".to_string(),
-            confidence: "medium".to_string(),
+        return FormatProbe::new(
+            "msi",
+            "cfb-ole",
+            "installer-package",
+            "msi",
+            "medium",
             signals,
-        };
+        );
     }
 
-    FormatProbe {
-        format: "ole".to_string(),
-        container: "cfb-ole".to_string(),
-        family: "compound-file".to_string(),
-        suggested_extension: "ole".to_string(),
-        confidence: "medium".to_string(),
-        signals,
-    }
+    FormatProbe::new("ole", "cfb-ole", "compound-file", "ole", "medium", signals)
 }
 
 fn probe_zip(data: &[u8], config: &ParserConfig) -> FormatProbe {
     let mut signals = vec!["zip-signature".to_string()];
     let Ok(mut zip) = SecureZipReader::new(Cursor::new(data), config.zip_config.clone()) else {
         signals.push("zip-open-failed".to_string());
-        return FormatProbe {
-            format: "zip".to_string(),
-            container: "zip".to_string(),
-            family: "archive".to_string(),
-            suggested_extension: "zip".to_string(),
-            confidence: "medium".to_string(),
-            signals,
-        };
+        return FormatProbe::new("zip", "zip", "archive", "zip", "medium", signals);
     };
 
     if zip.contains("[Content_Types].xml") {
@@ -243,75 +221,75 @@ fn probe_zip(data: &[u8], config: &ParserConfig) -> FormatProbe {
             }
             signals.push("content-types-parse-failed".to_string());
         }
-        return FormatProbe {
-            format: "ooxml".to_string(),
-            container: "zip-ooxml".to_string(),
-            family: "office-openxml".to_string(),
-            suggested_extension: "zip".to_string(),
-            confidence: "medium".to_string(),
+        return FormatProbe::new(
+            "ooxml",
+            "zip-ooxml",
+            "office-openxml",
+            "zip",
+            "medium",
             signals,
-        };
+        );
     }
 
     if zip.contains("mimetype") {
         signals.push("zip:mimetype".to_string());
         if let Ok(mimetype) = zip.read_file_string("mimetype") {
             let lower = mimetype.trim().to_ascii_lowercase();
-            if is_hwpx_mimetype(&lower) {
-                signals.push(format!("mimetype:{lower}"));
-                return FormatProbe {
-                    format: "hwpx".to_string(),
-                    container: "zip-hwpx".to_string(),
-                    family: "hangul-word-processor".to_string(),
-                    suggested_extension: "hwpx".to_string(),
-                    confidence: "high".to_string(),
-                    signals,
-                };
-            }
-            if lower.contains("opendocument.text") {
-                signals.push(format!("mimetype:{lower}"));
-                return FormatProbe {
-                    format: "odt".to_string(),
-                    container: "zip-odf".to_string(),
-                    family: "odf-text".to_string(),
-                    suggested_extension: "odt".to_string(),
-                    confidence: "high".to_string(),
-                    signals,
-                };
-            }
-            if lower.contains("opendocument.spreadsheet") {
-                signals.push(format!("mimetype:{lower}"));
-                return FormatProbe {
-                    format: "ods".to_string(),
-                    container: "zip-odf".to_string(),
-                    family: "odf-spreadsheet".to_string(),
-                    suggested_extension: "ods".to_string(),
-                    confidence: "high".to_string(),
-                    signals,
-                };
-            }
-            if lower.contains("opendocument.presentation") {
-                signals.push(format!("mimetype:{lower}"));
-                return FormatProbe {
-                    format: "odp".to_string(),
-                    container: "zip-odf".to_string(),
-                    family: "odf-presentation".to_string(),
-                    suggested_extension: "odp".to_string(),
-                    confidence: "high".to_string(),
-                    signals,
-                };
+            if let Some(probe) = probe_odf_mimetype(&lower, &mut signals) {
+                return probe;
             }
         }
     }
 
-    FormatProbe {
-        format: "zip".to_string(),
-        container: "zip".to_string(),
-        family: "archive".to_string(),
-        suggested_extension: "zip".to_string(),
-        confidence: "medium".to_string(),
-        signals,
+    FormatProbe::new("zip", "zip", "archive", "zip", "medium", signals)
+}
+
+fn probe_odf_mimetype(lower: &str, signals: &mut Vec<String>) -> Option<FormatProbe> {
+    if is_hwpx_mimetype(lower) {
+        signals.push(format!("mimetype:{lower}"));
+        return Some(FormatProbe::new(
+            "hwpx",
+            "zip-hwpx",
+            "hangul-word-processor",
+            "hwpx",
+            "high",
+            signals.clone(),
+        ));
     }
+    if lower.contains("opendocument.text") {
+        signals.push(format!("mimetype:{lower}"));
+        return Some(FormatProbe::new(
+            "odt",
+            "zip-odf",
+            "odf-text",
+            "odt",
+            "high",
+            signals.clone(),
+        ));
+    }
+    if lower.contains("opendocument.spreadsheet") {
+        signals.push(format!("mimetype:{lower}"));
+        return Some(FormatProbe::new(
+            "ods",
+            "zip-odf",
+            "odf-spreadsheet",
+            "ods",
+            "high",
+            signals.clone(),
+        ));
+    }
+    if lower.contains("opendocument.presentation") {
+        signals.push(format!("mimetype:{lower}"));
+        return Some(FormatProbe::new(
+            "odp",
+            "zip-odf",
+            "odf-presentation",
+            "odp",
+            "high",
+            signals.clone(),
+        ));
+    }
+    None
 }
 
 fn probe_ooxml_content_types(
@@ -331,47 +309,53 @@ fn probe_ooxml_content_types(
     }
 
     match content_types.detect_format() {
-        Some(docir_core::DocumentFormat::WordProcessing) => FormatProbe {
-            format: if macro_enabled { "docm" } else { "docx" }.to_string(),
-            container: "zip-ooxml".to_string(),
-            family: "word-processing".to_string(),
-            suggested_extension: if macro_enabled { "docm" } else { "docx" }.to_string(),
-            confidence: "high".to_string(),
-            signals: signals.clone(),
-        },
+        Some(docir_core::DocumentFormat::WordProcessing) => {
+            let ext = if macro_enabled { "docm" } else { "docx" };
+            FormatProbe::new(
+                ext,
+                "zip-ooxml",
+                "word-processing",
+                ext,
+                "high",
+                signals.clone(),
+            )
+        }
         Some(docir_core::DocumentFormat::Spreadsheet) => {
-            let format = if binary_workbook {
+            let ext = if binary_workbook {
                 "xlsb"
             } else if macro_enabled {
                 "xlsm"
             } else {
                 "xlsx"
             };
-            FormatProbe {
-                format: format.to_string(),
-                container: "zip-ooxml".to_string(),
-                family: "spreadsheet".to_string(),
-                suggested_extension: format.to_string(),
-                confidence: "high".to_string(),
-                signals: signals.clone(),
-            }
+            FormatProbe::new(
+                ext,
+                "zip-ooxml",
+                "spreadsheet",
+                ext,
+                "high",
+                signals.clone(),
+            )
         }
-        Some(docir_core::DocumentFormat::Presentation) => FormatProbe {
-            format: if macro_enabled { "pptm" } else { "pptx" }.to_string(),
-            container: "zip-ooxml".to_string(),
-            family: "presentation".to_string(),
-            suggested_extension: if macro_enabled { "pptm" } else { "pptx" }.to_string(),
-            confidence: "high".to_string(),
-            signals: signals.clone(),
-        },
-        _ => FormatProbe {
-            format: "ooxml".to_string(),
-            container: "zip-ooxml".to_string(),
-            family: "office-openxml".to_string(),
-            suggested_extension: "zip".to_string(),
-            confidence: "medium".to_string(),
-            signals: signals.clone(),
-        },
+        Some(docir_core::DocumentFormat::Presentation) => {
+            let ext = if macro_enabled { "pptm" } else { "pptx" };
+            FormatProbe::new(
+                ext,
+                "zip-ooxml",
+                "presentation",
+                ext,
+                "high",
+                signals.clone(),
+            )
+        }
+        _ => FormatProbe::new(
+            "ooxml",
+            "zip-ooxml",
+            "office-openxml",
+            "zip",
+            "medium",
+            signals.clone(),
+        ),
     }
 }
 

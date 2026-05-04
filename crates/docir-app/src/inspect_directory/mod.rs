@@ -43,57 +43,7 @@ pub fn inspect_directory_bytes(data: &[u8]) -> AppResult<DirectoryInspection> {
     let mut entries: Vec<DirectoryEntry> = cfb
         .list_directory_slots()
         .into_iter()
-        .map(|entry| DirectoryEntry {
-            entry_index: entry.entry_index,
-            path: entry.path.clone(),
-            entry_type: entry
-                .entry_type
-                .map(map_entry_type)
-                .unwrap_or("unknown")
-                .to_string(),
-            name_len_raw: entry.name_len_raw,
-            object_type_raw: entry.object_type_raw,
-            color_flag_raw: entry.color_flag_raw,
-            state: map_state(entry.state).to_string(),
-            classification: entry
-                .entry_type
-                .map(|entry_type| classify_entry(&entry.path, entry_type))
-                .unwrap_or_else(|| "free-slot".to_string()),
-            anomaly_severity: "none".to_string(),
-            anomaly_tags: build_entry_anomaly_tags(EntryAnomalyContext {
-                state: map_state(entry.state),
-                entry_type: entry.entry_type.map(map_entry_type).unwrap_or("unknown"),
-                name_len_raw: entry.name_len_raw,
-                entry_index: entry.entry_index,
-                slot_count,
-                sector_count,
-                start_sector: entry.start_sector,
-                size_bytes: entry.size,
-                left_sibling: entry.left_sibling,
-                right_sibling: entry.right_sibling,
-                child: entry.child,
-            }),
-            short_cycles: Vec::new(),
-            reachable_from_root: false,
-            fanout_count: 0,
-            incoming_reference_count: 0,
-            incoming_normal_reference_count: 0,
-            incoming_anomalous_reference_count: 0,
-            incoming_from_root_storage_count: 0,
-            incoming_from_storage_count: 0,
-            incoming_from_stream_count: 0,
-            incoming_from: Vec::new(),
-            size_bytes: entry.size,
-            start_sector: entry.start_sector,
-            left_sibling_raw: entry.left_sibling_raw,
-            right_sibling_raw: entry.right_sibling_raw,
-            child_raw: entry.child_raw,
-            left_sibling: entry.left_sibling,
-            right_sibling: entry.right_sibling,
-            child: entry.child,
-            created_filetime: entry.created_filetime,
-            modified_filetime: entry.modified_filetime,
-        })
+        .map(|entry| build_directory_entry(entry, slot_count, sector_count))
         .collect();
     annotate_incoming_references(&mut entries);
     entries.sort_by(|left, right| left.path.cmp(&right.path));
@@ -134,4 +84,62 @@ pub fn inspect_directory_bytes(data: &[u8]) -> AppResult<DirectoryInspection> {
         fanout_counts,
         entries,
     })
+}
+
+fn build_directory_entry(
+    entry: docir_parser::ole::CfbDirectorySlot,
+    slot_count: u32,
+    sector_count: u32,
+) -> DirectoryEntry {
+    DirectoryEntry {
+        entry_index: entry.entry_index,
+        path: entry.path.clone(),
+        entry_type: entry
+            .entry_type
+            .map(map_entry_type)
+            .unwrap_or("unknown")
+            .to_string(),
+        name_len_raw: entry.name_len_raw,
+        object_type_raw: entry.object_type_raw,
+        color_flag_raw: entry.color_flag_raw,
+        state: map_state(entry.state).to_string(),
+        classification: entry
+            .entry_type
+            .map(|entry_type| classify_entry(&entry.path, entry_type))
+            .unwrap_or_else(|| "free-slot".to_string()),
+        anomaly_severity: "none".to_string(),
+        anomaly_tags: build_entry_anomaly_tags(EntryAnomalyContext {
+            state: map_state(entry.state),
+            entry_type: entry.entry_type.map(map_entry_type).unwrap_or("unknown"),
+            name_len_raw: entry.name_len_raw,
+            entry_index: entry.entry_index,
+            slot_count,
+            sector_count,
+            start_sector: entry.start_sector,
+            size_bytes: entry.size,
+            left_sibling: entry.left_sibling,
+            right_sibling: entry.right_sibling,
+            child: entry.child,
+        }),
+        short_cycles: Vec::new(),
+        reachable_from_root: false,
+        fanout_count: 0,
+        incoming_reference_count: 0,
+        incoming_normal_reference_count: 0,
+        incoming_anomalous_reference_count: 0,
+        incoming_from_root_storage_count: 0,
+        incoming_from_storage_count: 0,
+        incoming_from_stream_count: 0,
+        incoming_from: Vec::new(),
+        size_bytes: entry.size,
+        start_sector: entry.start_sector,
+        left_sibling_raw: entry.left_sibling_raw,
+        right_sibling_raw: entry.right_sibling_raw,
+        child_raw: entry.child_raw,
+        left_sibling: entry.left_sibling,
+        right_sibling: entry.right_sibling,
+        child: entry.child,
+        created_filetime: entry.created_filetime,
+        modified_filetime: entry.modified_filetime,
+    }
 }
