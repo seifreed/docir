@@ -50,81 +50,107 @@ impl ContainerDump {
         input_bytes: &[u8],
         zip_config: &ZipConfig,
     ) -> Result<Self, AppError> {
-        let mut dump = Self {
+        let container_kind = classify_container_kind(parsed);
+        let entries = build_container_entries(container_kind, input_bytes, zip_config)?;
+        let entry_count = entries.len();
+        Ok(Self {
             document_format: parsed.format().extension().to_string(),
-            container_kind: classify_container_kind(parsed),
-            entry_count: 0,
-            entries: Vec::new(),
-        };
+            container_kind,
+            entry_count,
+            entries,
+        })
+    }
+}
 
-        match dump.container_kind {
-            ContainerKind::ZipOoxml | ContainerKind::ZipOdf | ContainerKind::ZipHwpx => {
-                let mut zip = SecureZipReader::new(Cursor::new(input_bytes), zip_config.clone())?;
-                let mut names: Vec<String> = zip.file_names().map(str::to_string).collect();
-                names.sort();
-                for path in names {
-                    dump.entries.push(ContainerEntry {
-                        kind: ContainerEntryKind::ZipEntry,
-                        size_bytes: zip.file_size(&path).ok(),
-                        start_sector: None,
-                        created_filetime: None,
-                        modified_filetime: None,
-                        path,
-                        details: None,
-                    });
-                }
-            }
-            ContainerKind::CfbOle => {
-                let cfb = Cfb::parse(input_bytes.to_vec())?;
-                for entry in cfb.list_entries() {
-                    dump.entries.push(ContainerEntry {
-                        kind: map_cfb_entry_kind(entry.entry_type),
-                        path: entry.path.clone(),
-                        size_bytes: Some(entry.size),
-                        start_sector: Some(entry.start_sector),
-                        created_filetime: entry.created_filetime,
-                        modified_filetime: entry.modified_filetime,
-                        details: classify_cfb_entry(&entry.path, entry.entry_type),
-                    });
-                }
-            }
-            ContainerKind::Rtf => {
-                dump.entries.push(ContainerEntry {
-                    kind: ContainerEntryKind::RtfDocument,
-                    path: "rtf:/document".to_string(),
-                    size_bytes: Some(input_bytes.len() as u64),
-                    start_sector: None,
-                    created_filetime: None,
-                    modified_filetime: None,
-                    details: None,
-                });
-                for (idx, blob) in scan_rtf_objdata(input_bytes).into_iter().enumerate() {
-                    dump.entries.push(ContainerEntry {
-                        kind: ContainerEntryKind::RtfEmbeddedObject,
-                        path: format!("rtf:/objdata/{}", idx + 1),
-                        size_bytes: Some(blob.len() as u64),
-                        start_sector: None,
-                        created_filetime: None,
-                        modified_filetime: None,
-                        details: Some(classify_rtf_blob(&blob).to_string()),
-                    });
-                }
-            }
-            ContainerKind::Unknown => {
-                dump.entries.push(ContainerEntry {
-                    kind: ContainerEntryKind::ZipEntry,
-                    path: "unknown:/".to_string(),
-                    size_bytes: Some(input_bytes.len() as u64),
-                    start_sector: None,
-                    created_filetime: None,
-                    modified_filetime: None,
-                    details: Some("opaque container".to_string()),
-                });
-            }
+fn build_container_entries(
+    container_kind: ContainerKind,
+    input_bytes: &[u8],
+    zip_config: &ZipConfig,
+) -> Result<Vec<ContainerEntry>, AppError> {
+    match container_kind {
+        ContainerKind::ZipOoxml | ContainerKind::ZipOdf | ContainerKind::ZipHwpx => {
+            build_zip_entries(input_bytes, zip_config)
         }
+        ContainerKind::CfbOle => build_cfb_entries(input_bytes),
+        ContainerKind::Rtf => Ok(build_rtf_entries(input_bytes)),
+        ContainerKind::Unknown => Ok(vec![unknown_container_entry(input_bytes)]),
+    }
+}
 
-        dump.entry_count = dump.entries.len();
-        Ok(dump)
+fn build_zip_entries(
+    input_bytes: &[u8],
+    zip_config: &ZipConfig,
+) -> Result<Vec<ContainerEntry>, AppError> {
+    let mut zip = SecureZipReader::new(Cursor::new(input_bytes), zip_config.clone())?;
+    let mut names: Vec<String> = zip.file_names().map(str::to_string).collect();
+    names.sort();
+    Ok(names
+        .into_iter()
+        .map(|path| ContainerEntry {
+            kind: ContainerEntryKind::ZipEntry,
+            size_bytes: zip.file_size(&path).ok(),
+            start_sector: None,
+            created_filetime: None,
+            modified_filetime: None,
+            path,
+            details: None,
+        })
+        .collect())
+}
+
+fn build_cfb_entries(input_bytes: &[u8]) -> Result<Vec<ContainerEntry>, AppError> {
+    let cfb = Cfb::parse(input_bytes.to_vec())?;
+    Ok(cfb
+        .list_entries()
+        .into_iter()
+        .map(|entry| ContainerEntry {
+            kind: map_cfb_entry_kind(entry.entry_type),
+            path: entry.path.clone(),
+            size_bytes: Some(entry.size),
+            start_sector: Some(entry.start_sector),
+            created_filetime: entry.created_filetime,
+            modified_filetime: entry.modified_filetime,
+            details: classify_cfb_entry(&entry.path, entry.entry_type),
+        })
+        .collect())
+}
+
+fn build_rtf_entries(input_bytes: &[u8]) -> Vec<ContainerEntry> {
+    let mut entries = vec![ContainerEntry {
+        kind: ContainerEntryKind::RtfDocument,
+        path: "rtf:/document".to_string(),
+        size_bytes: Some(input_bytes.len() as u64),
+        start_sector: None,
+        created_filetime: None,
+        modified_filetime: None,
+        details: None,
+    }];
+    entries.extend(
+        scan_rtf_objdata(input_bytes)
+            .into_iter()
+            .enumerate()
+            .map(|(idx, blob)| ContainerEntry {
+                kind: ContainerEntryKind::RtfEmbeddedObject,
+                path: format!("rtf:/objdata/{}", idx + 1),
+                size_bytes: Some(blob.len() as u64),
+                start_sector: None,
+                created_filetime: None,
+                modified_filetime: None,
+                details: Some(classify_rtf_blob(&blob).to_string()),
+            }),
+    );
+    entries
+}
+
+fn unknown_container_entry(input_bytes: &[u8]) -> ContainerEntry {
+    ContainerEntry {
+        kind: ContainerEntryKind::ZipEntry,
+        path: "unknown:/".to_string(),
+        size_bytes: Some(input_bytes.len() as u64),
+        start_sector: None,
+        created_filetime: None,
+        modified_filetime: None,
+        details: Some("opaque container".to_string()),
     }
 }
 

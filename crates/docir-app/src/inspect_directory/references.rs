@@ -187,80 +187,90 @@ pub(super) fn apply_incoming_refs_to_entries(
     cycles: BTreeMap<u32, Vec<String>>,
     reachable: &HashSet<u32>,
 ) {
-    use super::anomaly::anomaly_severity;
-    use crate::severity::max_severity;
-
     for entry in entries.iter_mut() {
         let refs = incoming
             .get(&entry.entry_index)
             .cloned()
             .unwrap_or_default();
-        entry.fanout_count = [entry.left_sibling, entry.right_sibling, entry.child]
-            .into_iter()
-            .flatten()
-            .count();
-        let entry_cycles = cycles.get(&entry.entry_index).cloned().unwrap_or_default();
-        for cycle in entry_cycles {
-            if !entry.short_cycles.iter().any(|item| item == &cycle) {
-                entry.short_cycles.push(cycle.clone());
-            }
-            if !entry.anomaly_tags.iter().any(|item| item == &cycle) {
-                entry.anomaly_tags.push(cycle);
-            }
-        }
-        entry.incoming_reference_count = refs.len();
-        entry.incoming_normal_reference_count =
-            refs.iter().filter(|(_, normal, _)| *normal).count();
-        entry.incoming_anomalous_reference_count =
-            refs.len() - entry.incoming_normal_reference_count;
-        entry.incoming_from_root_storage_count = refs
-            .iter()
-            .filter(|(_, _, source_type)| source_type == "root-storage")
-            .count();
-        entry.incoming_from_storage_count = refs
-            .iter()
-            .filter(|(_, _, source_type)| source_type == "storage")
-            .count();
-        entry.incoming_from_stream_count = refs
-            .iter()
-            .filter(|(_, _, source_type)| source_type == "stream")
-            .count();
+        entry.fanout_count = count_fanout(entry);
+        apply_short_cycles(entry, cycles.get(&entry.entry_index).map(Vec::as_slice));
+        apply_incoming_reference_counts(entry, &refs);
         entry.incoming_from = refs.into_iter().map(|(label, _, _)| label).collect();
         entry.reachable_from_root = reachable.contains(&entry.entry_index);
-
-        if entry.state == "normal"
-            && entry.entry_type != "root-storage"
-            && entry.incoming_reference_count == 0
-        {
-            entry
-                .anomaly_tags
-                .push("unreferenced-live-entry".to_string());
-        }
-        if entry.incoming_reference_count > 1 {
-            entry
-                .anomaly_tags
-                .push("multi-referenced-entry".to_string());
-        }
-        if entry.state == "normal"
-            && entry.entry_type != "root-storage"
-            && !entry.reachable_from_root
-        {
-            entry
-                .anomaly_tags
-                .push("unreachable-live-entry".to_string());
-        }
-        if entry.incoming_anomalous_reference_count > 0 {
-            entry
-                .anomaly_tags
-                .push("incoming-from-anomalous-entry".to_string());
-        }
-        entry.anomaly_severity = max_severity(
-            entry
-                .anomaly_tags
-                .iter()
-                .map(|tag| anomaly_severity(tag).to_string()),
-        );
+        apply_reference_anomaly_tags(entry);
+        refresh_entry_anomaly_severity(entry);
     }
+}
+
+fn count_fanout(entry: &DirectoryEntry) -> usize {
+    [entry.left_sibling, entry.right_sibling, entry.child]
+        .into_iter()
+        .flatten()
+        .count()
+}
+
+fn apply_short_cycles(entry: &mut DirectoryEntry, cycles: Option<&[String]>) {
+    for cycle in cycles.into_iter().flatten() {
+        if !entry.short_cycles.iter().any(|item| item == cycle) {
+            entry.short_cycles.push(cycle.clone());
+        }
+        if !entry.anomaly_tags.iter().any(|item| item == cycle) {
+            entry.anomaly_tags.push(cycle.clone());
+        }
+    }
+}
+
+fn apply_incoming_reference_counts(entry: &mut DirectoryEntry, refs: &[(String, bool, String)]) {
+    entry.incoming_reference_count = refs.len();
+    entry.incoming_normal_reference_count = refs.iter().filter(|(_, normal, _)| *normal).count();
+    entry.incoming_anomalous_reference_count = refs.len() - entry.incoming_normal_reference_count;
+    entry.incoming_from_root_storage_count = count_refs_from_type(refs, "root-storage");
+    entry.incoming_from_storage_count = count_refs_from_type(refs, "storage");
+    entry.incoming_from_stream_count = count_refs_from_type(refs, "stream");
+}
+
+fn count_refs_from_type(refs: &[(String, bool, String)], source_type: &str) -> usize {
+    refs.iter()
+        .filter(|(_, _, candidate)| candidate == source_type)
+        .count()
+}
+
+fn apply_reference_anomaly_tags(entry: &mut DirectoryEntry) {
+    if entry.state == "normal"
+        && entry.entry_type != "root-storage"
+        && entry.incoming_reference_count == 0
+    {
+        entry
+            .anomaly_tags
+            .push("unreferenced-live-entry".to_string());
+    }
+    if entry.incoming_reference_count > 1 {
+        entry
+            .anomaly_tags
+            .push("multi-referenced-entry".to_string());
+    }
+    if entry.state == "normal" && entry.entry_type != "root-storage" && !entry.reachable_from_root {
+        entry
+            .anomaly_tags
+            .push("unreachable-live-entry".to_string());
+    }
+    if entry.incoming_anomalous_reference_count > 0 {
+        entry
+            .anomaly_tags
+            .push("incoming-from-anomalous-entry".to_string());
+    }
+}
+
+fn refresh_entry_anomaly_severity(entry: &mut DirectoryEntry) {
+    use super::anomaly::anomaly_severity;
+    use crate::severity::max_severity;
+
+    entry.anomaly_severity = max_severity(
+        entry
+            .anomaly_tags
+            .iter()
+            .map(|tag| anomaly_severity(tag).to_string()),
+    );
 }
 
 pub(super) fn annotate_incoming_references(entries: &mut [DirectoryEntry]) {

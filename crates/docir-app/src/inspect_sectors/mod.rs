@@ -32,13 +32,35 @@ pub fn inspect_sectors_path<P: AsRef<Path>>(
 /// Inspect sector allocation from raw CFB/OLE bytes.
 pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
     let cfb = Cfb::parse(data.to_vec())?;
+    Ok(build_sector_inspection(&cfb, analyze_cfb_sectors(&cfb)))
+}
+
+struct SectorAnalysis {
+    sector_score: String,
+    fat_entry_count: usize,
+    fat_free_count: usize,
+    occupied_fat_entries: usize,
+    role_counts: Vec<RoleCount>,
+    shared_sector_claims: Vec<SharedSectorClaim>,
+    shared_chain_overlaps: Vec<SharedChainOverlap>,
+    start_sector_reuse: Vec<StartSectorReuse>,
+    truncated_chain_counts: Vec<TruncatedChainCount>,
+    structural_incoherence_counts: Vec<StructuralIncoherenceCount>,
+    chain_health_by_root: Vec<ChainHealthCount>,
+    chain_health_by_allocation: Vec<ChainHealthCount>,
+    sector_overview: Vec<SectorOverviewEntry>,
+    streams: Vec<StreamSectorMap>,
+    anomalies: Vec<SectorAnomaly>,
+}
+
+fn analyze_cfb_sectors(cfb: &Cfb) -> SectorAnalysis {
     let mut anomalies = Vec::new();
-    let mut streams = build_stream_maps(&cfb, &mut anomalies);
+    let mut streams = build_stream_maps(cfb, &mut anomalies);
     streams.sort_by(|left, right| left.path.cmp(&right.path));
     let (sector_owners, referenced_sectors) = build_sector_owner_map(&streams);
-    let (directory_sectors, mini_fat_sectors, difat_sectors) = collect_system_chains(&cfb);
+    let (directory_sectors, mini_fat_sectors, difat_sectors) = collect_system_chains(cfb);
     let sector_overview = build_sector_overview_entries(
-        &cfb,
+        cfb,
         &referenced_sectors,
         &directory_sectors,
         &mini_fat_sectors,
@@ -60,7 +82,7 @@ pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
     let structural_incoherence_counts =
         build_structural_incoherence_counts(&sector_overview, &streams, cfb.mini_fat_entry_count());
     anomalies.extend(collect_cfb_anomalies(
-        &cfb,
+        cfb,
         &streams,
         fat_entry_count,
         &shared_sector_claims,
@@ -78,26 +100,11 @@ pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
     let sector_score = build_sector_score(&streams, &anomalies);
     let fat_free_count = cfb.fat_free_count();
     let occupied_fat_entries = fat_entry_count.saturating_sub(fat_free_count);
-    Ok(SectorInspection {
-        container: "cfb-ole".to_string(),
+    SectorAnalysis {
         sector_score,
-        sector_size: cfb.sector_size(),
-        mini_sector_size: cfb.mini_sector_size(),
-        mini_cutoff: cfb.mini_cutoff(),
-        num_fat_sectors: cfb.num_fat_sectors(),
-        first_dir_sector: cfb.first_dir_sector(),
-        first_mini_fat: cfb.first_mini_fat(),
-        num_mini_fat: cfb.num_mini_fat(),
-        first_difat: cfb.first_difat(),
-        num_difat: cfb.num_difat(),
-        difat_entry_count: cfb.difat_entry_count(),
-        sector_count: cfb.sector_count(),
         fat_entry_count,
         fat_free_count,
         occupied_fat_entries,
-        fat_end_of_chain_count: cfb.fat_end_of_chain_count(),
-        fat_reserved_count: cfb.fat_reserved_count(),
-        mini_fat_entry_count: cfb.mini_fat_entry_count(),
         role_counts,
         shared_sector_claims,
         shared_chain_overlaps,
@@ -109,7 +116,42 @@ pub fn inspect_sectors_bytes(data: &[u8]) -> AppResult<SectorInspection> {
         sector_overview,
         streams,
         anomalies,
-    })
+    }
+}
+
+fn build_sector_inspection(cfb: &Cfb, analysis: SectorAnalysis) -> SectorInspection {
+    SectorInspection {
+        container: "cfb-ole".to_string(),
+        sector_score: analysis.sector_score,
+        sector_size: cfb.sector_size(),
+        mini_sector_size: cfb.mini_sector_size(),
+        mini_cutoff: cfb.mini_cutoff(),
+        num_fat_sectors: cfb.num_fat_sectors(),
+        first_dir_sector: cfb.first_dir_sector(),
+        first_mini_fat: cfb.first_mini_fat(),
+        num_mini_fat: cfb.num_mini_fat(),
+        first_difat: cfb.first_difat(),
+        num_difat: cfb.num_difat(),
+        difat_entry_count: cfb.difat_entry_count(),
+        sector_count: cfb.sector_count(),
+        fat_entry_count: analysis.fat_entry_count,
+        fat_free_count: analysis.fat_free_count,
+        occupied_fat_entries: analysis.occupied_fat_entries,
+        fat_end_of_chain_count: cfb.fat_end_of_chain_count(),
+        fat_reserved_count: cfb.fat_reserved_count(),
+        mini_fat_entry_count: cfb.mini_fat_entry_count(),
+        role_counts: analysis.role_counts,
+        shared_sector_claims: analysis.shared_sector_claims,
+        shared_chain_overlaps: analysis.shared_chain_overlaps,
+        start_sector_reuse: analysis.start_sector_reuse,
+        truncated_chain_counts: analysis.truncated_chain_counts,
+        structural_incoherence_counts: analysis.structural_incoherence_counts,
+        chain_health_by_root: analysis.chain_health_by_root,
+        chain_health_by_allocation: analysis.chain_health_by_allocation,
+        sector_overview: analysis.sector_overview,
+        streams: analysis.streams,
+        anomalies: analysis.anomalies,
+    }
 }
 
 fn build_stream_maps(cfb: &Cfb, anomalies: &mut Vec<SectorAnomaly>) -> Vec<StreamSectorMap> {
