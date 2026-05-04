@@ -101,10 +101,23 @@ impl ArtifactInventory {
             artifacts: Vec::new(),
         };
 
+        inventory.collect_ir_artifacts(parsed);
+
+        if let Some(security) = parsed.security_info() {
+            for dde in &security.dde_fields {
+                inventory.push_dde_field(dde);
+            }
+        }
+
+        inventory.artifact_count = inventory.artifacts.len();
+        inventory
+    }
+
+    fn collect_ir_artifacts(&mut self, parsed: &ParsedDocument) {
         for (id, node) in parsed.store().iter() {
             match node {
                 IRNode::RelationshipGraph(graph) => {
-                    inventory.push_node_artifact(
+                    self.push_node_artifact(
                         InventoryArtifactKind::RelationshipGraph,
                         Some(*id),
                         Some(graph.source.clone()),
@@ -116,27 +129,18 @@ impl ArtifactInventory {
                         format!("{} relationship(s)", graph.relationships.len()),
                     );
                 }
-                IRNode::ExtensionPart(part) => inventory.push_extension_part(*id, part),
-                IRNode::MediaAsset(asset) => inventory.push_media_asset(*id, asset),
-                IRNode::CustomXmlPart(part) => inventory.push_custom_xml(*id, part),
-                IRNode::MacroProject(project) => inventory.push_macro_project(*id, project),
-                IRNode::MacroModule(module) => inventory.push_macro_module(*id, module),
-                IRNode::OleObject(ole) => inventory.push_ole_object(*id, ole),
-                IRNode::ActiveXControl(control) => inventory.push_activex(*id, control),
-                IRNode::ExternalReference(ext) => inventory.push_external_reference(*id, ext),
-                IRNode::Diagnostics(diag) => inventory.push_diagnostics(*id, diag),
+                IRNode::ExtensionPart(part) => self.push_extension_part(*id, part),
+                IRNode::MediaAsset(asset) => self.push_media_asset(*id, asset),
+                IRNode::CustomXmlPart(part) => self.push_custom_xml(*id, part),
+                IRNode::MacroProject(project) => self.push_macro_project(*id, project),
+                IRNode::MacroModule(module) => self.push_macro_module(*id, module),
+                IRNode::OleObject(ole) => self.push_ole_object(*id, ole),
+                IRNode::ActiveXControl(control) => self.push_activex(*id, control),
+                IRNode::ExternalReference(ext) => self.push_external_reference(*id, ext),
+                IRNode::Diagnostics(diag) => self.push_diagnostics(*id, diag),
                 _ => {}
             }
         }
-
-        if let Some(security) = parsed.security_info() {
-            for dde in &security.dde_fields {
-                inventory.push_dde_field(dde);
-            }
-        }
-
-        inventory.artifact_count = inventory.artifacts.len();
-        inventory
     }
 
     /// Builds a document-wide artifact inventory and enriches it with low-level CFB metadata.
@@ -390,39 +394,44 @@ fn classify_container(parsed: &ParsedDocument) -> ContainerKind {
 }
 
 fn classify_cfb_entry_detail(path: &str, entry_type: CfbEntryType) -> String {
-    let upper = path.to_ascii_uppercase();
     match entry_type {
         CfbEntryType::RootStorage => "root-storage".to_string(),
-        CfbEntryType::Storage => {
-            if upper == "OBJECTPOOL" || upper.starts_with("OBJECTPOOL/") {
-                "embedded-object-storage".to_string()
-            } else if upper == "VBA" || upper.ends_with("/VBA") {
-                "vba-storage".to_string()
-            } else {
-                "storage".to_string()
-            }
-        }
-        CfbEntryType::Stream => {
-            if upper == "WORDDOCUMENT" {
-                "word-main-stream".to_string()
-            } else if upper == "WORKBOOK" || upper == "BOOK" {
-                "excel-main-stream".to_string()
-            } else if upper == "POWERPOINT DOCUMENT" {
-                "powerpoint-main-stream".to_string()
-            } else if upper.ends_with("/PROJECT") || upper == "PROJECT" {
-                "vba-project-metadata".to_string()
-            } else if upper.contains("/VBA/") || upper.starts_with("VBA/") {
-                "vba-module-stream".to_string()
-            } else if upper.ends_with("OLE10NATIVE") {
-                "ole-native-payload".to_string()
-            } else if upper.ends_with("/PACKAGE") {
-                "package-payload".to_string()
-            } else if upper.ends_with("/CONTENTS") {
-                "embedded-contents".to_string()
-            } else {
-                "stream".to_string()
-            }
-        }
+        CfbEntryType::Storage => classify_cfb_storage(path),
+        CfbEntryType::Stream => classify_cfb_stream(path),
+    }
+}
+
+fn classify_cfb_storage(path: &str) -> String {
+    let upper = path.to_ascii_uppercase();
+    if upper == "OBJECTPOOL" || upper.starts_with("OBJECTPOOL/") {
+        "embedded-object-storage".to_string()
+    } else if upper == "VBA" || upper.ends_with("/VBA") {
+        "vba-storage".to_string()
+    } else {
+        "storage".to_string()
+    }
+}
+
+fn classify_cfb_stream(path: &str) -> String {
+    let upper = path.to_ascii_uppercase();
+    if upper == "WORDDOCUMENT" {
+        "word-main-stream".to_string()
+    } else if upper == "WORKBOOK" || upper == "BOOK" {
+        "excel-main-stream".to_string()
+    } else if upper == "POWERPOINT DOCUMENT" {
+        "powerpoint-main-stream".to_string()
+    } else if upper.ends_with("/PROJECT") || upper == "PROJECT" {
+        "vba-project-metadata".to_string()
+    } else if upper.contains("/VBA/") || upper.starts_with("VBA/") {
+        "vba-module-stream".to_string()
+    } else if upper.ends_with("OLE10NATIVE") {
+        "ole-native-payload".to_string()
+    } else if upper.ends_with("/PACKAGE") {
+        "package-payload".to_string()
+    } else if upper.ends_with("/CONTENTS") {
+        "embedded-contents".to_string()
+    } else {
+        "stream".to_string()
     }
 }
 

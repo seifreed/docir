@@ -5,16 +5,16 @@ use docir_app::{IndicatorReport, ParserConfig};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::cli::JsonOutputOpts;
 use crate::commands::util::{build_app, push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
-pub fn run(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
+pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
     let app = build_app(parser_config);
     let source_bytes =
         fs::read(&input).with_context(|| format!("Failed to read {}", input.display()))?;
@@ -79,6 +79,7 @@ fn format_report_text(report: &IndicatorReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_report_text, run};
+    use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
         inspect_directory_bytes,
@@ -146,9 +147,11 @@ Module=Module1
 
         run(
             input.clone(),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("report-indicators json");

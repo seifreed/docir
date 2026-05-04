@@ -149,22 +149,12 @@ impl<'a> SecurityScanner<'a> {
         rel_path: &str,
         rel: &crate::ooxml::relationships::Relationship,
     ) {
-        let ref_type = self.map_external_ref_type(&rel.rel_type);
+        let ref_type = map_external_ref_type(&rel.rel_type);
         let mut ext_ref = ExternalReference::new(ref_type, &rel.target);
         ext_ref.relationship_id = Some(rel.id.clone());
         ext_ref.relationship_type = Some(rel.rel_type.clone());
         ext_ref.span = Some(SourceSpan::new(rel_path));
         store.insert(IRNode::ExternalReference(ext_ref));
-    }
-
-    fn map_external_ref_type(&self, rel_type_value: &str) -> ExternalRefType {
-        match rel_type_value {
-            rel_type::HYPERLINK => ExternalRefType::Hyperlink,
-            rel_type::IMAGE => ExternalRefType::Image,
-            rel_type::OLE_OBJECT => ExternalRefType::OleLink,
-            rel_type::ATTACHED_TEMPLATE => ExternalRefType::AttachedTemplate,
-            _ => ExternalRefType::Other,
-        }
     }
 
     fn detect_ole_object(
@@ -214,14 +204,27 @@ impl<'a> SecurityScanner<'a> {
         }
 
         if self.config.compute_hashes {
-            use sha2::{Digest, Sha256};
-            let mut hasher = Sha256::new();
-            hasher.update(data);
-            let hash = hasher.finalize();
-            ole.data_hash = Some(hex::encode(hash));
+            ole.data_hash = Some(compute_sha256_hex(data));
         }
 
         ole
+    }
+}
+
+fn compute_sha256_hex(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hex::encode(hasher.finalize())
+}
+
+fn map_external_ref_type(rel_type_value: &str) -> ExternalRefType {
+    match rel_type_value {
+        rel_type::HYPERLINK => ExternalRefType::Hyperlink,
+        rel_type::IMAGE => ExternalRefType::Image,
+        rel_type::OLE_OBJECT => ExternalRefType::OleLink,
+        rel_type::ATTACHED_TEMPLATE => ExternalRefType::AttachedTemplate,
+        _ => ExternalRefType::Other,
     }
 }
 

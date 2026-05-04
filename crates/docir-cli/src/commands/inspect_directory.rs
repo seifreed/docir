@@ -4,18 +4,18 @@ use anyhow::Result;
 use docir_app::{inspect_directory_path, DirectoryInspection, ParserConfig};
 use std::path::PathBuf;
 
+use crate::cli::JsonOutputOpts;
 use crate::commands::util::{
     push_bullet_line, push_count_section, push_labeled_line, run_dual_output,
 };
 
 /// Public API entrypoint: run.
-pub fn run(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
+pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
     let inspection = inspect_directory_path(&input, parser_config)?;
     run_dual_output(
         &inspection,
@@ -58,6 +58,12 @@ fn format_header_and_summary(out: &mut String, inspection: &DirectoryInspection)
             push_bullet_line(out, 2, &entry.anomaly, &entry.severity);
         }
     }
+    format_anomaly_summary(out, inspection);
+    format_reference_summary(out, inspection);
+    format_fanout_summary(out, inspection);
+}
+
+fn format_anomaly_summary(out: &mut String, inspection: &DirectoryInspection) {
     push_count_section(
         out,
         "Anomaly Severity Summary",
@@ -65,6 +71,9 @@ fn format_header_and_summary(out: &mut String, inspection: &DirectoryInspection)
         |e| &e.bucket,
         |e| e.count,
     );
+}
+
+fn format_reference_summary(out: &mut String, inspection: &DirectoryInspection) {
     push_count_section(
         out,
         "Reference Summary",
@@ -135,6 +144,9 @@ fn format_header_and_summary(out: &mut String, inspection: &DirectoryInspection)
         |e| &e.bucket,
         |e| e.count,
     );
+}
+
+fn format_fanout_summary(out: &mut String, inspection: &DirectoryInspection) {
     push_count_section(
         out,
         "Fanout Summary",
@@ -235,6 +247,7 @@ fn format_directory_entry(out: &mut String, entry: &docir_app::DirectoryEntry) {
 #[cfg(test)]
 mod tests {
     use super::{format_inspection_text, run};
+    use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
         test_support::{build_test_cfb, build_test_cfb_with_times},
@@ -254,9 +267,11 @@ mod tests {
 
         run(
             input.clone(),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inspect-directory json");
@@ -291,9 +306,11 @@ mod tests {
 
         run(
             input.clone(),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inspect-directory text");

@@ -4,17 +4,17 @@ use anyhow::Result;
 use docir_app::{inspect_slide_records_path, ParserConfig, SlideRecordInspection};
 use std::path::PathBuf;
 
+use crate::cli::JsonOutputOpts;
 use crate::commands::util::{
     push_bullet_line, push_count_section, push_labeled_line, run_dual_output,
 };
 
-pub fn run(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
+pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
     let inspection = inspect_slide_records_path(&input, parser_config)?;
     run_dual_output(
         &inspection,
@@ -85,6 +85,7 @@ fn format_inspection_text(inspection: &SlideRecordInspection) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_inspection_text, run};
+    use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
         test_support::build_test_cfb, ParserConfig, SlideRecordAnomaly, SlideRecordCount,
@@ -120,9 +121,11 @@ mod tests {
 
         run(
             input.clone(),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inspect-slide-records json");
@@ -147,9 +150,11 @@ mod tests {
 
         run(
             input.clone(),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inspect-slide-records text");
@@ -186,9 +191,11 @@ mod tests {
 
         run(
             input.clone(),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inspect-slide-records nested text");
@@ -217,9 +224,11 @@ mod tests {
 
         run(
             input.clone(),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inspect-slide-records prog-tags json");
@@ -244,9 +253,11 @@ mod tests {
 
         run(
             input.clone(),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inspect-slide-records roundtrip text");
@@ -270,9 +281,11 @@ mod tests {
 
         run(
             input.clone(),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inspect-slide-records user-edit json");
@@ -296,9 +309,11 @@ mod tests {
 
         run(
             input.clone(),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inspect-slide-records env slide json");
@@ -324,9 +339,11 @@ mod tests {
 
         run(
             input.clone(),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inspect-slide-records notes text");

@@ -5,6 +5,7 @@ use docir_app::{extract_flash_path, FlashExtractionReport, ParserConfig};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::cli::JsonOutputOpts;
 use crate::commands::util::{
     prepare_output_dir, push_bullet_line, push_labeled_line, run_dual_output,
 };
@@ -13,11 +14,14 @@ pub fn run(
     input: PathBuf,
     out: Option<PathBuf>,
     overwrite: bool,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
+    opts: JsonOutputOpts,
     parser_config: &ParserConfig,
 ) -> Result<()> {
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
     let mut report = extract_flash_path(&input, parser_config)?;
 
     if let Some(out_dir) = out.as_ref() {
@@ -64,6 +68,7 @@ fn format_report_text(report: &FlashExtractionReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_report_text, run};
+    use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{FlashExtractionReport, FlashObject, ParserConfig};
     use std::fs;
@@ -97,9 +102,11 @@ mod tests {
             input,
             None,
             false,
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract-flash json");
@@ -129,9 +136,11 @@ mod tests {
             input,
             Some(out_dir.clone()),
             false,
-            false,
-            false,
-            None,
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: None,
+            },
             &ParserConfig::default(),
         )
         .expect("extract-flash out");
@@ -158,9 +167,11 @@ mod tests {
             input,
             None,
             false,
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract-flash cfb json");
@@ -192,9 +203,11 @@ mod tests {
             input,
             None,
             false,
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract-flash truncated zip json");
@@ -227,9 +240,11 @@ mod tests {
             input,
             None,
             false,
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract-flash truncated zip text");
@@ -251,9 +266,11 @@ mod tests {
             input,
             None,
             false,
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract-flash raw text");
@@ -281,9 +298,11 @@ mod tests {
             input,
             None,
             false,
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract-flash cfb truncated text");
@@ -314,9 +333,11 @@ mod tests {
             input,
             None,
             false,
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract-flash fws zip json");
@@ -344,9 +365,11 @@ mod tests {
             input,
             None,
             false,
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract-flash zws cfb json");
@@ -376,9 +399,11 @@ mod tests {
             input,
             None,
             false,
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract-flash cws zip text");

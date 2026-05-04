@@ -4,16 +4,16 @@ use anyhow::Result;
 use docir_app::{list_times_path, ParserConfig, TimeListing};
 use std::path::PathBuf;
 
+use crate::cli::JsonOutputOpts;
 use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
-pub fn run(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
+pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
     let listing = list_times_path(&input, parser_config)?;
     run_dual_output(
         &listing,
@@ -47,6 +47,7 @@ fn format_listing_text(listing: &TimeListing) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_listing_text, run};
+    use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
         test_support::build_test_cfb_with_times, ParserConfig, TimeEntry, TimeListing,
@@ -65,9 +66,11 @@ mod tests {
 
         run(
             input.clone(),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("list-times json");
@@ -96,9 +99,11 @@ mod tests {
 
         run(
             input.clone(),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("list-times text");

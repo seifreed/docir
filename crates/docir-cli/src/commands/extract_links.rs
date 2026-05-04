@@ -4,18 +4,18 @@ use anyhow::Result;
 use docir_app::{LinkExtractionReport, ParserConfig};
 use std::path::PathBuf;
 
+use crate::cli::JsonOutputOpts;
 use crate::commands::util::{
     build_app_and_parse, push_bullet_line, push_labeled_line, run_dual_output,
 };
 
 /// Public API entrypoint: run.
-pub fn run(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
+pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
     let (app, parsed) = build_app_and_parse(&input, parser_config)?;
     let report = app.build_link_extraction_report(&parsed);
     run_dual_output(&report, "report", json, pretty, output, format_report_text)
@@ -46,6 +46,7 @@ fn format_report_text(report: &LinkExtractionReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::{format_report_text, run};
+    use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{LinkArtifact, LinkExtractionReport, ParserConfig};
     use docir_core::security::ThreatLevel;
@@ -133,9 +134,11 @@ mod tests {
 
         run(
             input.clone(),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract-links json");

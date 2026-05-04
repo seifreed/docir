@@ -4,16 +4,16 @@ use anyhow::Result;
 use docir_app::{ContainerDump, ParserConfig};
 use std::path::PathBuf;
 
+use crate::cli::JsonOutputOpts;
 use crate::commands::util::{build_app, push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
-pub fn run(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
+pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
     let app = build_app(parser_config);
     let (parsed, bytes) = app.parse_file_with_bytes(&input)?;
     let dump = app.build_container_dump(&parsed, &bytes)?;
@@ -77,6 +77,7 @@ fn container_entry_label(kind: docir_app::ContainerEntryKind) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{format_container_text, run};
+    use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
         test_support::build_test_cfb, ContainerDump, ContainerEntry, ContainerEntryKind,
@@ -89,9 +90,11 @@ mod tests {
         let output = test_support::temp_file("json", "json");
         run(
             test_support::fixture("minimal.docx"),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("dump container json");
@@ -105,9 +108,11 @@ mod tests {
         let output = test_support::temp_file("text", "json");
         run(
             test_support::fixture("minimal.docx"),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("dump container text");
@@ -132,9 +137,11 @@ mod tests {
         let output = test_support::temp_file("legacy_text_out", "json");
         run(
             input.clone(),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("dump legacy container text");

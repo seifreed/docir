@@ -4,16 +4,16 @@ use anyhow::Result;
 use docir_app::{probe_format_path, FormatProbe, ParserConfig};
 use std::path::PathBuf;
 
+use crate::cli::JsonOutputOpts;
 use crate::commands::util::{push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
-pub fn run(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
+pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
     let probe = probe_format_path(&input, parser_config)?;
     run_dual_output(&probe, "probe", json, pretty, output, format_probe_text)
 }
@@ -42,6 +42,7 @@ fn format_probe_text(probe: &FormatProbe) -> String {
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{test_support::build_test_cfb, FormatProbe, ParserConfig};
     use std::fs;
@@ -54,9 +55,11 @@ mod tests {
 
         run(
             input.clone(),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("probe json");
@@ -77,9 +80,11 @@ mod tests {
 
         run(
             input.clone(),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("probe text");
@@ -101,9 +106,11 @@ mod tests {
 
         run(
             input.clone(),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("probe legacy doc");

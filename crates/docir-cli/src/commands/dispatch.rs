@@ -1,16 +1,6 @@
-use super::dispatch_extract::{
-    cmd_extract, cmd_extract_artifacts, cmd_extract_flash, cmd_extract_links, cmd_extract_vba,
-};
-use super::dispatch_inspect::{
-    cmd_inspect_directory, cmd_inspect_metadata, cmd_inspect_sectors, cmd_inspect_sheet_records,
-    cmd_inspect_slide_records,
-};
-use super::dispatch_query::{cmd_diff, cmd_grep, cmd_query, cmd_rules};
-use crate::cli::JsonOutputOpts;
 use crate::{Cli, Commands};
 use anyhow::Result;
 use docir_app::ParserConfig;
-use std::path::PathBuf;
 
 pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
     run_command(cli.command, parser_config)
@@ -22,13 +12,7 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             input,
             format,
             output_opts,
-        } => super::parse::run(
-            input,
-            format,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
+        } => super::parse::run(input, format, output_opts, parser_config),
         Commands::Summary { input } => super::summary::run(input, parser_config),
         Commands::Coverage {
             input,
@@ -52,98 +36,65 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             },
             parser_config,
         ),
-        Commands::Inventory { input, output_opts } => super::inventory::run(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
-        Commands::ProbeFormat { input, output_opts } => super::probe_format::run(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
-        Commands::ListTimes { input, output_opts } => super::list_times::run(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
+        cmd => dispatch_remaining(cmd, parser_config),
+    }
+}
+
+fn dispatch_remaining(command: Commands, parser_config: &ParserConfig) -> Result<()> {
+    match command {
+        Commands::Inventory { input, output_opts } => {
+            super::inventory::run(input, output_opts, parser_config)
+        }
+        Commands::ProbeFormat { input, output_opts } => {
+            super::probe_format::run(input, output_opts, parser_config)
+        }
+        Commands::ListTimes { input, output_opts } => {
+            super::list_times::run(input, output_opts, parser_config)
+        }
         Commands::InspectMetadata { input, output_opts } => {
-            dispatch_inspect_metadata(input, output_opts, parser_config)
+            super::inspect_metadata::run(input, output_opts, parser_config)
         }
         Commands::InspectSheetRecords { input, output_opts } => {
-            dispatch_inspect_sheet_records(input, output_opts, parser_config)
+            super::inspect_sheet_records::run(input, output_opts, parser_config)
         }
         Commands::InspectSlideRecords { input, output_opts } => {
-            dispatch_inspect_slide_records(input, output_opts, parser_config)
+            super::inspect_slide_records::run(input, output_opts, parser_config)
         }
         Commands::InspectDirectory { input, output_opts } => {
-            dispatch_inspect_directory(input, output_opts, parser_config)
+            super::inspect_directory::run(input, output_opts, parser_config)
         }
         Commands::InspectSectors { input, output_opts } => {
-            dispatch_inspect_sectors(input, output_opts, parser_config)
+            super::inspect_sectors::run(input, output_opts, parser_config)
         }
-        Commands::ReportIndicators { input, output_opts } => super::report_indicators::run(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
-        Commands::ExtractLinks { input, output_opts } => cmd_extract_links(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
+        Commands::ReportIndicators { input, output_opts } => {
+            super::report_indicators::run(input, output_opts, parser_config)
+        }
+        Commands::ExtractLinks { input, output_opts } => {
+            super::extract_links::run(input, output_opts, parser_config)
+        }
         Commands::ExtractFlash {
             input,
             out,
             overwrite,
             output_opts,
-        } => cmd_extract_flash(
-            input,
-            out,
-            overwrite,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
+        } => super::extract_flash::run(input, out, overwrite, output_opts, parser_config),
         Commands::Manifest { input, output_opts } => {
-            super::manifest::run(input, output_opts.pretty, output_opts.output, parser_config)
+            super::manifest::run(input, output_opts, parser_config)
         }
-        Commands::DumpContainer { input, output_opts } => super::dump_container::run(
-            input,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
+        Commands::DumpContainer { input, output_opts } => {
+            super::dump_container::run(input, output_opts, parser_config)
+        }
         Commands::RecognizeVba {
             input,
             include_source,
             output_opts,
-        } => super::recognize_vba::run(
-            input,
-            include_source,
-            output_opts.json,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
+        } => super::recognize_vba::run(input, include_source, output_opts, parser_config),
         Commands::ExtractVba {
             input,
             out,
             overwrite,
             best_effort,
-        } => cmd_extract_vba(input, out, overwrite, best_effort, parser_config),
+        } => super::extract_vba::run(input, out, overwrite, best_effort, parser_config),
         Commands::ExtractArtifacts {
             input,
             out,
@@ -152,7 +103,7 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             no_media,
             only_ole,
             only_rtf_objects,
-        } => cmd_extract_artifacts(
+        } => super::extract_artifacts::run(
             input,
             out,
             super::extract_artifacts::ExtractArtifactsOptions {
@@ -178,24 +129,12 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             left,
             right,
             output_opts,
-        } => cmd_diff(
-            left,
-            right,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
+        } => super::diff::run(left, right, output_opts, parser_config),
         Commands::Rules {
             input,
             output_opts,
             profile,
-        } => cmd_rules(
-            input,
-            output_opts.pretty,
-            output_opts.output,
-            profile,
-            parser_config,
-        ),
+        } => super::rules::run(input, output_opts, profile, parser_config),
         Commands::Query {
             input,
             node_type,
@@ -213,7 +152,7 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             has_external_refs,
             has_macros,
             output_opts,
-        } => cmd_query(
+        } => super::query::run_with_filters(
             input,
             super::query::QueryFilters {
                 node_type,
@@ -222,8 +161,7 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
                 has_external_refs,
                 has_macros,
             },
-            output_opts.pretty,
-            output_opts.output,
+            output_opts,
             parser_config,
         ),
         Commands::Grep {
@@ -232,13 +170,12 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             node_type,
             format,
             output_opts,
-        } => cmd_grep(
+        } => super::grep::run(
             input,
             pattern,
             node_type,
             format,
-            output_opts.pretty,
-            output_opts.output,
+            output_opts,
             parser_config,
         ),
         Commands::Extract {
@@ -246,85 +183,11 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             node_id,
             node_type,
             output_opts,
-        } => cmd_extract(
-            input,
-            node_id,
-            node_type,
-            output_opts.pretty,
-            output_opts.output,
-            parser_config,
-        ),
+        } => super::extract::run(input, node_id, node_type, output_opts, parser_config),
+        Commands::Parse { .. } | Commands::Summary { .. } | Commands::Coverage { .. } => {
+            unreachable!()
+        }
     }
-}
-
-fn dispatch_inspect_metadata(
-    input: PathBuf,
-    output_opts: JsonOutputOpts,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    cmd_inspect_metadata(
-        input,
-        output_opts.json,
-        output_opts.pretty,
-        output_opts.output,
-        parser_config,
-    )
-}
-
-fn dispatch_inspect_sheet_records(
-    input: PathBuf,
-    output_opts: JsonOutputOpts,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    cmd_inspect_sheet_records(
-        input,
-        output_opts.json,
-        output_opts.pretty,
-        output_opts.output,
-        parser_config,
-    )
-}
-
-fn dispatch_inspect_slide_records(
-    input: PathBuf,
-    output_opts: JsonOutputOpts,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    cmd_inspect_slide_records(
-        input,
-        output_opts.json,
-        output_opts.pretty,
-        output_opts.output,
-        parser_config,
-    )
-}
-
-fn dispatch_inspect_directory(
-    input: PathBuf,
-    output_opts: JsonOutputOpts,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    cmd_inspect_directory(
-        input,
-        output_opts.json,
-        output_opts.pretty,
-        output_opts.output,
-        parser_config,
-    )
-}
-
-fn dispatch_inspect_sectors(
-    input: PathBuf,
-    output_opts: JsonOutputOpts,
-    parser_config: &ParserConfig,
-) -> Result<()> {
-    cmd_inspect_sectors(
-        input,
-        output_opts.json,
-        output_opts.pretty,
-        output_opts.output,
-        parser_config,
-    )
 }
 
 #[cfg(test)]
@@ -345,40 +208,9 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn run_command_routes_main_arms_successfully() {
+    fn run_command_routes_parse_summary_probe_inventory() {
         let config = ParserConfig::default();
         let parse_out = test_support::temp_file("parse", "json");
-        let list_times_input = test_support::temp_file("times", "doc");
-        let metadata_input = test_support::temp_file("metadata", "doc");
-        let inspect_directory_input = test_support::temp_file("inspect_directory", "doc");
-        let inspect_sectors_input = test_support::temp_file("inspect_sectors", "doc");
-        fs::write(
-            &list_times_input,
-            build_test_cfb_with_times(&[("WordDocument", b"doc")], &[("WordDocument", 10, 20)]),
-        )
-        .expect("list-times fixture");
-        fs::write(
-            &metadata_input,
-            build_test_cfb(&[(
-                "\u{0005}SummaryInformation",
-                &build_test_property_set_stream(&[(2, TestPropertyValue::Str("Specimen"))]),
-            )]),
-        )
-        .expect("metadata fixture");
-        fs::write(
-            &inspect_directory_input,
-            build_test_cfb(&[
-                ("WordDocument", b"doc"),
-                ("VBA/PROJECT", b"meta"),
-                ("ObjectPool/1/Ole10Native", b"payload"),
-            ]),
-        )
-        .expect("inspect-directory fixture");
-        fs::write(
-            &inspect_sectors_input,
-            build_test_cfb(&[("WordDocument", b"doc"), ("VBA/PROJECT", b"meta")]),
-        )
-        .expect("inspect-sectors fixture");
         run_command(
             Commands::Parse {
                 input: test_support::fixture("minimal.docx"),
@@ -427,6 +259,44 @@ mod tests {
         )
         .expect("inventory arm");
 
+        let _ = fs::remove_file(parse_out);
+    }
+
+    #[test]
+    fn run_command_routes_inspect_commands() {
+        let config = ParserConfig::default();
+        let list_times_input = test_support::temp_file("times", "doc");
+        let metadata_input = test_support::temp_file("metadata", "doc");
+        let inspect_directory_input = test_support::temp_file("inspect_directory", "doc");
+        let inspect_sectors_input = test_support::temp_file("inspect_sectors", "doc");
+        fs::write(
+            &list_times_input,
+            build_test_cfb_with_times(&[("WordDocument", b"doc")], &[("WordDocument", 10, 20)]),
+        )
+        .expect("list-times fixture");
+        fs::write(
+            &metadata_input,
+            build_test_cfb(&[(
+                "\u{0005}SummaryInformation",
+                &build_test_property_set_stream(&[(2, TestPropertyValue::Str("Specimen"))]),
+            )]),
+        )
+        .expect("metadata fixture");
+        fs::write(
+            &inspect_directory_input,
+            build_test_cfb(&[
+                ("WordDocument", b"doc"),
+                ("VBA/PROJECT", b"meta"),
+                ("ObjectPool/1/Ole10Native", b"payload"),
+            ]),
+        )
+        .expect("inspect-directory fixture");
+        fs::write(
+            &inspect_sectors_input,
+            build_test_cfb(&[("WordDocument", b"doc"), ("VBA/PROJECT", b"meta")]),
+        )
+        .expect("inspect-sectors fixture");
+
         run_command(
             Commands::ListTimes {
                 input: list_times_input.clone(),
@@ -439,18 +309,6 @@ mod tests {
             &config,
         )
         .expect("list-times arm");
-
-        run_command(
-            Commands::Manifest {
-                input: test_support::fixture("minimal.docx"),
-                output_opts: PrettyOutputOpts {
-                    pretty: true,
-                    output: None,
-                },
-            },
-            &config,
-        )
-        .expect("manifest arm");
 
         run_command(
             Commands::InspectMetadata {
@@ -491,31 +349,27 @@ mod tests {
         )
         .expect("inspect-sectors arm");
 
-        run_command(
-            Commands::ReportIndicators {
-                input: test_support::fixture("minimal.docx"),
-                output_opts: JsonOutputOpts {
-                    json: true,
-                    pretty: true,
-                    output: None,
-                },
-            },
-            &config,
-        )
-        .expect("report-indicators arm");
+        let _ = fs::remove_file(list_times_input);
+        let _ = fs::remove_file(metadata_input);
+        let _ = fs::remove_file(inspect_directory_input);
+        let _ = fs::remove_file(inspect_sectors_input);
+    }
+
+    #[test]
+    fn run_command_routes_output_commands() {
+        let config = ParserConfig::default();
 
         run_command(
-            Commands::ExtractLinks {
+            Commands::Manifest {
                 input: test_support::fixture("minimal.docx"),
-                output_opts: JsonOutputOpts {
-                    json: true,
+                output_opts: PrettyOutputOpts {
                     pretty: true,
                     output: None,
                 },
             },
             &config,
         )
-        .expect("extract-links arm");
+        .expect("manifest arm");
 
         run_command(
             Commands::DumpContainer {
@@ -545,6 +399,32 @@ mod tests {
         .expect("recognize-vba arm");
 
         run_command(
+            Commands::ReportIndicators {
+                input: test_support::fixture("minimal.docx"),
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
+            },
+            &config,
+        )
+        .expect("report-indicators arm");
+
+        run_command(
+            Commands::ExtractLinks {
+                input: test_support::fixture("minimal.docx"),
+                output_opts: JsonOutputOpts {
+                    json: true,
+                    pretty: true,
+                    output: None,
+                },
+            },
+            &config,
+        )
+        .expect("extract-links arm");
+
+        run_command(
             Commands::Security {
                 input: test_support::fixture("minimal.docx"),
                 json: true,
@@ -553,7 +433,11 @@ mod tests {
             &config,
         )
         .expect("security arm");
+    }
 
+    #[test]
+    fn run_command_routes_rules_diff_coverage() {
+        let config = ParserConfig::default();
         let rules_out = test_support::temp_file("rules", "json");
         run_command(
             Commands::Rules {
@@ -599,6 +483,13 @@ mod tests {
         )
         .expect("coverage arm");
 
+        let _ = fs::remove_file(rules_out);
+        let _ = fs::remove_file(diff_out);
+    }
+
+    #[test]
+    fn run_command_routes_extract_artifacts() {
+        let config = ParserConfig::default();
         let artifacts_out = test_support::temp_dir("extract_artifacts");
         run_command(
             Commands::ExtractArtifacts {
@@ -615,18 +506,11 @@ mod tests {
         .expect("extract artifacts arm");
         assert!(artifacts_out.join("manifest.json").exists());
 
-        let _ = fs::remove_file(parse_out);
-        let _ = fs::remove_file(list_times_input);
-        let _ = fs::remove_file(metadata_input);
-        let _ = fs::remove_file(inspect_directory_input);
-        let _ = fs::remove_file(inspect_sectors_input);
-        let _ = fs::remove_file(rules_out);
-        let _ = fs::remove_file(diff_out);
         let _ = fs::remove_dir_all(artifacts_out);
     }
 
     #[test]
-    fn run_command_routes_query_extract_arms_successfully() {
+    fn run_command_routes_query_select_grep_extract() {
         let config = ParserConfig::default();
         let query_out = test_support::temp_file("query", "json");
         run_command(

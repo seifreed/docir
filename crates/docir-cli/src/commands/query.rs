@@ -1,5 +1,6 @@
 //! Query the IR with simple predicates.
 
+use crate::cli::PrettyOutputOpts;
 use crate::commands::util::{parse_doc_format, parse_node_type, run_json_document_command};
 use anyhow::Result;
 use docir_app::ParserConfig;
@@ -33,10 +34,10 @@ struct QueryResult {
 pub(crate) fn run_with_filters(
     input: PathBuf,
     filters: QueryFilters,
-    pretty: bool,
-    output: Option<PathBuf>,
+    opts: PrettyOutputOpts,
     parser_config: &ParserConfig,
 ) -> Result<()> {
+    let PrettyOutputOpts { pretty, output } = opts;
     run_json_document_command(input, parser_config, pretty, output, move |parsed| {
         let mut query = Query::new();
 
@@ -71,6 +72,7 @@ pub(crate) fn run_with_filters(
 #[cfg(test)]
 mod tests {
     use super::{run_with_filters, QueryFilters};
+    use crate::cli::PrettyOutputOpts;
     use crate::test_support;
     use docir_app::ParserConfig;
     use std::fs;
@@ -87,8 +89,10 @@ mod tests {
                 has_external_refs: None,
                 has_macros: None,
             },
-            true,
-            Some(output.clone()),
+            PrettyOutputOpts {
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("query run");

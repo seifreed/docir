@@ -6,6 +6,7 @@ use docir_core::ir::IRNode;
 use serde::Serialize;
 use std::path::PathBuf;
 
+use crate::cli::PrettyOutputOpts;
 use crate::commands::util::{parse_node_id, parse_node_type, run_json_document_command};
 
 #[derive(Debug, Serialize)]
@@ -18,14 +19,14 @@ pub fn run(
     input: PathBuf,
     node_ids: Vec<String>,
     node_type: Option<String>,
-    pretty: bool,
-    output: Option<PathBuf>,
+    opts: PrettyOutputOpts,
     parser_config: &ParserConfig,
 ) -> Result<()> {
     if node_ids.is_empty() && node_type.is_none() {
         bail!("Provide --node-id or --node-type");
     }
 
+    let PrettyOutputOpts { pretty, output } = opts;
     run_json_document_command(input, parser_config, pretty, output, move |parsed| {
         let mut nodes = Vec::new();
 
@@ -52,6 +53,7 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::cli::PrettyOutputOpts;
     use crate::test_support;
     use docir_app::ParserConfig;
     use std::fs;
@@ -62,8 +64,10 @@ mod tests {
             test_support::fixture("minimal.docx"),
             Vec::new(),
             None,
-            false,
-            None,
+            PrettyOutputOpts {
+                pretty: false,
+                output: None,
+            },
             &ParserConfig::default(),
         )
         .expect_err("selectorless extract should fail");
@@ -77,8 +81,10 @@ mod tests {
             test_support::fixture("minimal.docx"),
             Vec::new(),
             Some("Paragraph".to_string()),
-            true,
-            Some(output.clone()),
+            PrettyOutputOpts {
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("extract by type");

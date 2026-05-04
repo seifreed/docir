@@ -4,6 +4,7 @@ use anyhow::{bail, Result};
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
+use crate::cli::PrettyOutputOpts;
 use crate::commands::query::{run_with_filters, QueryFilters};
 
 /// Public API entrypoint: run.
@@ -12,8 +13,7 @@ pub fn run(
     pattern: String,
     node_type: Option<String>,
     format: Option<String>,
-    pretty: bool,
-    output: Option<PathBuf>,
+    opts: PrettyOutputOpts,
     parser_config: &ParserConfig,
 ) -> Result<()> {
     if pattern.trim().is_empty() {
@@ -28,8 +28,7 @@ pub fn run(
             has_external_refs: None,
             has_macros: None,
         },
-        pretty,
-        output,
+        opts,
         parser_config,
     )
 }
@@ -37,6 +36,7 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::cli::PrettyOutputOpts;
     use crate::test_support;
     use docir_app::ParserConfig;
     use std::fs;
@@ -48,8 +48,10 @@ mod tests {
             "   ".to_string(),
             None,
             None,
-            false,
-            None,
+            PrettyOutputOpts {
+                pretty: false,
+                output: None,
+            },
             &ParserConfig::default(),
         )
         .expect_err("empty grep pattern should fail");
@@ -64,8 +66,10 @@ mod tests {
             "Hello".to_string(),
             None,
             None,
-            true,
-            Some(output.clone()),
+            PrettyOutputOpts {
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("grep should run");

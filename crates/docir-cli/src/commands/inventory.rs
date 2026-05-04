@@ -5,16 +5,16 @@ use docir_app::{ArtifactInventory, ParserConfig};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::cli::JsonOutputOpts;
 use crate::commands::util::{build_app, push_bullet_line, push_labeled_line, run_dual_output};
 
 /// Public API entrypoint: run.
-pub fn run(
-    input: PathBuf,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
+pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -> Result<()> {
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
     let app = build_app(parser_config);
     let source_bytes = fs::read(&input)?;
     let parsed = app.parse_bytes(&source_bytes)?;
@@ -118,6 +118,7 @@ fn inventory_kind_label(kind: docir_app::InventoryArtifactKind) -> &'static str 
 #[cfg(test)]
 mod tests {
     use super::{format_inventory_text, run};
+    use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
         test_support::build_test_cfb, ArtifactInventory, ContainerKind, InventoryArtifact,
@@ -130,9 +131,11 @@ mod tests {
         let output = test_support::temp_file("json", "json");
         run(
             test_support::fixture("minimal.docx"),
-            true,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: true,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inventory json");
@@ -146,9 +149,11 @@ mod tests {
         let output = test_support::temp_file("text", "json");
         run(
             test_support::fixture("minimal.docx"),
-            false,
-            false,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: false,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inventory text");
@@ -178,9 +183,11 @@ Reference=*\G{000204EF-0000-0000-C000-000000000046}#2.0#0#..\stdole2.tlb#OLE Aut
 
         run(
             input.clone(),
-            false,
-            true,
-            Some(output.clone()),
+            JsonOutputOpts {
+                json: false,
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("inventory text");

@@ -5,15 +5,12 @@ use docir_app::{ExportDocumentRef, ParserConfig, Phase0ArtifactManifestExport};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::cli::PrettyOutputOpts;
 use crate::commands::util::{build_app, source_format_label, write_json_output};
 
 /// Public API entrypoint: run.
-pub fn run(
-    input: PathBuf,
-    pretty: bool,
-    output: Option<PathBuf>,
-    parser_config: &ParserConfig,
-) -> Result<()> {
+pub fn run(input: PathBuf, opts: PrettyOutputOpts, parser_config: &ParserConfig) -> Result<()> {
+    let PrettyOutputOpts { pretty, output } = opts;
     let app = build_app(parser_config);
     let source_bytes = fs::read(&input)?;
     let parsed = app.parse_bytes(&source_bytes)?;
@@ -32,6 +29,7 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::cli::PrettyOutputOpts;
     use crate::test_support;
     use docir_app::{test_support::build_test_cfb, ParserConfig};
     use std::fs;
@@ -41,8 +39,10 @@ mod tests {
         let output = test_support::temp_file("json", "json");
         run(
             test_support::fixture("minimal.docx"),
-            true,
-            Some(output.clone()),
+            PrettyOutputOpts {
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("manifest json");
@@ -72,8 +72,10 @@ Reference=*\G{000204EF-0000-0000-C000-000000000046}#2.0#0#..\stdole2.tlb#OLE Aut
 
         run(
             input.clone(),
-            true,
-            Some(output.clone()),
+            PrettyOutputOpts {
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("manifest legacy vba");
@@ -118,8 +120,10 @@ Reference=*\G{000204EF-0000-0000-C000-000000000046}#2.0#0#..\stdole2.tlb#OLE Aut
 
         run(
             input.clone(),
-            true,
-            Some(output.clone()),
+            PrettyOutputOpts {
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("manifest legacy ole");
@@ -142,8 +146,10 @@ Reference=*\G{000204EF-0000-0000-C000-000000000046}#2.0#0#..\stdole2.tlb#OLE Aut
 
         run(
             input.clone(),
-            true,
-            Some(output.clone()),
+            PrettyOutputOpts {
+                pretty: true,
+                output: Some(output.clone()),
+            },
             &ParserConfig::default(),
         )
         .expect("manifest docx media");
@@ -170,7 +176,15 @@ Reference=*\G{000204EF-0000-0000-C000-000000000046}#2.0#0#..\stdole2.tlb#OLE Aut
             compute_hashes: false,
             ..ParserConfig::default()
         };
-        run(input.clone(), true, Some(output.clone()), &config).expect("manifest docx no hashes");
+        run(
+            input.clone(),
+            PrettyOutputOpts {
+                pretty: true,
+                output: Some(output.clone()),
+            },
+            &config,
+        )
+        .expect("manifest docx no hashes");
 
         let text = fs::read_to_string(&output).expect("manifest output");
         assert!(text.contains("\"embedded-file\""));

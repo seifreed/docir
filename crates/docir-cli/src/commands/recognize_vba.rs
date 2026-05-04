@@ -4,6 +4,7 @@ use anyhow::Result;
 use docir_app::{ExportDocumentRef, ParserConfig, Phase0VbaExport, VbaRecognitionReport};
 use std::path::PathBuf;
 
+use crate::cli::JsonOutputOpts;
 use crate::commands::util::{
     build_app_and_parse, push_labeled_line, source_format_label, write_json_output,
     write_text_output,
@@ -13,11 +14,14 @@ use crate::commands::util::{
 pub fn run(
     input: PathBuf,
     include_source: bool,
-    json: bool,
-    pretty: bool,
-    output: Option<PathBuf>,
+    opts: JsonOutputOpts,
     parser_config: &ParserConfig,
 ) -> Result<()> {
+    let JsonOutputOpts {
+        json,
+        pretty,
+        output,
+    } = opts;
     let mut parse_config = parser_config.clone();
     if include_source {
         parse_config.extract_macro_source = true;
