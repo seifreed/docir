@@ -68,7 +68,7 @@ pub fn is_suspicious_url(url: &str) -> bool {
     ];
 
     for pattern in &suspicious_patterns {
-        if decoded.contains(pattern) {
+        if host_matches_domain(&host, pattern) {
             return true;
         }
     }
@@ -117,6 +117,13 @@ fn extract_host(url: &str) -> String {
     let host = host_port.split(':').next().unwrap_or(host_port);
 
     host.to_string()
+}
+
+fn host_matches_domain(host: &str, domain: &str) -> bool {
+    host == domain
+        || host
+            .strip_suffix(domain)
+            .is_some_and(|prefix| prefix.ends_with('.'))
 }
 
 /// Checks if a string is an IPv4 address.
@@ -172,6 +179,10 @@ End Sub
         assert!(is_suspicious_url("http://evil.ru/malware.doc"));
         assert!(is_suspicious_url("https://pastebin.com/raw/abc123"));
         assert!(!is_suspicious_url("https://www.microsoft.com/docs"));
+        assert!(!is_suspicious_url("https://notpastebin.com/raw/abc123"));
+        assert!(!is_suspicious_url(
+            "https://example.com/path/pastebin.com/report"
+        ));
     }
 
     #[test]

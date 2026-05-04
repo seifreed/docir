@@ -8,7 +8,8 @@ pub(crate) fn parse_field_instruction(instr: &str) -> Option<FieldInstruction> {
     if tokens.is_empty() {
         return None;
     }
-    let kind = match tokens[0].as_str() {
+    let keyword = tokens[0].to_ascii_uppercase();
+    let kind = match keyword.as_str() {
         "HYPERLINK" => FieldKind::Hyperlink,
         "INCLUDETEXT" => FieldKind::IncludeText,
         "INCLUDEPICTURE" => FieldKind::IncludePicture,

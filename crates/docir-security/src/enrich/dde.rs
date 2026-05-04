@@ -1,15 +1,7 @@
 use docir_core::security::{DdeField, DdeFieldType};
 
 pub(super) fn parse_dde_instruction(instruction: &str) -> Option<DdeField> {
-    let upper = instruction.to_ascii_uppercase();
-    if !upper.contains("DDE") {
-        return None;
-    }
-    let field_type = if upper.contains("DDEAUTO") {
-        DdeFieldType::DdeAuto
-    } else {
-        DdeFieldType::Dde
-    };
+    let field_type = dde_field_type(instruction)?;
 
     let parts = extract_quoted_parts(instruction);
     let application = parts.first().cloned().unwrap_or_default();
@@ -35,6 +27,17 @@ pub(super) fn parse_dde_instruction(instruction: &str) -> Option<DdeField> {
         instruction: instruction.to_string(),
         location: None,
     })
+}
+
+fn dde_field_type(instruction: &str) -> Option<DdeFieldType> {
+    let keyword = instruction.split_whitespace().next()?;
+    if keyword.eq_ignore_ascii_case("DDEAUTO") {
+        Some(DdeFieldType::DdeAuto)
+    } else if keyword.eq_ignore_ascii_case("DDE") {
+        Some(DdeFieldType::Dde)
+    } else {
+        None
+    }
 }
 
 fn extract_quoted_parts(input: &str) -> Vec<String> {
@@ -108,5 +111,7 @@ mod tests {
     #[test]
     fn parse_dde_instruction_ignores_non_dde_fields() {
         assert!(parse_dde_instruction(r#"HYPERLINK "https://example.test""#).is_none());
+        assert!(parse_dde_instruction(r#"NOTDDE "cmd" "/c calc""#).is_none());
+        assert!(parse_dde_instruction(r#"SOMEDDEAUTO "cmd" "/c calc""#).is_none());
     }
 }

@@ -31,6 +31,12 @@ fn test_parse_field_instruction_extended() {
     let parsed = parse_field_instruction("DDEAUTO \"cmd\" \"args\"").expect("parsed");
     assert!(matches!(parsed.kind, docir_core::ir::FieldKind::DdeAuto));
 
+    let parsed = parse_field_instruction("ddeauto \"cmd\" \"args\"").expect("parsed");
+    assert!(matches!(parsed.kind, docir_core::ir::FieldKind::DdeAuto));
+
+    let parsed = parse_field_instruction("hyperlink \"https://example.test\"").expect("parsed");
+    assert!(matches!(parsed.kind, docir_core::ir::FieldKind::Hyperlink));
+
     let parsed = parse_field_instruction("AUTOTEXT MyEntry").expect("parsed");
     assert!(matches!(parsed.kind, docir_core::ir::FieldKind::AutoText));
 
