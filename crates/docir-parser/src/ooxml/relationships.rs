@@ -1,6 +1,7 @@
 //! OOXML relationships parser (.rels files).
 
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{read_event, reader_from_str};
 use quick_xml::events::Event;
 use std::collections::HashMap;
@@ -57,17 +58,16 @@ impl Relationships {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
                                 b"Id" => {
-                                    id = Some(String::from_utf8_lossy(&attr.value).to_string());
+                                    id = Some(lossy_attr_value(&attr).to_string());
                                 }
                                 b"Type" => {
-                                    rel_type =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string());
+                                    rel_type = Some(lossy_attr_value(&attr).to_string());
                                 }
                                 b"Target" => {
-                                    target = Some(String::from_utf8_lossy(&attr.value).to_string());
+                                    target = Some(lossy_attr_value(&attr).to_string());
                                 }
                                 b"TargetMode" => {
-                                    let mode = String::from_utf8_lossy(&attr.value);
+                                    let mode = lossy_attr_value(&attr);
                                     if mode.eq_ignore_ascii_case("External") {
                                         target_mode = TargetMode::External;
                                     }

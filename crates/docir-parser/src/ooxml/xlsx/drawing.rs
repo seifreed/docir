@@ -1,6 +1,7 @@
 use super::XlsxParser;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{IRNode, Shape, ShapeType, WorksheetDrawing};
@@ -42,12 +43,10 @@ impl XlsxParser {
                             for attr in e.attributes().flatten() {
                                 match attr.key.as_ref() {
                                     b"name" => {
-                                        shape.name =
-                                            Some(String::from_utf8_lossy(&attr.value).to_string());
+                                        shape.name = Some(lossy_attr_value(&attr).to_string());
                                     }
                                     b"descr" => {
-                                        shape.alt_text =
-                                            Some(String::from_utf8_lossy(&attr.value).to_string());
+                                        shape.alt_text = Some(lossy_attr_value(&attr).to_string());
                                     }
                                     _ => {}
                                 }
@@ -57,8 +56,7 @@ impl XlsxParser {
                     b"a:blip" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"r:embed" {
-                                current_embed =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
+                                current_embed = Some(lossy_attr_value(&attr).to_string());
                             }
                         }
                     }
@@ -66,8 +64,7 @@ impl XlsxParser {
                         for attr in e.attributes().flatten() {
                             let key = attr.key.as_ref();
                             if key == b"r:id" || key.ends_with(b":id") {
-                                current_chart =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
+                                current_chart = Some(lossy_attr_value(&attr).to_string());
                             }
                         }
                     }

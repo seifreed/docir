@@ -1,6 +1,7 @@
 //! XLSX metadata parsing helpers.
 
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
 use crate::xml_utils::{local_name, scan_xml_events, XmlScanControl};
 use docir_core::ir::{SheetMetadata, SheetMetadataType};
@@ -23,17 +24,17 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
                         let mut mtype = SheetMetadataType::new();
                         for attr in e.attributes().flatten() {
                             let key = local_name(attr.key.as_ref());
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
+                            let value = lossy_attr_value(&attr).to_string();
                             match key {
-                                b"name" => mtype.name = Some(val),
-                                b"minSupportedVersion" => mtype.min_supported_version = Some(val),
+                                b"name" => mtype.name = Some(value.clone()),
+                                b"minSupportedVersion" => mtype.min_supported_version = Some(value),
                                 b"copy" => {
                                     mtype.copy =
-                                        Some(val == "1" || val.eq_ignore_ascii_case("true"));
+                                        Some(value == "1" || value.eq_ignore_ascii_case("true"));
                                 }
                                 b"update" => {
                                     mtype.update =
-                                        Some(val == "1" || val.eq_ignore_ascii_case("true"));
+                                        Some(value == "1" || value.eq_ignore_ascii_case("true"));
                                 }
                                 _ => {}
                             }
@@ -45,7 +46,7 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
                             let key = local_name(attr.key.as_ref());
                             if key == b"count" {
                                 metadata.cell_metadata_count =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                                    lossy_attr_value(&attr).parse::<u32>().ok();
                             }
                         }
                     }
@@ -54,7 +55,7 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
                             let key = local_name(attr.key.as_ref());
                             if key == b"count" {
                                 metadata.value_metadata_count =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                                    lossy_attr_value(&attr).parse::<u32>().ok();
                             }
                         }
                     }

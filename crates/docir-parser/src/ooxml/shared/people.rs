@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{read_event, reader_from_str};
 use docir_core::ir::{PeoplePart, PersonEntry};
 use docir_core::types::SourceSpan;
@@ -32,7 +33,7 @@ fn parse_people_part_impl(xml: &str, path: &str) -> Result<PeoplePart, ParseErro
                             Some(pos) => &key[pos + 1..],
                             None => key,
                         };
-                        let val = String::from_utf8_lossy(&attr.value).to_string();
+                        let val = lossy_attr_value(&attr).to_string();
                         match key {
                             b"id" => entry.person_id = Some(val),
                             b"userId" | b"userID" => entry.user_id = Some(val),

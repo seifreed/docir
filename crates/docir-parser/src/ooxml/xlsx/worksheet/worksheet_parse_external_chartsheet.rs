@@ -1,5 +1,6 @@
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::xlsx::{IRNode, ParseError, Shape, ShapeType, WorksheetDrawing, XlsxParser};
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{reader_from_str, scan_xml_events, XmlScanControl};
 use crate::zip_handler::PackageReader;
 use docir_core::types::{NodeId, SourceSpan};
@@ -22,7 +23,7 @@ pub(super) fn parse_chartsheet_impl(
                 if e.name().as_ref().ends_with(b"chart") {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"r:id" {
-                            chart_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
+                            chart_rel = Some(lossy_attr_value(&attr).to_string());
                         }
                     }
                 }

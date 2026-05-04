@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{read_event, reader_from_str};
 use docir_core::ir::{Theme, ThemeColor, ThemeFontScheme};
 use docir_core::types::SourceSpan;
@@ -87,7 +88,7 @@ fn handle_end_event(tag: &[u8], state: &mut ThemeParseState) {
 fn set_theme_name(start: &BytesStart<'_>, slot: &mut Option<String>) {
     for attr in start.attributes().flatten() {
         if attr.key.as_ref() == b"name" {
-            *slot = Some(String::from_utf8_lossy(&attr.value).to_string());
+            *slot = Some(lossy_attr_value(&attr).to_string());
             break;
         }
     }
@@ -97,7 +98,7 @@ fn set_latin_typeface(start: &BytesStart<'_>, state: &mut ThemeParseState) {
     let mut typeface = None;
     for attr in start.attributes().flatten() {
         if attr.key.as_ref() == b"typeface" {
-            typeface = Some(String::from_utf8_lossy(&attr.value).to_string());
+            typeface = Some(lossy_attr_value(&attr).to_string());
             break;
         }
     }
@@ -116,7 +117,7 @@ fn srgb_value(start: &BytesStart<'_>) -> Option<String> {
     }
     for attr in start.attributes().flatten() {
         if attr.key.as_ref() == b"val" {
-            return Some(String::from_utf8_lossy(&attr.value).to_string());
+            return Some(lossy_attr_value(&attr).to_string());
         }
     }
     None

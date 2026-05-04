@@ -1,6 +1,7 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::{DrawingPart, Shape, ShapeType};
 use docir_core::types::SourceSpan;
@@ -100,7 +101,7 @@ fn attr_value_by_local_keys(
     for attr in event.attributes().flatten() {
         let key = local_name(attr.key.as_ref());
         if keys.contains(&key) {
-            return Some(String::from_utf8_lossy(&attr.value).to_string());
+            return Some(lossy_attr_value(&attr).to_string());
         }
     }
     None
@@ -116,7 +117,7 @@ fn rel_ids_from_attr_keys(
         .filter_map(|attr| {
             let key = local_name(attr.key.as_ref());
             if keys.contains(&key) {
-                Some(String::from_utf8_lossy(&attr.value).to_string())
+                Some(lossy_attr_value(&attr).to_string())
             } else {
                 None
             }

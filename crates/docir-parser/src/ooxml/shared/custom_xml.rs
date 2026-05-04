@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
 use docir_core::ir::CustomXmlPart;
 use docir_core::types::SourceSpan;
@@ -28,7 +29,7 @@ pub fn parse_custom_xml_part(
                 for attr in e.attributes().flatten() {
                     let key = String::from_utf8_lossy(attr.key.as_ref());
                     if key.starts_with("xmlns") {
-                        namespaces.insert(String::from_utf8_lossy(&attr.value).to_string());
+                        namespaces.insert(lossy_attr_value(&attr).to_string());
                     }
                 }
                 break;

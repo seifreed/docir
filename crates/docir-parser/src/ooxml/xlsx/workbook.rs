@@ -2,6 +2,7 @@
 
 use super::SheetState;
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
     dispatch_start_or_empty, reader_from_str, scan_xml_events_with_reader, xml_error,
     XmlScanControl,
@@ -121,11 +122,11 @@ fn parse_sheet_info(start: &BytesStart, sheets: &mut Vec<SheetInfo>) -> Result<(
 
     for attr in start.attributes().flatten() {
         match attr.key.as_ref() {
-            b"name" => name = Some(String::from_utf8_lossy(&attr.value).to_string()),
-            b"sheetId" => sheet_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
-            b"r:id" => rel_id = Some(String::from_utf8_lossy(&attr.value).to_string()),
+            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
+            b"sheetId" => sheet_id = lossy_attr_value(&attr).parse::<u32>().ok(),
+            b"r:id" => rel_id = Some(lossy_attr_value(&attr).to_string()),
             b"state" => {
-                let val = String::from_utf8_lossy(&attr.value);
+                let val = lossy_attr_value(&attr);
                 state = match val.as_ref() {
                     "hidden" => SheetState::Hidden,
                     "veryHidden" => SheetState::VeryHidden,
@@ -161,16 +162,14 @@ fn parse_defined_name(
 
     for attr in start.attributes().flatten() {
         match attr.key.as_ref() {
-            b"name" => name = Some(String::from_utf8_lossy(&attr.value).to_string()),
-            b"localSheetId" => {
-                local_sheet_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-            }
+            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
+            b"localSheetId" => local_sheet_id = lossy_attr_value(&attr).parse::<u32>().ok(),
             b"hidden" => {
-                let v = String::from_utf8_lossy(&attr.value);
-                hidden = v == "1" || v.eq_ignore_ascii_case("true");
+                let value = lossy_attr_value(&attr);
+                hidden = value == "1" || value.eq_ignore_ascii_case("true");
             }
             b"comment" => {
-                comment = Some(String::from_utf8_lossy(&attr.value).to_string());
+                comment = Some(lossy_attr_value(&attr).to_string());
             }
             _ => {}
         }
@@ -199,16 +198,14 @@ fn parse_defined_name_empty(start: &BytesStart) -> Option<DefinedName> {
 
     for attr in start.attributes().flatten() {
         match attr.key.as_ref() {
-            b"name" => name = Some(String::from_utf8_lossy(&attr.value).to_string()),
-            b"localSheetId" => {
-                local_sheet_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-            }
+            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
+            b"localSheetId" => local_sheet_id = lossy_attr_value(&attr).parse::<u32>().ok(),
             b"hidden" => {
-                let v = String::from_utf8_lossy(&attr.value);
-                hidden = v == "1" || v.eq_ignore_ascii_case("true");
+                let value = lossy_attr_value(&attr);
+                hidden = value == "1" || value.eq_ignore_ascii_case("true");
             }
             b"comment" => {
-                comment = Some(String::from_utf8_lossy(&attr.value).to_string());
+                comment = Some(lossy_attr_value(&attr).to_string());
             }
             _ => {}
         }
@@ -229,8 +226,8 @@ fn parse_workbook_pr(start: &BytesStart, props: &mut Option<WorkbookProperties>)
     let props = props.get_or_insert_with(WorkbookProperties::new);
     for attr in start.attributes().flatten() {
         if attr.key.as_ref() == b"date1904" {
-            let v = String::from_utf8_lossy(&attr.value);
-            props.date1904 = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+            let value = lossy_attr_value(&attr);
+            props.date1904 = Some(value == "1" || value.eq_ignore_ascii_case("true"));
         }
     }
 }
@@ -240,15 +237,15 @@ fn parse_calc_pr(start: &BytesStart, props: &mut Option<WorkbookProperties>) {
     for attr in start.attributes().flatten() {
         match attr.key.as_ref() {
             b"calcMode" => {
-                props.calc_mode = Some(String::from_utf8_lossy(&attr.value).to_string());
+                props.calc_mode = Some(lossy_attr_value(&attr).to_string());
             }
             b"fullCalcOnLoad" => {
-                let v = String::from_utf8_lossy(&attr.value);
-                props.calc_full = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+                let value = lossy_attr_value(&attr);
+                props.calc_full = Some(value == "1" || value.eq_ignore_ascii_case("true"));
             }
             b"calcOnSave" => {
-                let v = String::from_utf8_lossy(&attr.value);
-                props.calc_on_save = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+                let value = lossy_attr_value(&attr);
+                props.calc_on_save = Some(value == "1" || value.eq_ignore_ascii_case("true"));
             }
             _ => {}
         }
@@ -260,37 +257,39 @@ fn parse_workbook_view(start: &BytesStart, props: &mut Option<WorkbookProperties
     for attr in start.attributes().flatten() {
         match attr.key.as_ref() {
             b"activeTab" => {
-                props.active_tab = String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                props.active_tab = lossy_attr_value(&attr).parse::<u32>().ok();
             }
             b"firstSheet" => {
-                props.first_sheet = String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                props.first_sheet = lossy_attr_value(&attr).parse::<u32>().ok();
             }
             b"showHorizontalScroll" => {
-                let v = String::from_utf8_lossy(&attr.value);
-                props.show_horizontal_scroll = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+                let value = lossy_attr_value(&attr);
+                props.show_horizontal_scroll =
+                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
             }
             b"showVerticalScroll" => {
-                let v = String::from_utf8_lossy(&attr.value);
-                props.show_vertical_scroll = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+                let value = lossy_attr_value(&attr);
+                props.show_vertical_scroll =
+                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
             }
             b"showSheetTabs" => {
-                let v = String::from_utf8_lossy(&attr.value);
-                props.show_sheet_tabs = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+                let value = lossy_attr_value(&attr);
+                props.show_sheet_tabs = Some(value == "1" || value.eq_ignore_ascii_case("true"));
             }
             b"tabRatio" => {
-                props.tab_ratio = String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                props.tab_ratio = lossy_attr_value(&attr).parse::<u32>().ok();
             }
             b"windowWidth" => {
-                props.window_width = String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                props.window_width = lossy_attr_value(&attr).parse::<u32>().ok();
             }
             b"windowHeight" => {
-                props.window_height = String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                props.window_height = lossy_attr_value(&attr).parse::<u32>().ok();
             }
             b"xWindow" => {
-                props.x_window = String::from_utf8_lossy(&attr.value).parse::<i32>().ok();
+                props.x_window = lossy_attr_value(&attr).parse::<i32>().ok();
             }
             b"yWindow" => {
-                props.y_window = String::from_utf8_lossy(&attr.value).parse::<i32>().ok();
+                props.y_window = lossy_attr_value(&attr).parse::<i32>().ok();
             }
             _ => {}
         }
@@ -303,10 +302,10 @@ fn parse_pivot_cache_ref(start: &BytesStart, out: &mut Vec<PivotCacheRef>) {
     for attr in start.attributes().flatten() {
         match attr.key.as_ref() {
             b"cacheId" => {
-                cache_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                cache_id = lossy_attr_value(&attr).parse::<u32>().ok();
             }
             b"r:id" => {
-                rel_id = Some(String::from_utf8_lossy(&attr.value).to_string());
+                rel_id = Some(lossy_attr_value(&attr).to_string());
             }
             _ => {}
         }

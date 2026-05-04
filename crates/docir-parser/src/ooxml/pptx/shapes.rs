@@ -1,6 +1,7 @@
 #[cfg(test)]
 use super::ShapeType;
 use super::{map_shape_type, parse_transform, ParseError, Reader, Shape};
+use crate::xml_utils::lossy_attr_value;
 use quick_xml::events::Event;
 
 pub(super) fn parse_shape_properties(
@@ -15,8 +16,7 @@ pub(super) fn parse_shape_properties(
                 b"a:prstGeom" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"prst" {
-                            shape.shape_type =
-                                map_shape_type(&String::from_utf8_lossy(&attr.value));
+                            shape.shape_type = map_shape_type(&lossy_attr_value(&attr));
                         }
                     }
                 }

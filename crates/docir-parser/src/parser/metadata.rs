@@ -1,4 +1,5 @@
 use super::{OoxmlParser, ParseError};
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{CustomProperty, DocumentMetadata, PropertyValue};
@@ -142,16 +143,12 @@ impl OoxmlParser {
                         };
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                b"name" => {
-                                    prop.name = String::from_utf8_lossy(&attr.value).to_string()
-                                }
+                                b"name" => prop.name = lossy_attr_value(&attr).to_string(),
                                 b"fmtid" => {
-                                    prop.format_id =
-                                        Some(String::from_utf8_lossy(&attr.value).to_string())
+                                    prop.format_id = Some(lossy_attr_value(&attr).to_string())
                                 }
                                 b"pid" => {
-                                    prop.property_id =
-                                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
+                                    prop.property_id = lossy_attr_value(&attr).parse::<u32>().ok()
                                 }
                                 _ => {}
                             }

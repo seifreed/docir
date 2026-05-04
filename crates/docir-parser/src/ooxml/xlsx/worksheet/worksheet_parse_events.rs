@@ -4,6 +4,7 @@ use crate::ooxml::xlsx::{
     parse_color_attr, parse_column, parse_merge_cell, ParseError, Worksheet, XlsxParser,
 };
 use crate::xml_utils::attr_value;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{scan_xml_events_until_end, XmlScanControl};
 use docir_core::ir::ConditionalFormat;
 use docir_core::ir::{DataValidation, SheetPageMargins};
@@ -66,27 +67,27 @@ pub(crate) fn parse_page_margins(start: &BytesStart) -> Option<SheetPageMargins>
     for attr in start.attributes().flatten() {
         match attr.key.as_ref() {
             b"left" => {
-                margins.left = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                margins.left = lossy_attr_value(&attr).parse::<f64>().ok();
                 found = true;
             }
             b"right" => {
-                margins.right = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                margins.right = lossy_attr_value(&attr).parse::<f64>().ok();
                 found = true;
             }
             b"top" => {
-                margins.top = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                margins.top = lossy_attr_value(&attr).parse::<f64>().ok();
                 found = true;
             }
             b"bottom" => {
-                margins.bottom = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                margins.bottom = lossy_attr_value(&attr).parse::<f64>().ok();
                 found = true;
             }
             b"header" => {
-                margins.header = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                margins.header = lossy_attr_value(&attr).parse::<f64>().ok();
                 found = true;
             }
             b"footer" => {
-                margins.footer = String::from_utf8_lossy(&attr.value).parse::<f64>().ok();
+                margins.footer = lossy_attr_value(&attr).parse::<f64>().ok();
                 found = true;
             }
             _ => {}
@@ -106,8 +107,8 @@ pub(crate) fn parse_conditional_formatting_empty(
     let mut ranges: Vec<String> = Vec::new();
     for attr in start.attributes().flatten() {
         if attr.key.as_ref() == b"sqref" {
-            let val = String::from_utf8_lossy(&attr.value).to_string();
-            ranges = val.split_whitespace().map(|s| s.to_string()).collect();
+            let value = lossy_attr_value(&attr).to_string();
+            ranges = value.split_whitespace().map(|s| s.to_string()).collect();
         }
     }
     ConditionalFormat {
@@ -271,38 +272,38 @@ pub(crate) fn parse_data_validation_empty(start: &BytesStart, sheet_path: &str) 
     for attr in start.attributes().flatten() {
         match attr.key.as_ref() {
             b"type" => {
-                validation.validation_type = Some(String::from_utf8_lossy(&attr.value).to_string());
+                validation.validation_type = Some(lossy_attr_value(&attr).to_string());
             }
             b"operator" => {
-                validation.operator = Some(String::from_utf8_lossy(&attr.value).to_string());
+                validation.operator = Some(lossy_attr_value(&attr).to_string());
             }
             b"allowBlank" => {
-                let v = String::from_utf8_lossy(&attr.value);
+                let v = lossy_attr_value(&attr);
                 validation.allow_blank = v == "1" || v.eq_ignore_ascii_case("true");
             }
             b"showInputMessage" => {
-                let v = String::from_utf8_lossy(&attr.value);
+                let v = lossy_attr_value(&attr);
                 validation.show_input_message = v == "1" || v.eq_ignore_ascii_case("true");
             }
             b"showErrorMessage" => {
-                let v = String::from_utf8_lossy(&attr.value);
+                let v = lossy_attr_value(&attr);
                 validation.show_error_message = v == "1" || v.eq_ignore_ascii_case("true");
             }
             b"errorTitle" => {
-                validation.error_title = Some(String::from_utf8_lossy(&attr.value).to_string());
+                validation.error_title = Some(lossy_attr_value(&attr).to_string());
             }
             b"error" => {
-                validation.error = Some(String::from_utf8_lossy(&attr.value).to_string());
+                validation.error = Some(lossy_attr_value(&attr).to_string());
             }
             b"promptTitle" => {
-                validation.prompt_title = Some(String::from_utf8_lossy(&attr.value).to_string());
+                validation.prompt_title = Some(lossy_attr_value(&attr).to_string());
             }
             b"prompt" => {
-                validation.prompt = Some(String::from_utf8_lossy(&attr.value).to_string());
+                validation.prompt = Some(lossy_attr_value(&attr).to_string());
             }
             b"sqref" => {
-                let val = String::from_utf8_lossy(&attr.value).to_string();
-                validation.ranges = val.split_whitespace().map(|s| s.to_string()).collect();
+                let value = lossy_attr_value(&attr).to_string();
+                validation.ranges = value.split_whitespace().map(|s| s.to_string()).collect();
             }
             _ => {}
         }

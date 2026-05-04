@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
 use docir_core::ir::{
     parse_cell_reference, CalcChain, CalcChainEntry, CellError, CellFormula, ColumnDefinition,
@@ -28,22 +29,15 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
                     let mut new_value = None;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"r" => {
-                                cell_ref = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            b"i" => {
-                                index = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"l" => {
-                                level = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
+                            b"r" => cell_ref = Some(lossy_attr_value(&attr).to_string()),
+                            b"i" => index = lossy_attr_value(&attr).parse::<u32>().ok(),
+                            b"l" => level = lossy_attr_value(&attr).parse::<u32>().ok(),
                             b"s" => {
-                                let v = String::from_utf8_lossy(&attr.value);
-                                new_value = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+                                let value = lossy_attr_value(&attr);
+                                new_value =
+                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
                             }
-                            b"si" => {
-                                sheet_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
+                            b"si" => sheet_id = lossy_attr_value(&attr).parse::<u32>().ok(),
                             _ => {}
                         }
                     }
@@ -95,8 +89,8 @@ pub(super) fn parse_conditional_formatting(
     let mut ranges: Vec<String> = Vec::new();
     for attr in start.attributes().flatten() {
         if attr.key.as_ref() == b"sqref" {
-            let val = String::from_utf8_lossy(&attr.value).to_string();
-            ranges = val.split_whitespace().map(|s| s.to_string()).collect();
+            let value = lossy_attr_value(&attr).to_string();
+            ranges = value.split_whitespace().map(|s| s.to_string()).collect();
         }
     }
 
@@ -115,12 +109,10 @@ pub(super) fn parse_conditional_formatting(
                     let mut operator = None;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"type" => rule_type = String::from_utf8_lossy(&attr.value).to_string(),
-                            b"priority" => {
-                                priority = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
+                            b"type" => rule_type = lossy_attr_value(&attr).to_string(),
+                            b"priority" => priority = lossy_attr_value(&attr).parse::<u32>().ok(),
                             b"operator" => {
-                                operator = Some(String::from_utf8_lossy(&attr.value).to_string());
+                                operator = Some(lossy_attr_value(&attr).to_string());
                             }
                             _ => {}
                         }
@@ -244,8 +236,8 @@ fn parse_formula_attrs(
     for attr in start.attributes().flatten() {
         match attr.key.as_ref() {
             b"t" => {
-                let v = String::from_utf8_lossy(&attr.value);
-                match v.as_ref() {
+                let value = lossy_attr_value(&attr);
+                match value.as_ref() {
                     "shared" => formula_type = FormulaType::Shared,
                     "array" => {
                         formula_type = FormulaType::Array;
@@ -255,9 +247,9 @@ fn parse_formula_attrs(
                     _ => {}
                 }
             }
-            b"si" => shared_index = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
+            b"si" => shared_index = lossy_attr_value(&attr).parse::<u32>().ok(),
             b"ref" => {
-                let r = String::from_utf8_lossy(&attr.value).to_string();
+                let r = lossy_attr_value(&attr).to_string();
                 if formula_type == FormulaType::Shared {
                     shared_ref = Some(r);
                 } else {
@@ -326,9 +318,9 @@ pub(super) fn parse_column(element: &BytesStart, columns: &mut HashMap<u32, Colu
 
     for attr in element.attributes().flatten() {
         match attr.key.as_ref() {
-            b"min" => min = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
-            b"max" => max = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
-            b"width" => width = String::from_utf8_lossy(&attr.value).parse::<f64>().ok(),
+            b"min" => min = lossy_attr_value(&attr).parse::<u32>().ok(),
+            b"max" => max = lossy_attr_value(&attr).parse::<u32>().ok(),
+            b"width" => width = lossy_attr_value(&attr).parse::<f64>().ok(),
             b"hidden" => hidden = attr.value.as_ref() == b"1",
             b"customWidth" => custom_width = attr.value.as_ref() == b"1",
             _ => {}
@@ -356,7 +348,7 @@ pub(super) fn parse_merge_cell(element: &BytesStart) -> Option<MergedCellRange> 
     let mut ref_attr = None;
     for attr in element.attributes().flatten() {
         if attr.key.as_ref() == b"ref" {
-            ref_attr = Some(String::from_utf8_lossy(&attr.value).to_string());
+            ref_attr = Some(lossy_attr_value(&attr).to_string());
         }
     }
 

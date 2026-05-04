@@ -2,6 +2,7 @@ use super::{
     attr_value, normalize_docx_target, parse_border, reader_from_str, span_from_reader, DocxParser,
     NodeId, PageBorders, ParseError, Relationships, WordSettings,
 };
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
@@ -207,7 +208,7 @@ pub(super) fn parse_settings_like(xml: &str) -> Result<WordSettings, ParseError>
                 };
                 for attr in e.attributes().flatten() {
                     let attr_name = String::from_utf8_lossy(attr.key.as_ref()).to_string();
-                    let attr_val = String::from_utf8_lossy(&attr.value).to_string();
+                    let attr_val = lossy_attr_value(&attr).to_string();
                     entry.attributes.push(docir_core::ir::SettingAttribute {
                         name: attr_name,
                         value: attr_val,

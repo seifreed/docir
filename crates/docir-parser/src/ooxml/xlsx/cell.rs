@@ -1,5 +1,6 @@
 use super::XlsxParser;
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{scan_xml_events_with_reader, XmlScanControl};
 use docir_core::ir::{Cell, CellFormula, CellValue};
 use docir_core::types::SourceSpan;
@@ -19,10 +20,10 @@ impl XlsxParser {
 
         for attr in start.attributes().flatten() {
             match attr.key.as_ref() {
-                b"r" => cell_ref = Some(String::from_utf8_lossy(&attr.value).to_string()),
-                b"t" => cell_type = Some(String::from_utf8_lossy(&attr.value).to_string()),
+                b"r" => cell_ref = Some(lossy_attr_value(&attr).to_string()),
+                b"t" => cell_type = Some(lossy_attr_value(&attr).to_string()),
                 b"s" => {
-                    let raw = String::from_utf8_lossy(&attr.value);
+                    let raw = lossy_attr_value(&attr);
                     style_id = Some(raw.parse::<u32>().map_err(|err| {
                         let cell_reference = cell_ref.as_deref().unwrap_or("<unknown>");
                         ParseError::InvalidStructure(format!(

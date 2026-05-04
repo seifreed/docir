@@ -1,5 +1,6 @@
 use crate::error::ParseError;
 use crate::xml_utils::local_name;
+use crate::xml_utils::lossy_attr_value;
 use docir_core::ir::{CellError, IRNode};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -21,14 +22,14 @@ pub(super) fn parse_activex_xml(
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 for attr in e.attributes().flatten() {
                     let key = attr.key.as_ref();
-                    let val = String::from_utf8_lossy(&attr.value).to_string();
+                    let value = lossy_attr_value(&attr).to_string();
                     match key {
-                        b"name" => control.name = Some(val.clone()),
-                        b"clsid" | b"classid" => control.clsid = Some(val.clone()),
-                        b"progid" => control.prog_id = Some(val.clone()),
+                        b"name" => control.name = Some(value.clone()),
+                        b"clsid" | b"classid" => control.clsid = Some(value.clone()),
+                        b"progid" => control.prog_id = Some(value.clone()),
                         _ => {
                             let k = String::from_utf8_lossy(key).to_string();
-                            control.properties.push((k, val));
+                            control.properties.push((k, value));
                         }
                     }
                 }
@@ -94,9 +95,9 @@ pub(super) fn parse_smartart_part(
                     for attr in e.attributes().flatten() {
                         let key = attr.key.as_ref();
                         if key == b"r:dm" || key == b"r:lo" || key == b"r:qs" || key == b"r:cs" {
-                            let val = String::from_utf8_lossy(&attr.value).to_string();
-                            if !val.is_empty() {
-                                rel_ids.push(val);
+                            let value = lossy_attr_value(&attr).to_string();
+                            if !value.is_empty() {
+                                rel_ids.push(value);
                             }
                         }
                     }

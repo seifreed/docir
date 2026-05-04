@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
 use docir_core::ir::DigitalSignature;
 use docir_core::types::SourceSpan;
@@ -25,24 +26,21 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
                 b"ds:Signature" | b"Signature" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"Id" {
-                            sig.signature_id =
-                                Some(String::from_utf8_lossy(&attr.value).to_string());
+                            sig.signature_id = Some(lossy_attr_value(&attr).to_string());
                         }
                     }
                 }
                 b"ds:SignatureMethod" | b"SignatureMethod" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"Algorithm" {
-                            sig.signature_method =
-                                Some(String::from_utf8_lossy(&attr.value).to_string());
+                            sig.signature_method = Some(lossy_attr_value(&attr).to_string());
                         }
                     }
                 }
                 b"ds:DigestMethod" | b"DigestMethod" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"Algorithm" {
-                            sig.digest_methods
-                                .push(String::from_utf8_lossy(&attr.value).to_string());
+                            sig.digest_methods.push(lossy_attr_value(&attr).to_string());
                         }
                     }
                 }

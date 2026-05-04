@@ -1,4 +1,5 @@
 use super::{ParseError, Reader, ShapeTransform};
+use crate::xml_utils::lossy_attr_value;
 use quick_xml::events::Event;
 
 pub(super) fn parse_transform(
@@ -14,14 +15,10 @@ pub(super) fn parse_transform(
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"x" => {
-                                transform.x = String::from_utf8_lossy(&attr.value)
-                                    .parse::<i64>()
-                                    .unwrap_or(0)
+                                transform.x = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0)
                             }
                             b"y" => {
-                                transform.y = String::from_utf8_lossy(&attr.value)
-                                    .parse::<i64>()
-                                    .unwrap_or(0)
+                                transform.y = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0)
                             }
                             _ => {}
                         }
@@ -31,14 +28,12 @@ pub(super) fn parse_transform(
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"cx" => {
-                                transform.width = String::from_utf8_lossy(&attr.value)
-                                    .parse::<u64>()
-                                    .unwrap_or(0)
+                                transform.width =
+                                    lossy_attr_value(&attr).parse::<u64>().unwrap_or(0)
                             }
                             b"cy" => {
-                                transform.height = String::from_utf8_lossy(&attr.value)
-                                    .parse::<u64>()
-                                    .unwrap_or(0)
+                                transform.height =
+                                    lossy_attr_value(&attr).parse::<u64>().unwrap_or(0)
                             }
                             _ => {}
                         }
@@ -51,14 +46,10 @@ pub(super) fn parse_transform(
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"x" => {
-                                transform.x = String::from_utf8_lossy(&attr.value)
-                                    .parse::<i64>()
-                                    .unwrap_or(0)
+                                transform.x = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0)
                             }
                             b"y" => {
-                                transform.y = String::from_utf8_lossy(&attr.value)
-                                    .parse::<i64>()
-                                    .unwrap_or(0)
+                                transform.y = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0)
                             }
                             _ => {}
                         }
@@ -68,14 +59,12 @@ pub(super) fn parse_transform(
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"cx" => {
-                                transform.width = String::from_utf8_lossy(&attr.value)
-                                    .parse::<u64>()
-                                    .unwrap_or(0)
+                                transform.width =
+                                    lossy_attr_value(&attr).parse::<u64>().unwrap_or(0)
                             }
                             b"cy" => {
-                                transform.height = String::from_utf8_lossy(&attr.value)
-                                    .parse::<u64>()
-                                    .unwrap_or(0)
+                                transform.height =
+                                    lossy_attr_value(&attr).parse::<u64>().unwrap_or(0)
                             }
                             _ => {}
                         }

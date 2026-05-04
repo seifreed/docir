@@ -1,6 +1,7 @@
 //! XLSX table and pivot parsing.
 
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{scan_xml_events, XmlScanControl};
 use docir_core::ir::{PivotCacheRecords, PivotTable, TableColumn, TableDefinition};
 use docir_core::types::{NodeId, SourceSpan};
@@ -32,24 +33,16 @@ pub(crate) fn parse_table_definition(
                 b"table" => {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"name" => {
-                                table.name = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
+                            b"name" => table.name = Some(lossy_attr_value(&attr).to_string()),
                             b"displayName" => {
-                                table.display_name =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string())
+                                table.display_name = Some(lossy_attr_value(&attr).to_string())
                             }
-                            b"ref" => {
-                                table.ref_range =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
+                            b"ref" => table.ref_range = Some(lossy_attr_value(&attr).to_string()),
                             b"headerRowCount" => {
-                                table.header_row_count =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
+                                table.header_row_count = lossy_attr_value(&attr).parse::<u32>().ok()
                             }
                             b"totalsRowCount" => {
-                                table.totals_row_count =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
+                                table.totals_row_count = lossy_attr_value(&attr).parse::<u32>().ok()
                             }
                             _ => {}
                         }
@@ -62,17 +55,13 @@ pub(crate) fn parse_table_definition(
                     let mut totals_row_function = None;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"id" => id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
-                            b"name" => {
-                                name = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
+                            b"id" => id = lossy_attr_value(&attr).parse::<u32>().ok(),
+                            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
                             b"totalsRowLabel" => {
-                                totals_row_label =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string())
+                                totals_row_label = Some(lossy_attr_value(&attr).to_string())
                             }
                             b"totalsRowFunction" => {
-                                totals_row_function =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string())
+                                totals_row_function = Some(lossy_attr_value(&attr).to_string())
                             }
                             _ => {}
                         }
@@ -95,15 +84,13 @@ pub(crate) fn parse_table_definition(
                 let mut totals_row_function = None;
                 for attr in e.attributes().flatten() {
                     match attr.key.as_ref() {
-                        b"id" => id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
-                        b"name" => name = Some(String::from_utf8_lossy(&attr.value).to_string()),
+                        b"id" => id = lossy_attr_value(&attr).parse::<u32>().ok(),
+                        b"name" => name = Some(lossy_attr_value(&attr).to_string()),
                         b"totalsRowLabel" => {
-                            totals_row_label =
-                                Some(String::from_utf8_lossy(&attr.value).to_string())
+                            totals_row_label = Some(lossy_attr_value(&attr).to_string())
                         }
                         b"totalsRowFunction" => {
-                            totals_row_function =
-                                Some(String::from_utf8_lossy(&attr.value).to_string())
+                            totals_row_function = Some(lossy_attr_value(&attr).to_string())
                         }
                         _ => {}
                     }
@@ -150,12 +137,9 @@ pub(crate) fn parse_pivot_table_definition(
                 b"pivotTableDefinition" => {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"name" => {
-                                pivot.name = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
+                            b"name" => pivot.name = Some(lossy_attr_value(&attr).to_string()),
                             b"cacheId" => {
-                                pivot.cache_id =
-                                    String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
+                                pivot.cache_id = lossy_attr_value(&attr).parse::<u32>().ok()
                             }
                             _ => {}
                         }
@@ -164,8 +148,7 @@ pub(crate) fn parse_pivot_table_definition(
                 b"location" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"ref" {
-                            pivot.ref_range =
-                                Some(String::from_utf8_lossy(&attr.value).to_string());
+                            pivot.ref_range = Some(lossy_attr_value(&attr).to_string());
                         }
                     }
                 }
@@ -174,7 +157,7 @@ pub(crate) fn parse_pivot_table_definition(
             Event::Empty(e) if e.name().as_ref() == b"location" => {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"ref" {
-                        pivot.ref_range = Some(String::from_utf8_lossy(&attr.value).to_string());
+                        pivot.ref_range = Some(lossy_attr_value(&attr).to_string());
                     }
                 }
             }
@@ -212,8 +195,7 @@ pub(crate) fn parse_pivot_cache_records(
                 if e.name().as_ref() == b"pivotCacheRecords" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"count" {
-                            records.record_count =
-                                String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                            records.record_count = lossy_attr_value(&attr).parse::<u32>().ok();
                             has_count_attr = records.record_count.is_some();
                         }
                     }
@@ -228,8 +210,7 @@ pub(crate) fn parse_pivot_cache_records(
                 if e.name().as_ref() == b"pivotCacheRecords" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"count" {
-                            records.record_count =
-                                String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                            records.record_count = lossy_attr_value(&attr).parse::<u32>().ok();
                             has_count_attr = records.record_count.is_some();
                         }
                     }

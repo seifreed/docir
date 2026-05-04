@@ -2,6 +2,7 @@
 
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{attr_bool, attr_u32, attr_value, local_name};
 use crate::xml_utils::{scan_xml_events, XmlScanControl};
 use docir_core::ir::{
@@ -159,7 +160,7 @@ pub(crate) fn parse_external_link_part(
             for attr in e.attributes().flatten() {
                 let key = local_name(attr.key.as_ref());
                 if key == b"linkType" || key == b"type" {
-                    part.link_type = Some(String::from_utf8_lossy(&attr.value).to_string());
+                    part.link_type = Some(lossy_attr_value(&attr).to_string());
                 }
             }
         }
@@ -171,9 +172,9 @@ pub(crate) fn parse_external_link_part(
             };
             for attr in e.attributes().flatten() {
                 let key = local_name(attr.key.as_ref());
-                let val = String::from_utf8_lossy(&attr.value).to_string();
+                let value = lossy_attr_value(&attr).to_string();
                 if key == b"val" || key == b"name" {
-                    sheet.name = Some(val);
+                    sheet.name = Some(value);
                 }
             }
             if let Some(name) = sheet.name {
@@ -187,7 +188,7 @@ pub(crate) fn parse_external_link_part(
             for attr in e.attributes().flatten() {
                 let key = local_name(attr.key.as_ref());
                 if key == b"id" || key == b"rid" || key == b"rId" {
-                    let rel_id = String::from_utf8_lossy(&attr.value).to_string();
+                    let rel_id = lossy_attr_value(&attr).to_string();
                     if let Some(rels) = rels {
                         if let Some(rel) = rels.get(&rel_id) {
                             part.target = Some(rel.target.clone());
@@ -215,12 +216,12 @@ pub(crate) fn parse_slicer_part(xml: &str, path: &str) -> Result<SlicerPart, Par
         if local == b"slicer" {
             for attr in e.attributes().flatten() {
                 let key = local_name(attr.key.as_ref());
-                let val = String::from_utf8_lossy(&attr.value).to_string();
+                let value = lossy_attr_value(&attr).to_string();
                 match key {
-                    b"name" => slicer.name = Some(val),
-                    b"caption" => slicer.caption = Some(val),
-                    b"cache" | b"cacheId" => slicer.cache_id = Some(val),
-                    b"ref" | b"pivotRef" => slicer.target_ref = Some(val),
+                    b"name" => slicer.name = Some(value),
+                    b"caption" => slicer.caption = Some(value),
+                    b"cache" | b"cacheId" => slicer.cache_id = Some(value),
+                    b"ref" | b"pivotRef" => slicer.target_ref = Some(value),
                     _ => {}
                 }
             }
@@ -238,10 +239,10 @@ pub(crate) fn parse_timeline_part(xml: &str, path: &str) -> Result<TimelinePart,
         if local == b"timeline" {
             for attr in e.attributes().flatten() {
                 let key = local_name(attr.key.as_ref());
-                let val = String::from_utf8_lossy(&attr.value).to_string();
+                let value = lossy_attr_value(&attr).to_string();
                 match key {
-                    b"name" => timeline.name = Some(val),
-                    b"cache" | b"cacheId" => timeline.cache_id = Some(val),
+                    b"name" => timeline.name = Some(value),
+                    b"cache" | b"cacheId" => timeline.cache_id = Some(value),
                     _ => {}
                 }
             }
@@ -259,10 +260,10 @@ pub(crate) fn parse_query_table_part(xml: &str, path: &str) -> Result<QueryTable
         b"queryTable" => {
             for attr in e.attributes().flatten() {
                 let key = local_name(attr.key.as_ref());
-                let val = String::from_utf8_lossy(&attr.value).to_string();
+                let value = lossy_attr_value(&attr).to_string();
                 match key {
-                    b"name" => query.name = Some(val),
-                    b"connectionId" | b"connection" => query.connection_id = Some(val),
+                    b"name" => query.name = Some(value),
+                    b"connectionId" | b"connection" => query.connection_id = Some(value),
                     _ => {}
                 }
             }
@@ -270,22 +271,22 @@ pub(crate) fn parse_query_table_part(xml: &str, path: &str) -> Result<QueryTable
         b"dbPr" => {
             for attr in e.attributes().flatten() {
                 let key = local_name(attr.key.as_ref());
-                let val = String::from_utf8_lossy(&attr.value).to_string();
+                let value = lossy_attr_value(&attr).to_string();
                 if key == b"command" {
-                    query.command = Some(val.clone());
+                    query.command = Some(value.clone());
                 }
                 if key == b"connection" {
-                    query.connection_id = Some(val);
+                    query.connection_id = Some(value);
                 }
             }
         }
         b"webPr" => {
             for attr in e.attributes().flatten() {
                 let key = local_name(attr.key.as_ref());
-                let val = String::from_utf8_lossy(&attr.value).to_string();
+                let value = lossy_attr_value(&attr).to_string();
                 if key == b"url" {
-                    query.url = Some(val.clone());
-                    query.source = Some(val);
+                    query.url = Some(value.clone());
+                    query.source = Some(value);
                 }
             }
         }

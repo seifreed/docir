@@ -4,6 +4,7 @@ use super::{
 };
 use crate::error::ParseError;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{IRNode, Shape, ShapeType, Slide, SlideAnimation, SlideTransition};
@@ -301,10 +302,10 @@ impl PptxParser {
                 for attr in event.attributes().flatten() {
                     match attr.key.as_ref() {
                         b"name" => {
-                            shape.name = Some(String::from_utf8_lossy(&attr.value).to_string());
+                            shape.name = Some(lossy_attr_value(&attr).to_string());
                         }
                         b"descr" => {
-                            shape.alt_text = Some(String::from_utf8_lossy(&attr.value).to_string());
+                            shape.alt_text = Some(lossy_attr_value(&attr).to_string());
                         }
                         _ => {}
                     }
@@ -316,9 +317,9 @@ impl PptxParser {
             b"a:blip" => {
                 for attr in event.attributes().flatten() {
                     if attr.key.as_ref() == b"r:embed" {
-                        *embed_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
+                        *embed_rel = Some(lossy_attr_value(&attr).to_string());
                     } else if attr.key.as_ref() == b"r:link" {
-                        *link_rel = Some(String::from_utf8_lossy(&attr.value).to_string());
+                        *link_rel = Some(lossy_attr_value(&attr).to_string());
                     }
                 }
             }
@@ -400,18 +401,16 @@ impl PptxParser {
 
         for attr in start.attributes().flatten() {
             match attr.key.as_ref() {
-                b"spd" => transition.speed = Some(String::from_utf8_lossy(&attr.value).to_string()),
+                b"spd" => transition.speed = Some(lossy_attr_value(&attr).to_string()),
                 b"advClick" => {
-                    let v = String::from_utf8_lossy(&attr.value);
+                    let v = lossy_attr_value(&attr);
                     transition.advance_on_click = Some(v == "1" || v.eq_ignore_ascii_case("true"));
                 }
                 b"advTm" => {
-                    transition.advance_after_ms =
-                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                    transition.advance_after_ms = lossy_attr_value(&attr).parse::<u32>().ok();
                 }
                 b"dur" => {
-                    transition.duration_ms =
-                        String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                    transition.duration_ms = lossy_attr_value(&attr).parse::<u32>().ok();
                 }
                 _ => {}
             }
@@ -510,7 +509,7 @@ impl PptxParser {
 fn update_slide_visibility(slide: &mut Slide, event: &BytesStart<'_>) {
     for attr in event.attributes().flatten() {
         if attr.key.as_ref() == b"show" {
-            let v = String::from_utf8_lossy(&attr.value);
+            let v = lossy_attr_value(&attr);
             if v == "0" || v.eq_ignore_ascii_case("false") {
                 slide.hidden = true;
             }
@@ -521,7 +520,7 @@ fn update_slide_visibility(slide: &mut Slide, event: &BytesStart<'_>) {
 fn update_slide_name(slide: &mut Slide, event: &BytesStart<'_>) {
     for attr in event.attributes().flatten() {
         if attr.key.as_ref() == b"name" {
-            slide.name = Some(String::from_utf8_lossy(&attr.value).to_string());
+            slide.name = Some(lossy_attr_value(&attr).to_string());
         }
     }
 }
@@ -558,16 +557,16 @@ where
     for attr in attrs {
         match attr.key.as_ref() {
             b"dur" => {
-                anim.duration_ms = String::from_utf8_lossy(&attr.value).parse::<u32>().ok();
+                anim.duration_ms = lossy_attr_value(&attr).parse::<u32>().ok();
             }
             b"presetID" => {
-                anim.preset_id = Some(String::from_utf8_lossy(&attr.value).to_string());
+                anim.preset_id = Some(lossy_attr_value(&attr).to_string());
             }
             b"presetClass" => {
-                anim.preset_class = Some(String::from_utf8_lossy(&attr.value).to_string());
+                anim.preset_class = Some(lossy_attr_value(&attr).to_string());
             }
             b"r:link" | b"r:embed" => {
-                let rel_id = String::from_utf8_lossy(&attr.value).to_string();
+                let rel_id = lossy_attr_value(&attr).to_string();
                 anim.target = Some(resolve_animation_target(slide_path, relationships, rel_id));
             }
             _ => {}
@@ -598,7 +597,7 @@ where
     };
     for attr in attrs {
         if attr.key.as_ref() == b"spid" {
-            animations[idx].target = Some(String::from_utf8_lossy(&attr.value).to_string());
+            animations[idx].target = Some(lossy_attr_value(&attr).to_string());
         }
     }
 }

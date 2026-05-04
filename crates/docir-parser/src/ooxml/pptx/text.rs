@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use docir_core::ir::{ShapeText, ShapeTextParagraph, ShapeTextRun, TextAlignment};
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -80,7 +81,7 @@ fn parse_text_paragraph(
                 b"a:pPr" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"algn" {
-                            alignment = map_alignment(&String::from_utf8_lossy(&attr.value));
+                            alignment = map_alignment(&lossy_attr_value(&attr));
                         }
                     }
                 }
@@ -138,9 +139,7 @@ fn parse_text_run(
                         match attr.key.as_ref() {
                             b"b" => bold = Some(attr.value.as_ref() == b"1"),
                             b"i" => italic = Some(attr.value.as_ref() == b"1"),
-                            b"sz" => {
-                                font_size = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
+                            b"sz" => font_size = lossy_attr_value(&attr).parse::<u32>().ok(),
                             _ => {}
                         }
                     }
@@ -155,7 +154,7 @@ fn parse_text_run(
                 b"a:latin" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"typeface" {
-                            font_family = Some(String::from_utf8_lossy(&attr.value).to_string());
+                            font_family = Some(lossy_attr_value(&attr).to_string());
                         }
                     }
                 }

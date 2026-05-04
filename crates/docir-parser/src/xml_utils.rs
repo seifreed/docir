@@ -1,13 +1,22 @@
 use crate::error::ParseError;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use std::borrow::Cow;
 use std::fmt::Display;
 use std::io::BufRead;
+
+/// Converts an XML attribute's value bytes to a lossy UTF-8 string.
+/// Replaces the verbose `String::from_utf8_lossy(&attr.value)` pattern in attribute iteration loops.
+pub(crate) fn lossy_attr_value<'a>(
+    attr: &'a quick_xml::events::attributes::Attribute<'a>,
+) -> Cow<'a, str> {
+    String::from_utf8_lossy(&attr.value)
+}
 
 pub(crate) fn attr_value(e: &BytesStart<'_>, name: &[u8]) -> Option<String> {
     for attr in e.attributes().flatten() {
         if attr.key.as_ref() == name {
-            return Some(String::from_utf8_lossy(&attr.value).to_string());
+            return Some(lossy_attr_value(&attr).to_string());
         }
     }
     None
@@ -93,7 +102,7 @@ pub(crate) fn attr_value_by_suffix(e: &BytesStart<'_>, suffixes: &[&[u8]]) -> Op
                 if let Ok(value) = attr.unescape_value() {
                     return Some(value.to_string());
                 }
-                return Some(String::from_utf8_lossy(&attr.value).to_string());
+                return Some(lossy_attr_value(&attr).to_string());
             }
         }
     }

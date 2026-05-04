@@ -1,5 +1,6 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::{VmlDrawing, VmlShape};
 use docir_core::types::SourceSpan;
@@ -107,7 +108,7 @@ fn handle_vml_element_start(
 fn apply_shape_attrs(shape: &mut VmlShape, e: &quick_xml::events::BytesStart<'_>) {
     for attr in e.attributes().flatten() {
         let key = local_name(attr.key.as_ref());
-        let val = String::from_utf8_lossy(&attr.value).to_string();
+        let val = lossy_attr_value(&attr).to_string();
         match key {
             b"id" | b"name" => shape.name = Some(val),
             b"type" => shape.shape_type = Some(val),
@@ -143,7 +144,7 @@ fn parse_image_rel_id(e: &quick_xml::events::BytesStart<'_>) -> Option<String> {
         if key != b"id" && key != b"rid" && key != b"rId" {
             continue;
         }
-        return Some(String::from_utf8_lossy(&attr.value).to_string());
+        return Some(lossy_attr_value(&attr).to_string());
     }
     None
 }

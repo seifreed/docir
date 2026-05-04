@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::xml_utils::lossy_attr_value;
 use docir_core::ir::{PptxComment, PptxCommentAuthor};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::events::Event;
@@ -23,15 +24,9 @@ pub(crate) fn parse_comment_authors(
                     let mut initials = None;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"id" => {
-                                author_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"name" => {
-                                name = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
-                            b"initials" => {
-                                initials = Some(String::from_utf8_lossy(&attr.value).to_string())
-                            }
+                            b"id" => author_id = lossy_attr_value(&attr).parse::<u32>().ok(),
+                            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
+                            b"initials" => initials = Some(lossy_attr_value(&attr).to_string()),
                             _ => {}
                         }
                     }
@@ -83,10 +78,8 @@ pub(crate) fn parse_comments(
                     let mut dt = None;
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
-                            b"authorId" => {
-                                author_id = String::from_utf8_lossy(&attr.value).parse::<u32>().ok()
-                            }
-                            b"dt" => dt = Some(String::from_utf8_lossy(&attr.value).to_string()),
+                            b"authorId" => author_id = lossy_attr_value(&attr).parse::<u32>().ok(),
+                            b"dt" => dt = Some(lossy_attr_value(&attr).to_string()),
                             _ => {}
                         }
                     }

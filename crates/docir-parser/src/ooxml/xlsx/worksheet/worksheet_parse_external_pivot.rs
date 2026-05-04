@@ -3,6 +3,7 @@ use crate::ooxml::relationships::Relationships;
 use crate::ooxml::xlsx::{
     parse_pivot_cache_records, rel_type, IRNode, ParseError, PivotCache, XlsxParser,
 };
+use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{reader_from_str, scan_xml_events_until_end, XmlScanControl};
 use crate::zip_handler::PackageReader;
 use docir_core::types::SourceSpan;
@@ -32,11 +33,10 @@ pub(super) fn parse_pivot_cache_impl(
                     b"cacheSource" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"type" {
-                                cache.cache_source =
-                                    Some(String::from_utf8_lossy(&attr.value).to_string());
+                                cache.cache_source = Some(lossy_attr_value(&attr).to_string());
                             }
                             if attr.key.as_ref() == b"connectionId" {
-                                let conn = String::from_utf8_lossy(&attr.value).to_string();
+                                let conn = lossy_attr_value(&attr).to_string();
                                 cache.cache_source = Some(format!("connection:{conn}"));
                             }
                         }
@@ -46,12 +46,8 @@ pub(super) fn parse_pivot_cache_impl(
                         let mut range = None;
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                b"sheet" => {
-                                    sheet = Some(String::from_utf8_lossy(&attr.value).to_string())
-                                }
-                                b"ref" => {
-                                    range = Some(String::from_utf8_lossy(&attr.value).to_string())
-                                }
+                                b"sheet" => sheet = Some(lossy_attr_value(&attr).to_string()),
+                                b"ref" => range = Some(lossy_attr_value(&attr).to_string()),
                                 _ => {}
                             }
                         }
