@@ -100,6 +100,23 @@ pub enum CellError {
     GettingData,
 }
 
+impl std::fmt::Display for CellError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Null => write!(f, "#NULL!"),
+            Self::DivZero => write!(f, "#DIV/0!"),
+            Self::Value => write!(f, "#VALUE!"),
+            Self::Ref => write!(f, "#REF!"),
+            Self::Name => write!(f, "#NAME?"),
+            Self::Num => write!(f, "#NUM!"),
+            Self::NA => write!(f, "#N/A"),
+            Self::GettingData => write!(f, "#GETTING_DATA"),
+        }
+    }
+}
+
+impl std::error::Error for CellError {}
+
 /// Cell formula information.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]

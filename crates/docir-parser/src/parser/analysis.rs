@@ -28,8 +28,8 @@ pub(super) fn parse_activex_xml(
                         b"clsid" | b"classid" => control.clsid = Some(value.clone()),
                         b"progid" => control.prog_id = Some(value.clone()),
                         _ => {
-                            let k = String::from_utf8_lossy(key).to_string();
-                            control.properties.push((k, value));
+                            let prop_key = String::from_utf8_lossy(key).to_string();
+                            control.properties.push((prop_key, value));
                         }
                     }
                 }

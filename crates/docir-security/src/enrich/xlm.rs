@@ -117,8 +117,8 @@ pub(super) fn apply_xlm_defined_name_targets(
 fn auto_open_target_from_defined_name(name: &DefinedName) -> Option<Option<String>> {
     let upper = name.name.to_ascii_uppercase();
     if upper == "_XLNM.AUTO_OPEN" || upper == "AUTO_OPEN" || upper == "AUTO.OPEN" {
-        let val = name.value.trim();
-        if let Some((sheet, _)) = val.split_once('!') {
+        let value = name.value.trim();
+        if let Some((sheet, _)) = value.split_once('!') {
             let cleaned = sheet.trim().trim_matches('\'').to_string();
             if !cleaned.is_empty() {
                 return Some(Some(cleaned));

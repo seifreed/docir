@@ -8,15 +8,10 @@ use crate::types::NodeId;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[path = "security/extraction.rs"]
 mod extraction;
-#[path = "security/security_macros.rs"]
 mod security_macros;
-#[path = "security/security_ole.rs"]
 mod security_ole;
-#[path = "security/security_references.rs"]
 mod security_references;
-#[path = "security/threat_level.rs"]
 mod threat_level;
 mod vba;
 

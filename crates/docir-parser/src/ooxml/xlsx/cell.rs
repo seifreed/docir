@@ -108,8 +108,8 @@ impl XlsxParser {
                     }
                 }
                 Some("b") => {
-                    let v = value.trim();
-                    CellValue::Boolean(v == "1" || v.eq_ignore_ascii_case("true"))
+                    let bool_value = value.trim();
+                    CellValue::Boolean(bool_value == "1" || bool_value.eq_ignore_ascii_case("true"))
                 }
                 Some("str") => CellValue::String(value),
                 Some("e") => CellValue::Error(super::map_cell_error(&value)),

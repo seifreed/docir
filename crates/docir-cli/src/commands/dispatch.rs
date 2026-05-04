@@ -3,10 +3,10 @@ use anyhow::Result;
 use docir_app::ParserConfig;
 
 pub(crate) fn run(cli: Cli, parser_config: &ParserConfig) -> Result<()> {
-    run_command(cli.command, parser_config)
+    dispatch(cli.command, parser_config)
 }
 
-fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
+fn dispatch(command: Commands, parser_config: &ParserConfig) -> Result<()> {
     match command {
         Commands::Parse {
             input,
@@ -36,12 +36,6 @@ fn run_command(command: Commands, parser_config: &ParserConfig) -> Result<()> {
             },
             parser_config,
         ),
-        cmd => dispatch_remaining(cmd, parser_config),
-    }
-}
-
-fn dispatch_remaining(command: Commands, parser_config: &ParserConfig) -> Result<()> {
-    match command {
         Commands::Inventory { input, output_opts } => {
             super::inventory::run(input, output_opts, parser_config)
         }
@@ -184,15 +178,12 @@ fn dispatch_remaining(command: Commands, parser_config: &ParserConfig) -> Result
             node_type,
             output_opts,
         } => super::extract::run(input, node_id, node_type, output_opts, parser_config),
-        Commands::Parse { .. } | Commands::Summary { .. } | Commands::Coverage { .. } => {
-            unreachable!()
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::run_command;
+    use super::dispatch;
     use crate::test_support;
     use crate::{
         Commands, CoverageExportFormat, CoverageExportMode, JsonOutputOpts, OutputFormat,
@@ -208,10 +199,10 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn run_command_routes_parse_summary_probe_inventory() {
+    fn dispatch_routes_parse_summary_probe_inventory() {
         let config = ParserConfig::default();
         let parse_out = test_support::temp_file("parse", "json");
-        run_command(
+        dispatch(
             Commands::Parse {
                 input: test_support::fixture("minimal.docx"),
                 format: OutputFormat::Json,
@@ -225,7 +216,7 @@ mod tests {
         .expect("parse arm");
         assert!(parse_out.exists());
 
-        run_command(
+        dispatch(
             Commands::Summary {
                 input: test_support::fixture("minimal.docx"),
             },
@@ -233,7 +224,7 @@ mod tests {
         )
         .expect("summary arm");
 
-        run_command(
+        dispatch(
             Commands::ProbeFormat {
                 input: test_support::fixture("minimal.docx"),
                 output_opts: JsonOutputOpts {
@@ -246,7 +237,7 @@ mod tests {
         )
         .expect("probe-format arm");
 
-        run_command(
+        dispatch(
             Commands::Inventory {
                 input: test_support::fixture("minimal.docx"),
                 output_opts: JsonOutputOpts {
@@ -263,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn run_command_routes_inspect_commands() {
+    fn dispatch_routes_inspect_commands() {
         let config = ParserConfig::default();
         let list_times_input = test_support::temp_file("times", "doc");
         let metadata_input = test_support::temp_file("metadata", "doc");
@@ -297,7 +288,7 @@ mod tests {
         )
         .expect("inspect-sectors fixture");
 
-        run_command(
+        dispatch(
             Commands::ListTimes {
                 input: list_times_input.clone(),
                 output_opts: JsonOutputOpts {
@@ -310,7 +301,7 @@ mod tests {
         )
         .expect("list-times arm");
 
-        run_command(
+        dispatch(
             Commands::InspectMetadata {
                 input: metadata_input.clone(),
                 output_opts: JsonOutputOpts {
@@ -323,7 +314,7 @@ mod tests {
         )
         .expect("inspect-metadata arm");
 
-        run_command(
+        dispatch(
             Commands::InspectDirectory {
                 input: inspect_directory_input.clone(),
                 output_opts: JsonOutputOpts {
@@ -336,7 +327,7 @@ mod tests {
         )
         .expect("inspect-directory arm");
 
-        run_command(
+        dispatch(
             Commands::InspectSectors {
                 input: inspect_sectors_input.clone(),
                 output_opts: JsonOutputOpts {
@@ -356,10 +347,10 @@ mod tests {
     }
 
     #[test]
-    fn run_command_routes_output_commands() {
+    fn dispatch_routes_output_commands() {
         let config = ParserConfig::default();
 
-        run_command(
+        dispatch(
             Commands::Manifest {
                 input: test_support::fixture("minimal.docx"),
                 output_opts: PrettyOutputOpts {
@@ -371,7 +362,7 @@ mod tests {
         )
         .expect("manifest arm");
 
-        run_command(
+        dispatch(
             Commands::DumpContainer {
                 input: test_support::fixture("minimal.docx"),
                 output_opts: JsonOutputOpts {
@@ -384,7 +375,7 @@ mod tests {
         )
         .expect("dump-container arm");
 
-        run_command(
+        dispatch(
             Commands::RecognizeVba {
                 input: test_support::fixture("minimal.docx"),
                 include_source: false,
@@ -398,7 +389,7 @@ mod tests {
         )
         .expect("recognize-vba arm");
 
-        run_command(
+        dispatch(
             Commands::ReportIndicators {
                 input: test_support::fixture("minimal.docx"),
                 output_opts: JsonOutputOpts {
@@ -411,7 +402,7 @@ mod tests {
         )
         .expect("report-indicators arm");
 
-        run_command(
+        dispatch(
             Commands::ExtractLinks {
                 input: test_support::fixture("minimal.docx"),
                 output_opts: JsonOutputOpts {
@@ -424,7 +415,7 @@ mod tests {
         )
         .expect("extract-links arm");
 
-        run_command(
+        dispatch(
             Commands::Security {
                 input: test_support::fixture("minimal.docx"),
                 json: true,
@@ -436,10 +427,10 @@ mod tests {
     }
 
     #[test]
-    fn run_command_routes_rules_diff_coverage() {
+    fn dispatch_routes_rules_diff_coverage() {
         let config = ParserConfig::default();
         let rules_out = test_support::temp_file("rules", "json");
-        run_command(
+        dispatch(
             Commands::Rules {
                 input: test_support::fixture("minimal.docx"),
                 output_opts: PrettyOutputOpts {
@@ -454,7 +445,7 @@ mod tests {
         assert!(rules_out.exists());
 
         let diff_out = test_support::temp_file("diff", "json");
-        run_command(
+        dispatch(
             Commands::Diff {
                 left: test_support::fixture("minimal.docx"),
                 right: test_support::fixture("minimal.docx"),
@@ -468,7 +459,7 @@ mod tests {
         .expect("diff arm");
         assert!(diff_out.exists());
 
-        run_command(
+        dispatch(
             Commands::Coverage {
                 input: test_support::fixture("minimal.docx"),
                 json: true,
@@ -488,10 +479,10 @@ mod tests {
     }
 
     #[test]
-    fn run_command_routes_extract_artifacts() {
+    fn dispatch_routes_extract_artifacts() {
         let config = ParserConfig::default();
         let artifacts_out = test_support::temp_dir("extract_artifacts");
-        run_command(
+        dispatch(
             Commands::ExtractArtifacts {
                 input: test_support::fixture("minimal.docx"),
                 out: artifacts_out.clone(),
@@ -510,10 +501,10 @@ mod tests {
     }
 
     #[test]
-    fn run_command_routes_query_select_grep_extract() {
+    fn dispatch_routes_query_select_grep_extract() {
         let config = ParserConfig::default();
         let query_out = test_support::temp_file("query", "json");
-        run_command(
+        dispatch(
             Commands::Query {
                 input: test_support::fixture("minimal.docx"),
                 node_type: Some("Paragraph".to_string()),
@@ -532,7 +523,7 @@ mod tests {
         assert!(query_out.exists());
 
         let select_out = test_support::temp_file("select", "json");
-        run_command(
+        dispatch(
             Commands::Select {
                 input: test_support::fixture("minimal.docx"),
                 node_type: Some("Paragraph".to_string()),
@@ -551,7 +542,7 @@ mod tests {
         assert!(select_out.exists());
 
         let grep_out = test_support::temp_file("grep", "json");
-        run_command(
+        dispatch(
             Commands::Grep {
                 input: test_support::fixture("minimal.docx"),
                 pattern: "Hello".to_string(),
@@ -568,7 +559,7 @@ mod tests {
         assert!(grep_out.exists());
 
         let extract_out = test_support::temp_file("extract", "json");
-        run_command(
+        dispatch(
             Commands::Extract {
                 input: test_support::fixture("minimal.docx"),
                 node_id: Vec::new(),
@@ -590,9 +581,9 @@ mod tests {
     }
 
     #[test]
-    fn run_command_dump_node_invalid_id_fails() {
+    fn dispatch_dump_node_invalid_id_fails() {
         let config = ParserConfig::default();
-        let err = run_command(
+        let err = dispatch(
             Commands::DumpNode {
                 input: test_support::fixture("minimal.docx"),
                 node_id: "invalid".to_string(),

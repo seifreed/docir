@@ -403,8 +403,9 @@ impl PptxParser {
             match attr.key.as_ref() {
                 b"spd" => transition.speed = Some(lossy_attr_value(&attr).to_string()),
                 b"advClick" => {
-                    let v = lossy_attr_value(&attr);
-                    transition.advance_on_click = Some(v == "1" || v.eq_ignore_ascii_case("true"));
+                    let value = lossy_attr_value(&attr);
+                    transition.advance_on_click =
+                        Some(value == "1" || value.eq_ignore_ascii_case("true"));
                 }
                 b"advTm" => {
                     transition.advance_after_ms = lossy_attr_value(&attr).parse::<u32>().ok();
@@ -509,8 +510,8 @@ impl PptxParser {
 fn update_slide_visibility(slide: &mut Slide, event: &BytesStart<'_>) {
     for attr in event.attributes().flatten() {
         if attr.key.as_ref() == b"show" {
-            let v = lossy_attr_value(&attr);
-            if v == "0" || v.eq_ignore_ascii_case("false") {
+            let value = lossy_attr_value(&attr);
+            if value == "0" || value.eq_ignore_ascii_case("false") {
                 slide.hidden = true;
             }
         }

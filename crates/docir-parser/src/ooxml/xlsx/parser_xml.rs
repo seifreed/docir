@@ -249,11 +249,11 @@ fn parse_formula_attrs(
             }
             b"si" => shared_index = lossy_attr_value(&attr).parse::<u32>().ok(),
             b"ref" => {
-                let r = lossy_attr_value(&attr).to_string();
+                let reference = lossy_attr_value(&attr).to_string();
                 if formula_type == FormulaType::Shared {
-                    shared_ref = Some(r);
+                    shared_ref = Some(reference);
                 } else {
-                    array_ref = Some(r);
+                    array_ref = Some(reference);
                 }
             }
             _ => {}

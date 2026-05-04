@@ -278,16 +278,16 @@ pub(crate) fn parse_data_validation_empty(start: &BytesStart, sheet_path: &str) 
                 validation.operator = Some(lossy_attr_value(&attr).to_string());
             }
             b"allowBlank" => {
-                let v = lossy_attr_value(&attr);
-                validation.allow_blank = v == "1" || v.eq_ignore_ascii_case("true");
+                let value = lossy_attr_value(&attr);
+                validation.allow_blank = value == "1" || value.eq_ignore_ascii_case("true");
             }
             b"showInputMessage" => {
-                let v = lossy_attr_value(&attr);
-                validation.show_input_message = v == "1" || v.eq_ignore_ascii_case("true");
+                let value = lossy_attr_value(&attr);
+                validation.show_input_message = value == "1" || value.eq_ignore_ascii_case("true");
             }
             b"showErrorMessage" => {
-                let v = lossy_attr_value(&attr);
-                validation.show_error_message = v == "1" || v.eq_ignore_ascii_case("true");
+                let value = lossy_attr_value(&attr);
+                validation.show_error_message = value == "1" || value.eq_ignore_ascii_case("true");
             }
             b"errorTitle" => {
                 validation.error_title = Some(lossy_attr_value(&attr).to_string());

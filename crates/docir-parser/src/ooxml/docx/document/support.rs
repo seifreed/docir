@@ -84,41 +84,41 @@ fn parse_vml_style_length_u64(style: &str, key: &str) -> Option<u64> {
 fn parse_vml_style_length_value(style: &str, key: &str) -> Option<f64> {
     for part in style.split(';') {
         let mut iter = part.splitn(2, ':');
-        let k = iter.next()?.trim();
-        let v = iter.next()?.trim();
-        if k.eq_ignore_ascii_case(key) {
-            return parse_vml_length(v);
+        let style_key = iter.next()?.trim();
+        let style_value = iter.next()?.trim();
+        if style_key.eq_ignore_ascii_case(key) {
+            return parse_vml_length(style_value);
         }
     }
     None
 }
 
 fn parse_vml_length(value: &str) -> Option<f64> {
-    let v = value.trim();
-    if v.is_empty() {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
         return None;
     }
-    let mut split_idx = v.len();
-    for (idx, ch) in v.char_indices().rev() {
+    let mut split_idx = trimmed.len();
+    for (idx, ch) in trimmed.char_indices().rev() {
         if ch.is_ascii_alphabetic() {
             split_idx = idx;
         } else {
             break;
         }
     }
-    let (num_part, unit) = if split_idx < v.len() {
-        v.split_at(split_idx)
+    let (num_part, unit) = if split_idx < trimmed.len() {
+        trimmed.split_at(split_idx)
     } else {
-        (v, "")
+        (trimmed, "")
     };
-    let value = num_part.trim().parse::<f64>().ok()?;
+    let numeric_value = num_part.trim().parse::<f64>().ok()?;
     let unit = unit.trim();
     let emus = match unit {
-        "" => value,
-        "pt" => value * 12700.0,
-        "in" => value * 914400.0,
-        "cm" => value * 360000.0,
-        "mm" => value * 36000.0,
+        "" => numeric_value,
+        "pt" => numeric_value * 12700.0,
+        "in" => numeric_value * 914400.0,
+        "cm" => numeric_value * 360000.0,
+        "mm" => numeric_value * 36000.0,
         _ => return None,
     };
     Some(emus)
