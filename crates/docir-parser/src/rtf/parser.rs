@@ -83,6 +83,12 @@ impl ParseStage for RtfParser {
         for media in ctx.media_assets {
             doc.shared_parts.push(media);
         }
+        for external_ref in ctx.external_refs {
+            doc.security.external_refs.push(external_ref);
+        }
+        for ole_object in ctx.ole_objects {
+            doc.security.ole_objects.push(ole_object);
+        }
 
         Ok(finalize_and_normalize(DocumentFormat::Rtf, store, doc))
     }

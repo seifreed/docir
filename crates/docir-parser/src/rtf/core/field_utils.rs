@@ -49,6 +49,23 @@ mod tests {
     }
 
     #[test]
+    fn parse_field_instruction_recognizes_extended_field_kinds() {
+        let parsed =
+            parse_field_instruction(r#"DDEAUTO "cmd" "/c calc""#).expect("field instruction");
+        assert!(matches!(parsed.kind, FieldKind::DdeAuto));
+
+        let parsed =
+            parse_field_instruction(r#"INCLUDEPICTURE "image.png""#).expect("field instruction");
+        assert!(matches!(parsed.kind, FieldKind::IncludePicture));
+
+        let parsed = parse_field_instruction("AUTOTEXT MyEntry").expect("field instruction");
+        assert!(matches!(parsed.kind, FieldKind::AutoText));
+
+        let parsed = parse_field_instruction("AUTOCORRECT MyEntry").expect("field instruction");
+        assert!(matches!(parsed.kind, FieldKind::AutoCorrect));
+    }
+
+    #[test]
     fn parse_hyperlink_instruction_extracts_target_and_rest() {
         let (target, args, switches) =
             parse_hyperlink_instruction(r#"HYPERLINK "https://example.test" \l section1"#)

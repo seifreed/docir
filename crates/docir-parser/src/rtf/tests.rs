@@ -3,6 +3,7 @@ use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::parser::ParserConfig;
 use docir_core::ir::IRNode;
+use docir_core::security::OleObject;
 use docir_core::types::DocumentFormat;
 use docir_core::types::NodeType;
 use std::io::Cursor;
@@ -22,6 +23,24 @@ fn parse_hyperlink_field() {
     let parser = RtfParser::new();
     let parsed = parser.parse_bytes(data).expect("parse rtf");
     assert_eq!(parsed.format, DocumentFormat::Rtf);
+    let doc = parsed.document().expect("document");
+    assert_eq!(doc.security.external_refs.len(), 1);
+}
+
+#[test]
+fn parse_object_tracks_security_ole_object() {
+    let data = b"{\\rtf1{\\object\\objclass Package\\objname DemoObject\\objdata 01020304}}";
+    let parser = RtfParser::new();
+    let parsed = parser.parse_bytes(data).expect("parse rtf");
+    let doc = parsed.document().expect("document");
+    assert_eq!(doc.security.ole_objects.len(), 1);
+    let Some(IRNode::OleObject(OleObject { name, prog_id, .. })) =
+        parsed.store.get(doc.security.ole_objects[0])
+    else {
+        panic!("expected OLE object");
+    };
+    assert_eq!(name.as_deref(), Some("DemoObject"));
+    assert_eq!(prog_id.as_deref(), Some("Package"));
 }
 
 #[test]

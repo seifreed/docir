@@ -30,6 +30,24 @@ fn apply_pending_numbering_to_current_paragraph(ctx: &mut RtfParseContext) {
     }
 }
 
+fn flush_pending_object_text(ctx: &mut RtfParseContext) {
+    let Some(target) = ctx.object_text_target else {
+        ctx.current_text.clear();
+        return;
+    };
+    if ctx.current_text.is_empty() {
+        return;
+    }
+    let text = std::mem::take(&mut ctx.current_text);
+    let Some(obj) = ctx.object_stack.last_mut() else {
+        return;
+    };
+    match target {
+        ObjectTextTarget::Class => obj.class_name = Some(text.trim().to_string()),
+        ObjectTextTarget::Name => obj.object_name = Some(text.trim().to_string()),
+    }
+}
+
 fn set_last_object_media_image(ctx: &mut RtfParseContext) {
     if let Some(obj) = ctx.object_stack.last_mut() {
         obj.media_type = Some(MediaType::Image);
@@ -222,16 +240,16 @@ pub(super) fn handle_object_controls(
             ctx.object_stack.push(ObjectContext::default());
         }
         "objclass" => {
-            ctx.current_text.clear();
+            flush_pending_object_text(ctx);
             ctx.object_text_target = Some(ObjectTextTarget::Class);
         }
         "objname" => {
-            ctx.current_text.clear();
+            flush_pending_object_text(ctx);
             ctx.object_text_target = Some(ObjectTextTarget::Name);
         }
         "objdata" => {
+            flush_pending_object_text(ctx);
             set_last_group_kind(ctx, GroupKind::Object);
-            ctx.current_text.clear();
             ctx.object_text_target = None;
         }
         _ => return false,

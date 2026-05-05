@@ -9,10 +9,15 @@ pub(super) fn parse_field_instruction(text: &str) -> Option<FieldInstruction> {
     let kind = match first.as_str() {
         "HYPERLINK" => FieldKind::Hyperlink,
         "INCLUDETEXT" => FieldKind::IncludeText,
+        "INCLUDEPICTURE" => FieldKind::IncludePicture,
         "MERGEFIELD" => FieldKind::MergeField,
         "DATE" => FieldKind::Date,
         "REF" => FieldKind::Ref,
         "PAGEREF" => FieldKind::PageRef,
+        "DDE" => FieldKind::Dde,
+        "DDEAUTO" => FieldKind::DdeAuto,
+        "AUTOTEXT" => FieldKind::AutoText,
+        "AUTOCORRECT" => FieldKind::AutoCorrect,
         _ => FieldKind::Unknown,
     };
     let mut args = Vec::new();

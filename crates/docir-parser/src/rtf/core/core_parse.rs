@@ -40,7 +40,11 @@ pub(crate) fn parse_rtf(
                     append_text_byte(ctx, byte);
                 }
                 GroupKind::Object | GroupKind::Picture => {
-                    if byte.is_ascii_hexdigit() {
+                    if ctx.current_group_kind() == GroupKind::Object
+                        && ctx.object_text_target.is_some()
+                    {
+                        append_text_byte(ctx, byte);
+                    } else if byte.is_ascii_hexdigit() {
                         if let Some(obj) = ctx.object_stack.last_mut() {
                             obj.data_hex_len += 1;
                             if ctx.max_object_hex_len > 0

@@ -114,7 +114,11 @@ fn extract_host(url: &str) -> String {
 
     // Strip port and path
     let host_port = no_auth.split('/').next().unwrap_or(no_auth);
-    let host = host_port.split(':').next().unwrap_or(host_port);
+    let host = host_port
+        .split(':')
+        .next()
+        .unwrap_or(host_port)
+        .trim_end_matches('.');
 
     host.to_string()
 }
@@ -178,6 +182,8 @@ End Sub
         assert!(is_suspicious_url("http://192.168.1.1/payload.exe"));
         assert!(is_suspicious_url("http://evil.ru/malware.doc"));
         assert!(is_suspicious_url("https://pastebin.com/raw/abc123"));
+        assert!(is_suspicious_url("https://pastebin.com./raw/abc123"));
+        assert!(is_suspicious_url("http://evil.ru./malware.doc"));
         assert!(!is_suspicious_url("https://www.microsoft.com/docs"));
         assert!(!is_suspicious_url("https://notpastebin.com/raw/abc123"));
         assert!(!is_suspicious_url(
