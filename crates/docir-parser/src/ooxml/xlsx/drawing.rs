@@ -2,7 +2,7 @@ use super::XlsxParser;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{local_name, xml_error};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{IRNode, Shape, ShapeType, WorksheetDrawing};
 use docir_core::security::{ExternalRefType, ExternalReference};
@@ -43,14 +43,14 @@ impl XlsxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"xdr:pic" => {
+                Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                    b"pic" => {
                         current_shape = Some(Shape::new(ShapeType::Picture));
                     }
-                    b"xdr:graphicFrame" => {
+                    b"graphicFrame" => {
                         current_shape = Some(Shape::new(ShapeType::Chart));
                     }
-                    b"xdr:cNvPr" => {
+                    b"cNvPr" => {
                         if let Some(shape) = current_shape.as_mut() {
                             for attr in e.attributes().flatten() {
                                 match attr.key.as_ref() {
@@ -65,25 +65,24 @@ impl XlsxParser {
                             }
                         }
                     }
-                    b"a:blip" => {
+                    b"blip" => {
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref().ends_with(b":embed") {
+                            if local_name(attr.key.as_ref()) == b"embed" {
                                 current_embed = Some(lossy_attr_value(&attr).to_string());
                             }
                         }
                     }
-                    _ if e.name().as_ref().ends_with(b"chart") => {
+                    b"chart" => {
                         for attr in e.attributes().flatten() {
-                            let key = attr.key.as_ref();
-                            if key == b"r:id" || key.ends_with(b":id") {
+                            if local_name(attr.key.as_ref()) == b"id" {
                                 current_chart = Some(lossy_attr_value(&attr).to_string());
                             }
                         }
                     }
                     _ => {}
                 },
-                Ok(Event::End(e)) => match e.name().as_ref() {
-                    b"xdr:pic" => {
+                Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
+                    b"pic" => {
                         if let Some(mut shape) = current_shape.take() {
                             if let Some(rel_id) = current_embed.take() {
                                 if let Some(rel) = relationships.get(&rel_id) {
@@ -113,7 +112,7 @@ impl XlsxParser {
                             drawing.shapes.push(id);
                         }
                     }
-                    b"xdr:graphicFrame" => {
+                    b"graphicFrame" => {
                         if let Some(mut shape) = current_shape.take() {
                             if let Some(rel_id) = current_chart.take() {
                                 if let Some(rel) = relationships.get(&rel_id) {
@@ -325,6 +324,64 @@ mod tests {
             })
             .expect("worksheet drawing node");
         assert_eq!(drawing.shapes.len(), 1);
+    }
+
+    #[test]
+    fn parse_drawing_accepts_alternate_xml_prefixes() {
+        let mut parser = XlsxParser::new();
+        let rels = Relationships::parse(relationships_xml()).expect("relationships");
+        let mut zip = TestPackageReader::new(&[(
+            "xl/charts/chart1.xml",
+            br#"<chartSpace><chart></chart></chartSpace>"#,
+        )]);
+        let drawing_xml = r#"
+            <d:wsDr xmlns:d="drawing" xmlns:b="blip" xmlns:c="chart" xmlns:rel="rels">
+              <d:pic>
+                <d:nvPicPr>
+                  <d:cNvPr name="Picture 1" descr="Alt"></d:cNvPr>
+                </d:nvPicPr>
+                <d:blipFill>
+                  <b:blip rel:embed="rImgExternal"></b:blip>
+                </d:blipFill>
+              </d:pic>
+              <d:graphicFrame>
+                <d:nvGraphicFramePr>
+                  <d:cNvPr name="Chart 1" descr="Chart alt"></d:cNvPr>
+                </d:nvGraphicFramePr>
+                <d:graphic>
+                  <d:graphicData>
+                    <c:chart rel:id="rChart"></c:chart>
+                  </d:graphicData>
+                </d:graphic>
+              </d:graphicFrame>
+            </d:wsDr>
+        "#;
+
+        let id = parser
+            .parse_drawing(drawing_xml, "xl/drawings/drawing1.xml", &rels, &mut zip)
+            .expect("drawing parse");
+
+        let drawing = parser
+            .store
+            .get(id)
+            .and_then(|node| match node {
+                IRNode::WorksheetDrawing(d) => Some(d),
+                _ => None,
+            })
+            .expect("worksheet drawing node");
+        assert_eq!(drawing.shapes.len(), 2);
+        let chart_shape = parser
+            .store
+            .get(drawing.shapes[1])
+            .and_then(|node| match node {
+                IRNode::Shape(shape) => Some(shape),
+                _ => None,
+            })
+            .expect("chart shape");
+        assert_eq!(
+            chart_shape.media_target.as_deref(),
+            Some("xl/charts/chart1.xml")
+        );
     }
 
     #[test]

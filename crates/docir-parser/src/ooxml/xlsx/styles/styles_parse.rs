@@ -1,7 +1,9 @@
 //! XLSX styles parsing.
 
 use crate::error::ParseError;
-use crate::xml_utils::{attr_f64, attr_u32_from_bytes, attr_value, reader_from_str_with_options};
+use crate::xml_utils::{
+    attr_f64, attr_u32_from_bytes, attr_value, local_name, reader_from_str_with_options,
+};
 use crate::xml_utils::{scan_xml_events, XmlScanControl};
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,
@@ -106,31 +108,33 @@ fn handle_styles_start(
     if handled {
         return Ok(());
     }
-    if e.name().as_ref() == b"numFmts" {
+    let raw_name = e.name();
+    let name = local_name(raw_name.as_ref());
+    if name == b"numFmts" {
         state.in_num_fmts = true;
         #[cfg(test)]
         eprintln!("handle_styles_start entered numFmts");
-    } else if e.name().as_ref() == b"fonts" {
+    } else if name == b"fonts" {
         state.in_fonts = true;
         #[cfg(test)]
         eprintln!("handle_styles_start entered fonts");
-    } else if e.name().as_ref() == b"fills" {
+    } else if name == b"fills" {
         state.in_fills = true;
         #[cfg(test)]
         eprintln!("handle_styles_start entered fills");
-    } else if e.name().as_ref() == b"borders" {
+    } else if name == b"borders" {
         state.in_borders = true;
         #[cfg(test)]
         eprintln!("handle_styles_start entered borders");
-    } else if e.name().as_ref() == b"cellXfs" {
+    } else if name == b"cellXfs" {
         state.in_cell_xfs = true;
         #[cfg(test)]
         eprintln!("handle_styles_start entered cellXfs");
-    } else if e.name().as_ref() == b"cellStyleXfs" {
+    } else if name == b"cellStyleXfs" {
         state.in_cell_style_xfs = true;
         #[cfg(test)]
         eprintln!("handle_styles_start entered cellStyleXfs");
-    } else if e.name().as_ref() == b"dxfs" {
+    } else if name == b"dxfs" {
         state.in_dxfs = true;
         #[cfg(test)]
         eprintln!("handle_styles_start entered dxfs");
@@ -143,7 +147,7 @@ fn handle_num_fmt_start(
     state: &mut StylesParseState,
     styles: &mut SpreadsheetStyles,
 ) -> bool {
-    if e.name().as_ref() != b"numFmt" {
+    if local_name(e.name().as_ref()) != b"numFmt" {
         return false;
     }
     #[cfg(test)]
@@ -168,7 +172,9 @@ fn handle_num_fmt_start(
 }
 
 fn handle_font_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
-    if e.name().as_ref() == b"font" {
+    let raw_name = e.name();
+    let name = local_name(raw_name.as_ref());
+    if name == b"font" {
         if state.in_fonts {
             state.current_font = Some(new_font());
             return true;
@@ -184,7 +190,7 @@ fn handle_font_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
         return false;
     }
 
-    match e.name().as_ref() {
+    match name {
         b"name" | b"sz" | b"b" | b"i" | b"u" | b"color" => {
             apply_font_node_attrs(e, state);
             true
@@ -194,7 +200,7 @@ fn handle_font_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
 }
 
 fn apply_font_node_attrs(e: &BytesStart<'_>, state: &mut StylesParseState) {
-    match e.name().as_ref() {
+    match local_name(e.name().as_ref()) {
         b"name" => {
             if let Some(name) = attr_value(e, b"val") {
                 apply_font_attr(
@@ -270,7 +276,7 @@ fn apply_color_attr(e: &BytesStart<'_>, state: &mut StylesParseState) {
 }
 
 fn handle_fill_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
-    match e.name().as_ref() {
+    match local_name(e.name().as_ref()) {
         b"fill" if state.in_fills => {
             state.current_fill = Some(new_fill());
             true
@@ -310,7 +316,7 @@ fn handle_fill_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
 }
 
 fn handle_border_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
-    match e.name().as_ref() {
+    match local_name(e.name().as_ref()) {
         b"border" if state.in_borders => {
             state.current_border = Some(new_border());
             true
@@ -321,7 +327,7 @@ fn handle_border_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool
         }
         b"left" | b"right" | b"top" | b"bottom" => {
             let side = parse_border_side(e);
-            let side_name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+            let side_name = String::from_utf8_lossy(local_name(e.name().as_ref())).to_string();
             if state.current_border.is_some() {
                 state.current_border_side = Some((side_name, side));
             } else if state.current_dxf_border.is_some() {
@@ -334,7 +340,7 @@ fn handle_border_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool
 }
 
 fn handle_xf_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
-    match e.name().as_ref() {
+    match local_name(e.name().as_ref()) {
         b"dxf" if state.in_dxfs => {
             #[cfg(test)]
             eprintln!("handle_xf_start entering dxf");
@@ -377,7 +383,7 @@ fn handle_table_style_start(
     state: &mut StylesParseState,
     styles: &mut SpreadsheetStyles,
 ) -> bool {
-    match e.name().as_ref() {
+    match local_name(e.name().as_ref()) {
         b"tableStyles" => {
             styles.table_styles = Some(parse_table_style_info(e));
             state.in_table_styles = true;
@@ -400,7 +406,7 @@ fn handle_styles_end(
     state: &mut StylesParseState,
     styles: &mut SpreadsheetStyles,
 ) {
-    match e.name().as_ref() {
+    match local_name(e.name().as_ref()) {
         b"numFmts" => state.in_num_fmts = false,
         b"fonts" => state.in_fonts = false,
         b"fills" => state.in_fills = false,

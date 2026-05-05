@@ -4,7 +4,9 @@ use crate::ooxml::xlsx::{
     parse_pivot_cache_records, rel_type, IRNode, ParseError, PivotCache, XlsxParser,
 };
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{reader_from_str, scan_xml_events_until_end, XmlScanControl};
+use crate::xml_utils::{
+    is_end_event_local, local_name, reader_from_str, scan_xml_events_until_end, XmlScanControl,
+};
 use crate::zip_handler::PackageReader;
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -26,10 +28,10 @@ pub(super) fn parse_pivot_cache_impl(
         &mut reader,
         &mut buf,
         cache_path,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"pivotCacheDefinition"),
+        |event| is_end_event_local(event, b"pivotCacheDefinition"),
         |_reader, event| {
             if let Event::Start(e) | Event::Empty(e) = event {
-                match e.name().as_ref() {
+                match local_name(e.name().as_ref()) {
                     b"cacheSource" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"type" {

@@ -1,6 +1,6 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::{
     parse_cell_reference, CalcChain, CalcChainEntry, CellError, CellFormula, ColumnDefinition,
     ConditionalFormat, ConditionalRule, FormulaType, MergedCellRange,
@@ -21,7 +21,7 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"c" {
+                if local_name(e.name().as_ref()) == b"c" {
                     let mut cell_ref = None;
                     let mut sheet_id = None;
                     let mut index = None;
@@ -99,7 +99,7 @@ pub(super) fn parse_conditional_formatting(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                 b"cfRule" => {
                     let mut rule_type = "unknown".to_string();
                     let mut priority = None;
@@ -132,7 +132,7 @@ pub(super) fn parse_conditional_formatting(
                     formula_text.push_str(&e.unescape().unwrap_or_default());
                 }
             }
-            Ok(Event::End(e)) => match e.name().as_ref() {
+            Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
                 b"formula" => {
                     in_formula = false;
                     if let Some(rule) = current_rule.as_mut() {
@@ -271,7 +271,7 @@ pub(super) fn parse_inline_string(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                if e.name().as_ref() == b"t" {
+                if local_name(e.name().as_ref()) == b"t" {
                     in_t = true;
                 }
             }
@@ -282,9 +282,9 @@ pub(super) fn parse_inline_string(
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"t" {
+                if local_name(e.name().as_ref()) == b"t" {
                     in_t = false;
-                } else if e.name().as_ref() == b"is" {
+                } else if local_name(e.name().as_ref()) == b"is" {
                     break;
                 }
             }

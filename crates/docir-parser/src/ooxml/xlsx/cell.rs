@@ -1,7 +1,7 @@
 use super::XlsxParser;
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{scan_xml_events_with_reader, xml_error, XmlScanControl};
+use crate::xml_utils::{local_name, scan_xml_events_with_reader, xml_error, XmlScanControl};
 use docir_core::ir::{Cell, CellFormula, CellValue};
 use docir_core::types::SourceSpan;
 use quick_xml::events::{BytesStart, Event};
@@ -50,7 +50,7 @@ impl XlsxParser {
         let mut buf = Vec::new();
         scan_xml_events_with_reader(reader, &mut buf, sheet_path, |reader, event| {
             match event {
-                Event::Start(e) => match e.name().as_ref() {
+                Event::Start(e) => match local_name(e.name().as_ref()) {
                     b"v" => {
                         let text = reader
                             .read_text(e.name())
@@ -67,12 +67,12 @@ impl XlsxParser {
                     _ => {}
                 },
                 Event::Empty(e) => {
-                    if e.name().as_ref() == b"f" {
+                    if local_name(e.name().as_ref()) == b"f" {
                         formula = Some(super::parse_formula_empty(&e));
                     }
                 }
                 Event::End(e) => {
-                    if e.name().as_ref() == b"c" {
+                    if local_name(e.name().as_ref()) == b"c" {
                         return Ok(XmlScanControl::Break);
                     }
                 }

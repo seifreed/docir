@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{scan_xml_events, xml_error, XmlScanControl};
+use crate::xml_utils::{local_name, scan_xml_events, xml_error, XmlScanControl};
 use docir_core::ir::{SharedStringItem, SharedStringTable};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -25,7 +25,7 @@ pub(crate) fn parse_shared_strings_table(
 
     scan_xml_events(&mut reader, &mut buf, "xl/sharedStrings.xml", |event| {
         match event {
-            Event::Start(e) => match e.name().as_ref() {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"si" => {
                     in_si = true;
                     current.clear();
@@ -52,7 +52,7 @@ pub(crate) fn parse_shared_strings_table(
                     }
                 }
             }
-            Event::End(e) => match e.name().as_ref() {
+            Event::End(e) => match local_name(e.name().as_ref()) {
                 b"t" => in_t = false,
                 b"r" => {
                     if in_run {
@@ -90,6 +90,23 @@ mod tests {
           <si><t>Hello</t></si>
           <si><r><t>Foo</t></r><r><t>Bar</t></r></si>
         </sst>
+        "#;
+        let (table, strings) = parse_shared_strings_table(xml).expect("shared strings");
+        assert_eq!(strings, vec!["Hello", "FooBar"]);
+        assert_eq!(table.items.len(), 2);
+        assert_eq!(
+            table.items[1].runs,
+            vec!["Foo".to_string(), "Bar".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_parse_shared_strings_accepts_prefixed_main_namespace() {
+        let xml = r#"
+        <x:sst xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <x:si><x:t>Hello</x:t></x:si>
+          <x:si><x:r><x:t>Foo</x:t></x:r><x:r><x:t>Bar</x:t></x:r></x:si>
+        </x:sst>
         "#;
         let (table, strings) = parse_shared_strings_table(xml).expect("shared strings");
         assert_eq!(strings, vec!["Hello", "FooBar"]);

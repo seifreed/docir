@@ -102,6 +102,120 @@ fn test_parse_styles_minimal() {
     assert_style_content(&styles);
 }
 
+#[test]
+fn test_xlsx_auxiliary_parsers_accept_prefixed_main_namespace() {
+    let styles_xml = r#"
+        <x:styleSheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <x:numFmts count="1">
+            <x:numFmt numFmtId="164" formatCode="0.00"/>
+          </x:numFmts>
+          <x:fonts count="1">
+            <x:font>
+              <x:sz val="11"/>
+              <x:name val="Calibri"/>
+              <x:b/>
+              <x:color rgb="FF0000"/>
+            </x:font>
+          </x:fonts>
+          <x:fills count="1">
+            <x:fill>
+              <x:patternFill patternType="solid">
+                <x:fgColor rgb="FFFF00"/>
+              </x:patternFill>
+            </x:fill>
+          </x:fills>
+          <x:borders count="1">
+            <x:border>
+              <x:left style="thin"><x:color rgb="FF00FF"/></x:left>
+            </x:border>
+          </x:borders>
+          <x:cellXfs count="1">
+            <x:xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0"
+                  applyNumberFormat="1" applyAlignment="1" applyProtection="1" quotePrefix="1">
+              <x:alignment horizontal="center" wrapText="1" indent="2" textRotation="45"
+                           shrinkToFit="1" readingOrder="1"/>
+              <x:protection locked="1" hidden="0"/>
+            </x:xf>
+          </x:cellXfs>
+          <x:cellStyleXfs count="1">
+            <x:xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+          </x:cellStyleXfs>
+          <x:dxfs count="1">
+            <x:dxf>
+              <x:numFmt numFmtId="200" formatCode="0.00"/>
+              <x:font><x:b/><x:color rgb="FF0000"/></x:font>
+              <x:fill><x:patternFill patternType="solid"><x:fgColor rgb="00FF00"/></x:patternFill></x:fill>
+            </x:dxf>
+          </x:dxfs>
+          <x:tableStyles count="1" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16">
+            <x:tableStyle name="TableStyleMedium2" pivot="0" table="1"/>
+          </x:tableStyles>
+        </x:styleSheet>
+        "#;
+    let styles = parse_styles(styles_xml, "xl/styles.xml").expect("prefixed styles");
+    assert_style_counts(&styles);
+    assert_style_content(&styles);
+
+    let comments_xml = r#"
+        <x:comments xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <x:authors><x:author>Alice</x:author></x:authors>
+          <x:commentList>
+            <x:comment ref="A1" authorId="0">
+              <x:text><x:r><x:t>Hello</x:t></x:r></x:text>
+            </x:comment>
+          </x:commentList>
+        </x:comments>
+        "#;
+    let comments =
+        parse_sheet_comments(comments_xml, "xl/comments1.xml", Some("Sheet1")).expect("comments");
+    assert_eq!(comments.len(), 1);
+    assert_eq!(comments[0].author.as_deref(), Some("Alice"));
+    assert_eq!(comments[0].text, "Hello");
+
+    let chain_xml = r#"
+        <x:calcChain xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <x:c r="A1" i="0" l="1" s="1"/>
+        </x:calcChain>
+        "#;
+    let chain = parse_calc_chain(chain_xml, "xl/calcChain.xml").expect("calc chain");
+    assert_eq!(chain.entries.len(), 1);
+    assert_eq!(chain.entries[0].cell_ref, "A1");
+
+    let table_xml = r#"
+        <x:table xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                 name="Table1" displayName="Table1" ref="A1:B3" headerRowCount="1">
+          <x:tableColumns count="2">
+            <x:tableColumn id="1" name="Col1"/>
+            <x:tableColumn id="2" name="Col2" totalsRowFunction="sum"/>
+          </x:tableColumns>
+        </x:table>
+        "#;
+    let table = parse_table_definition(table_xml, "xl/tables/table1.xml").expect("table");
+    assert_eq!(table.columns.len(), 2);
+    assert_eq!(table.ref_range.as_deref(), Some("A1:B3"));
+
+    let pivot_xml = r#"
+        <x:pivotTableDefinition xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                                name="Pivot1" cacheId="3">
+          <x:location ref="D1:F10"/>
+        </x:pivotTableDefinition>
+        "#;
+    let pivot =
+        parse_pivot_table_definition(pivot_xml, "xl/pivotTables/pivotTable1.xml").expect("pivot");
+    assert_eq!(pivot.cache_id, Some(3));
+    assert_eq!(pivot.ref_range.as_deref(), Some("D1:F10"));
+
+    let records_xml = r#"
+        <x:pivotCacheRecords xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <x:r><x:n v="1"/><x:s v="0"/></x:r>
+        </x:pivotCacheRecords>
+        "#;
+    let records = parse_pivot_cache_records(records_xml, "xl/pivotCache/pivotCacheRecords1.xml")
+        .expect("records");
+    assert_eq!(records.record_count, Some(1));
+    assert_eq!(records.field_count, Some(2));
+}
+
 fn assert_style_counts(styles: &SpreadsheetStyles) {
     assert_eq!(styles.number_formats.len(), 1);
     assert_eq!(styles.fonts.len(), 1);

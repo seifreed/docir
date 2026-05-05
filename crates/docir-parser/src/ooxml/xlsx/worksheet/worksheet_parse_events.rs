@@ -5,7 +5,7 @@ use crate::ooxml::xlsx::{
 };
 use crate::xml_utils::attr_value;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{scan_xml_events_until_end, XmlScanControl};
+use crate::xml_utils::{is_end_event_local, local_name, scan_xml_events_until_end, XmlScanControl};
 use docir_core::ir::ConditionalFormat;
 use docir_core::ir::{DataValidation, SheetPageMargins};
 use docir_core::types::{NodeId, SourceSpan};
@@ -21,7 +21,7 @@ pub(crate) fn handle_worksheet_common_tag(
     accum: &mut WorksheetParseAccum,
     parser: &mut XlsxParser,
 ) -> bool {
-    match e.name().as_ref() {
+    match local_name(e.name().as_ref()) {
         b"dimension" => {
             if let Some(val) = attr_value(e, b"ref") {
                 worksheet.dimension = Some(val);
@@ -129,14 +129,14 @@ pub(crate) fn parse_data_validations(
         reader,
         &mut buf,
         sheet_path,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"dataValidations"),
+        |event| is_end_event_local(event, b"dataValidations"),
         |reader, event| {
             match event {
-                Event::Start(e) if e.name().as_ref() == b"dataValidation" => {
+                Event::Start(e) if local_name(e.name().as_ref()) == b"dataValidation" => {
                     let val = parse_data_validation(reader, e, sheet_path)?;
                     validations.push(val);
                 }
-                Event::Empty(e) if e.name().as_ref() == b"dataValidation" => {
+                Event::Empty(e) if local_name(e.name().as_ref()) == b"dataValidation" => {
                     let val = parse_data_validation_empty(e, sheet_path);
                     validations.push(val);
                 }
@@ -162,7 +162,7 @@ pub(crate) fn parse_data_validation(
         reader,
         &mut buf,
         sheet_path,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"dataValidation"),
+        |event| is_end_event_local(event, b"dataValidation"),
         |_reader, event| {
             match event {
                 Event::Start(e) => {
@@ -194,7 +194,7 @@ struct DataValidationFormulaCapture {
 
 impl DataValidationFormulaCapture {
     fn track_start(&mut self, e: &BytesStart<'_>) {
-        match e.name().as_ref() {
+        match local_name(e.name().as_ref()) {
             b"formula1" => {
                 self.in_formula = Some(1);
                 self.formula1.clear();
@@ -208,14 +208,14 @@ impl DataValidationFormulaCapture {
     }
 
     fn track_start_with_context(&mut self, e: &BytesStart<'_>, validation: &mut DataValidation) {
-        if e.name().as_ref() == b"formula1" {
+        if local_name(e.name().as_ref()) == b"formula1" {
             if let Some(val) = attr_value(e, b"val") {
                 validation.formula1 = Some(val);
                 self.in_formula = None;
                 self.formula1.clear();
             }
         }
-        if e.name().as_ref() == b"formula2" {
+        if local_name(e.name().as_ref()) == b"formula2" {
             if let Some(val) = attr_value(e, b"val") {
                 validation.formula2 = Some(val);
                 self.in_formula = None;
@@ -233,7 +233,7 @@ impl DataValidationFormulaCapture {
     }
 
     fn track_end(&mut self, e: &BytesEnd<'_>, validation: &mut DataValidation) {
-        match (self.in_formula, e.name().as_ref()) {
+        match (self.in_formula, local_name(e.name().as_ref())) {
             (Some(1), b"formula1") => {
                 self.in_formula = None;
                 if !self.formula1.is_empty() {

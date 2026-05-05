@@ -68,10 +68,6 @@ pub(crate) fn attr_f64(e: &BytesStart<'_>, name: &[u8]) -> Option<f64> {
     attr_value(e, name).and_then(|v| v.parse::<f64>().ok())
 }
 
-pub(crate) fn is_end_event(event: &Event<'_>, name: &[u8]) -> bool {
-    matches!(event, Event::End(e) if e.name().as_ref() == name)
-}
-
 pub(crate) fn is_end_event_local(event: &Event<'_>, name: &[u8]) -> bool {
     matches!(event, Event::End(e) if local_name(e.name().as_ref()) == name)
 }

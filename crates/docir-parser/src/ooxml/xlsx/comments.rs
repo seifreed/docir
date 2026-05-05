@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, local_name};
 use docir_core::ir::SheetComment;
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -30,7 +30,7 @@ pub(super) fn parse_sheet_comments_impl(
     let mut out = Vec::new();
     loop {
         match crate::xml_utils::read_event(&mut reader, &mut buf, path)? {
-            Event::Start(e) => match e.name().as_ref() {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"author" if matches!(flavor, CommentFlavor::Legacy) => in_author = true,
                 b"comment" if matches!(flavor, CommentFlavor::Legacy) => {
                     in_comment = true;
@@ -60,7 +60,7 @@ pub(super) fn parse_sheet_comments_impl(
                     current_text.push_str(&text);
                 }
             }
-            Event::End(e) => match e.name().as_ref() {
+            Event::End(e) => match local_name(e.name().as_ref()) {
                 b"author" => in_author = false,
                 b"text" | b"t" => in_text = false,
                 b"comment" if matches!(flavor, CommentFlavor::Legacy) => {

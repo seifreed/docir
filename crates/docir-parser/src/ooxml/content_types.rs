@@ -1,7 +1,7 @@
 //! [Content_Types].xml parser.
 
 use crate::error::ParseError;
-use crate::xml_utils::{attr_each, read_event, reader_from_str};
+use crate::xml_utils::{attr_each, local_name, read_event, reader_from_str};
 use quick_xml::events::Event;
 use std::collections::HashMap;
 
@@ -24,7 +24,7 @@ impl ContentTypes {
 
         loop {
             match read_event(&mut reader, &mut buf, "[Content_Types].xml")? {
-                Event::Empty(e) | Event::Start(e) => match e.name().as_ref() {
+                Event::Empty(e) | Event::Start(e) => match local_name(e.name().as_ref()) {
                     b"Default" => {
                         if let Some((ext, ct)) = parse_default_entry(&e) {
                             content_types.defaults.insert(ext, ct);
@@ -295,4 +295,32 @@ pub mod content_type {
     pub const VBA_PROJECT: &str = "application/vnd.ms-office.vbaProject";
     pub const OLE_OBJECT: &str = "application/vnd.openxmlformats-officedocument.oleObject";
     pub const RELATIONSHIPS: &str = "application/vnd.openxmlformats-package.relationships+xml";
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{content_type, ContentTypes};
+    use docir_core::DocumentFormat;
+
+    #[test]
+    fn parse_accepts_prefixed_content_type_entries() {
+        let xml = r#"
+        <ct:Types xmlns:ct="http://schemas.openxmlformats.org/package/2006/content-types">
+          <ct:Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+          <ct:Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+        </ct:Types>
+        "#;
+
+        let types = ContentTypes::parse(xml).expect("content types");
+
+        assert_eq!(
+            types.get_content_type("xl/workbook.xml"),
+            Some(content_type::EXCEL_WORKBOOK)
+        );
+        assert_eq!(
+            types.get_content_type("xl/_rels/workbook.xml.rels"),
+            Some(content_type::RELATIONSHIPS)
+        );
+        assert_eq!(types.detect_format(), Some(DocumentFormat::Spreadsheet));
+    }
 }

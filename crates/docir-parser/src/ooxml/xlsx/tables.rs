@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{scan_xml_events, XmlScanControl};
+use crate::xml_utils::{local_name, scan_xml_events, XmlScanControl};
 use docir_core::ir::{PivotCacheRecords, PivotTable, TableColumn, TableDefinition};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::events::Event;
@@ -29,7 +29,7 @@ pub(crate) fn parse_table_definition(
     let mut buf = Vec::new();
     scan_xml_events(&mut reader, &mut buf, table_path, |event| {
         match event {
-            Event::Start(e) => match e.name().as_ref() {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"table" => {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
@@ -77,7 +77,7 @@ pub(crate) fn parse_table_definition(
                 }
                 _ => {}
             },
-            Event::Empty(e) if e.name().as_ref() == b"tableColumn" => {
+            Event::Empty(e) if local_name(e.name().as_ref()) == b"tableColumn" => {
                 let mut id = None;
                 let mut name = None;
                 let mut totals_row_label = None;
@@ -104,7 +104,7 @@ pub(crate) fn parse_table_definition(
                     });
                 }
             }
-            Event::End(e) if e.name().as_ref() == b"table" => {
+            Event::End(e) if local_name(e.name().as_ref()) == b"table" => {
                 return Ok(XmlScanControl::Break);
             }
             _ => {}
@@ -133,7 +133,7 @@ pub(crate) fn parse_pivot_table_definition(
     let mut buf = Vec::new();
     scan_xml_events(&mut reader, &mut buf, pivot_path, |event| {
         match event {
-            Event::Start(e) => match e.name().as_ref() {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"pivotTableDefinition" => {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
@@ -154,14 +154,14 @@ pub(crate) fn parse_pivot_table_definition(
                 }
                 _ => {}
             },
-            Event::Empty(e) if e.name().as_ref() == b"location" => {
+            Event::Empty(e) if local_name(e.name().as_ref()) == b"location" => {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"ref" {
                         pivot.ref_range = Some(lossy_attr_value(&attr).to_string());
                     }
                 }
             }
-            Event::End(e) if e.name().as_ref() == b"pivotTableDefinition" => {
+            Event::End(e) if local_name(e.name().as_ref()) == b"pivotTableDefinition" => {
                 return Ok(XmlScanControl::Break);
             }
             _ => {}
@@ -192,14 +192,14 @@ pub(crate) fn parse_pivot_cache_records(
     scan_xml_events(&mut reader, &mut buf, records_path, |event| {
         match event {
             Event::Start(e) => {
-                if e.name().as_ref() == b"pivotCacheRecords" {
+                if local_name(e.name().as_ref()) == b"pivotCacheRecords" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"count" {
                             records.record_count = lossy_attr_value(&attr).parse::<u32>().ok();
                             has_count_attr = records.record_count.is_some();
                         }
                     }
-                } else if e.name().as_ref() == b"r" {
+                } else if local_name(e.name().as_ref()) == b"r" {
                     in_record = true;
                     current_fields = 0;
                 } else if in_record {
@@ -207,14 +207,14 @@ pub(crate) fn parse_pivot_cache_records(
                 }
             }
             Event::Empty(e) => {
-                if e.name().as_ref() == b"pivotCacheRecords" {
+                if local_name(e.name().as_ref()) == b"pivotCacheRecords" {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"count" {
                             records.record_count = lossy_attr_value(&attr).parse::<u32>().ok();
                             has_count_attr = records.record_count.is_some();
                         }
                     }
-                } else if e.name().as_ref() == b"r" {
+                } else if local_name(e.name().as_ref()) == b"r" {
                     counted_records = counted_records.saturating_add(1);
                     if max_fields < current_fields {
                         max_fields = current_fields;
@@ -226,7 +226,7 @@ pub(crate) fn parse_pivot_cache_records(
                 }
             }
             Event::End(e) => {
-                if e.name().as_ref() == b"r" {
+                if local_name(e.name().as_ref()) == b"r" {
                     counted_records = counted_records.saturating_add(1);
                     if max_fields < current_fields {
                         max_fields = current_fields;

@@ -52,21 +52,21 @@ pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<Connection
     scan_xml_events(&mut reader, &mut buf, path, |event| {
         match event {
             Event::Start(e) => {
-                if e.name().as_ref() == b"connection" {
+                if local_name(e.name().as_ref()) == b"connection" {
                     current = Some(connection_entry_from_attrs(&e));
                 } else {
                     apply_connection_child_attrs(&mut current, &e);
                 }
             }
             Event::Empty(e) => {
-                if e.name().as_ref() == b"connection" {
+                if local_name(e.name().as_ref()) == b"connection" {
                     part.entries.push(connection_entry_from_attrs(&e));
                 } else {
                     apply_connection_child_attrs(&mut current, &e);
                 }
             }
             Event::End(e) => {
-                if e.name().as_ref() == b"connection" {
+                if local_name(e.name().as_ref()) == b"connection" {
                     if let Some(entry) = current.take() {
                         part.entries.push(entry);
                     }
@@ -113,7 +113,7 @@ fn apply_connection_child_attrs(current: &mut Option<ConnectionEntry>, e: &Bytes
     let Some(entry) = current.as_mut() else {
         return;
     };
-    match e.name().as_ref() {
+    match local_name(e.name().as_ref()) {
         b"dbPr" => apply_dbpr_attrs(entry, e),
         b"webPr" => {
             if let Some(url) = attr_value(e, b"url") {
@@ -294,4 +294,43 @@ pub(crate) fn parse_query_table_part(xml: &str, path: &str) -> Result<QueryTable
     })?;
 
     Ok(query)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{connection_targets, parse_connections_part};
+
+    #[test]
+    fn parse_connections_part_accepts_prefixed_connection_tags() {
+        let xml = r#"
+        <x:connections xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <x:connection id="1" name="Db" type="5" refreshOnLoad="1">
+            <x:dbPr connection="Server=example" command="select * from t"/>
+          </x:connection>
+          <x:connection id="2" name="Web" type="4">
+            <x:webPr url="https://example.test/feed"/>
+          </x:connection>
+        </x:connections>
+        "#;
+
+        let part = parse_connections_part(xml, "xl/connections.xml").expect("connections");
+
+        assert_eq!(part.entries.len(), 2);
+        assert_eq!(part.entries[0].connection_id, Some(1));
+        assert_eq!(
+            part.entries[0].connection.as_deref(),
+            Some("Server=example")
+        );
+        assert_eq!(
+            part.entries[1].url.as_deref(),
+            Some("https://example.test/feed")
+        );
+        assert_eq!(
+            connection_targets(&part),
+            vec![
+                "Server=example".to_string(),
+                "https://example.test/feed".to_string()
+            ]
+        );
+    }
 }

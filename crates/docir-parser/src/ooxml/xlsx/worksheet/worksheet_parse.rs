@@ -7,7 +7,9 @@ use crate::ooxml::xlsx::{
     parse_conditional_formatting, Cell, ColumnDefinition, ConditionalFormat, IRNode,
     MergedCellRange, ParseError, SheetKind, Worksheet, XlsxParser,
 };
-use crate::xml_utils::{is_end_event, reader_from_str, scan_xml_events_until_end, XmlScanControl};
+use crate::xml_utils::{
+    is_end_event_local, local_name, reader_from_str, scan_xml_events_until_end, XmlScanControl,
+};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::DataValidation;
 use docir_core::types::{NodeId, SourceSpan};
@@ -120,7 +122,7 @@ impl XlsxParser {
             &mut reader,
             &mut buf,
             sheet_path,
-            |event| is_end_event(event, b"worksheet"),
+            |event| is_end_event_local(event, b"worksheet"),
             |reader, event| {
                 match event {
                     Event::Start(start) => {
@@ -164,7 +166,7 @@ impl XlsxParser {
             return Ok(true);
         }
 
-        match start.name().as_ref() {
+        match local_name(start.name().as_ref()) {
             b"c" => {
                 let cell = self.parse_cell(reader, start, sheet_path)?;
                 self.insert_cell(cell, accum);
@@ -200,7 +202,7 @@ impl XlsxParser {
             return Ok(());
         }
 
-        match empty.name().as_ref() {
+        match local_name(empty.name().as_ref()) {
             b"c" => {
                 let cell = self.parse_empty_cell(empty, sheet_path)?;
                 self.insert_cell(cell, accum);

@@ -119,6 +119,48 @@ fn test_parse_workbook_info_sheets() {
 }
 
 #[test]
+fn test_parse_workbook_info_accepts_prefixed_main_namespace() {
+    let xml = r#"
+        <x:workbook xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                    xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <x:workbookPr date1904="true"/>
+          <x:bookViews>
+            <x:workbookView activeTab="1" firstSheet="0"/>
+          </x:bookViews>
+          <x:calcPr calcMode="manual" fullCalcOnLoad="1"/>
+          <x:workbookProtection lockStructure="1"/>
+          <x:definedNames>
+            <x:definedName name="AUTO_OPEN" hidden="1">'Macro Sheet'!$A$1</x:definedName>
+          </x:definedNames>
+          <x:pivotCaches>
+            <x:pivotCache cacheId="7" r:id="rIdPivot"/>
+          </x:pivotCaches>
+          <x:sheets>
+            <x:sheet name="Sheet1" sheetId="1" r:id="rId1" state="hidden"/>
+          </x:sheets>
+        </x:workbook>
+        "#;
+
+    let info = parse_workbook_info(xml).expect("parse prefixed workbook info");
+
+    assert_eq!(info.sheets.len(), 1);
+    assert_eq!(info.sheets[0].name, "Sheet1");
+    assert_eq!(info.sheets[0].state, SheetState::Hidden);
+    assert_eq!(info.defined_names.len(), 1);
+    assert_eq!(info.defined_names[0].name, "AUTO_OPEN");
+    assert_eq!(info.pivot_cache_refs.len(), 1);
+    assert_eq!(info.pivot_cache_refs[0].cache_id, 7);
+    assert_eq!(info.pivot_cache_refs[0].rel_id, "rIdPivot");
+    let props = info.workbook_properties.expect("workbook props");
+    assert_eq!(props.date1904, Some(true));
+    assert_eq!(props.active_tab, Some(1));
+    assert_eq!(props.first_sheet, Some(0));
+    assert_eq!(props.calc_mode.as_deref(), Some("manual"));
+    assert_eq!(props.calc_full, Some(true));
+    assert!(props.workbook_protected);
+}
+
+#[test]
 fn test_parse_workbook_info_defined_names_and_props() {
     let xml = r#"
         <workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -369,6 +411,104 @@ fn test_parse_worksheet_cells() {
 
     let cell_f1 = get_cell(&store, worksheet.cells[5], "cell f1");
     assert!(matches!(cell_f1.value, CellValue::InlineString(ref v) if v == "Inline"));
+}
+
+#[test]
+fn test_parse_worksheet_accepts_prefixed_main_namespace() {
+    let xml = r#"
+        <x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <x:dimension ref="A1:C2"/>
+          <x:sheetPr>
+            <x:tabColor rgb="FF112233"/>
+          </x:sheetPr>
+          <x:cols>
+            <x:col min="1" max="1" width="12" customWidth="1"/>
+          </x:cols>
+          <x:sheetData>
+            <x:row r="1">
+              <x:c r="A1" t="s"><x:v>0</x:v></x:c>
+              <x:c r="B1"><x:f>SUM(1,2)</x:f><x:v>3</x:v></x:c>
+              <x:c r="C1"><x:is><x:t>Inline</x:t></x:is></x:c>
+            </x:row>
+          </x:sheetData>
+          <x:mergeCells>
+            <x:mergeCell ref="A1:B1"/>
+          </x:mergeCells>
+          <x:conditionalFormatting sqref="A1">
+            <x:cfRule type="expression" priority="1">
+              <x:formula>A1&gt;0</x:formula>
+            </x:cfRule>
+          </x:conditionalFormatting>
+          <x:dataValidations>
+            <x:dataValidation type="whole" sqref="C1">
+              <x:formula1>1</x:formula1>
+              <x:formula2>10</x:formula2>
+            </x:dataValidation>
+          </x:dataValidations>
+        </x:worksheet>
+        "#;
+
+    let mut parser = XlsxParser::new();
+    parser.shared_strings = vec!["Shared".to_string()];
+
+    let sheet = SheetInfo {
+        name: "Sheet1".to_string(),
+        sheet_id: 1,
+        rel_id: "rId1".to_string(),
+        state: SheetState::Visible,
+    };
+
+    let mut zip = build_empty_zip();
+    let ws_id = parser
+        .parse_worksheet(
+            &mut zip,
+            xml,
+            &sheet,
+            "xl/worksheets/sheet1.xml",
+            &Relationships::default(),
+            SheetKind::Worksheet,
+        )
+        .expect("parse prefixed worksheet");
+    let store = parser.into_store();
+
+    let worksheet = match store.get(ws_id) {
+        Some(IRNode::Worksheet(ws)) => ws,
+        _ => panic!("missing worksheet node"),
+    };
+
+    assert_eq!(worksheet.dimension.as_deref(), Some("A1:C2"));
+    assert_eq!(worksheet.tab_color.as_deref(), Some("rgb:FF112233"));
+    assert_eq!(worksheet.columns.len(), 1);
+    assert_eq!(worksheet.merged_cells.len(), 1);
+    assert_eq!(worksheet.cells.len(), 3);
+    assert_eq!(worksheet.conditional_formats.len(), 1);
+    assert_eq!(worksheet.data_validations.len(), 1);
+
+    let cell_a1 = get_cell(&store, worksheet.cells[0], "cell a1");
+    assert!(matches!(cell_a1.value, CellValue::String(ref v) if v == "Shared"));
+
+    let cell_b1 = get_cell(&store, worksheet.cells[1], "cell b1");
+    assert!(cell_b1.formula.is_some());
+    assert!(matches!(cell_b1.value, CellValue::Number(v) if (v - 3.0).abs() < f64::EPSILON));
+
+    let cell_c1 = get_cell(&store, worksheet.cells[2], "cell c1");
+    assert!(matches!(cell_c1.value, CellValue::InlineString(ref v) if v == "Inline"));
+
+    let fmt = match store.get(worksheet.conditional_formats[0]) {
+        Some(IRNode::ConditionalFormat(fmt)) => fmt,
+        _ => panic!("missing conditional format"),
+    };
+    assert_eq!(fmt.ranges, vec!["A1".to_string()]);
+    assert_eq!(fmt.rules.len(), 1);
+    assert_eq!(fmt.rules[0].formulae, vec!["A1>0".to_string()]);
+
+    let validation = match store.get(worksheet.data_validations[0]) {
+        Some(IRNode::DataValidation(validation)) => validation,
+        _ => panic!("missing data validation"),
+    };
+    assert_eq!(validation.ranges, vec!["C1".to_string()]);
+    assert_eq!(validation.formula1.as_deref(), Some("1"));
+    assert_eq!(validation.formula2.as_deref(), Some("10"));
 }
 
 #[test]

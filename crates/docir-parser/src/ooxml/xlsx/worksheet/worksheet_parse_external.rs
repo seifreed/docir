@@ -219,6 +219,33 @@ mod tests {
     }
 
     #[test]
+    fn parse_pivot_cache_accepts_prefixed_main_namespace() {
+        let mut parser = XlsxParser::new();
+        let mut zip = MockPackageReader::default();
+        let cache_xml = r#"
+            <x:pivotCacheDefinition xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <x:cacheSource type="worksheet"/>
+              <x:worksheetSource sheet="Sheet1" ref="A1:B3"/>
+            </x:pivotCacheDefinition>
+        "#;
+
+        let cache = parser
+            .parse_pivot_cache(
+                &mut zip,
+                cache_xml,
+                "xl/pivotCache/pivotCacheDefinition1.xml",
+                9,
+            )
+            .expect("pivot cache parse");
+
+        assert_eq!(
+            cache.cache_source.as_deref(),
+            Some("worksheet:Sheet1!A1:B3")
+        );
+        assert_eq!(cache.cache_id, 9);
+    }
+
+    #[test]
     fn parse_external_links_and_connections_collects_shared_parts_and_external_refs() {
         let mut parser = XlsxParser::new();
         let mut zip = MockPackageReader::default();

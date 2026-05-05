@@ -4,7 +4,7 @@ use super::SheetState;
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
-    dispatch_start_or_empty, reader_from_str, scan_xml_events_with_reader, xml_error,
+    dispatch_start_or_empty, local_name, reader_from_str, scan_xml_events_with_reader, xml_error,
     XmlScanControl,
 };
 use docir_core::ir::{DefinedName, WorkbookProperties};
@@ -75,7 +75,7 @@ fn handle_workbook_event(
     pivot_cache_refs: &mut Vec<PivotCacheRef>,
     workbook_properties: &mut Option<WorkbookProperties>,
 ) -> Result<(), ParseError> {
-    match e.name().as_ref() {
+    match local_name(e.name().as_ref()) {
         b"sheet" => parse_sheet_info(e, sheets)?,
         b"definedName" => {
             if is_start {
