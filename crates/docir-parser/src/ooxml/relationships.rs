@@ -2,8 +2,8 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::local_name;
-use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{read_event, reader_from_str};
+use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event;
 use std::collections::HashMap;
 
@@ -59,16 +59,16 @@ impl Relationships {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
                                 b"Id" => {
-                                    id = Some(lossy_attr_value(&attr).to_string());
+                                    id = Some(unescaped_attr_value(&attr));
                                 }
                                 b"Type" => {
-                                    rel_type = Some(lossy_attr_value(&attr).to_string());
+                                    rel_type = Some(unescaped_attr_value(&attr));
                                 }
                                 b"Target" => {
-                                    target = Some(lossy_attr_value(&attr).to_string());
+                                    target = Some(unescaped_attr_value(&attr));
                                 }
                                 b"TargetMode" => {
-                                    let mode = lossy_attr_value(&attr);
+                                    let mode = unescaped_attr_value(&attr);
                                     if mode.eq_ignore_ascii_case("External") {
                                         target_mode = TargetMode::External;
                                     }
@@ -131,9 +131,14 @@ impl Relationships {
             return target.to_string();
         }
 
+        let normalized_target = target.replace('\\', "/");
+
         // Handle absolute targets
-        if target.starts_with('/') {
-            return target.strip_prefix('/').unwrap_or(target).to_string();
+        if normalized_target.starts_with('/') {
+            return normalized_target
+                .strip_prefix('/')
+                .unwrap_or(&normalized_target)
+                .to_string();
         }
 
         // Get directory of base path
@@ -146,7 +151,7 @@ impl Relationships {
         // Simple path resolution (handles ../ references)
         let mut parts: Vec<&str> = base_dir.split('/').filter(|s| !s.is_empty()).collect();
 
-        for component in target.split('/') {
+        for component in normalized_target.split('/') {
             match component {
                 ".." => {
                     parts.pop();
@@ -160,6 +165,12 @@ impl Relationships {
 
         parts.join("/")
     }
+}
+
+fn unescaped_attr_value(attr: &Attribute<'_>) -> String {
+    attr.unescape_value()
+        .map(|value| value.into_owned())
+        .unwrap_or_else(|_| String::from_utf8_lossy(attr.value.as_ref()).into_owned())
 }
 
 fn looks_like_external_target(target: &str) -> bool {
@@ -203,10 +214,43 @@ mod tests {
     }
 
     #[test]
+    fn parse_unescapes_relationship_attribute_values() {
+        let xml = r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1"
+                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                Target="https://example.test/a?x=1&amp;y=2"
+                TargetMode="External"/>
+            </Relationships>
+        "#;
+
+        let rels = Relationships::parse(xml).expect("relationships parse");
+        let rel = rels.get("rId1").expect("relationship");
+
+        assert_eq!(rel.target, "https://example.test/a?x=1&y=2");
+    }
+
+    #[test]
     fn resolve_target_preserves_external_uris() {
         assert_eq!(
             Relationships::resolve_target("ppt/slides/slide1.xml", "https://example.com/a.wav"),
             "https://example.com/a.wav"
+        );
+    }
+
+    #[test]
+    fn resolve_target_accepts_backslash_components_for_internal_parts() {
+        assert_eq!(
+            Relationships::resolve_target("xl/worksheets/sheet1.xml", r"..\drawings\drawing1.xml"),
+            "xl/drawings/drawing1.xml"
+        );
+        assert_eq!(
+            Relationships::resolve_target("word/document.xml", r"media\image1.png"),
+            "word/media/image1.png"
+        );
+        assert_eq!(
+            Relationships::resolve_target("word/document.xml", r"\\server\share\doc.docx"),
+            r"\\server\share\doc.docx"
         );
     }
 }

@@ -113,9 +113,9 @@ fn extract_host(url: &str) -> String {
     // Strip userinfo (user:pass@)
     let no_auth = no_scheme.split('@').next_back().unwrap_or(no_scheme);
 
-    // Strip port and path
+    // Strip port, path, query, and fragment.
     let host_port = no_auth
-        .split(['/', '\\'])
+        .split(['/', '\\', '?', '#'])
         .next()
         .unwrap_or(no_auth)
         .trim_end_matches('.');
@@ -191,14 +191,19 @@ End Sub
         assert!(is_suspicious_url("http://192.168.1.1/payload.exe"));
         assert!(is_suspicious_url("http://[2001:db8::1]/payload.exe"));
         assert!(is_suspicious_url("http://evil.ru/malware.doc"));
+        assert!(is_suspicious_url("http://evil.ru?download=1"));
+        assert!(is_suspicious_url("http://192.168.1.1#payload"));
         assert!(is_suspicious_url(r"http://evil.ru\malware.doc"));
         assert!(is_suspicious_url("http://evil.ru%5cmalware.doc"));
         assert!(is_suspicious_url(r"http://192.168.1.1\payload.exe"));
         assert!(is_suspicious_url("https://pastebin.com/raw/abc123"));
+        assert!(is_suspicious_url("https://pastebin.com?raw=abc123"));
+        assert!(is_suspicious_url("https://pastebin.com%3fraw=abc123"));
         assert!(is_suspicious_url("https://pastebin.com./raw/abc123"));
         assert!(is_suspicious_url("http://evil.ru./malware.doc"));
         assert!(!is_suspicious_url("https://www.microsoft.com/docs"));
         assert!(!is_suspicious_url("https://notpastebin.com/raw/abc123"));
+        assert!(!is_suspicious_url("https://example.com?next=pastebin.com"));
         assert!(!is_suspicious_url(
             "https://example.com/path/pastebin.com/report"
         ));
