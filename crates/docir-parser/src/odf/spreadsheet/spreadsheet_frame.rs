@@ -4,8 +4,9 @@ use super::super::super::presentation_helpers::{
 use super::super::super::{
     parse_frame_transform, IRNode, IrStore, NodeId, OdfReader, ParseError, Shape,
 };
-use crate::xml_utils::attr_value;
-use crate::xml_utils::{is_end_event, scan_xml_events_until_end, XmlScanControl};
+use crate::xml_utils::{
+    attr_value_by_suffix, is_end_event_local, scan_xml_events_until_end, XmlScanControl,
+};
 use quick_xml::events::{BytesStart, Event};
 
 pub(crate) fn parse_draw_frame_spreadsheet(
@@ -16,13 +17,13 @@ pub(crate) fn parse_draw_frame_spreadsheet(
     let transform = parse_frame_transform(start);
     let mut frame = FrameShapeState::new();
     let mut buf = Vec::new();
-    let mut name = attr_value(start, b"draw:name");
+    let mut name = attr_value_by_suffix(start, &[b":name"]);
 
     scan_xml_events_until_end(
         reader,
         &mut buf,
         "content.xml",
-        |event| is_end_event(event, b"draw:frame"),
+        |event| is_end_event_local(event, b"frame"),
         |reader, event| {
             match event {
                 Event::Start(start) => {

@@ -8,8 +8,8 @@ use crate::odf::{
     utils::parse_frame_transform, OdfReader,
 };
 use crate::xml_utils::{
-    attr_value, attr_value_by_suffix, local_name, scan_xml_events_until_end,
-    scan_xml_events_with_reader, xml_error, XmlScanControl,
+    attr_value_by_suffix, local_name, scan_xml_events_until_end, scan_xml_events_with_reader,
+    xml_error, XmlScanControl,
 };
 use docir_core::ir::*;
 use docir_core::types::*;
@@ -283,7 +283,7 @@ pub(crate) fn parse_draw_frame(
 ) -> Result<Option<NodeId>, ParseError> {
     let mut shape = Shape::new(ShapeType::Picture);
     shape.transform = parse_frame_transform(start);
-    shape.name = attr_value(start, b"draw:name");
+    shape.name = attr_value_by_suffix(start, &[b":name"]);
     let mut buf = Vec::new();
     let mut has_shape = false;
 

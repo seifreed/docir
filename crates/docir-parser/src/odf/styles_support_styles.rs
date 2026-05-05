@@ -1,4 +1,5 @@
-use super::super::{attr_value, parse_text_alignment, Style, StyleSet, StyleType};
+use super::super::{parse_text_alignment, Style, StyleSet, StyleType};
+use crate::xml_utils::{attr_value_by_suffix, local_name};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
@@ -10,28 +11,28 @@ pub(crate) fn parse_styles(xml: &str) -> Option<StyleSet> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"style:style" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"style" => {
                     if let Some(mut style) = build_style_from_start(&e, false) {
-                        parse_style_properties(&mut reader, &mut style, b"style:style");
+                        parse_style_properties(&mut reader, &mut style, e.name().as_ref());
                         styles.styles.push(style);
                     }
                 }
-                b"style:default-style" => {
+                b"default-style" => {
                     if let Some(mut style) = build_style_from_start(&e, true) {
-                        parse_style_properties(&mut reader, &mut style, b"style:default-style");
+                        parse_style_properties(&mut reader, &mut style, e.name().as_ref());
                         styles.styles.push(style);
                     }
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"style:style" => {
+            Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"style" => {
                     if let Some(style) = build_style_from_start(&e, false) {
                         styles.styles.push(style);
                     }
                 }
-                b"style:default-style" => {
+                b"default-style" => {
                     if let Some(style) = build_style_from_start(&e, true) {
                         styles.styles.push(style);
                     }
@@ -73,8 +74,8 @@ pub(crate) fn parse_master_pages(xml: &str) -> Vec<String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"style:master-page" {
-                    if let Some(name) = attr_value(&e, b"style:name") {
+                if local_name(e.name().as_ref()) == b"master-page" {
+                    if let Some(name) = attr_value_by_suffix(&e, &[b":name"]) {
                         out.push(name);
                     }
                 }
@@ -96,8 +97,8 @@ pub(crate) fn parse_page_layouts(xml: &str) -> Vec<String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"style:page-layout" {
-                    if let Some(name) = attr_value(&e, b"style:name") {
+                if local_name(e.name().as_ref()) == b"page-layout" {
+                    if let Some(name) = attr_value_by_suffix(&e, &[b":name"]) {
                         out.push(name);
                     }
                 }
@@ -112,7 +113,7 @@ pub(crate) fn parse_page_layouts(xml: &str) -> Vec<String> {
 }
 
 fn map_style_family(e: &BytesStart<'_>) -> StyleType {
-    match attr_value(e, b"style:family").as_deref() {
+    match attr_value_by_suffix(e, &[b":family"]).as_deref() {
         Some("paragraph") => StyleType::Paragraph,
         Some("text") => StyleType::Character,
         Some("table") => StyleType::Table,
@@ -122,24 +123,24 @@ fn map_style_family(e: &BytesStart<'_>) -> StyleType {
 }
 
 fn build_style_from_start(start: &BytesStart<'_>, is_default: bool) -> Option<Style> {
-    let style_id = attr_value(start, b"style:name")
-        .or_else(|| attr_value(start, b"style:family").map(|f| format!("default:{f}")));
+    let style_id = attr_value_by_suffix(start, &[b":name"])
+        .or_else(|| attr_value_by_suffix(start, &[b":family"]).map(|f| format!("default:{f}")));
     let style_id = style_id?;
     let mut style = Style {
         style_id,
-        name: attr_value(start, b"style:display-name"),
+        name: attr_value_by_suffix(start, &[b":display-name"]),
         style_type: map_style_family(start),
-        based_on: attr_value(start, b"style:parent-style-name"),
-        next: attr_value(start, b"style:next-style-name"),
+        based_on: attr_value_by_suffix(start, &[b":parent-style-name"]),
+        next: attr_value_by_suffix(start, &[b":next-style-name"]),
         is_default,
         run_props: None,
         paragraph_props: None,
         table_props: None,
     };
-    if let Some(family) = attr_value(start, b"style:family") {
+    if let Some(family) = attr_value_by_suffix(start, &[b":family"]) {
         if family == "paragraph" || family == "text" {
             style.is_default = is_default
-                || attr_value(start, b"style:default")
+                || attr_value_by_suffix(start, &[b":default"])
                     .map(|v| v == "true")
                     .unwrap_or(false);
         }
@@ -151,34 +152,34 @@ fn parse_style_properties(reader: &mut Reader<&[u8]>, style: &mut Style, end_nam
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"style:text-properties" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"text-properties" => {
                     let mut props = style.run_props.take().unwrap_or_default();
-                    if let Some(font) = attr_value(&e, b"fo:font-family")
-                        .or_else(|| attr_value(&e, b"style:font-name"))
+                    if let Some(font) = attr_value_by_suffix(&e, &[b":font-family"])
+                        .or_else(|| attr_value_by_suffix(&e, &[b":font-name"]))
                     {
                         props.font_family = Some(font);
                     }
                     if let Some(size) =
-                        attr_value(&e, b"fo:font-size").and_then(|v| parse_font_size(&v))
+                        attr_value_by_suffix(&e, &[b":font-size"]).and_then(|v| parse_font_size(&v))
                     {
                         props.font_size = Some(size);
                     }
-                    if let Some(weight) = attr_value(&e, b"fo:font-weight") {
+                    if let Some(weight) = attr_value_by_suffix(&e, &[b":font-weight"]) {
                         props.bold = Some(weight.eq_ignore_ascii_case("bold"));
                     }
-                    if let Some(style_attr) = attr_value(&e, b"fo:font-style") {
+                    if let Some(style_attr) = attr_value_by_suffix(&e, &[b":font-style"]) {
                         props.italic = Some(style_attr.eq_ignore_ascii_case("italic"));
                     }
-                    if let Some(color) = attr_value(&e, b"fo:color") {
+                    if let Some(color) = attr_value_by_suffix(&e, &[b":color"]) {
                         props.color = Some(color);
                     }
                     style.run_props = Some(props);
                 }
-                b"style:paragraph-properties" => {
+                b"paragraph-properties" => {
                     let mut props = style.paragraph_props.take().unwrap_or_default();
-                    if let Some(align) =
-                        attr_value(&e, b"fo:text-align").and_then(|v| parse_text_alignment(&v))
+                    if let Some(align) = attr_value_by_suffix(&e, &[b":text-align"])
+                        .and_then(|v| parse_text_alignment(&v))
                     {
                         props.alignment = Some(align);
                     }

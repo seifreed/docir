@@ -5,7 +5,7 @@ use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::parser::{ParsedDocument, ParserConfig};
 use crate::text_utils::parse_text_alignment;
-use crate::xml_utils::{attr_value, read_event, scan_xml_events, scan_xml_events_with_reader};
+use crate::xml_utils::{read_event, scan_xml_events, scan_xml_events_with_reader};
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{
     BookmarkEnd, BookmarkStart, Cell, CellFormula, CellValue, ChartData, CommentReference,

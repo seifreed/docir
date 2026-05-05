@@ -283,4 +283,76 @@ mod tests {
         };
         assert!(footer_para.properties.numbering.is_none());
     }
+
+    #[test]
+    fn parse_styles_and_headers_accept_alternate_namespace_prefixes() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<pkg:document-styles xmlns:pkg="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:s="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+  xmlns:f="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+  xmlns:txt="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <pkg:styles>
+    <s:default-style s:family="paragraph">
+      <s:text-properties f:font-family="Alt Sans" f:font-size="10pt"/>
+      <s:paragraph-properties f:text-align="right"/>
+    </s:default-style>
+  </pkg:styles>
+  <pkg:master-styles>
+    <s:master-page s:name="Standard">
+      <s:header-left>
+        <txt:h txt:outline-level="3"/>
+        <txt:list txt:style-name="AltList">
+          <txt:list-item><txt:p>Header item</txt:p></txt:list-item>
+        </txt:list>
+      </s:header-left>
+      <s:footer-left>
+        <txt:p/>
+      </s:footer-left>
+    </s:master-page>
+  </pkg:master-styles>
+</pkg:document-styles>
+"#;
+
+        let styles = parse_styles(xml).expect("expected alternate-prefix styles");
+        assert_eq!(styles.styles.len(), 1);
+        let style = &styles.styles[0];
+        assert_eq!(style.style_id, "default:paragraph");
+        assert_eq!(style.style_type, StyleType::Paragraph);
+        assert_eq!(
+            style
+                .run_props
+                .as_ref()
+                .and_then(|props| props.font_family.as_deref()),
+            Some("Alt Sans")
+        );
+        assert_eq!(
+            style
+                .paragraph_props
+                .as_ref()
+                .and_then(|props| props.alignment)
+                .map(|alignment| format!("{alignment:?}")),
+            Some("Right".to_string())
+        );
+        assert_eq!(parse_master_pages(xml), vec!["Standard".to_string()]);
+
+        let mut store = IrStore::new();
+        let (headers, footers) =
+            parse_odf_headers_footers(xml, &mut store, &ParserConfig::default())
+                .expect("parse alternate-prefix headers/footers");
+        assert_eq!(headers.len(), 1);
+        assert_eq!(footers.len(), 1);
+
+        let Some(IRNode::Header(header)) = store.get(headers[0]) else {
+            panic!("expected header node");
+        };
+        assert_eq!(header.content.len(), 2);
+        let Some(IRNode::Paragraph(heading)) = store.get(header.content[0]) else {
+            panic!("expected heading paragraph");
+        };
+        assert_eq!(heading.properties.outline_level, Some(3));
+        let Some(IRNode::Paragraph(list_item)) = store.get(header.content[1]) else {
+            panic!("expected list item paragraph");
+        };
+        assert!(list_item.properties.numbering.is_some());
+    }
 }

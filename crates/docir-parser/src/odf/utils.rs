@@ -1,4 +1,4 @@
-use crate::xml_utils::{attr_value, scan_xml_events, XmlScanControl};
+use crate::xml_utils::{attr_value_by_suffix, local_name, scan_xml_events, XmlScanControl};
 use docir_core::ir::{DefinedName, ShapeTransform};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::events::{BytesStart, Event};
@@ -22,14 +22,14 @@ pub(super) fn parse_ods_named_ranges(xml: &[u8]) -> Vec<DefinedName> {
 
     let _ = scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
         match event {
-            Event::Start(e) | Event::Empty(e) => match e.name().as_ref() {
-                b"table:named-range" => {
+            Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
+                b"named-range" => {
                     if let Some(def) = parse_ods_named_definition(&e, NamedDefinitionSource::Range)
                     {
                         out.push(def);
                     }
                 }
-                b"table:named-expression" => {
+                b"named-expression" => {
                     if let Some(def) =
                         parse_ods_named_definition(&e, NamedDefinitionSource::Expression)
                     {
@@ -55,10 +55,10 @@ fn parse_ods_named_definition(
     element: &BytesStart<'_>,
     source: NamedDefinitionSource,
 ) -> Option<DefinedName> {
-    let name = attr_value(element, b"table:name")?;
+    let name = attr_value_by_suffix(element, &[b":name"])?;
     let value = match source {
-        NamedDefinitionSource::Range => attr_value(element, b"table:cell-range-address"),
-        NamedDefinitionSource::Expression => attr_value(element, b"table:expression"),
+        NamedDefinitionSource::Range => attr_value_by_suffix(element, &[b":cell-range-address"]),
+        NamedDefinitionSource::Expression => attr_value_by_suffix(element, &[b":expression"]),
     }
     .unwrap_or_default();
 
@@ -68,11 +68,11 @@ fn parse_ods_named_definition(
         value,
         local_sheet_id: None,
         hidden: false,
-        comment: attr_value(element, b"table:comment"),
+        comment: attr_value_by_suffix(element, &[b":comment"]),
         span: Some(SourceSpan::new("content.xml")),
     };
 
-    if let Some(hidden) = attr_value(element, b"table:hidden") {
+    if let Some(hidden) = attr_value_by_suffix(element, &[b":hidden"]) {
         def.hidden = hidden == "true";
     }
     Some(def)
@@ -80,27 +80,27 @@ fn parse_ods_named_definition(
 
 pub(crate) fn parse_frame_transform(start: &BytesStart<'_>) -> ShapeTransform {
     let mut transform = ShapeTransform::default();
-    if let Some(x) = parse_length_emu_attr(start, b"svg:x") {
+    if let Some(x) = parse_length_emu_attr(start, b":x") {
         transform.x = x;
     }
-    if let Some(y) = parse_length_emu_attr(start, b"svg:y") {
+    if let Some(y) = parse_length_emu_attr(start, b":y") {
         transform.y = y;
     }
-    if let Some(width) = parse_length_emu_attr_u64(start, b"svg:width") {
+    if let Some(width) = parse_length_emu_attr_u64(start, b":width") {
         transform.width = width;
     }
-    if let Some(height) = parse_length_emu_attr_u64(start, b"svg:height") {
+    if let Some(height) = parse_length_emu_attr_u64(start, b":height") {
         transform.height = height;
     }
     transform
 }
 
 fn parse_length_emu_attr(start: &BytesStart<'_>, key: &[u8]) -> Option<i64> {
-    attr_value(start, key).and_then(parse_length_emu)
+    attr_value_by_suffix(start, &[key]).and_then(parse_length_emu)
 }
 
 fn parse_length_emu_attr_u64(start: &BytesStart<'_>, key: &[u8]) -> Option<u64> {
-    attr_value(start, key).and_then(parse_length_emu_u64)
+    attr_value_by_suffix(start, &[key]).and_then(parse_length_emu_u64)
 }
 
 fn parse_length_emu(value: String) -> Option<i64> {

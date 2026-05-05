@@ -1,8 +1,8 @@
 use super::{
-    attr_value, text, BookmarkEnd, BookmarkStart, Field, FieldInstruction, FieldKind, IRNode,
-    IrStore, NodeId, NumberingInfo, OdfLimitCounter, OdfReader, ParseError,
+    text, BookmarkEnd, BookmarkStart, Field, FieldInstruction, FieldKind, IRNode, IrStore, NodeId,
+    NumberingInfo, OdfLimitCounter, OdfReader, ParseError,
 };
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 use quick_xml::events::{BytesStart, Event};
 
 pub(crate) fn parse_paragraph(
@@ -53,17 +53,17 @@ fn handle_inline_event(
     store: &mut IrStore,
     inline_nodes: &mut Vec<NodeId>,
 ) {
-    match event.name().as_ref() {
-        b"text:s" => {
-            let count = attr_value(event, b"text:c")
+    match local_name(event.name().as_ref()) {
+        b"s" => {
+            let count = attr_value_by_suffix(event, &[b":c"])
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(1);
             text.extend(std::iter::repeat_n(' ', count));
         }
-        b"text:tab" => text.push('\t'),
-        b"text:line-break" => text.push('\n'),
-        b"text:bookmark-start" => {
-            if let Some(name) = attr_value(event, b"text:name") {
+        b"tab" => text.push('\t'),
+        b"line-break" => text.push('\n'),
+        b"bookmark-start" => {
+            if let Some(name) = attr_value_by_suffix(event, &[b":name"]) {
                 let mut bookmark = BookmarkStart::new(name.clone());
                 bookmark.name = Some(name);
                 let bookmark_id = bookmark.id;
@@ -75,8 +75,8 @@ fn handle_inline_event(
                 );
             }
         }
-        b"text:bookmark-end" => {
-            if let Some(name) = attr_value(event, b"text:name") {
+        b"bookmark-end" => {
+            if let Some(name) = attr_value_by_suffix(event, &[b":name"]) {
                 let bookmark = BookmarkEnd::new(name);
                 let bookmark_id = bookmark.id;
                 push_inline_node(
@@ -87,7 +87,7 @@ fn handle_inline_event(
                 );
             }
         }
-        b"text:date" => {
+        b"date" => {
             let mut field = Field::new(Some("DATE".to_string()));
             field.instruction_parsed = Some(FieldInstruction {
                 kind: FieldKind::Date,
@@ -97,7 +97,7 @@ fn handle_inline_event(
             let field_id = field.id;
             push_inline_node(store, inline_nodes, field_id, IRNode::Field(field));
         }
-        b"text:time" => {
+        b"time" => {
             let field = Field::new(Some("TIME".to_string()));
             let field_id = field.id;
             push_inline_node(store, inline_nodes, field_id, IRNode::Field(field));

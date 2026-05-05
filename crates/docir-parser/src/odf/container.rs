@@ -4,7 +4,7 @@ use super::{
     OdfLimits, OdfManifestEntry, OdfParser, ParseError, ParserConfig, SecureZipReader,
 };
 use crate::diagnostics::{push_info, push_warning};
-use crate::xml_utils::{scan_xml_events, XmlScanControl};
+use crate::xml_utils::{local_name, scan_xml_events, XmlScanControl};
 use aes::{Aes128, Aes256};
 use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
 use cbc::Decryptor;
@@ -321,14 +321,14 @@ fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
     if scan_xml_events(&mut reader, &mut buf, "meta.xml", |event| {
         match event {
             Event::Start(e) => {
-                current = match e.name().as_ref() {
-                    b"dc:title" => Some(MetaField::Title),
-                    b"dc:subject" => Some(MetaField::Subject),
-                    b"dc:creator" => Some(MetaField::Creator),
-                    b"meta:keyword" => Some(MetaField::Keywords),
-                    b"dc:description" => Some(MetaField::Description),
-                    b"meta:creation-date" => Some(MetaField::Created),
-                    b"dc:date" => Some(MetaField::Modified),
+                current = match local_name(e.name().as_ref()) {
+                    b"title" => Some(MetaField::Title),
+                    b"subject" => Some(MetaField::Subject),
+                    b"creator" => Some(MetaField::Creator),
+                    b"keyword" => Some(MetaField::Keywords),
+                    b"description" => Some(MetaField::Description),
+                    b"creation-date" => Some(MetaField::Created),
+                    b"date" => Some(MetaField::Modified),
                     _ => None,
                 };
             }
@@ -430,6 +430,20 @@ mod tests {
         assert_eq!(meta.description.as_deref(), Some("Desc"));
         assert_eq!(meta.created.as_deref(), Some("2026-01-01"));
         assert_eq!(meta.modified.as_deref(), Some("2026-01-02"));
+
+        let prefixed_meta = parse_meta(
+            r#"
+            <pkg:meta xmlns:dct="dc" xmlns:m="meta">
+              <dct:title>Alt Title</dct:title>
+              <dct:creator>Bob</dct:creator>
+              <m:creation-date>2026-02-01</m:creation-date>
+            </pkg:meta>
+            "#,
+        )
+        .expect("alternate-prefix meta must parse");
+        assert_eq!(prefixed_meta.title.as_deref(), Some("Alt Title"));
+        assert_eq!(prefixed_meta.creator.as_deref(), Some("Bob"));
+        assert_eq!(prefixed_meta.created.as_deref(), Some("2026-02-01"));
 
         assert!(parse_meta("<office:meta/>").is_none());
         assert!(parse_meta("<office:meta><dc:title>").is_none());

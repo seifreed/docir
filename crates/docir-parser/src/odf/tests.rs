@@ -368,6 +368,102 @@ fn test_parse_odt_rich_content() {
 }
 
 #[test]
+fn test_parse_odt_text_content_accepts_alternate_namespace_prefixes() {
+    let mimetype = "application/vnd.oasis.opendocument.text";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<pkg:document-content xmlns:pkg="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:off="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:txt="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  xmlns:tbl="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+  xmlns:drw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  xmlns:dct="http://purl.org/dc/elements/1.1/">
+  <off:body>
+    <off:text>
+      <txt:h txt:outline-level="2">Heading</txt:h>
+      <txt:p>First<txt:s txt:c="2"/>line<txt:tab/>tab<txt:line-break/>next</txt:p>
+      <txt:list txt:style-name="AltList">
+        <txt:list-item><txt:p>Item</txt:p></txt:list-item>
+      </txt:list>
+      <tbl:table>
+        <tbl:table-row>
+          <tbl:table-cell><txt:p>Cell</txt:p></tbl:table-cell>
+        </tbl:table-row>
+      </tbl:table>
+      <off:annotation>
+        <dct:creator>Alice</dct:creator>
+        <dct:date>2024-01-01</dct:date>
+        <txt:p>Comment body</txt:p>
+      </off:annotation>
+      <txt:note txt:note-class="footnote">
+        <txt:note-body><txt:p>Footnote body</txt:p></txt:note-body>
+      </txt:note>
+      <txt:bookmark-start txt:name="bm-alt" />
+      <txt:bookmark-end txt:name="bm-alt" />
+      <txt:date />
+      <txt:time />
+      <drw:frame drw:name="AltImage">
+        <drw:image xlink:href="Pictures/image1.png" />
+      </drw:frame>
+      <txt:tracked-changes>
+        <txt:changed-region>
+          <txt:change-info>
+            <dct:creator>Bob</dct:creator>
+            <dct:date>2024-01-02</dct:date>
+          </txt:change-info>
+          <txt:insertion><txt:p>Inserted text</txt:p></txt:insertion>
+        </txt:changed-region>
+      </txt:tracked-changes>
+    </off:text>
+  </off:body>
+</pkg:document-content>
+"#;
+    let zip_data = build_odf_zip(mimetype, content_xml, None);
+    let parser = DocumentParser::new();
+    let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+    let counts = collect_rich_content_counts(&parsed);
+
+    let paragraph_texts = parsed
+        .store
+        .values()
+        .filter_map(|node| match node {
+            IRNode::Paragraph(paragraph) => Some(paragraph.text_content(&parsed.store)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(paragraph_texts
+        .iter()
+        .any(|text| text == "First  line\ttab\nnext"));
+    assert!(parsed.store.values().any(|node| {
+        matches!(node, IRNode::Paragraph(paragraph) if paragraph.properties.outline_level == Some(2))
+    }));
+    assert!(parsed.store.values().any(|node| match node {
+        IRNode::Paragraph(paragraph) => paragraph
+            .properties
+            .numbering
+            .as_ref()
+            .map(|numbering| numbering.level == 0)
+            .unwrap_or(false),
+        _ => false,
+    }));
+    assert_eq!(counts.table, 1);
+    assert_eq!(counts.comment, 1);
+    assert_eq!(counts.footnote, 1);
+    assert!(counts.bookmark >= 2);
+    assert_eq!(counts.field, 2);
+    assert_eq!(counts.shape, 1);
+    assert_eq!(counts.revision, 1);
+    assert!(parsed.store.values().any(|node| {
+        matches!(
+            node,
+            IRNode::Shape(shape)
+                if shape.name.as_deref() == Some("AltImage")
+                    && shape.media_target.as_deref() == Some("Pictures/image1.png")
+        )
+    }));
+}
+
+#[test]
 fn test_odf_formula_dde_and_links() {
     let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -653,6 +749,75 @@ fn test_parse_ods_named_ranges_and_pivots() {
     assert!(pivot_tables >= 1);
     assert!(pivot_caches >= 1);
     assert!(pivot_records >= 1);
+}
+
+#[test]
+fn test_parse_ods_named_ranges_validations_and_pivots_accept_alternate_namespace_prefixes() {
+    let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<pkg:document-content xmlns:pkg="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:calc="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:t="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+  xmlns:txt="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <pkg:body>
+    <calc:spreadsheet>
+      <t:named-expressions>
+        <t:named-range t:name="RANGE_ALT" t:cell-range-address="Sheet1.A1:Sheet1.B2"/>
+        <t:named-expression t:name="EXPR_ALT" t:expression="of:=SUM([.A1];[.B1])"/>
+      </t:named-expressions>
+      <t:content-validations>
+        <t:content-validation t:name="rule-alt" t:condition="cell-content-is-between(1,10)" />
+      </t:content-validations>
+      <t:table t:name="Sheet1">
+        <t:table-row>
+          <t:table-cell t:cell-value-type="float" t:cell-value="1" t:content-validation-name="rule-alt"/>
+          <t:table-cell t:cell-value-type="float" t:cell-value="2"/>
+        </t:table-row>
+      </t:table>
+      <t:data-pilot-table t:name="PivotAlt"
+        t:source-range-address="Sheet1.A1:Sheet1.B2"
+        t:target-range-address="Sheet1.D1:Sheet1.E2">
+        <t:data-pilot-field t:source-field-name="Field1"/>
+      </t:data-pilot-table>
+    </calc:spreadsheet>
+  </pkg:body>
+</pkg:document-content>
+"#;
+    let zip_data = build_odf_zip(mimetype, content_xml, None);
+    let parser = DocumentParser::new();
+    let mut parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
+    docir_security::populate_security_indicators(&mut parsed.store, parsed.root_id);
+    let doc = parsed.document().unwrap();
+
+    assert!(doc.defined_names.len() >= 2);
+
+    let mut data_validations = 0;
+    let mut pivot_tables = 0;
+    let mut pivot_caches = 0;
+    let mut pivot_records = 0;
+    let mut pivot_named = false;
+    for node in parsed.store.values() {
+        match node {
+            IRNode::DataValidation(_) => data_validations += 1,
+            IRNode::PivotTable(pivot) => {
+                pivot_tables += 1;
+                if pivot.name.as_deref() == Some("PivotAlt")
+                    && pivot.ref_range.as_deref() == Some("Sheet1.D1:Sheet1.E2")
+                {
+                    pivot_named = true;
+                }
+            }
+            IRNode::PivotCache(_) => pivot_caches += 1,
+            IRNode::PivotCacheRecords(_) => pivot_records += 1,
+            _ => {}
+        }
+    }
+
+    assert_eq!(data_validations, 1);
+    assert_eq!(pivot_tables, 1);
+    assert_eq!(pivot_caches, 1);
+    assert_eq!(pivot_records, 1);
+    assert!(pivot_named);
 }
 
 #[test]

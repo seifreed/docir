@@ -5,11 +5,11 @@ use super::helpers::{
 };
 use super::spreadsheet::parse_content_spreadsheet_fast;
 use super::{
-    attr_value, parse_paragraph, BookmarkEnd, BookmarkStart, CommentReference, Field,
-    FieldInstruction, FieldKind, IRNode, IrStore, NodeId, NumberingInfo, OdfContentResult,
-    OdfLimitCounter, Paragraph, ParagraphProperties, ParseError, Run, Section,
+    parse_paragraph, BookmarkEnd, BookmarkStart, CommentReference, Field, FieldInstruction,
+    FieldKind, IRNode, IrStore, NodeId, NumberingInfo, OdfContentResult, OdfLimitCounter,
+    Paragraph, ParagraphProperties, ParseError, Run, Section,
 };
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use std::collections::HashMap;
@@ -91,27 +91,27 @@ fn handle_text_start(
     section: &mut Section,
     state: &mut OdfTextState,
 ) -> Result<(), ParseError> {
-    match e.name().as_ref() {
-        b"office:text" => state.in_text = true,
-        b"text:list" if state.in_text => push_text_list(state, e),
-        b"text:p" | b"text:h" if state.in_text => {
+    match local_name(e.name().as_ref()) {
+        b"text" => state.in_text = true,
+        b"list" if state.in_text => push_text_list(state, e),
+        b"p" | b"h" if state.in_text => {
             parse_text_paragraph(e, reader, store, limits, section, state)?
         }
-        b"table:table" if state.in_text => parse_text_table(reader, store, limits, section, state)?,
-        b"office:annotation" if state.in_text => {
+        b"table" if state.in_text => parse_text_table(reader, store, limits, section, state)?,
+        b"annotation" if state.in_text => {
             parse_text_annotation(reader, store, limits, section, state)?
         }
-        b"text:note" if state.in_text => parse_text_note(e, reader, store, limits, state)?,
-        b"text:bookmark-start" | b"text:reference-mark-start" if state.in_text => {
+        b"note" if state.in_text => parse_text_note(e, reader, store, limits, state)?,
+        b"bookmark-start" | b"reference-mark-start" if state.in_text => {
             push_bookmark_start(e, store, section);
         }
-        b"text:bookmark-end" | b"text:reference-mark-end" if state.in_text => {
+        b"bookmark-end" | b"reference-mark-end" if state.in_text => {
             push_bookmark_end(e, store, section);
         }
-        b"text:date" if state.in_text => push_date_field(store, section),
-        b"text:time" if state.in_text => push_time_field(store, section),
-        b"draw:frame" if state.in_text => push_draw_frame(e, reader, store, section)?,
-        b"text:tracked-changes" if state.in_text => {
+        b"date" if state.in_text => push_date_field(store, section),
+        b"time" if state.in_text => push_time_field(store, section),
+        b"frame" if state.in_text => push_draw_frame(e, reader, store, section)?,
+        b"tracked-changes" if state.in_text => {
             parse_text_tracked_changes(reader, store, limits, state)?
         }
         _ => {}
@@ -120,7 +120,7 @@ fn handle_text_start(
 }
 
 fn push_text_list(state: &mut OdfTextState, e: &BytesStart<'_>) {
-    let style_name = attr_value(e, b"text:style-name").unwrap_or_default();
+    let style_name = attr_value_by_suffix(e, &[b":style-name"]).unwrap_or_default();
     let num_id = state.list_id_map.entry(style_name).or_insert_with(|| {
         let id = state.next_list_id;
         state.next_list_id += 1;
@@ -141,7 +141,8 @@ fn parse_text_paragraph(
     section: &mut Section,
     state: &mut OdfTextState,
 ) -> Result<(), ParseError> {
-    let outline_level = attr_value(e, b"text:outline-level").and_then(|v| v.parse::<u8>().ok());
+    let outline_level =
+        attr_value_by_suffix(e, &[b":outline-level"]).and_then(|v| v.parse::<u8>().ok());
     let numbering = state.list_stack.last().map(|ctx| NumberingInfo {
         num_id: ctx.num_id,
         level: ctx.level,
@@ -199,7 +200,8 @@ fn parse_text_note(
     limits: &dyn OdfLimitCounter,
     state: &mut OdfTextState,
 ) -> Result<(), ParseError> {
-    let note_class = attr_value(e, b"text:note-class").unwrap_or_else(|| "footnote".to_string());
+    let note_class =
+        attr_value_by_suffix(e, &[b":note-class"]).unwrap_or_else(|| "footnote".to_string());
     let note_id = format!("odf-note-{}", state.comment_counter);
     state.comment_counter += 1;
     let note = parse_note(reader, &note_id, &note_class, store, limits)?;
@@ -239,34 +241,34 @@ fn handle_text_empty(
     section: &mut Section,
     state: &mut OdfTextState,
 ) {
-    match e.name().as_ref() {
-        b"text:bookmark-start" if state.in_text => {
+    match local_name(e.name().as_ref()) {
+        b"bookmark-start" if state.in_text => {
             push_bookmark_start(e, store, section);
         }
-        b"text:bookmark-end" if state.in_text => {
+        b"bookmark-end" if state.in_text => {
             push_bookmark_end(e, store, section);
         }
-        b"text:reference-mark-start" if state.in_text => {
+        b"reference-mark-start" if state.in_text => {
             push_bookmark_start(e, store, section);
         }
-        b"text:reference-mark-end" if state.in_text => {
+        b"reference-mark-end" if state.in_text => {
             push_bookmark_end(e, store, section);
         }
-        b"text:date" if state.in_text => {
+        b"date" if state.in_text => {
             push_date_field(store, section);
         }
-        b"text:time" if state.in_text => {
+        b"time" if state.in_text => {
             push_time_field(store, section);
         }
-        b"draw:frame" if state.in_text => {}
+        b"frame" if state.in_text => {}
         _ => {}
     }
 }
 
 fn handle_text_end(e: &quick_xml::events::BytesEnd<'_>, state: &mut OdfTextState) {
-    match e.name().as_ref() {
-        b"office:text" => state.in_text = false,
-        b"text:list" => {
+    match local_name(e.name().as_ref()) {
+        b"text" => state.in_text = false,
+        b"list" => {
             state.list_stack.pop();
         }
         _ => {}
@@ -274,7 +276,7 @@ fn handle_text_end(e: &quick_xml::events::BytesEnd<'_>, state: &mut OdfTextState
 }
 
 fn push_bookmark_start(e: &BytesStart<'_>, store: &mut IrStore, section: &mut Section) {
-    if let Some(name) = attr_value(e, b"text:name") {
+    if let Some(name) = attr_value_by_suffix(e, &[b":name"]) {
         let mut bookmark = BookmarkStart::new(name.clone());
         bookmark.name = Some(name);
         let bookmark_id = bookmark.id;
@@ -284,7 +286,7 @@ fn push_bookmark_start(e: &BytesStart<'_>, store: &mut IrStore, section: &mut Se
 }
 
 fn push_bookmark_end(e: &BytesStart<'_>, store: &mut IrStore, section: &mut Section) {
-    if let Some(name) = attr_value(e, b"text:name") {
+    if let Some(name) = attr_value_by_suffix(e, &[b":name"]) {
         let bookmark = BookmarkEnd::new(name);
         let bookmark_id = bookmark.id;
         store.insert(IRNode::BookmarkEnd(bookmark));

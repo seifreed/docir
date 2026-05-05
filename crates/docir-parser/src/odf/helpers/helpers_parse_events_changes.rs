@@ -3,6 +3,7 @@ use super::{
     OdfReader, ParseError, Revision, RevisionType, ODF_CONTENT_XML,
 };
 use crate::odf::paragraph::parse_paragraph;
+use crate::xml_utils::local_name;
 use docir_core::ir::Comment;
 use docir_core::visitor::IrStore;
 
@@ -26,13 +27,13 @@ pub(super) fn parse_annotation(
         reader,
         &mut buf,
         ODF_CONTENT_XML,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"office:annotation"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"annotation"),
         |reader, event| {
             match event {
-                Event::Start(e) => match e.name().as_ref() {
-                    b"dc:creator" => current = Some(AnnotationField::Creator),
-                    b"dc:date" => current = Some(AnnotationField::Date),
-                    b"text:p" => {
+                Event::Start(e) => match local_name(e.name().as_ref()) {
+                    b"creator" => current = Some(AnnotationField::Creator),
+                    b"date" => current = Some(AnnotationField::Date),
+                    b"p" => {
                         let paragraph_id = parse_paragraph(
                             reader,
                             e.name().as_ref(),
@@ -56,7 +57,7 @@ pub(super) fn parse_annotation(
                     }
                 }
                 Event::End(e) => {
-                    if matches!(e.name().as_ref(), b"dc:creator" | b"dc:date") {
+                    if matches!(local_name(e.name().as_ref()), b"creator" | b"date") {
                         current = None;
                     }
                 }
@@ -85,10 +86,10 @@ pub(super) fn parse_note(
         reader,
         &mut buf,
         ODF_CONTENT_XML,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"text:note"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"note"),
         |reader, event| {
             if let Event::Start(e) = event {
-                if e.name().as_ref() == b"text:p" {
+                if local_name(e.name().as_ref()) == b"p" {
                     let paragraph_id = parse_paragraph(
                         reader,
                         e.name().as_ref(),
@@ -139,22 +140,22 @@ pub(super) fn parse_tracked_changes(
         reader,
         &mut buf,
         ODF_CONTENT_XML,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"text:tracked-changes"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"tracked-changes"),
         |reader, event| {
             match event {
-                Event::Start(e) => match e.name().as_ref() {
-                    b"text:changed-region" => {
+                Event::Start(e) => match local_name(e.name().as_ref()) {
+                    b"changed-region" => {
                         current_revision = None;
                     }
-                    b"text:insertion" => {
+                    b"insertion" => {
                         current_revision = Some(Revision::new(RevisionType::Insert));
                     }
-                    b"text:deletion" => {
+                    b"deletion" => {
                         current_revision = Some(Revision::new(RevisionType::Delete));
                     }
-                    b"dc:creator" => current_field = Some(ChangeInfoField::Author),
-                    b"dc:date" => current_field = Some(ChangeInfoField::Date),
-                    b"text:p" => {
+                    b"creator" => current_field = Some(ChangeInfoField::Author),
+                    b"date" => current_field = Some(ChangeInfoField::Date),
+                    b"p" => {
                         if let Some(rev) = current_revision.as_mut() {
                             let paragraph_id = parse_paragraph(
                                 reader,
@@ -181,15 +182,15 @@ pub(super) fn parse_tracked_changes(
                         }
                     }
                 }
-                Event::End(e) => match e.name().as_ref() {
-                    b"text:insertion" | b"text:deletion" => {
+                Event::End(e) => match local_name(e.name().as_ref()) {
+                    b"insertion" | b"deletion" => {
                         if let Some(rev) = current_revision.take() {
                             let id = rev.id;
                             store.insert(IRNode::Revision(rev));
                             revisions.push(id);
                         }
                     }
-                    b"dc:creator" | b"dc:date" => current_field = None,
+                    b"creator" | b"date" => current_field = None,
                     _ => {}
                 },
                 _ => {}

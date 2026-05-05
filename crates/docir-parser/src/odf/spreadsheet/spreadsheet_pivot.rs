@@ -1,7 +1,7 @@
 use super::super::super::helpers::ValidationDef;
-use super::super::super::{attr_value, scan_xml_events_with_reader, OdfReader};
+use super::super::super::{scan_xml_events_with_reader, OdfReader};
 use crate::error::ParseError;
-use crate::xml_utils::XmlScanControl;
+use crate::xml_utils::{attr_value_by_suffix, local_name, XmlScanControl};
 use docir_core::ir::{IRNode, PivotCache, PivotCacheRecords, PivotTable};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -29,17 +29,17 @@ pub(super) fn parse_ods_pivot_table_full(
     scan_xml_events_with_reader(reader, &mut buf, "content.xml", |reader, event| {
         match event {
             Event::Start(e) => {
-                if e.name().as_ref() == b"table:data-pilot-field" {
+                if local_name(e.name().as_ref()) == b"data-pilot-field" {
                     field_count = field_count.saturating_add(1);
                     super::skip_element(reader, e.name().as_ref())?;
                 }
             }
             Event::Empty(e) => {
-                if e.name().as_ref() == b"table:data-pilot-field" {
+                if local_name(e.name().as_ref()) == b"data-pilot-field" {
                     field_count = field_count.saturating_add(1);
                 }
             }
-            Event::End(e) if e.name().as_ref() == b"table:data-pilot-table" => {
+            Event::End(e) if local_name(e.name().as_ref()) == b"data-pilot-table" => {
                 return Ok(XmlScanControl::Break);
             }
             _ => {}
@@ -105,9 +105,9 @@ fn build_ods_pivot(
     start: &BytesStart<'_>,
     cache_id: u32,
 ) -> (PivotTable, Option<String>, Option<PivotCache>) {
-    let name = attr_value(start, b"table:name");
-    let target = attr_value(start, b"table:target-range-address");
-    let source = attr_value(start, b"table:source-range-address");
+    let name = attr_value_by_suffix(start, &[b":name"]);
+    let target = attr_value_by_suffix(start, &[b":target-range-address"]);
+    let source = attr_value_by_suffix(start, &[b":source-range-address"]);
     let ref_range = target.clone().or(source.clone());
     let sheet_name = ref_range
         .as_deref()
@@ -121,7 +121,7 @@ fn build_ods_pivot(
         span: Some(SourceSpan::new("content.xml")),
     };
     if pivot.name.is_none() {
-        pivot.name = attr_value(start, b"table:display-name");
+        pivot.name = attr_value_by_suffix(start, &[b":display-name"]);
     }
     let cache = source.map(|source_range| {
         let mut cache = PivotCache::new(cache_id);
@@ -152,9 +152,9 @@ pub(super) fn parse_ods_pivots_from_xml(
 
     scan_xml_events_with_reader(&mut reader, &mut buf, "content.xml", |reader, event| {
         match event {
-            Event::Start(e) => match e.name().as_ref() {
-                b"office:spreadsheet" => in_spreadsheet = true,
-                b"table:data-pilot-table" if in_spreadsheet => {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
+                b"spreadsheet" => in_spreadsheet = true,
+                b"data-pilot-table" if in_spreadsheet => {
                     let cache_id = next_cache_id;
                     let parsed = parse_ods_pivot_table_full(reader, &e, cache_id)?;
                     record_pivot_parse(
@@ -168,7 +168,7 @@ pub(super) fn parse_ods_pivots_from_xml(
                 _ => {}
             },
             Event::Empty(e) => {
-                if e.name().as_ref() == b"table:data-pilot-table" && in_spreadsheet {
+                if local_name(e.name().as_ref()) == b"data-pilot-table" && in_spreadsheet {
                     let cache_id = next_cache_id;
                     let parsed = parse_ods_pivot_table_empty(&e, cache_id);
                     record_pivot_parse(
@@ -180,7 +180,7 @@ pub(super) fn parse_ods_pivots_from_xml(
                     );
                 }
             }
-            Event::End(e) if e.name().as_ref() == b"office:spreadsheet" => {
+            Event::End(e) if local_name(e.name().as_ref()) == b"spreadsheet" => {
                 in_spreadsheet = false;
             }
             _ => {}
@@ -202,9 +202,9 @@ pub(super) fn collect_validation_definitions(
 
     super::scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
         match event {
-            Event::Start(e) => match e.name().as_ref() {
-                b"office:spreadsheet" => in_spreadsheet = true,
-                b"table:content-validation" if in_spreadsheet => {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
+                b"spreadsheet" => in_spreadsheet = true,
+                b"content-validation" if in_spreadsheet => {
                     if let Some((name, def)) = super::parse_validation_definition(&e) {
                         validations.insert(name, def);
                     }
@@ -212,13 +212,13 @@ pub(super) fn collect_validation_definitions(
                 _ => {}
             },
             Event::Empty(e) => {
-                if e.name().as_ref() == b"table:content-validation" && in_spreadsheet {
+                if local_name(e.name().as_ref()) == b"content-validation" && in_spreadsheet {
                     if let Some((name, def)) = super::parse_validation_definition(&e) {
                         validations.insert(name, def);
                     }
                 }
             }
-            Event::End(e) if e.name().as_ref() == b"office:spreadsheet" => {
+            Event::End(e) if local_name(e.name().as_ref()) == b"spreadsheet" => {
                 in_spreadsheet = false;
             }
             _ => {}
