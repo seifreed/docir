@@ -1,4 +1,4 @@
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, attr_value_by_suffix, local_name};
 use docir_core::ir::IRNode;
 use docir_core::security::{MacroModule, MacroModuleType, MacroProject};
 use docir_core::visitor::IrStore;
@@ -67,8 +67,8 @@ pub(crate) fn scan_script_links(xml: &str) -> Vec<String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"script:script" {
-                    if let Some(href) = attr_value(&e, b"xlink:href") {
+                if local_name(e.name().as_ref()) == b"script" {
+                    if let Some(href) = attr_value_by_suffix(&e, &[b":href"]) {
                         links.push(href);
                     }
                 }
@@ -91,14 +91,29 @@ pub(crate) fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSign
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"ds:Signature" => current = Some(docir_core::ir::DigitalSignature::new()),
-                b"ds:SignatureMethod" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"Signature" => current = Some(docir_core::ir::DigitalSignature::new()),
+                b"SignatureMethod" => {
                     if let Some(sig) = current.as_mut() {
                         sig.signature_method = attr_value(&e, b"Algorithm");
                     }
                 }
-                b"ds:DigestMethod" => {
+                b"DigestMethod" => {
+                    if let Some(sig) = current.as_mut() {
+                        if let Some(alg) = attr_value(&e, b"Algorithm") {
+                            sig.digest_methods.push(alg);
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"SignatureMethod" => {
+                    if let Some(sig) = current.as_mut() {
+                        sig.signature_method = attr_value(&e, b"Algorithm");
+                    }
+                }
+                b"DigestMethod" => {
                     if let Some(sig) = current.as_mut() {
                         if let Some(alg) = attr_value(&e, b"Algorithm") {
                             sig.digest_methods.push(alg);
@@ -119,7 +134,7 @@ pub(crate) fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSign
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"ds:Signature" {
+                if local_name(e.name().as_ref()) == b"Signature" {
                     if let Some(sig) = current.take() {
                         sigs.push(sig);
                     }
@@ -132,4 +147,53 @@ pub(crate) fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSign
         buf.clear();
     }
     sigs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_odf_signatures, scan_script_links};
+
+    #[test]
+    fn scan_script_links_accepts_alternate_namespace_prefixes() {
+        let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:scr="urn:oasis:names:tc:opendocument:xmlns:script:1.0"
+              xmlns:lnk="http://www.w3.org/1999/xlink">
+              <office:scripts>
+                <scr:script lnk:href="Scripts/macro.py"/>
+              </office:scripts>
+            </office:document-content>
+        "#;
+
+        assert_eq!(scan_script_links(xml), vec!["Scripts/macro.py"]);
+    }
+
+    #[test]
+    fn parse_odf_signatures_accepts_alternate_namespace_prefixes() {
+        let xml = r#"
+            <sig:Signatures xmlns:sig="http://www.w3.org/2000/09/xmldsig#">
+              <sig:Signature>
+                <sig:SignedInfo>
+                  <sig:SignatureMethod Algorithm="rsa-sha256"/>
+                  <sig:Reference>
+                    <sig:DigestMethod Algorithm="sha256"/>
+                  </sig:Reference>
+                </sig:SignedInfo>
+                <sig:KeyInfo>
+                  <sig:X509SubjectName>CN=Tester</sig:X509SubjectName>
+                </sig:KeyInfo>
+              </sig:Signature>
+            </sig:Signatures>
+        "#;
+
+        let signatures = parse_odf_signatures(xml);
+        assert_eq!(signatures.len(), 1);
+        assert_eq!(
+            signatures[0].signature_method.as_deref(),
+            Some("rsa-sha256")
+        );
+        assert_eq!(signatures[0].digest_methods, vec!["sha256"]);
+        assert_eq!(signatures[0].signer.as_deref(), Some("CN=Tester"));
+    }
 }

@@ -3,7 +3,9 @@ use crate::odf::{
     ods::{parse_ods_cell, parse_ods_cell_empty},
     OdfReader,
 };
-use crate::xml_utils::{attr_value, scan_xml_events_until_end, XmlScanControl};
+use crate::xml_utils::{
+    attr_value_by_suffix, is_end_event_local, local_name, scan_xml_events_until_end, XmlScanControl,
+};
 use docir_core::ir::{CellFormula, CellValue, MergedCellRange};
 use docir_core::visitor::IrStore;
 use quick_xml::events::{BytesStart, Event};
@@ -60,7 +62,7 @@ pub(crate) fn parse_ods_row(
         reader,
         &mut buf,
         "content.xml",
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"table:table-row"),
+        |event| is_end_event_local(event, b"table-row"),
         |reader, event| {
             dispatch_ods_row_event(reader, event, &mut state, store, style_map, next_style_id)?;
             Ok(XmlScanControl::Continue)
@@ -100,12 +102,12 @@ fn handle_ods_row_start_event(
     next_style_id: &mut u32,
     state: &mut OdsRowParseState,
 ) -> Result<(), ParseError> {
-    match start.name().as_ref() {
-        b"table:table-cell" => {
+    match local_name(start.name().as_ref()) {
+        b"table-cell" => {
             let cell = parse_ods_cell(reader, start, store, style_map, next_style_id)?;
             state.cells.push(cell);
         }
-        b"table:covered-table-cell" => {
+        b"covered-table-cell" => {
             let cell = parse_ods_covered_cell(reader, start)?;
             state.cells.push(cell);
         }
@@ -120,12 +122,12 @@ fn handle_ods_row_empty_event(
     next_style_id: &mut u32,
     state: &mut OdsRowParseState,
 ) -> Result<(), ParseError> {
-    match start.name().as_ref() {
-        b"table:table-cell" => {
+    match local_name(start.name().as_ref()) {
+        b"table-cell" => {
             let cell = parse_ods_cell_empty(start, style_map, next_style_id)?;
             state.cells.push(cell);
         }
-        b"table:covered-table-cell" => {
+        b"covered-table-cell" => {
             let cell = parse_ods_covered_cell_empty(start)?;
             state.cells.push(cell);
         }
@@ -144,7 +146,7 @@ pub(crate) fn parse_ods_covered_cell(
         reader,
         &mut buf,
         "content.xml",
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"table:covered-table-cell"),
+        |event| is_end_event_local(event, b"covered-table-cell"),
         |_reader, _event| Ok(XmlScanControl::Continue),
     )?;
     Ok(cell)
@@ -157,13 +159,13 @@ pub(crate) fn parse_ods_covered_cell_empty(
 }
 
 fn covered_cell_from_start(start: &BytesStart<'_>) -> OdsCellData {
-    let col_repeat = attr_value(start, b"table:number-columns-repeated")
+    let col_repeat = attr_value_by_suffix(start, &[b":number-columns-repeated"])
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(1);
-    let col_span =
-        attr_value(start, b"table:number-columns-spanned").and_then(|v| v.parse::<u32>().ok());
+    let col_span = attr_value_by_suffix(start, &[b":number-columns-spanned"])
+        .and_then(|v| v.parse::<u32>().ok());
     let row_span =
-        attr_value(start, b"table:number-rows-spanned").and_then(|v| v.parse::<u32>().ok());
+        attr_value_by_suffix(start, &[b":number-rows-spanned"]).and_then(|v| v.parse::<u32>().ok());
     OdsCellData {
         value: CellValue::Empty,
         formula: None,

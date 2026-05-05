@@ -2,7 +2,7 @@ use super::helpers::parse_odf_condition_operator;
 use crate::diagnostics::push_entry;
 use crate::security_scan::OdfXmlInputs;
 use crate::security_utils::parse_dde_formula;
-use crate::xml_utils::{scan_xml_events, XmlScanControl};
+use crate::xml_utils::{attr_value_by_suffix, local_name, scan_xml_events, XmlScanControl};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document, IRNode};
 use docir_core::security::{DdeField, ExternalRefType, ExternalReference, OleObject};
@@ -38,11 +38,11 @@ fn visit_start_or_empty(xml: &str, mut on_element: impl FnMut(&BytesStart<'_>) -
 pub(crate) fn scan_external_links(xml: &str, location: &str) -> Vec<ExternalReference> {
     let mut refs = Vec::new();
     visit_start_or_empty(xml, |e| {
-        if let Some(href) = super::attr_value(e, b"xlink:href") {
-            let ref_type = match e.name().as_ref() {
-                b"draw:image" => ExternalRefType::Image,
-                b"text:a" => ExternalRefType::Hyperlink,
-                b"draw:object" | b"draw:object-ole" => ExternalRefType::OleLink,
+        if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
+            let ref_type = match local_name(e.name().as_ref()) {
+                b"image" => ExternalRefType::Image,
+                b"a" => ExternalRefType::Hyperlink,
+                b"object" | b"object-ole" => ExternalRefType::OleLink,
                 _ => ExternalRefType::Other,
             };
             let mut ext = ExternalReference::new(ref_type, href);
@@ -58,9 +58,9 @@ pub(crate) fn scan_odf_objects(xml: &str) -> (Vec<OleObject>, Vec<ExternalRefere
     let mut oles = Vec::new();
     let mut refs = Vec::new();
     visit_start_or_empty(xml, |e| {
-        match e.name().as_ref() {
-            b"draw:object" | b"draw:object-ole" => {
-                if let Some(href) = super::attr_value(e, b"xlink:href") {
+        match local_name(e.name().as_ref()) {
+            b"object" | b"object-ole" => {
+                if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
                     let mut ole = OleObject::new();
                     ole.is_linked = href.starts_with("http://") || href.starts_with("https://");
                     ole.link_target = Some(href.clone());
@@ -123,7 +123,7 @@ pub(crate) fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
     let _ = scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
         match event {
             Event::Start(e) | Event::Empty(e) => {
-                if let Some(formula_attr) = super::attr_value(&e, b"table:formula") {
+                if let Some(formula_attr) = attr_value_by_suffix(&e, &[b":formula"]) {
                     process_formula(&formula_attr, &mut scan, &mut unsupported, &mut has_array);
                 }
             }
@@ -285,9 +285,7 @@ pub(crate) fn scan_odf_protection(xml: &str) -> Vec<DiagnosticEntry> {
     let mut entries = Vec::new();
     let mut protected = false;
     visit_start_or_empty(xml, |e| {
-        if let Some(value) = super::attr_value(e, b"table:protected")
-            .or_else(|| super::attr_value(e, b"text:protected"))
-        {
+        if let Some(value) = attr_value_by_suffix(e, &[b":protected"]) {
             if value == "true" {
                 protected = true;
                 return true;
@@ -313,20 +311,20 @@ pub(crate) fn scan_odf_advanced_features(xml: &str) -> Vec<DiagnosticEntry> {
     let mut pivot_advanced = false;
     let mut odp_advanced = false;
     visit_start_or_empty(xml, |e| {
-        match e.name().as_ref() {
-            b"table:conditional-format" => {
-                if let Some(condition) = super::attr_value(e, b"table:condition") {
+        match local_name(e.name().as_ref()) {
+            b"conditional-format" => {
+                if let Some(condition) = attr_value_by_suffix(e, &[b":condition"]) {
                     if parse_odf_condition_operator(&condition).is_none() {
                         conditional_advanced = true;
                     }
                 }
             }
-            b"table:pivot-table" | b"table:data-pilot-table" => {
-                if super::attr_value(e, b"table:target-range-address").is_some() {
+            b"pivot-table" | b"data-pilot-table" => {
+                if attr_value_by_suffix(e, &[b":target-range-address"]).is_some() {
                     pivot_advanced = true;
                 }
             }
-            b"draw:object" | b"draw:object-ole" => odp_advanced = true,
+            b"object" | b"object-ole" => odp_advanced = true,
             _ => {}
         }
         false
@@ -419,4 +417,69 @@ fn extract_quoted_strings(input: &str) -> Vec<String> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{scan_external_links, scan_odf_formula_security, scan_odf_objects};
+    use docir_core::security::ExternalRefType;
+
+    #[test]
+    fn scan_external_links_accepts_alternate_namespace_prefixes() {
+        let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:txt="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+              xmlns:dr="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+              xmlns:lnk="http://www.w3.org/1999/xlink">
+              <txt:a lnk:href="https://example.test/link">Link</txt:a>
+              <dr:image lnk:href="Pictures/pic.png"/>
+              <dr:object-ole lnk:href="https://example.test/object.bin"/>
+            </office:document-content>
+        "#;
+
+        let refs = scan_external_links(xml, "content.xml");
+        let types: Vec<_> = refs.iter().map(|r| r.ref_type).collect();
+
+        assert_eq!(refs.len(), 3);
+        assert!(types.contains(&ExternalRefType::Hyperlink));
+        assert!(types.contains(&ExternalRefType::Image));
+        assert!(types.contains(&ExternalRefType::OleLink));
+    }
+
+    #[test]
+    fn scan_odf_objects_accepts_alternate_namespace_prefixes() {
+        let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:dr="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+              xmlns:lnk="http://www.w3.org/1999/xlink">
+              <dr:object-ole lnk:href="https://example.test/object.bin"/>
+            </office:document-content>
+        "#;
+
+        let (oles, refs) = scan_odf_objects(xml);
+        assert_eq!(oles.len(), 1);
+        assert_eq!(
+            oles[0].link_target.as_deref(),
+            Some("https://example.test/object.bin")
+        );
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].ref_type, ExternalRefType::OleLink);
+    }
+
+    #[test]
+    fn scan_odf_formula_security_accepts_alternate_formula_prefix() {
+        let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:tbl="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+              <tbl:table-cell tbl:formula='of:=DDE("cmd";"/c calc";"A1")'/>
+            </office:document-content>
+        "#;
+
+        let scan = scan_odf_formula_security(xml);
+        assert_eq!(scan.dde_fields.len(), 1);
+        assert_eq!(scan.dde_fields[0].application, "cmd");
+    }
 }

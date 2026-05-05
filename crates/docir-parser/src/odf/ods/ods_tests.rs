@@ -11,7 +11,9 @@ fn parse_table_start(xml: &[u8]) -> (Reader<std::io::Cursor<&[u8]>>, BytesStart<
     let mut buf = Vec::new();
     let table_start = loop {
         match reader.read_event_into(&mut buf).unwrap() {
-            Event::Start(e) if e.name().as_ref() == b"table:table" => break e.into_owned(),
+            Event::Start(e) if crate::xml_utils::local_name(e.name().as_ref()) == b"table" => {
+                break e.into_owned();
+            }
             Event::Eof => panic!("missing table start"),
             _ => {}
         }
@@ -91,6 +93,75 @@ fn parse_ods_table_evaluates_formula_and_flushes_validations() {
         CellValue::Number(value) => assert!((value - 3.0).abs() < f64::EPSILON),
         _ => panic!("expected numeric formula result"),
     }
+}
+
+#[test]
+fn parse_ods_table_accepts_alternate_namespace_prefixes() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<pkg:spreadsheet xmlns:pkg="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:t="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+  xmlns:o="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:txt="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <t:table t:name="AltSheet">
+    <t:table-row t:number-rows-repeated="2">
+      <t:table-cell o:value-type="float" o:value="4" t:number-columns-repeated="2"
+        t:content-validation-name="rule1" />
+      <t:covered-table-cell t:number-columns-repeated="1"
+        t:number-columns-spanned="2" t:number-rows-spanned="2" />
+      <t:table-cell t:formula="of:=SUM([.A1];[.B1])"><txt:p>pending</txt:p></t:table-cell>
+    </t:table-row>
+  </t:table>
+</pkg:spreadsheet>
+"#;
+    let (mut reader, table_start) = parse_table_start(xml);
+    let mut store = IrStore::new();
+    let mut validations = HashMap::new();
+    validations.insert(
+        "rule1".to_string(),
+        ValidationDef {
+            validation_type: Some("between".to_string()),
+            operator: None,
+            allow_blank: true,
+            show_input_message: false,
+            show_error_message: false,
+            error_title: None,
+            error: None,
+            prompt_title: None,
+            prompt: None,
+            formula1: Some("1".to_string()),
+            formula2: Some("10".to_string()),
+        },
+    );
+
+    let worksheet = parse_ods_table(
+        &mut reader,
+        &table_start,
+        1,
+        &mut store,
+        &validations,
+        &default_limits(),
+    )
+    .expect("alternate prefixes should parse");
+
+    assert_eq!(worksheet.name, "AltSheet");
+    assert_eq!(worksheet.cells.len(), 6);
+    assert_eq!(worksheet.data_validations.len(), 1);
+
+    let refs: Vec<String> = worksheet
+        .cells
+        .iter()
+        .filter_map(|id| match store.get(*id) {
+            Some(IRNode::Cell(cell)) => Some(cell.reference.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(refs, vec!["A1", "B1", "D1", "A2", "B2", "D2"]);
+
+    let Some(IRNode::DataValidation(validation)) = store.get(worksheet.data_validations[0]) else {
+        panic!("expected validation node");
+    };
+    assert_eq!(validation.ranges, vec!["A1", "B1", "A2", "B2"]);
+    assert!(validation.allow_blank);
 }
 
 #[test]

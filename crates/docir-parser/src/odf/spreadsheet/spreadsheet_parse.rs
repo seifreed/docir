@@ -9,12 +9,14 @@ use super::super::spreadsheet_chunks::{
     extract_spreadsheet_table_chunks, table_name_from_chunk, OdfTableChunk,
 };
 use super::super::{
-    attr_value, parse_ods_table, parse_ods_table_fast, scan_xml_events,
-    scan_xml_events_with_reader, OdfAtomicLimits, OdfContentResult, OdfLimitCounter, OdfReader,
+    parse_ods_table, parse_ods_table_fast, scan_xml_events, scan_xml_events_with_reader,
+    OdfAtomicLimits, OdfContentResult, OdfLimitCounter, OdfReader,
 };
 use crate::error::ParseError;
 use crate::parser::ParserConfig;
-use crate::xml_utils::{is_end_event, scan_xml_events_until_end, XmlScanControl};
+use crate::xml_utils::{
+    attr_value_by_suffix, is_end_event_local, local_name, scan_xml_events_until_end, XmlScanControl,
+};
 use docir_core::ir::{IRNode, Worksheet};
 use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
@@ -75,7 +77,7 @@ pub(crate) fn parse_content_spreadsheet(
         &mut reader,
         &mut buf,
         "content.xml",
-        |event| is_end_event(event, b"office:spreadsheet"),
+        |event| is_end_event_local(event, b"spreadsheet"),
         |reader, event| {
             match event {
                 Event::Start(start) => {
@@ -144,7 +146,7 @@ pub(crate) fn parse_content_spreadsheet_fast(
         &mut reader,
         &mut buf,
         "content.xml",
-        |event| is_end_event(event, b"office:spreadsheet"),
+        |event| is_end_event_local(event, b"spreadsheet"),
         |reader, event| {
             match event {
                 Event::Start(start) => {
@@ -183,7 +185,8 @@ pub(crate) fn parse_content_spreadsheet_fast(
 }
 
 fn build_empty_sheet(start: &BytesStart<'_>, sheet_id: u32) -> (Worksheet, NodeId) {
-    let name = attr_value(start, b"table:name").unwrap_or_else(|| format!("Sheet{}", sheet_id));
+    let name =
+        attr_value_by_suffix(start, &[b":name"]).unwrap_or_else(|| format!("Sheet{}", sheet_id));
     let sheet = Worksheet::new(name, sheet_id);
     let node_id = sheet.id;
     (sheet, node_id)
@@ -206,17 +209,17 @@ fn handle_spreadsheet_start_full(
         pivot_caches,
         next_cache_id,
     } = state;
-    match start.name().as_ref() {
-        b"office:spreadsheet" => *in_spreadsheet = true,
-        b"table:content-validation" if *in_spreadsheet => {
+    match local_name(start.name().as_ref()) {
+        b"spreadsheet" => *in_spreadsheet = true,
+        b"content-validation" if *in_spreadsheet => {
             insert_validation_definition(validations, start);
         }
-        b"table:table" if *in_spreadsheet => {
+        b"table" if *in_spreadsheet => {
             let worksheet = parse_ods_table(reader, start, *sheet_id, store, validations, limits)?;
             insert_worksheet(store, sheets, sheet_index, worksheet);
             *sheet_id += 1;
         }
-        b"table:data-pilot-table" if *in_spreadsheet => {
+        b"data-pilot-table" if *in_spreadsheet => {
             let parsed = parse_ods_pivot_table_full(reader, start, *next_cache_id)?;
             record_pivot_parse(store, pivot_links, pivot_caches, next_cache_id, parsed);
         }
@@ -238,16 +241,16 @@ fn handle_spreadsheet_empty_full(empty: &BytesStart<'_>, state: FullSpreadsheetS
         next_cache_id,
         ..
     } = state;
-    match empty.name().as_ref() {
-        b"table:table" if *in_spreadsheet => {
+    match local_name(empty.name().as_ref()) {
+        b"table" if *in_spreadsheet => {
             let (sheet, _) = build_empty_sheet(empty, *sheet_id);
             insert_worksheet(store, sheets, sheet_index, sheet);
             *sheet_id += 1;
         }
-        b"table:content-validation" if *in_spreadsheet => {
+        b"content-validation" if *in_spreadsheet => {
             insert_validation_definition(validations, empty);
         }
-        b"table:data-pilot-table" if *in_spreadsheet => {
+        b"data-pilot-table" if *in_spreadsheet => {
             let parsed = parse_ods_pivot_table_empty(empty, *next_cache_id);
             record_pivot_parse(store, pivot_links, pivot_caches, next_cache_id, parsed);
         }
@@ -268,9 +271,9 @@ fn handle_spreadsheet_start_fast(
         validations,
         limits,
     } = state;
-    match start.name().as_ref() {
-        b"office:spreadsheet" => *in_spreadsheet = true,
-        b"table:table" if *in_spreadsheet => {
+    match local_name(start.name().as_ref()) {
+        b"spreadsheet" => *in_spreadsheet = true,
+        b"table" if *in_spreadsheet => {
             let worksheet =
                 parse_ods_table_fast(reader, start, *sheet_id, store, validations, limits)?;
             insert_worksheet_no_index(store, sheets, worksheet);
@@ -288,7 +291,7 @@ fn handle_spreadsheet_empty_fast(
     store: &mut IrStore,
     sheets: &mut Vec<NodeId>,
 ) {
-    if empty.name().as_ref() == b"table:table" && in_spreadsheet {
+    if local_name(empty.name().as_ref()) == b"table" && in_spreadsheet {
         let (sheet, _) = build_empty_sheet(empty, *sheet_id);
         insert_worksheet_no_index(store, sheets, sheet);
         *sheet_id += 1;
@@ -347,7 +350,7 @@ pub(crate) fn parse_content_spreadsheet_parallel(
     let validations = Arc::new(collect_validation_definitions(xml)?);
     let chunks = extract_spreadsheet_table_chunks(xml);
     if chunks.is_empty() {
-        return Ok(OdfContentResult::default());
+        return parse_content_spreadsheet(xml, store, limits.as_ref());
     }
 
     let max_threads = config
@@ -432,7 +435,7 @@ fn parse_ods_table_from_chunk(
     let mut parsed = None;
     scan_xml_events_with_reader(&mut reader, &mut buf, "content.xml", |reader, event| {
         if let Event::Start(e) = event {
-            if e.name().as_ref() == b"table:table" {
+            if local_name(e.name().as_ref()) == b"table" {
                 let mut local_store = IrStore::new();
                 let worksheet =
                     parse_ods_table(reader, &e, sheet_id, &mut local_store, validations, limits)?;

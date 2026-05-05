@@ -1,7 +1,8 @@
 use super::{
-    attr_value, parse_odf_chart, ChartData, IRNode, IrStore, NodeId, OdfReader, ParseError,
-    ShapeType, SourceSpan,
+    parse_odf_chart, ChartData, IRNode, IrStore, NodeId, OdfReader, ParseError, ShapeType,
+    SourceSpan,
 };
+use crate::xml_utils::{attr_value_by_suffix, local_name};
 use quick_xml::events::BytesStart;
 
 pub(crate) struct FrameShapeState {
@@ -28,9 +29,9 @@ pub(crate) fn parse_frame_shape_start(
     store: &mut IrStore,
     frame: &mut FrameShapeState,
 ) -> Result<(), ParseError> {
-    match start.name().as_ref() {
-        b"draw:image" => apply_picture_shape(start, frame),
-        b"chart:chart" => {
+    match local_name(start.name().as_ref()) {
+        b"image" => apply_picture_shape(start, frame),
+        b"chart" => {
             frame.shape_type = ShapeType::Chart;
             frame.has_shape = true;
             let chart = parse_odf_chart(reader, start)?;
@@ -38,8 +39,8 @@ pub(crate) fn parse_frame_shape_start(
             store.insert(IRNode::ChartData(chart));
             frame.chart_id = Some(id);
         }
-        b"draw:plugin" => apply_plugin_shape(start, frame),
-        b"draw:object" | b"draw:object-ole" => apply_ole_shape(start, frame),
+        b"plugin" => apply_plugin_shape(start, frame),
+        b"object" | b"object-ole" => apply_ole_shape(start, frame),
         _ => {}
     }
     Ok(())
@@ -50,26 +51,26 @@ pub(crate) fn parse_frame_shape_empty(
     store: &mut IrStore,
     frame: &mut FrameShapeState,
 ) {
-    match start.name().as_ref() {
-        b"draw:image" => apply_picture_shape(start, frame),
-        b"chart:chart" => {
+    match local_name(start.name().as_ref()) {
+        b"image" => apply_picture_shape(start, frame),
+        b"chart" => {
             frame.shape_type = ShapeType::Chart;
             frame.has_shape = true;
             let mut chart = ChartData::new();
-            chart.chart_type = attr_value(start, b"chart:class");
+            chart.chart_type = attr_value_by_suffix(start, &[b":class"]);
             chart.span = Some(SourceSpan::new("content.xml"));
             let id = chart.id;
             store.insert(IRNode::ChartData(chart));
             frame.chart_id = Some(id);
         }
-        b"draw:plugin" => apply_plugin_shape(start, frame),
-        b"draw:object" | b"draw:object-ole" => apply_ole_shape(start, frame),
+        b"plugin" => apply_plugin_shape(start, frame),
+        b"object" | b"object-ole" => apply_ole_shape(start, frame),
         _ => {}
     }
 }
 
 fn apply_picture_shape(start: &BytesStart<'_>, frame: &mut FrameShapeState) {
-    if let Some(href) = attr_value(start, b"xlink:href") {
+    if let Some(href) = attr_value_by_suffix(start, &[b":href"]) {
         frame.media_target = Some(href);
         frame.shape_type = ShapeType::Picture;
         frame.has_shape = true;
@@ -77,7 +78,7 @@ fn apply_picture_shape(start: &BytesStart<'_>, frame: &mut FrameShapeState) {
 }
 
 fn apply_plugin_shape(start: &BytesStart<'_>, frame: &mut FrameShapeState) {
-    if let Some(href) = attr_value(start, b"xlink:href") {
+    if let Some(href) = attr_value_by_suffix(start, &[b":href"]) {
         frame.media_target = Some(href.clone());
         frame.shape_type = classify_media_shape(&href);
         frame.has_shape = true;
@@ -85,7 +86,7 @@ fn apply_plugin_shape(start: &BytesStart<'_>, frame: &mut FrameShapeState) {
 }
 
 fn apply_ole_shape(start: &BytesStart<'_>, frame: &mut FrameShapeState) {
-    if let Some(href) = attr_value(start, b"xlink:href") {
+    if let Some(href) = attr_value_by_suffix(start, &[b":href"]) {
         frame.media_target = Some(href);
     }
     frame.shape_type = ShapeType::OleObject;

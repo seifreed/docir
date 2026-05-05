@@ -1,7 +1,7 @@
 //! ODF manifest parsing helpers.
 
 use crate::error::ParseError;
-use crate::xml_utils::{scan_xml_events, XmlScanControl};
+use crate::xml_utils::{attr_value_by_suffix, local_name, scan_xml_events, XmlScanControl};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use quick_xml::events::Event;
@@ -53,17 +53,17 @@ fn handle_manifest_start_event(
     e: &quick_xml::events::BytesStart<'_>,
     current_entry: &mut Option<OdfManifestEntry>,
 ) {
-    match e.name().as_ref() {
-        b"manifest:file-entry" => {
+    match local_name(e.name().as_ref()) {
+        b"file-entry" => {
             *current_entry = Some(parse_manifest_entry(e));
         }
-        b"manifest:encryption-data" => {
+        b"encryption-data" => {
             apply_entry_encryption_attrs(current_entry, e, apply_encryption_data_attrs);
         }
-        b"manifest:algorithm" => {
+        b"algorithm" => {
             apply_entry_encryption_attrs(current_entry, e, apply_algorithm_attrs);
         }
-        b"manifest:key-derivation" => {
+        b"key-derivation" => {
             apply_entry_encryption_attrs(current_entry, e, apply_key_derivation_attrs);
         }
         _ => {}
@@ -75,15 +75,13 @@ fn handle_manifest_empty_event(
     entries: &mut Vec<OdfManifestEntry>,
     current_entry: &mut Option<OdfManifestEntry>,
 ) {
-    match e.name().as_ref() {
-        b"manifest:file-entry" => entries.push(parse_manifest_entry(e)),
-        b"manifest:encryption-data" => {
+    match local_name(e.name().as_ref()) {
+        b"file-entry" => entries.push(parse_manifest_entry(e)),
+        b"encryption-data" => {
             apply_entry_encryption_attrs(current_entry, e, apply_encryption_data_attrs)
         }
-        b"manifest:algorithm" => {
-            apply_entry_encryption_attrs(current_entry, e, apply_algorithm_attrs)
-        }
-        b"manifest:key-derivation" => {
+        b"algorithm" => apply_entry_encryption_attrs(current_entry, e, apply_algorithm_attrs),
+        b"key-derivation" => {
             apply_entry_encryption_attrs(current_entry, e, apply_key_derivation_attrs)
         }
         _ => {}
@@ -95,7 +93,7 @@ fn handle_manifest_end_event(
     entries: &mut Vec<OdfManifestEntry>,
     current_entry: &mut Option<OdfManifestEntry>,
 ) {
-    if name == b"manifest:file-entry" {
+    if local_name(name) == b"file-entry" {
         if let Some(entry) = current_entry.take() {
             entries.push(entry);
         }
@@ -115,8 +113,8 @@ fn apply_entry_encryption_attrs(
 }
 
 fn parse_manifest_entry(e: &quick_xml::events::BytesStart<'_>) -> OdfManifestEntry {
-    let path = super::attr_value(e, b"manifest:full-path").unwrap_or_default();
-    let media_type = super::attr_value(e, b"manifest:media-type");
+    let path = attr_value_by_suffix(e, &[b":full-path"]).unwrap_or_default();
+    let media_type = attr_value_by_suffix(e, &[b":media-type"]);
     OdfManifestEntry {
         path,
         media_type,
@@ -125,22 +123,22 @@ fn parse_manifest_entry(e: &quick_xml::events::BytesStart<'_>) -> OdfManifestEnt
 }
 
 fn apply_encryption_data_attrs(enc: &mut OdfEncryptionData, e: &quick_xml::events::BytesStart<'_>) {
-    enc.checksum_type = super::attr_value(e, b"manifest:checksum-type");
-    enc.checksum = super::attr_value(e, b"manifest:checksum").and_then(|v| decode_base64_bytes(&v));
+    enc.checksum_type = attr_value_by_suffix(e, &[b":checksum-type"]);
+    enc.checksum = attr_value_by_suffix(e, &[b":checksum"]).and_then(|v| decode_base64_bytes(&v));
 }
 
 fn apply_algorithm_attrs(enc: &mut OdfEncryptionData, e: &quick_xml::events::BytesStart<'_>) {
-    enc.algorithm_name = super::attr_value(e, b"manifest:algorithm-name");
-    enc.init_vector = super::attr_value(e, b"manifest:initialisation-vector")
-        .and_then(|v| decode_base64_bytes(&v));
-    enc.key_size = super::attr_value(e, b"manifest:key-size").and_then(|v| v.parse::<u32>().ok());
+    enc.algorithm_name = attr_value_by_suffix(e, &[b":algorithm-name"]);
+    enc.init_vector =
+        attr_value_by_suffix(e, &[b":initialisation-vector"]).and_then(|v| decode_base64_bytes(&v));
+    enc.key_size = attr_value_by_suffix(e, &[b":key-size"]).and_then(|v| v.parse::<u32>().ok());
 }
 
 fn apply_key_derivation_attrs(enc: &mut OdfEncryptionData, e: &quick_xml::events::BytesStart<'_>) {
-    enc.key_derivation_name = super::attr_value(e, b"manifest:key-derivation-name");
-    enc.salt = super::attr_value(e, b"manifest:salt").and_then(|v| decode_base64_bytes(&v));
+    enc.key_derivation_name = attr_value_by_suffix(e, &[b":key-derivation-name"]);
+    enc.salt = attr_value_by_suffix(e, &[b":salt"]).and_then(|v| decode_base64_bytes(&v));
     enc.iteration_count =
-        super::attr_value(e, b"manifest:iteration-count").and_then(|v| v.parse::<u32>().ok());
+        attr_value_by_suffix(e, &[b":iteration-count"]).and_then(|v| v.parse::<u32>().ok());
 }
 
 /// Public API entrypoint: is_manifest_entry_encrypted.
@@ -196,4 +194,35 @@ pub fn format_odf_encryption_metadata(entry: &OdfManifestEntry) -> Option<String
 
 fn decode_base64_bytes(value: &str) -> Option<Vec<u8>> {
     STANDARD.decode(value.as_bytes()).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{format_odf_encryption_metadata, parse_manifest};
+
+    #[test]
+    fn parse_manifest_accepts_alternate_namespace_prefixes() {
+        let xml = r#"
+            <mf:manifest xmlns:mf="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <mf:file-entry mf:full-path="content.xml" mf:media-type="text/xml">
+                <mf:encryption-data mf:checksum-type="SHA1" mf:checksum="YWJjZA==">
+                  <mf:algorithm mf:algorithm-name="http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+                    mf:initialisation-vector="MTIzNDU2Nzg5MA==" mf:key-size="32"/>
+                  <mf:key-derivation mf:key-derivation-name="PBKDF2"
+                    mf:salt="c2FsdA==" mf:iteration-count="2048"/>
+                </mf:encryption-data>
+              </mf:file-entry>
+            </mf:manifest>
+        "#;
+
+        let entries = parse_manifest(xml).expect("manifest");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, "content.xml");
+        assert_eq!(entries[0].media_type.as_deref(), Some("text/xml"));
+
+        let encryption = format_odf_encryption_metadata(&entries[0]).expect("encryption");
+        assert!(encryption.contains("aes256-cbc"));
+        assert!(encryption.contains("PBKDF2"));
+        assert!(encryption.contains("2048"));
+    }
 }

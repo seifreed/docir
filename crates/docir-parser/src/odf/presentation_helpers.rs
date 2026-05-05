@@ -1,13 +1,13 @@
 //! ODF presentation parsing helpers extracted from the main module.
 
 use super::helpers::{parse_notes, parse_text_element};
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 #[path = "presentation_helpers_utils.rs"]
 mod presentation_helpers_utils;
 use super::{
-    attr_value, parse_frame_transform, read_event, ChartData, IRNode, IrStore, MediaAsset,
-    MediaType, NodeId, OdfReader, ParseError, Shape, ShapeText, ShapeTextParagraph, ShapeTextRun,
-    ShapeType, Slide, SlideAnimation, SlideTransition, SourceSpan,
+    parse_frame_transform, read_event, ChartData, IRNode, IrStore, MediaAsset, MediaType, NodeId,
+    OdfReader, ParseError, Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeType, Slide,
+    SlideAnimation, SlideTransition, SourceSpan,
 };
 #[path = "presentation_helpers_frame.rs"]
 mod presentation_helpers_frame;
@@ -27,11 +27,10 @@ pub(super) fn parse_draw_page(
     store: &mut IrStore,
 ) -> Result<Slide, ParseError> {
     let mut slide = Slide::new(slide_no);
-    slide.name = attr_value(start, b"draw:name");
-    slide.master_id = attr_value(start, b"draw:master-page-name")
-        .or_else(|| attr_value(start, b"presentation:master-page-name"));
-    slide.layout_id = attr_value(start, b"presentation:page-layout-name")
-        .or_else(|| attr_value(start, b"draw:style-name"));
+    slide.name = attr_value_by_suffix(start, &[b":name"]);
+    slide.master_id = attr_value_by_suffix(start, &[b":master-page-name"]);
+    slide.layout_id = attr_value_by_suffix(start, &[b":page-layout-name"])
+        .or_else(|| attr_value_by_suffix(start, &[b":style-name"]));
     slide.transition = parse_odp_transition(start);
 
     let mut state = DrawPageState {
@@ -45,7 +44,7 @@ pub(super) fn parse_draw_page(
             Event::Start(e) => handle_draw_page_start_event(reader, &e, store, &mut state)?,
             Event::Empty(e) => handle_draw_page_empty_event(reader, &e, store, &mut state)?,
             Event::End(e) => {
-                if e.name().as_ref() == b"draw:page" {
+                if local_name(e.name().as_ref()) == b"page" {
                     break;
                 }
             }
@@ -70,18 +69,18 @@ fn handle_draw_page_start_event(
     store: &mut IrStore,
     state: &mut DrawPageState,
 ) -> Result<(), ParseError> {
-    match event.name().as_ref() {
-        b"draw:frame" => {
+    match local_name(event.name().as_ref()) {
+        b"frame" => {
             if let Some(shape_id) = parse_draw_frame_presentation(reader, event, store)? {
                 state.slide.shapes.push(shape_id);
             }
         }
-        b"draw:custom-shape" => {
+        b"custom-shape" => {
             if let Some(shape_id) = parse_custom_shape_presentation(reader, event, store)? {
                 state.slide.shapes.push(shape_id);
             }
         }
-        b"presentation:notes" => {
+        b"notes" => {
             state.notes_text = parse_notes(reader)?;
         }
         name if name.starts_with(b"anim:") => {
@@ -100,13 +99,13 @@ fn handle_draw_page_empty_event(
     store: &mut IrStore,
     state: &mut DrawPageState,
 ) -> Result<(), ParseError> {
-    match event.name().as_ref() {
-        b"draw:frame" => {
+    match local_name(event.name().as_ref()) {
+        b"frame" => {
             if let Some(shape_id) = parse_draw_frame_presentation(reader, event, store)? {
                 state.slide.shapes.push(shape_id);
             }
         }
-        b"draw:custom-shape" => {
+        b"custom-shape" => {
             if let Some(shape_id) = parse_custom_shape_presentation(reader, event, store)? {
                 state.slide.shapes.push(shape_id);
             }
@@ -130,7 +129,7 @@ pub(super) fn parse_draw_frame_presentation(
     let mut state = DrawFrameState {
         frame: FrameShapeState::new(),
         text: None,
-        name: attr_value(start, b"draw:name"),
+        name: attr_value_by_suffix(start, &[b":name"]),
     };
     let mut buf = Vec::new();
 
@@ -139,7 +138,7 @@ pub(super) fn parse_draw_frame_presentation(
             Event::Start(e) => handle_draw_frame_start_event(reader, &e, store, &mut state)?,
             Event::Empty(e) => parse_frame_shape_empty(&e, store, &mut state.frame),
             Event::End(e) => {
-                if e.name().as_ref() == b"draw:frame" {
+                if local_name(e.name().as_ref()) == b"frame" {
                     break;
                 }
             }
@@ -176,9 +175,9 @@ fn handle_draw_frame_start_event(
     store: &mut IrStore,
     state: &mut DrawFrameState,
 ) -> Result<(), ParseError> {
-    match event.name().as_ref() {
-        b"draw:text-box" => {
-            let paragraphs = parse_shape_text(reader, b"draw:text-box")?;
+    match local_name(event.name().as_ref()) {
+        b"text-box" => {
+            let paragraphs = parse_shape_text(reader, event.name().as_ref())?;
             if !paragraphs.is_empty() {
                 state.text = Some(ShapeText { paragraphs });
                 state.frame.shape_type = ShapeType::TextBox;
@@ -195,8 +194,8 @@ pub(super) fn parse_custom_shape_presentation(
     start: &BytesStart<'_>,
     store: &mut IrStore,
 ) -> Result<Option<NodeId>, ParseError> {
-    let mut name = attr_value(start, b"draw:name");
-    let paragraphs = parse_shape_text(reader, b"draw:custom-shape")?;
+    let mut name = attr_value_by_suffix(start, &[b":name"]);
+    let paragraphs = parse_shape_text(reader, start.name().as_ref())?;
     let mut shape = Shape::new(ShapeType::Custom);
     shape.name = name.take();
     if !paragraphs.is_empty() {
@@ -216,8 +215,8 @@ fn parse_shape_text(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                if e.name().as_ref() == b"text:p" {
-                    let text = parse_text_element(reader, b"text:p")?;
+                if local_name(e.name().as_ref()) == b"p" {
+                    let text = parse_text_element(reader, e.name().as_ref())?;
                     let run = ShapeTextRun {
                         text,
                         bold: None,
@@ -246,14 +245,13 @@ fn parse_shape_text(
 }
 
 pub(super) fn parse_odp_transition(start: &BytesStart<'_>) -> Option<SlideTransition> {
-    let transition_type = attr_value(start, b"presentation:transition-type")
-        .or_else(|| attr_value(start, b"draw:transition-type"));
-    let speed = attr_value(start, b"presentation:transition-speed");
+    let transition_type = attr_value_by_suffix(start, &[b":transition-type"]);
+    let speed = attr_value_by_suffix(start, &[b":transition-speed"]);
     let duration_ms =
-        attr_value(start, b"presentation:transition-duration").and_then(|v| v.parse::<u32>().ok());
+        attr_value_by_suffix(start, &[b":transition-duration"]).and_then(|v| v.parse::<u32>().ok());
     let advance_after_ms =
-        attr_value(start, b"presentation:duration").and_then(|v| v.parse::<u32>().ok());
-    let advance_on_click = attr_value(start, b"presentation:animation").map(|v| v == "click");
+        attr_value_by_suffix(start, &[b":duration"]).and_then(|v| v.parse::<u32>().ok());
+    let advance_on_click = attr_value_by_suffix(start, &[b":animation"]).map(|v| v == "click");
     if transition_type.is_some() || speed.is_some() || duration_ms.is_some() {
         Some(SlideTransition {
             transition_type,
@@ -272,7 +270,7 @@ pub(super) fn parse_odf_chart(
     start: &BytesStart<'_>,
 ) -> Result<ChartData, ParseError> {
     let mut chart = ChartData::new();
-    chart.chart_type = attr_value(start, b"chart:class");
+    chart.chart_type = attr_value_by_suffix(start, &[b":class"]);
     chart.span = Some(SourceSpan::new("content.xml"));
     let mut buf = Vec::new();
     let mut in_title = false;
@@ -280,12 +278,12 @@ pub(super) fn parse_odf_chart(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"chart:title" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"title" => {
                     in_title = true;
                 }
-                b"text:p" if in_title => {
-                    let text = parse_text_element(reader, b"text:p")?;
+                b"p" if in_title => {
+                    let text = parse_text_element(reader, e.name().as_ref())?;
                     if !title_text.is_empty() && !text.is_empty() {
                         title_text.push(' ');
                     }
@@ -294,10 +292,10 @@ pub(super) fn parse_odf_chart(
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"chart:title" {
+                if local_name(e.name().as_ref()) == b"title" {
                     in_title = false;
                 }
-                if e.name().as_ref() == b"chart:chart" {
+                if local_name(e.name().as_ref()) == b"chart" {
                     break;
                 }
             }
@@ -318,14 +316,14 @@ pub(super) fn parse_odf_animation(start: &BytesStart<'_>) -> Option<SlideAnimati
     let name = String::from_utf8_lossy(start.name().as_ref()).to_string();
     let mut anim = SlideAnimation {
         animation_type: name,
-        target: attr_value(start, b"anim:targetElement"),
-        duration_ms: attr_value(start, b"smil:dur").and_then(|v| parse_duration_ms(&v)),
-        preset_id: attr_value(start, b"presentation:preset-id"),
-        preset_class: attr_value(start, b"presentation:preset-class"),
+        target: attr_value_by_suffix(start, &[b":targetElement"]),
+        duration_ms: attr_value_by_suffix(start, &[b":dur"]).and_then(|v| parse_duration_ms(&v)),
+        preset_id: attr_value_by_suffix(start, &[b":preset-id"]),
+        preset_class: attr_value_by_suffix(start, &[b":preset-class"]),
         media_asset: None,
     };
     if anim.target.is_none() {
-        anim.target = attr_value(start, b"smil:targetElement");
+        anim.target = attr_value_by_suffix(start, &[b":targetElement"]);
     }
     Some(anim)
 }
@@ -348,7 +346,9 @@ mod tests {
         let mut buf = Vec::new();
         let page_start = loop {
             match reader.read_event_into(&mut buf).unwrap() {
-                Event::Start(e) if e.name().as_ref() == b"draw:page" => break e.into_owned(),
+                Event::Start(e) if local_name(e.name().as_ref()) == b"page" => {
+                    break e.into_owned();
+                }
                 Event::Eof => panic!("missing draw:page"),
                 _ => {}
             }
@@ -361,24 +361,24 @@ mod tests {
     fn parse_draw_page_extracts_metadata_transition_notes_and_shape_text() {
         let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
-  xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
-  xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"
-  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
-  <draw:page draw:name="SlideA"
-    presentation:master-page-name="MasterA"
-    draw:style-name="LayoutFallback"
-    presentation:transition-type="fade"
-    presentation:transition-duration="2"
-    presentation:animation="click">
-    <draw:frame draw:name="TitleShape">
-      <draw:text-box>
-        <text:p>Hello ODP</text:p>
-      </draw:text-box>
-    </draw:frame>
-    <presentation:notes>
-      <text:p>Speaker notes</text:p>
-    </presentation:notes>
-  </draw:page>
+  xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:p="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"
+  xmlns:t="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <d:page d:name="SlideA"
+    p:master-page-name="MasterA"
+    d:style-name="LayoutFallback"
+    p:transition-type="fade"
+    p:transition-duration="2"
+    p:animation="click">
+    <d:frame d:name="TitleShape">
+      <d:text-box>
+        <t:p>Hello ODP</t:p>
+      </d:text-box>
+    </d:frame>
+    <p:notes>
+      <t:p>Speaker notes</t:p>
+    </p:notes>
+  </d:page>
 </office:document-content>
 "#;
 
@@ -585,15 +585,15 @@ mod tests {
         let mut frame = FrameShapeState::new();
         let mut store = IrStore::new();
 
-        let mut image = BytesStart::new("draw:image");
-        image.push_attribute(("xlink:href", "Pictures/img1.png"));
+        let mut image = BytesStart::new("dr:image");
+        image.push_attribute(("lnk:href", "Pictures/img1.png"));
         parse_frame_shape_empty(&image, &mut store, &mut frame);
         assert_eq!(frame.shape_type, ShapeType::Picture);
         assert_eq!(frame.media_target.as_deref(), Some("Pictures/img1.png"));
         assert!(frame.has_shape);
 
-        let mut chart = BytesStart::new("chart:chart");
-        chart.push_attribute(("chart:class", "bar"));
+        let mut chart = BytesStart::new("ch:chart");
+        chart.push_attribute(("ch:class", "bar"));
         parse_frame_shape_empty(&chart, &mut store, &mut frame);
         assert_eq!(frame.shape_type, ShapeType::Chart);
         let chart_id = frame.chart_id.expect("chart id");
@@ -602,7 +602,7 @@ mod tests {
         };
         assert_eq!(chart_node.chart_type.as_deref(), Some("bar"));
 
-        let object = BytesStart::new("draw:object-ole");
+        let object = BytesStart::new("dr:object-ole");
         parse_frame_shape_empty(&object, &mut store, &mut frame);
         assert_eq!(frame.shape_type, ShapeType::OleObject);
         assert!(frame.has_shape);

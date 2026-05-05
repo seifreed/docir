@@ -1,5 +1,5 @@
-use super::{attr_value, Event, Reader};
-use crate::xml_utils::{scan_xml_events, XmlScanControl};
+use super::{Event, Reader};
+use crate::xml_utils::{attr_value_by_suffix, local_name, scan_xml_events, XmlScanControl};
 
 #[derive(Clone)]
 pub(super) struct OdfTableChunk {
@@ -52,9 +52,11 @@ pub(super) fn table_name_from_chunk(chunk: &[u8], sheet_id: u32) -> String {
     let mut buf = Vec::new();
     let mut table_name = None;
     if scan_xml_events(&mut reader, &mut buf, "content.xml", |event| match event {
-        Event::Start(e) if e.name().as_ref() == b"table:table" => {
-            table_name =
-                Some(attr_value(&e, b"table:name").unwrap_or_else(|| format!("Sheet{}", sheet_id)));
+        Event::Start(e) if local_name(e.name().as_ref()) == b"table" => {
+            table_name = Some(
+                attr_value_by_suffix(&e, &[b":name"])
+                    .unwrap_or_else(|| format!("Sheet{}", sheet_id)),
+            );
             Ok(XmlScanControl::Break)
         }
         _ => Ok(XmlScanControl::Continue),

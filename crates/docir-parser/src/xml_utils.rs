@@ -72,6 +72,10 @@ pub(crate) fn is_end_event(event: &Event<'_>, name: &[u8]) -> bool {
     matches!(event, Event::End(e) if e.name().as_ref() == name)
 }
 
+pub(crate) fn is_end_event_local(event: &Event<'_>, name: &[u8]) -> bool {
+    matches!(event, Event::End(e) if local_name(e.name().as_ref()) == name)
+}
+
 pub(crate) fn dispatch_start_or_empty<'e, R, F>(
     reader: &mut Reader<R>,
     event: &'e Event<'e>,

@@ -8,7 +8,8 @@ use crate::odf::{
     utils::parse_frame_transform, OdfReader,
 };
 use crate::xml_utils::{
-    attr_value, scan_xml_events_until_end, scan_xml_events_with_reader, xml_error, XmlScanControl,
+    attr_value, attr_value_by_suffix, local_name, scan_xml_events_until_end,
+    scan_xml_events_with_reader, xml_error, XmlScanControl,
 };
 use docir_core::ir::*;
 use docir_core::types::*;
@@ -38,15 +39,15 @@ pub(crate) fn parse_notes(reader: &mut OdfReader<'_>) -> Result<Option<String>, 
     scan_xml_events_with_reader(reader, &mut buf, ODF_CONTENT_XML, |reader, event| {
         match event {
             Event::Start(e) => {
-                if e.name().as_ref() == b"text:p" {
-                    let para = parse_text_element(reader, b"text:p")?;
+                if local_name(e.name().as_ref()) == b"p" {
+                    let para = parse_text_element(reader, e.name().as_ref())?;
                     if !text.is_empty() {
                         text.push('\n');
                     }
                     text.push_str(&para);
                 }
             }
-            Event::End(e) if e.name().as_ref() == b"presentation:notes" => {
+            Event::End(e) if local_name(e.name().as_ref()) == b"notes" => {
                 return Ok(XmlScanControl::Break);
             }
             _ => {}
@@ -64,15 +65,15 @@ pub(crate) fn parse_notes(reader: &mut OdfReader<'_>) -> Result<Option<String>, 
 pub(crate) fn parse_validation_definition(
     start: &BytesStart<'_>,
 ) -> Option<(String, ValidationDef)> {
-    let name = attr_value(start, b"table:name")?;
-    let condition = attr_value(start, b"table:condition");
-    let allow_blank = attr_value(start, b"table:allow-empty-cell")
+    let name = attr_value_by_suffix(start, &[b":name"])?;
+    let condition = attr_value_by_suffix(start, &[b":condition"]);
+    let allow_blank = attr_value_by_suffix(start, &[b":allow-empty-cell"])
         .map(|v| v == "true")
         .unwrap_or(false);
-    let show_input_message = attr_value(start, b"table:display-list")
+    let show_input_message = attr_value_by_suffix(start, &[b":display-list"])
         .map(|v| v == "true")
         .unwrap_or(false);
-    let show_error_message = attr_value(start, b"table:display-error-message")
+    let show_error_message = attr_value_by_suffix(start, &[b":display-error-message"])
         .map(|v| v == "true")
         .unwrap_or(false);
     let def = ValidationDef {
@@ -102,18 +103,18 @@ pub(crate) fn parse_ods_conditional_formatting(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                if depth == 1 && e.name().as_ref() == b"table:conditional-format" {
+                if depth == 1 && local_name(e.name().as_ref()) == b"conditional-format" {
                     cf.rules.push(build_ods_conditional_rule(&e));
                 }
                 depth = depth.saturating_add(1);
             }
             Ok(Event::Empty(e)) => {
-                if depth == 1 && e.name().as_ref() == b"table:conditional-format" {
+                if depth == 1 && local_name(e.name().as_ref()) == b"conditional-format" {
                     cf.rules.push(build_ods_conditional_rule(&e));
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"table:conditional-formatting" && depth == 1 {
+                if local_name(e.name().as_ref()) == b"conditional-formatting" && depth == 1 {
                     break;
                 }
                 depth = depth.saturating_sub(1);
@@ -175,8 +176,8 @@ fn init_conditional_format(start: &BytesStart<'_>) -> ConditionalFormat {
         rules: Vec::new(),
         span: Some(SourceSpan::new(ODF_CONTENT_XML)),
     };
-    if let Some(ranges) = attr_value(start, b"table:target-range-address")
-        .or_else(|| attr_value(start, b"table:cell-range-address"))
+    if let Some(ranges) = attr_value_by_suffix(start, &[b":target-range-address"])
+        .or_else(|| attr_value_by_suffix(start, &[b":cell-range-address"]))
     {
         cf.ranges = ranges.split_whitespace().map(|s| s.to_string()).collect();
     }
@@ -190,27 +191,28 @@ fn build_ods_conditional_rule(start: &BytesStart<'_>) -> ConditionalRule {
         operator: None,
         formulae: Vec::new(),
     };
-    rule.priority = attr_value(start, b"table:priority").and_then(|v| v.parse::<u32>().ok());
-    if let Some(condition) = attr_value(start, b"table:condition") {
+    rule.priority =
+        attr_value_by_suffix(start, &[b":priority"]).and_then(|v| v.parse::<u32>().ok());
+    if let Some(condition) = attr_value_by_suffix(start, &[b":condition"]) {
         rule.operator = parse_odf_condition_operator(&condition);
         rule.formulae.push(condition);
     }
-    if let Some(style_name) = attr_value(start, b"table:apply-style-name") {
+    if let Some(style_name) = attr_value_by_suffix(start, &[b":apply-style-name"]) {
         rule.formulae.push(format!("apply-style:{}", style_name));
     }
     rule
 }
 
 fn append_text_control(text: &mut String, e: &BytesStart<'_>) {
-    match e.name().as_ref() {
-        b"text:s" => {
-            let count = attr_value(e, b"text:c")
+    match local_name(e.name().as_ref()) {
+        b"s" => {
+            let count = attr_value_by_suffix(e, &[b":c"])
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(1);
             text.extend(std::iter::repeat_n(' ', count));
         }
-        b"text:tab" => text.push('\t'),
-        b"text:line-break" => text.push('\n'),
+        b"tab" => text.push('\t'),
+        b"line-break" => text.push('\n'),
         _ => {}
     }
 }
@@ -289,26 +291,26 @@ pub(crate) fn parse_draw_frame(
         reader,
         &mut buf,
         "content.xml",
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"draw:frame"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"frame"),
         |_reader, event| {
             match event {
-                Event::Start(e) | Event::Empty(e) => match e.name().as_ref() {
-                    b"draw:image" => {
-                        if let Some(href) = attr_value(e, b"xlink:href") {
+                Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
+                    b"image" => {
+                        if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
                             shape.media_target = Some(href);
                             shape.shape_type = ShapeType::Picture;
                             has_shape = true;
                         }
                     }
-                    b"draw:object" | b"draw:object-ole" => {
-                        if let Some(href) = attr_value(e, b"xlink:href") {
+                    b"object" | b"object-ole" => {
+                        if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
                             shape.media_target = Some(href);
                         }
                         shape.shape_type = ShapeType::OleObject;
                         has_shape = true;
                     }
-                    b"draw:plugin" => {
-                        if let Some(href) = attr_value(e, b"xlink:href") {
+                    b"plugin" => {
+                        if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
                             shape.media_target = Some(href.clone());
                             shape.shape_type = classify_media_shape(&href);
                             has_shape = true;

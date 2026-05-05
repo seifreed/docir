@@ -10,11 +10,12 @@ use super::{
     row_repeat_from, RowBuildState,
 };
 use crate::odf::{
-    attr_value, evaluate_ods_formulas, parse_ods_row_sample, spreadsheet, CellValue, IrStore,
-    NodeId, OdfLimitCounter, OdfReader, ParseError, Worksheet,
+    evaluate_ods_formulas, parse_ods_row_sample, spreadsheet, CellValue, IrStore, NodeId,
+    OdfLimitCounter, OdfReader, ParseError, Worksheet,
 };
 use crate::xml_utils::{
-    dispatch_start_or_empty, is_end_event, scan_xml_events_with_reader, XmlScanControl,
+    attr_value_by_suffix, dispatch_start_or_empty, is_end_event_local, local_name,
+    scan_xml_events_with_reader, XmlScanControl,
 };
 use quick_xml::events::BytesStart;
 use std::collections::HashMap;
@@ -54,7 +55,8 @@ pub(crate) fn parse_ods_table(
     if limits.fast_mode() {
         return parse_ods_table_fast(reader, start, sheet_id, store, validations, limits);
     }
-    let name = attr_value(start, b"table:name").unwrap_or_else(|| format!("Sheet{sheet_id}"));
+    let name =
+        attr_value_by_suffix(start, &[b":name"]).unwrap_or_else(|| format!("Sheet{sheet_id}"));
     let mut worksheet = Worksheet::new(name, sheet_id);
     let mut buf = Vec::new();
     let mut row_idx: u32 = 0;
@@ -67,7 +69,7 @@ pub(crate) fn parse_ods_table(
     let mut formula_map: HashMap<(u32, u32), String> = HashMap::new();
 
     scan_xml_events_with_reader(reader, &mut buf, "content.xml", |reader, event| {
-        if is_end_event(&event, b"table:table") {
+        if is_end_event_local(&event, b"table") {
             return Ok(XmlScanControl::Break);
         }
         let _ = dispatch_start_or_empty(reader, &event, |reader, e, is_start| {
@@ -128,7 +130,8 @@ pub(crate) fn parse_ods_table_fast(
     validations: &HashMap<String, ValidationDef>,
     limits: &dyn OdfLimitCounter,
 ) -> Result<Worksheet, ParseError> {
-    let name = attr_value(start, b"table:name").unwrap_or_else(|| format!("Sheet{sheet_id}"));
+    let name =
+        attr_value_by_suffix(start, &[b":name"]).unwrap_or_else(|| format!("Sheet{sheet_id}"));
     let mut worksheet = Worksheet::new(name, sheet_id);
     let mut buf = Vec::new();
     let mut row_idx: u32 = 0;
@@ -140,7 +143,7 @@ pub(crate) fn parse_ods_table_fast(
     let sample_enabled = sample_rows > 0 && sample_cols > 0;
 
     scan_xml_events_with_reader(reader, &mut buf, "content.xml", |reader, event| {
-        if is_end_event(&event, b"table:table") {
+        if is_end_event_local(&event, b"table") {
             return Ok(XmlScanControl::Break);
         }
         let _ = dispatch_start_or_empty(reader, &event, |reader, e, is_start| {
@@ -197,8 +200,8 @@ fn handle_table_start_full(
         formula_map,
         shapes,
     } = ctx;
-    match start.name().as_ref() {
-        b"table:table-row" => {
+    match local_name(start.name().as_ref()) {
+        b"table-row" => {
             let row_repeat = row_repeat_from(start);
             limits.bump_rows(row_repeat as u64)?;
             let row_cells = parse_ods_row(reader, start, store, style_map, next_style_id)?;
@@ -220,18 +223,18 @@ fn handle_table_start_full(
                 *row_idx += 1;
             }
         }
-        b"draw:frame" => {
+        b"frame" => {
             if let Some(shape_id) = spreadsheet::parse_draw_frame_spreadsheet(reader, start, store)?
             {
                 shapes.push(shape_id);
             }
         }
-        b"table:conditional-formatting" => {
+        b"conditional-formatting" => {
             if let Some(cf) = parse_ods_conditional_formatting(reader, start)? {
                 push_conditional_format(store, worksheet, cf);
             }
         }
-        b"table:filter" | b"table:filter-and" | b"table:filter-or" => {
+        b"filter" | b"filter-and" | b"filter-or" => {
             spreadsheet::skip_element(reader, start.name().as_ref())?;
         }
         _ => {}
@@ -248,19 +251,19 @@ fn handle_table_empty_full(
     worksheet: &mut Worksheet,
     shapes: &mut Vec<NodeId>,
 ) -> Result<(), ParseError> {
-    match empty.name().as_ref() {
-        b"table:table-row" => {
+    match local_name(empty.name().as_ref()) {
+        b"table-row" => {
             let row_repeat = row_repeat_from(empty);
             limits.bump_rows(row_repeat as u64)?;
             *row_idx += row_repeat;
         }
-        b"draw:frame" => {
+        b"frame" => {
             if let Some(shape_id) = spreadsheet::parse_draw_frame_spreadsheet(reader, empty, store)?
             {
                 shapes.push(shape_id);
             }
         }
-        b"table:conditional-formatting" => {
+        b"conditional-formatting" => {
             if let Some(cf) = parse_ods_conditional_formatting_empty(empty)? {
                 push_conditional_format(store, worksheet, cf);
             }
@@ -287,8 +290,8 @@ fn handle_table_start_fast(
         worksheet,
         validation_ranges,
     } = ctx;
-    match start.name().as_ref() {
-        b"table:table-row" => {
+    match local_name(start.name().as_ref()) {
+        b"table-row" => {
             let row_repeat = row_repeat_from(start);
             limits.bump_rows(row_repeat as u64)?;
             if sample_enabled && *row_idx < sample_rows {
@@ -322,7 +325,7 @@ fn handle_table_start_fast(
                 *row_idx += row_repeat;
             }
         }
-        b"draw:frame" => {
+        b"frame" => {
             spreadsheet::skip_element(reader, start.name().as_ref())?;
         }
         _ => {}
@@ -335,7 +338,7 @@ fn handle_table_empty_fast(
     limits: &dyn OdfLimitCounter,
     row_idx: &mut u32,
 ) -> Result<(), ParseError> {
-    if empty.name().as_ref() == b"table:table-row" {
+    if local_name(empty.name().as_ref()) == b"table-row" {
         let row_repeat = row_repeat_from(empty);
         limits.bump_rows(row_repeat as u64)?;
         *row_idx += row_repeat;
@@ -350,21 +353,21 @@ pub(crate) fn parse_ods_cell(
     style_map: &mut HashMap<String, u32>,
     next_style_id: &mut u32,
 ) -> Result<OdsCellData, ParseError> {
-    let mut value_type = attr_value(start, b"table:cell-value-type")
-        .or_else(|| attr_value(start, b"office:value-type"));
-    let mut value_attr =
-        attr_value(start, b"table:cell-value").or_else(|| attr_value(start, b"office:value"));
-    let date_value = attr_value(start, b"table:date-value");
-    let time_value = attr_value(start, b"table:time-value");
-    let formula_attr = attr_value(start, b"table:formula");
-    let col_repeat = attr_value(start, b"table:number-columns-repeated")
+    let mut value_type = attr_value_by_suffix(start, &[b":cell-value-type"])
+        .or_else(|| attr_value_by_suffix(start, &[b":value-type"]));
+    let mut value_attr = attr_value_by_suffix(start, &[b":cell-value"])
+        .or_else(|| attr_value_by_suffix(start, &[b":value"]));
+    let date_value = attr_value_by_suffix(start, &[b":date-value"]);
+    let time_value = attr_value_by_suffix(start, &[b":time-value"]);
+    let formula_attr = attr_value_by_suffix(start, &[b":formula"]);
+    let col_repeat = attr_value_by_suffix(start, &[b":number-columns-repeated"])
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(1);
-    let col_span =
-        attr_value(start, b"table:number-columns-spanned").and_then(|v| v.parse::<u32>().ok());
+    let col_span = attr_value_by_suffix(start, &[b":number-columns-spanned"])
+        .and_then(|v| v.parse::<u32>().ok());
     let row_span =
-        attr_value(start, b"table:number-rows-spanned").and_then(|v| v.parse::<u32>().ok());
-    let validation_name = attr_value(start, b"table:content-validation-name");
+        attr_value_by_suffix(start, &[b":number-rows-spanned"]).and_then(|v| v.parse::<u32>().ok());
+    let validation_name = attr_value_by_suffix(start, &[b":content-validation-name"]);
 
     let style_id = resolve_style_id(start, style_map, next_style_id);
     let text = read_ods_cell_text(reader)?;
@@ -396,21 +399,21 @@ pub(crate) fn parse_ods_cell_empty(
     style_map: &mut HashMap<String, u32>,
     next_style_id: &mut u32,
 ) -> Result<OdsCellData, ParseError> {
-    let value_type = attr_value(start, b"table:cell-value-type")
-        .or_else(|| attr_value(start, b"office:value-type"));
-    let value_attr = attr_value(start, b"table:cell-value")
-        .or_else(|| attr_value(start, b"office:value"))
-        .or_else(|| attr_value(start, b"table:date-value"))
-        .or_else(|| attr_value(start, b"table:time-value"));
-    let formula_attr = attr_value(start, b"table:formula");
-    let col_repeat = attr_value(start, b"table:number-columns-repeated")
+    let value_type = attr_value_by_suffix(start, &[b":cell-value-type"])
+        .or_else(|| attr_value_by_suffix(start, &[b":value-type"]));
+    let value_attr = attr_value_by_suffix(start, &[b":cell-value"])
+        .or_else(|| attr_value_by_suffix(start, &[b":value"]))
+        .or_else(|| attr_value_by_suffix(start, &[b":date-value"]))
+        .or_else(|| attr_value_by_suffix(start, &[b":time-value"]));
+    let formula_attr = attr_value_by_suffix(start, &[b":formula"]);
+    let col_repeat = attr_value_by_suffix(start, &[b":number-columns-repeated"])
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(1);
-    let col_span =
-        attr_value(start, b"table:number-columns-spanned").and_then(|v| v.parse::<u32>().ok());
+    let col_span = attr_value_by_suffix(start, &[b":number-columns-spanned"])
+        .and_then(|v| v.parse::<u32>().ok());
     let row_span =
-        attr_value(start, b"table:number-rows-spanned").and_then(|v| v.parse::<u32>().ok());
-    let validation_name = attr_value(start, b"table:content-validation-name");
+        attr_value_by_suffix(start, &[b":number-rows-spanned"]).and_then(|v| v.parse::<u32>().ok());
+    let validation_name = attr_value_by_suffix(start, &[b":content-validation-name"]);
     let style_id = resolve_style_id(start, style_map, next_style_id);
     let value = parse_cell_value_empty(value_type.as_deref(), value_attr.as_deref());
     let formula = parse_cell_formula(formula_attr);

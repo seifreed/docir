@@ -2,7 +2,7 @@ use super::helpers::{parse_ods_covered_cell, parse_ods_covered_cell_empty, OdsRo
 use super::ods::{parse_ods_cell, parse_ods_cell_empty};
 use super::{spreadsheet, OdfReader};
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value, xml_error};
+use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 use docir_core::visitor::IrStore;
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
@@ -20,10 +20,10 @@ pub(super) fn parse_ods_row_sample(
     let mut col_idx: u32 = 0;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"table:table-cell" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"table-cell" => {
                     if col_idx >= sample_cols {
-                        let repeat = attr_value(&e, b"table:number-columns-repeated")
+                        let repeat = attr_value_by_suffix(&e, &[b":number-columns-repeated"])
                             .and_then(|v| v.parse::<u32>().ok())
                             .unwrap_or(1);
                         col_idx = col_idx.saturating_add(repeat);
@@ -34,9 +34,9 @@ pub(super) fn parse_ods_row_sample(
                         cells.push(cell);
                     }
                 }
-                b"table:covered-table-cell" => {
+                b"covered-table-cell" => {
                     if col_idx >= sample_cols {
-                        let repeat = attr_value(&e, b"table:number-columns-repeated")
+                        let repeat = attr_value_by_suffix(&e, &[b":number-columns-repeated"])
                             .and_then(|v| v.parse::<u32>().ok())
                             .unwrap_or(1);
                         col_idx = col_idx.saturating_add(repeat);
@@ -49,26 +49,26 @@ pub(super) fn parse_ods_row_sample(
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"table:table-cell" => {
+            Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"table-cell" => {
                     if col_idx < sample_cols {
                         let cell = parse_ods_cell_empty(&e, style_map, next_style_id)?;
                         col_idx = col_idx.saturating_add(cell.col_repeat);
                         cells.push(cell);
                     } else {
-                        let repeat = attr_value(&e, b"table:number-columns-repeated")
+                        let repeat = attr_value_by_suffix(&e, &[b":number-columns-repeated"])
                             .and_then(|v| v.parse::<u32>().ok())
                             .unwrap_or(1);
                         col_idx = col_idx.saturating_add(repeat);
                     }
                 }
-                b"table:covered-table-cell" => {
+                b"covered-table-cell" => {
                     if col_idx < sample_cols {
                         let cell = parse_ods_covered_cell_empty(&e)?;
                         col_idx = col_idx.saturating_add(cell.col_repeat);
                         cells.push(cell);
                     } else {
-                        let repeat = attr_value(&e, b"table:number-columns-repeated")
+                        let repeat = attr_value_by_suffix(&e, &[b":number-columns-repeated"])
                             .and_then(|v| v.parse::<u32>().ok())
                             .unwrap_or(1);
                         col_idx = col_idx.saturating_add(repeat);
@@ -77,7 +77,7 @@ pub(super) fn parse_ods_row_sample(
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"table:table-row" {
+                if local_name(e.name().as_ref()) == b"table-row" {
                     break;
                 }
             }

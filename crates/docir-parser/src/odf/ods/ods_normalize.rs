@@ -1,10 +1,11 @@
 use super::super::helpers::parse_text_element;
-use crate::odf::{attr_value, CellFormula, CellValue, OdfReader, ParseError};
+use crate::odf::{CellFormula, CellValue, OdfReader, ParseError};
+use crate::xml_utils::{attr_value_by_suffix, local_name};
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 pub(crate) fn row_repeat_from(start: &BytesStart<'_>) -> u32 {
-    attr_value(start, b"table:number-rows-repeated")
+    attr_value_by_suffix(start, &[b":number-rows-repeated"])
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(1)
 }
@@ -14,7 +15,7 @@ pub(crate) fn read_ods_cell_text(reader: &mut OdfReader<'_>) -> Result<String, P
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"text:p" => {
+            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"p" => {
                 let para = parse_text_element(reader, e.name().as_ref())?;
                 if !text.is_empty() && !para.is_empty() {
                     text.push('\n');
@@ -25,7 +26,7 @@ pub(crate) fn read_ods_cell_text(reader: &mut OdfReader<'_>) -> Result<String, P
                 let chunk = e.unescape().unwrap_or_default();
                 text.push_str(&chunk);
             }
-            Ok(Event::End(e)) if e.name().as_ref() == b"table:table-cell" => break,
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"table-cell" => break,
             Ok(Event::Eof) => break,
             Err(e) => return Err(crate::xml_utils::xml_error("content.xml", e)),
             _ => {}
@@ -61,7 +62,7 @@ pub(crate) fn resolve_style_id(
     style_map: &mut HashMap<String, u32>,
     next_style_id: &mut u32,
 ) -> Option<u32> {
-    attr_value(start, b"table:style-name").map(|name| {
+    attr_value_by_suffix(start, &[b":style-name"]).map(|name| {
         if let Some(id) = style_map.get(&name) {
             *id
         } else {
