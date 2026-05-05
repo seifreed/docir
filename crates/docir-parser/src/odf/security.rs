@@ -42,7 +42,7 @@ pub(crate) fn scan_external_links(xml: &str, location: &str) -> Vec<ExternalRefe
             let ref_type = match local_name(e.name().as_ref()) {
                 b"image" => ExternalRefType::Image,
                 b"a" => ExternalRefType::Hyperlink,
-                b"object" | b"object-ole" => ExternalRefType::OleLink,
+                b"object" | b"object-ole" => return false,
                 _ => ExternalRefType::Other,
             };
             let mut ext = ExternalReference::new(ref_type, href);
@@ -61,14 +61,17 @@ pub(crate) fn scan_odf_objects(xml: &str) -> (Vec<OleObject>, Vec<ExternalRefere
         match local_name(e.name().as_ref()) {
             b"object" | b"object-ole" => {
                 if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
+                    let is_linked = is_external_target(&href);
                     let mut ole = OleObject::new();
-                    ole.is_linked = href.starts_with("http://") || href.starts_with("https://");
+                    ole.is_linked = is_linked;
                     ole.link_target = Some(href.clone());
                     ole.size_bytes = 0;
                     oles.push(ole);
-                    let mut ext = ExternalReference::new(ExternalRefType::OleLink, href);
-                    ext.span = Some(SourceSpan::new("content.xml"));
-                    refs.push(ext);
+                    if is_linked {
+                        let mut ext = ExternalReference::new(ExternalRefType::OleLink, href);
+                        ext.span = Some(SourceSpan::new("content.xml"));
+                        refs.push(ext);
+                    }
                 }
             }
             _ => {}
@@ -102,9 +105,12 @@ pub(crate) fn scan_embedded_objects(
 pub(crate) fn scan_odf_filters(xml: &str) -> Vec<String> {
     let mut out = Vec::new();
     visit_start_or_empty(xml, |e| {
-        if e.name().as_ref().starts_with(b"table:filter") {
-            let target = super::attr_value(e, b"table:target-range-address")
-                .or_else(|| super::attr_value(e, b"table:condition"))
+        if matches!(
+            local_name(e.name().as_ref()),
+            b"filter" | b"filter-and" | b"filter-or"
+        ) {
+            let target = attr_value_by_suffix(e, &[b":target-range-address"])
+                .or_else(|| attr_value_by_suffix(e, &[b":condition"]))
                 .unwrap_or_else(|| "unknown".to_string());
             out.push(target);
         }
@@ -421,7 +427,9 @@ fn extract_quoted_strings(input: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{scan_external_links, scan_odf_formula_security, scan_odf_objects};
+    use super::{
+        scan_external_links, scan_odf_filters, scan_odf_formula_security, scan_odf_objects,
+    };
     use docir_core::security::ExternalRefType;
 
     #[test]
@@ -441,10 +449,9 @@ mod tests {
         let refs = scan_external_links(xml, "content.xml");
         let types: Vec<_> = refs.iter().map(|r| r.ref_type).collect();
 
-        assert_eq!(refs.len(), 3);
+        assert_eq!(refs.len(), 2);
         assert!(types.contains(&ExternalRefType::Hyperlink));
         assert!(types.contains(&ExternalRefType::Image));
-        assert!(types.contains(&ExternalRefType::OleLink));
     }
 
     #[test]
@@ -469,6 +476,26 @@ mod tests {
     }
 
     #[test]
+    fn scan_odf_object_internal_targets_are_not_external_ole_links() {
+        let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:dr="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+              xmlns:lnk="http://www.w3.org/1999/xlink">
+              <dr:object-ole lnk:href="Object 1"/>
+            </office:document-content>
+        "#;
+
+        let refs = scan_external_links(xml, "content.xml");
+        let (oles, ole_refs) = scan_odf_objects(xml);
+
+        assert!(refs.is_empty());
+        assert_eq!(oles.len(), 1);
+        assert!(!oles[0].is_linked);
+        assert!(ole_refs.is_empty());
+    }
+
+    #[test]
     fn scan_odf_formula_security_accepts_alternate_formula_prefix() {
         let xml = r#"
             <office:document-content
@@ -481,5 +508,25 @@ mod tests {
         let scan = scan_odf_formula_security(xml);
         assert_eq!(scan.dde_fields.len(), 1);
         assert_eq!(scan.dde_fields[0].application, "cmd");
+    }
+
+    #[test]
+    fn scan_odf_filters_accepts_alternate_namespace_prefixes() {
+        let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:tbl="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+              <tbl:filter tbl:target-range-address="Sheet1.A1:Sheet1.B2"/>
+              <tbl:filter-and tbl:condition="cell-content()&gt;0"/>
+            </office:document-content>
+        "#;
+
+        assert_eq!(
+            scan_odf_filters(xml),
+            vec![
+                "Sheet1.A1:Sheet1.B2".to_string(),
+                "cell-content()>0".to_string()
+            ]
+        );
     }
 }
