@@ -1,6 +1,6 @@
 use super::DocxParser;
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value, xml_error};
+use crate::xml_utils::{attr_value, local_name, xml_error};
 use docir_core::ir::{Paragraph, RunProperties, Style, StyleSet, StyleType};
 use docir_core::types::NodeId;
 use quick_xml::events::{BytesStart, Event};
@@ -34,9 +34,9 @@ impl DocxParser {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"w:name" {
+                    if local_name(e.name().as_ref()) == b"name" {
                         in_name = false;
-                    } else if e.name().as_ref() == b"w:style" {
+                    } else if local_name(e.name().as_ref()) == b"style" {
                         if let Some(style) = current.take() {
                             styles.styles.push(style);
                         }
@@ -72,21 +72,21 @@ fn handle_style_start(
     current: &mut Option<Style>,
     in_name: &mut bool,
 ) -> Result<(), ParseError> {
-    match event.name().as_ref() {
-        b"w:style" => {
+    match local_name(event.name().as_ref()) {
+        b"style" => {
             *current = Some(build_style(event));
         }
-        b"w:name" => {
+        b"name" => {
             *in_name = true;
         }
-        b"w:rPr" => {
+        b"rPr" => {
             let mut props = RunProperties::default();
             super::parse_run_properties(reader, &mut props)?;
             if let Some(style) = current.as_mut() {
                 style.run_props = Some(super::style_run_from_run_props(props));
             }
         }
-        b"w:pPr" => {
+        b"pPr" => {
             let mut para = Paragraph::new();
             let _ = parse_paragraph_properties(reader, &mut para, None)?;
             if let Some(style) = current.as_mut() {
@@ -94,25 +94,25 @@ fn handle_style_start(
                     Some(super::style_paragraph_from_paragraph_props(para.properties));
             }
         }
-        b"w:tblPr" => {
+        b"tblPr" => {
             if let Some(style) = current.as_mut() {
                 let mut props = docir_core::ir::TableProperties::default();
                 parse_table_properties(reader, &mut props)?;
                 style.table_props = Some(props);
             }
         }
-        b"w:basedOn" => assign_style_attr(event, current.as_mut(), StyleAttr::BasedOn),
-        b"w:next" => assign_style_attr(event, current.as_mut(), StyleAttr::Next),
+        b"basedOn" => assign_style_attr(event, current.as_mut(), StyleAttr::BasedOn),
+        b"next" => assign_style_attr(event, current.as_mut(), StyleAttr::Next),
         _ => {}
     }
     Ok(())
 }
 
 fn handle_style_empty(event: &BytesStart<'_>, current: &mut Option<Style>) {
-    match event.name().as_ref() {
-        b"w:name" => assign_style_attr(event, current.as_mut(), StyleAttr::Name),
-        b"w:basedOn" => assign_style_attr(event, current.as_mut(), StyleAttr::BasedOn),
-        b"w:next" => assign_style_attr(event, current.as_mut(), StyleAttr::Next),
+    match local_name(event.name().as_ref()) {
+        b"name" => assign_style_attr(event, current.as_mut(), StyleAttr::Name),
+        b"basedOn" => assign_style_attr(event, current.as_mut(), StyleAttr::BasedOn),
+        b"next" => assign_style_attr(event, current.as_mut(), StyleAttr::Next),
         _ => {}
     }
 }

@@ -2,7 +2,7 @@ use super::{
     ParseError, PresentationProperties, PresentationTag, ShapeType, SmartArtPart, SourceSpan,
     TableStyle, TableStyleSet, ViewProperties,
 };
-use crate::xml_utils::{lossy_attr_value, xml_error};
+use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
 use docir_core::types::NodeId;
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -21,7 +21,7 @@ pub(super) fn parse_presentation_properties(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"p:presentationPr" {
+                if local_name(e.name().as_ref()) == b"presentationPr" {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"autoCompressPictures" => {
@@ -79,8 +79,8 @@ pub(super) fn parse_view_properties(xml: &str, path: &str) -> Result<ViewPropert
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"p:viewPr" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"viewPr" => {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"lastView" => {
@@ -115,7 +115,7 @@ pub(super) fn parse_view_properties(xml: &str, path: &str) -> Result<ViewPropert
                         }
                     }
                 }
-                b"p:zoom" => {
+                b"zoom" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"percent" {
                             props.zoom = lossy_attr_value(&attr).parse::<u32>().ok();
@@ -146,15 +146,15 @@ pub(super) fn parse_table_styles(xml: &str, path: &str) -> Result<TableStyleSet,
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"a:tblStyleLst" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"tblStyleLst" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"def" {
                             styles.default_style_id = Some(lossy_attr_value(&attr).to_string());
                         }
                     }
                 }
-                b"a:tblStyle" => {
+                b"tblStyle" => {
                     let mut style_id = None;
                     let mut name = None;
                     for attr in e.attributes().flatten() {
@@ -196,7 +196,7 @@ pub(super) fn parse_presentation_tags(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref().ends_with(b"tag") {
+                if local_name(e.name().as_ref()) == b"tag" {
                     let mut name = None;
                     let mut val = None;
                     for attr in e.attributes().flatten() {
@@ -243,21 +243,17 @@ pub(super) fn parse_smartart_part(xml: &str, path: &str) -> Result<SmartArtPart,
                     root = Some(String::from_utf8_lossy(e.name().as_ref()).to_string());
                 }
                 let name_buf = e.name().as_ref().to_vec();
-                let name = name_buf.as_slice();
-                if name.ends_with(b":pt") || name == b"dgm:pt" {
+                let name = local_name(name_buf.as_slice());
+                if name == b"pt" {
                     point_count += 1;
                 }
-                if name.ends_with(b":cxn") || name == b"dgm:cxn" {
+                if name == b"cxn" {
                     connection_count += 1;
                 }
-                if name.ends_with(b":relIds") || name == b"dgm:relIds" {
+                if name == b"relIds" {
                     for attr in e.attributes().flatten() {
-                        let key = attr.key.as_ref();
-                        if key.ends_with(b":dm")
-                            || key.ends_with(b":lo")
-                            || key.ends_with(b":qs")
-                            || key.ends_with(b":cs")
-                        {
+                        let key = local_name(attr.key.as_ref());
+                        if matches!(key, b"dm" | b"lo" | b"qs" | b"cs") {
                             let val = lossy_attr_value(&attr).to_string();
                             if !val.is_empty() {
                                 rel_ids.push(val);
@@ -323,7 +319,7 @@ pub(super) fn parse_slide_master_meta(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"p:sldMaster" {
+                if local_name(e.name().as_ref()) == b"sldMaster" {
                     for attr in e.attributes().flatten() {
                         let value = lossy_attr_value(&attr);
                         match attr.key.as_ref() {
@@ -376,7 +372,7 @@ pub(super) fn parse_slide_layout_meta(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"p:sldLayout" {
+                if local_name(e.name().as_ref()) == b"sldLayout" {
                     for attr in e.attributes().flatten() {
                         let value = lossy_attr_value(&attr);
                         match attr.key.as_ref() {

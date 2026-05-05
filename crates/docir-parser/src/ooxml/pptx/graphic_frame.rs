@@ -5,6 +5,7 @@ use super::{
     parse_transform, BytesStart, ExternalRefType, ExternalReference, IRNode, NodeId, ParseError,
     PptxParser, Reader, Relationships, Shape, ShapeType, TargetMode,
 };
+use crate::xml_utils::local_name;
 use crate::zip_handler::PackageReader;
 
 pub(super) struct GraphicFrameState {
@@ -33,31 +34,29 @@ impl PptxParser {
         shape: &mut Shape,
         state: &mut GraphicFrameState,
     ) -> Result<(), ParseError> {
-        match e.name().as_ref() {
-            b"p:cNvPr" => apply_non_visual_shape_props(shape, e),
-            b"a:hlinkClick" => {
+        match local_name(e.name().as_ref()) {
+            b"cNvPr" => apply_non_visual_shape_props(shape, e),
+            b"hlinkClick" => {
                 self.attach_hyperlink(shape, e, relationships, slide_path);
             }
-            b"p:xfrm" => {
+            b"xfrm" => {
                 parse_transform(reader, &mut shape.transform, slide_path)?;
             }
-            _ if e.name().as_ref().ends_with(b"graphicData") => {
+            b"graphicData" => {
                 apply_graphic_data_shape_type(shape, e);
             }
-            b"a:tbl" => {
+            b"tbl" => {
                 let table = self.parse_pptx_table(reader, slide_path)?;
                 let id = table.id;
                 self.store.insert(IRNode::Table(table));
                 state.table_id = Some(id);
                 shape.shape_type = ShapeType::Table;
             }
-            _ if e.name().as_ref().ends_with(b"chart") => {
+            b"chart" => {
                 capture_chart_rel(state, e);
                 shape.shape_type = ShapeType::Chart;
             }
-            _ if e.name().as_ref().ends_with(b"oleObj")
-                || e.name().as_ref().ends_with(b"oleObject") =>
-            {
+            b"oleObj" | b"oleObject" => {
                 capture_ole_rel(state, e);
                 shape.shape_type = ShapeType::OleObject;
             }
@@ -75,27 +74,25 @@ impl PptxParser {
         shape: &mut Shape,
         state: &mut GraphicFrameState,
     ) -> Result<(), ParseError> {
-        match e.name().as_ref() {
-            b"p:cNvPr" => apply_non_visual_shape_props(shape, e),
-            b"a:hlinkClick" => {
+        match local_name(e.name().as_ref()) {
+            b"cNvPr" => apply_non_visual_shape_props(shape, e),
+            b"hlinkClick" => {
                 self.attach_hyperlink(shape, e, relationships, slide_path);
             }
-            b"p:xfrm" => {}
-            _ if e.name().as_ref().ends_with(b"graphicData") => {}
-            b"a:tbl" => {
+            b"xfrm" => {}
+            b"graphicData" => {}
+            b"tbl" => {
                 let table = self.parse_pptx_table(reader, slide_path)?;
                 let id = table.id;
                 self.store.insert(IRNode::Table(table));
                 state.table_id = Some(id);
                 shape.shape_type = ShapeType::Table;
             }
-            _ if e.name().as_ref().ends_with(b"chart") => {
+            b"chart" => {
                 capture_chart_rel(state, e);
                 shape.shape_type = ShapeType::Chart;
             }
-            _ if e.name().as_ref().ends_with(b"oleObj")
-                || e.name().as_ref().ends_with(b"oleObject") =>
-            {
+            b"oleObj" | b"oleObject" => {
                 capture_ole_rel(state, e);
                 shape.shape_type = ShapeType::OleObject;
             }

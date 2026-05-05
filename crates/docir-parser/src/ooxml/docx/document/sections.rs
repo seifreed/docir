@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value, attr_value_by_suffix, xml_error};
+use crate::xml_utils::{attr_value, attr_value_by_suffix, local_name, xml_error};
 use docir_core::ir::{
     LineNumberRestart, PageMargins, PageOrientation, SectionProperties, SectionType,
 };
@@ -25,25 +25,25 @@ pub(super) fn apply_section_refs(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"w:headerReference" | b"w:footerReference" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"headerReference" | b"footerReference" => {
                     apply_section_header_footer(&e, header_footer_map, &mut headers, &mut footers);
                 }
-                b"w:pgSz" => apply_section_page_size(&e, &mut properties),
-                b"w:pgMar" => apply_section_margins(&e, &mut properties),
-                b"w:cols" => apply_section_columns(&e, &mut properties),
-                b"w:type" => apply_section_type(&e, &mut properties),
-                b"w:titlePg" => apply_section_title_page(&e, &mut properties),
-                b"w:pgNumType" => apply_section_page_numbering(&e, &mut properties),
-                b"w:lnNumType" | b"w:lineNumberType" => {
+                b"pgSz" => apply_section_page_size(&e, &mut properties),
+                b"pgMar" => apply_section_margins(&e, &mut properties),
+                b"cols" => apply_section_columns(&e, &mut properties),
+                b"type" => apply_section_type(&e, &mut properties),
+                b"titlePg" => apply_section_title_page(&e, &mut properties),
+                b"pgNumType" => apply_section_page_numbering(&e, &mut properties),
+                b"lnNumType" | b"lineNumberType" => {
                     apply_section_line_numbering(&e, &mut properties)
                 }
-                b"w:pgBorders" => apply_section_page_borders(reader, &mut properties)?,
-                b"w:textDirection" => apply_section_text_direction(&e, &mut properties),
+                b"pgBorders" => apply_section_page_borders(reader, &mut properties)?,
+                b"textDirection" => apply_section_text_direction(&e, &mut properties),
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:sectPr" {
+                if local_name(e.name().as_ref()) == b"sectPr" {
                     break;
                 }
             }
@@ -77,7 +77,7 @@ fn apply_section_header_footer(
     let Some(node_id) = map.get(&id) else {
         return;
     };
-    if e.name().as_ref() == b"w:headerReference" {
+    if local_name(e.name().as_ref()) == b"headerReference" {
         headers.push(*node_id);
     } else {
         footers.push(*node_id);

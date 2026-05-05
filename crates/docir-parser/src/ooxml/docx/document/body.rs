@@ -1,6 +1,6 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::read_event;
+use crate::xml_utils::{local_name, read_event};
 use docir_core::ir::Section;
 use docir_core::types::NodeId;
 use quick_xml::events::Event;
@@ -25,8 +25,8 @@ pub(crate) fn parse_body_sections(
 
     loop {
         match read_event(reader, &mut buf, "word/document.xml")? {
-            Event::Start(e) => match e.name().as_ref() {
-                b"w:p" => {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
+                b"p" => {
                     let para = parse_paragraph(parser, reader, rels, header_footer_map)?;
                     current.content.push(para.id);
                     if let Some(section_ref) = para.section_ref {
@@ -37,15 +37,15 @@ pub(crate) fn parse_body_sections(
                         current = Section::new();
                     }
                 }
-                b"w:tbl" => {
+                b"tbl" => {
                     let table_id = parse_table(parser, reader, rels)?;
                     current.content.push(table_id);
                 }
-                b"w:sdt" => {
+                b"sdt" => {
                     let sdt_id = parse_sdt(parser, reader, rels, SdtMode::Block)?;
                     current.content.push(sdt_id);
                 }
-                b"w:sectPr" => {
+                b"sectPr" => {
                     let section_ref = apply_section_refs(reader, header_footer_map)?;
                     current.headers = section_ref.headers;
                     current.footers = section_ref.footers;
@@ -53,27 +53,27 @@ pub(crate) fn parse_body_sections(
                     sections.push(current);
                     current = Section::new();
                 }
-                b"w:ins" => {
+                b"ins" => {
                     let rev_id =
                         parse_revision_block(parser, reader, rels, &e, RevisionType::Insert)?;
                     current.content.push(rev_id);
                 }
-                b"w:del" => {
+                b"del" => {
                     let rev_id =
                         parse_revision_block(parser, reader, rels, &e, RevisionType::Delete)?;
                     current.content.push(rev_id);
                 }
-                b"w:moveFrom" => {
+                b"moveFrom" => {
                     let rev_id =
                         parse_revision_block(parser, reader, rels, &e, RevisionType::MoveFrom)?;
                     current.content.push(rev_id);
                 }
-                b"w:moveTo" => {
+                b"moveTo" => {
                     let rev_id =
                         parse_revision_block(parser, reader, rels, &e, RevisionType::MoveTo)?;
                     current.content.push(rev_id);
                 }
-                b"w:pPrChange" | b"w:rPrChange" => {
+                b"pPrChange" | b"rPrChange" => {
                     let rev_id =
                         parse_revision_block(parser, reader, rels, &e, RevisionType::FormatChange)?;
                     current.content.push(rev_id);
@@ -81,7 +81,7 @@ pub(crate) fn parse_body_sections(
                 _ => {}
             },
             Event::End(e) => {
-                if e.name().as_ref() == b"w:body" {
+                if local_name(e.name().as_ref()) == b"body" {
                     break;
                 }
             }
@@ -118,23 +118,23 @@ pub(crate) fn parse_block_until(
 
     loop {
         match read_event(reader, &mut buf, "word/document.xml")? {
-            Event::Start(e) => match e.name().as_ref() {
-                b"w:p" => {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
+                b"p" => {
                     let para_id = parse_paragraph_simple(parser, reader, rels)?;
                     content.push(para_id);
                 }
-                b"w:tbl" => {
+                b"tbl" => {
                     let table_id = parse_table(parser, reader, rels)?;
                     content.push(table_id);
                 }
-                b"w:sdt" => {
+                b"sdt" => {
                     let sdt_id = parse_sdt(parser, reader, rels, SdtMode::Block)?;
                     content.push(sdt_id);
                 }
                 _ => {}
             },
             Event::End(e) => {
-                if e.name().as_ref() == end_tag {
+                if local_name(e.name().as_ref()) == local_name(end_tag) {
                     break;
                 }
             }

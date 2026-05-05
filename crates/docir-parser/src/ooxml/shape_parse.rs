@@ -3,8 +3,7 @@ use super::{
     read_event, PackageReader, ParseError, PptxParser, Reader, Relationships, Shape, ShapeType,
     SourceSpan, TargetMode,
 };
-use crate::xml_utils::attr_value_by_suffix;
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 use docir_core::ir::IRNode;
 use docir_core::types::NodeId;
 use quick_xml::events::{BytesStart, Event};
@@ -24,22 +23,22 @@ impl PptxParser {
 
         loop {
             match read_event(&mut reader, &mut buf, slide_path)? {
-                Event::Start(e) => match e.name().as_ref() {
-                    b"p:sp" => {
+                Event::Start(e) => match local_name(e.name().as_ref()) {
+                    b"sp" => {
                         let shape =
                             self.parse_shape_sp(&mut reader, &e, slide_path, relationships)?;
                         let id = shape.id;
                         self.store.insert(IRNode::Shape(shape));
                         shapes.push(id);
                     }
-                    b"p:pic" => {
+                    b"pic" => {
                         let shape =
                             self.parse_shape_pic(&mut reader, &e, slide_path, relationships)?;
                         let id = shape.id;
                         self.store.insert(IRNode::Shape(shape));
                         shapes.push(id);
                     }
-                    b"p:graphicFrame" => {
+                    b"graphicFrame" => {
                         let shape = self.parse_shape_graphic_frame(
                             &mut reader,
                             &e,
@@ -51,7 +50,7 @@ impl PptxParser {
                         self.store.insert(IRNode::Shape(shape));
                         shapes.push(id);
                     }
-                    b"p:grpSp" => {
+                    b"grpSp" => {
                         let shape =
                             self.parse_shape_group(&mut reader, &e, slide_path, relationships)?;
                         let id = shape.id;
@@ -82,17 +81,17 @@ impl PptxParser {
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"p:cNvPr" => {
+                Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                    b"cNvPr" => {
                         parse_shape_non_visual_props(&e, &mut shape);
                     }
-                    b"a:hlinkClick" => {
+                    b"hlinkClick" => {
                         self.attach_hyperlink(&mut shape, &e, relationships, slide_path);
                     }
-                    b"p:spPr" => {
+                    b"spPr" => {
                         parse_shape_properties(reader, &mut shape, slide_path)?;
                     }
-                    b"p:txBody" => {
+                    b"txBody" => {
                         let text = parse_text_body(reader, slide_path)?;
                         shape.text = Some(text);
                         if matches!(shape.shape_type, ShapeType::Unknown) {
@@ -101,18 +100,18 @@ impl PptxParser {
                     }
                     _ => {}
                 },
-                Ok(Event::Empty(e)) => match e.name().as_ref() {
-                    b"p:cNvPr" => {
+                Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                    b"cNvPr" => {
                         parse_shape_non_visual_props(&e, &mut shape);
                     }
-                    b"a:hlinkClick" => {
+                    b"hlinkClick" => {
                         self.attach_hyperlink(&mut shape, &e, relationships, slide_path);
                     }
-                    b"p:spPr" => {}
+                    b"spPr" => {}
                     _ => {}
                 },
                 Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"p:sp" {
+                    if local_name(e.name().as_ref()) == b"sp" {
                         break;
                     }
                 }
@@ -145,24 +144,24 @@ impl PptxParser {
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"p:cNvPr" => {
+                Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                    b"cNvPr" => {
                         parse_non_visual_name(&e, &mut shape);
                     }
-                    b"p:grpSpPr" => {
+                    b"grpSpPr" => {
                         parse_group_properties(reader, &mut shape, slide_path)?;
                     }
                     _ => {}
                 },
-                Ok(Event::Empty(e)) => match e.name().as_ref() {
-                    b"p:cNvPr" => {
+                Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                    b"cNvPr" => {
                         parse_non_visual_name(&e, &mut shape);
                     }
-                    b"p:grpSpPr" => {}
+                    b"grpSpPr" => {}
                     _ => {}
                 },
                 Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"p:grpSp" {
+                    if local_name(e.name().as_ref()) == b"grpSp" {
                         break;
                     }
                 }
@@ -225,12 +224,12 @@ fn parse_group_properties(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                if e.name().as_ref() == b"a:xfrm" {
+                if local_name(e.name().as_ref()) == b"xfrm" {
                     parse_transform(reader, &mut shape.transform, slide_path)?;
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"p:grpSpPr" {
+                if local_name(e.name().as_ref()) == b"grpSpPr" {
                     break;
                 }
             }

@@ -4,6 +4,7 @@ use super::{
 };
 use crate::error::ParseError;
 use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
+use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
 use crate::xml_utils::xml_error;
@@ -82,30 +83,30 @@ impl PptxParser {
         zip: &mut impl PackageReader,
         slide: &mut Slide,
     ) -> Result<(), ParseError> {
-        match event.name().as_ref() {
-            b"p:sld" => update_slide_visibility(slide, event),
-            b"p:cSld" => update_slide_name(slide, event),
-            b"p:sp" => {
+        match local_name(event.name().as_ref()) {
+            b"sld" => update_slide_visibility(slide, event),
+            b"cSld" => update_slide_name(slide, event),
+            b"sp" => {
                 let shape = self.parse_shape_sp(reader, event, slide_path, relationships)?;
                 self.push_slide_shape(slide, shape);
             }
-            b"p:pic" => {
+            b"pic" => {
                 let shape = self.parse_shape_pic(reader, event, slide_path, relationships)?;
                 self.push_slide_shape(slide, shape);
             }
-            b"p:graphicFrame" => {
+            b"graphicFrame" => {
                 let shape =
                     self.parse_shape_graphic_frame(reader, event, slide_path, relationships, zip)?;
                 self.push_slide_shape(slide, shape);
             }
-            b"p:grpSp" => {
+            b"grpSp" => {
                 let shape = self.parse_shape_group(reader, event, slide_path, relationships)?;
                 self.push_slide_shape(slide, shape);
             }
-            b"p:transition" => {
+            b"transition" => {
                 slide.transition = Some(Self::parse_slide_transition(reader, event, slide_path)?)
             }
-            b"p:timing" => {
+            b"timing" => {
                 slide.animations = Self::parse_slide_animations(reader, slide_path, relationships)?
             }
             _ => {}
@@ -209,7 +210,7 @@ impl PptxParser {
                         &mut embed_rel,
                         &mut link_rel,
                     );
-                    if e.name().as_ref() == b"p:spPr" {
+                    if local_name(e.name().as_ref()) == b"spPr" {
                         parse_shape_properties(reader, &mut shape, slide_path)?;
                     }
                 }
@@ -224,7 +225,7 @@ impl PptxParser {
                     );
                 }
                 Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"p:pic" {
+                    if local_name(e.name().as_ref()) == b"pic" {
                         break;
                     }
                 }
@@ -292,8 +293,8 @@ impl PptxParser {
         embed_rel: &mut Option<String>,
         link_rel: &mut Option<String>,
     ) {
-        match event.name().as_ref() {
-            b"p:cNvPr" => {
+        match local_name(event.name().as_ref()) {
+            b"cNvPr" => {
                 for attr in event.attributes().flatten() {
                     match attr.key.as_ref() {
                         b"name" => {
@@ -306,15 +307,19 @@ impl PptxParser {
                     }
                 }
             }
-            b"a:hlinkClick" => {
+            b"hlinkClick" => {
                 self.attach_hyperlink(shape, event, relationships, slide_path);
             }
-            b"a:blip" => {
+            b"blip" => {
                 for attr in event.attributes().flatten() {
-                    if attr.key.as_ref().ends_with(b":embed") {
-                        *embed_rel = Some(lossy_attr_value(&attr).to_string());
-                    } else if attr.key.as_ref().ends_with(b":link") {
-                        *link_rel = Some(lossy_attr_value(&attr).to_string());
+                    match local_name(attr.key.as_ref()) {
+                        b"embed" => {
+                            *embed_rel = Some(lossy_attr_value(&attr).to_string());
+                        }
+                        b"link" => {
+                            *link_rel = Some(lossy_attr_value(&attr).to_string());
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -358,7 +363,7 @@ impl PptxParser {
                     )?;
                 }
                 Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"p:graphicFrame" {
+                    if local_name(e.name().as_ref()) == b"graphicFrame" {
                         break;
                     }
                 }
@@ -419,7 +424,7 @@ impl PptxParser {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"p:transition" {
+                    if local_name(e.name().as_ref()) == b"transition" {
                         break;
                     }
                 }
@@ -448,7 +453,8 @@ impl PptxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => {
                     let name = e.name().as_ref().to_vec();
-                    if is_standard_animation(&name) || is_media_animation(&name) {
+                    let local = local_name(&name);
+                    if is_standard_animation(local) || is_media_animation(local) {
                         let anim = build_animation_from_event(
                             &name,
                             e.attributes().flatten(),
@@ -457,15 +463,16 @@ impl PptxParser {
                         );
                         animations.push(anim);
                         current_index = Some(animations.len() - 1);
-                    } else if name.as_slice() == b"p:spTgt" {
+                    } else if local == b"spTgt" {
                         apply_sp_target(&mut animations, current_index, e.attributes().flatten());
                     }
                 }
                 Ok(Event::Empty(e)) => {
                     let name = e.name().as_ref().to_vec();
-                    if name.as_slice() == b"p:spTgt" {
+                    let local = local_name(&name);
+                    if local == b"spTgt" {
                         apply_sp_target(&mut animations, current_index, e.attributes().flatten());
-                    } else if is_media_animation(&name) {
+                    } else if is_media_animation(local) {
                         let anim = build_animation_from_event(
                             &name,
                             e.attributes().flatten(),
@@ -476,7 +483,7 @@ impl PptxParser {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"p:timing" {
+                    if local_name(e.name().as_ref()) == b"timing" {
                         break;
                     }
                 }
@@ -515,12 +522,12 @@ fn update_slide_name(slide: &mut Slide, event: &BytesStart<'_>) {
 fn is_standard_animation(name: &[u8]) -> bool {
     matches!(
         name,
-        b"p:anim" | b"p:animEffect" | b"p:animMotion" | b"p:animRot" | b"p:animScale" | b"p:seq"
+        b"anim" | b"animEffect" | b"animMotion" | b"animRot" | b"animScale" | b"seq"
     )
 }
 
 fn is_media_animation(name: &[u8]) -> bool {
-    name.ends_with(b":audio") || name.ends_with(b":video")
+    name == b"audio" || name == b"video"
 }
 
 fn build_animation_from_event<'a, I>(
@@ -552,7 +559,7 @@ where
             b"presetClass" => {
                 anim.preset_class = Some(lossy_attr_value(&attr).to_string());
             }
-            key if key.ends_with(b":link") || key.ends_with(b":embed") => {
+            key if matches!(local_name(key), b"link" | b"embed") => {
                 let rel_id = lossy_attr_value(&attr).to_string();
                 anim.target = Some(resolve_animation_target(slide_path, relationships, rel_id));
             }

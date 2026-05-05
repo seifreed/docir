@@ -7,7 +7,7 @@ use crate::ooxml::docx::document::{
 };
 use crate::ooxml::docx::DocxParser;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{attr_value, XmlScanControl};
+use crate::xml_utils::{attr_value, local_name, XmlScanControl};
 use docir_core::ir::{Revision, RevisionType};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::events::{BytesStart, Event};
@@ -38,7 +38,7 @@ pub(crate) fn parse_run(
     super::scan_docx_xml_events_until_end(
         reader,
         &mut buf,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"w:r"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"r"),
         |reader, event| {
             match event {
                 Event::Start(start) => {
@@ -84,45 +84,45 @@ fn handle_run_start_event(
     start: &BytesStart<'_>,
     state: &mut RunParseState,
 ) -> Result<(), ParseError> {
-    match start.name().as_ref() {
-        b"w:rPr" => {
+    match local_name(start.name().as_ref()) {
+        b"rPr" => {
             super::parse_run_properties(reader, &mut state.props)?;
         }
-        b"w:drawing" => {
+        b"drawing" => {
             if let Some(shape_id) = parse_drawing(parser, reader, rels)? {
                 state.embedded.push(shape_id);
             }
         }
-        b"w:pict" => {
+        b"pict" => {
             if let Some(shape_id) = parse_vml_pict(parser, reader, rels)? {
                 state.embedded.push(shape_id);
             }
         }
-        b"w:footnoteReference" => push_note_reference_if_present(
+        b"footnoteReference" => push_note_reference_if_present(
             parser,
             reader,
             start,
             docir_core::ir::FieldKind::FootnoteRef,
             &mut state.embedded,
         ),
-        b"w:endnoteReference" => push_note_reference_if_present(
+        b"endnoteReference" => push_note_reference_if_present(
             parser,
             reader,
             start,
             docir_core::ir::FieldKind::EndnoteRef,
             &mut state.embedded,
         ),
-        b"w:fldChar" => {
+        b"fldChar" => {
             state.field_char = attr_value(start, b"w:fldCharType");
         }
-        b"w:t" | b"w:instrText" | b"w:delText" => {
+        b"t" | b"instrText" | b"delText" => {
             let content = reader.read_text(start.name()).unwrap_or_default();
-            if start.name().as_ref() == b"w:instrText" {
+            if local_name(start.name().as_ref()) == b"instrText" {
                 state.has_instr = true;
             }
             state.text.push_str(&content);
         }
-        b"w:tab" => state.text.push('\t'),
+        b"tab" => state.text.push('\t'),
         _ => {}
     }
     Ok(())
@@ -134,35 +134,29 @@ fn handle_run_empty_event(
     start: &BytesStart<'_>,
     state: &mut RunParseState,
 ) -> Result<(), ParseError> {
-    if start.name().as_ref() == b"w:tab" {
-        state.text.push('\t');
-        return Ok(());
-    }
-    if start.name().as_ref() == b"w:fldChar" {
-        state.field_char = attr_value(start, b"w:fldCharType");
-        return Ok(());
-    }
-    if start.name().as_ref() == b"w:footnoteReference" {
-        push_note_reference_if_present(
+    match local_name(start.name().as_ref()) {
+        b"tab" => {
+            state.text.push('\t');
+        }
+        b"fldChar" => {
+            state.field_char = attr_value(start, b"w:fldCharType");
+        }
+        b"footnoteReference" => push_note_reference_if_present(
             parser,
             reader,
             start,
             docir_core::ir::FieldKind::FootnoteRef,
             &mut state.embedded,
-        );
-        return Ok(());
-    }
-    if start.name().as_ref() == b"w:endnoteReference" {
-        push_note_reference_if_present(
+        ),
+        b"endnoteReference" => push_note_reference_if_present(
             parser,
             reader,
             start,
             docir_core::ir::FieldKind::EndnoteRef,
             &mut state.embedded,
-        );
-        return Ok(());
+        ),
+        _ => {}
     }
-
     Ok(())
 }
 
@@ -250,9 +244,9 @@ fn parse_revision(
                 event,
                 Event::End(e)
                     if matches!(
-                        e.name().as_ref(),
-                        b"w:ins" | b"w:del" | b"w:moveFrom" | b"w:moveTo" | b"w:pPrChange"
-                            | b"w:rPrChange"
+                        local_name(e.name().as_ref()),
+                        b"ins" | b"del" | b"moveFrom" | b"moveTo" | b"pPrChange"
+                            | b"rPrChange"
                     )
             )
         },
@@ -260,22 +254,22 @@ fn parse_revision(
             if let Event::Start(e) = event {
                 match mode {
                     RevisionParseMode::Inline => {
-                        if e.name().as_ref() == b"w:r" {
+                        if local_name(e.name().as_ref()) == b"r" {
                             let run = parse_run(parser, reader, rels)?;
                             revision.content.push(run.run_id);
                             revision.content.extend(run.embedded);
                         }
                     }
-                    RevisionParseMode::Block => match e.name().as_ref() {
-                        b"w:p" => {
+                    RevisionParseMode::Block => match local_name(e.name().as_ref()) {
+                        b"p" => {
                             let para_id = parse_paragraph_simple(parser, reader, rels)?;
                             revision.content.push(para_id);
                         }
-                        b"w:tbl" => {
+                        b"tbl" => {
                             let table_id = parse_table(parser, reader, rels)?;
                             revision.content.push(table_id);
                         }
-                        b"w:r" => {
+                        b"r" => {
                             let run = parse_run(parser, reader, rels)?;
                             revision.content.push(run.run_id);
                             revision.content.extend(run.embedded);
@@ -308,13 +302,13 @@ pub(crate) fn parse_sdt(
     super::scan_docx_xml_events_until_end_with_handlers(
         reader,
         &mut buf,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"w:sdt"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"sdt"),
         |reader, start| {
-            match start.name().as_ref() {
-                b"w:sdtPr" => {
+            match local_name(start.name().as_ref()) {
+                b"sdtPr" => {
                     parse_sdt_properties(reader, &mut control)?;
                 }
-                b"w:sdtContent" => {
+                b"sdtContent" => {
                     let content = match mode {
                         SdtMode::Block => parse_sdt_content_block(parser, reader, rels)?,
                         SdtMode::Inline => parse_sdt_content_inline(parser, reader, rels)?,
@@ -346,36 +340,36 @@ fn parse_sdt_properties(
     super::scan_docx_xml_events_until_end(
         reader,
         &mut buf,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"w:sdtPr"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"sdtPr"),
         |_reader, event| {
             match event {
-                Event::Start(e) | Event::Empty(e) => match e.name().as_ref() {
-                    b"w:tag" => {
+                Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
+                    b"tag" => {
                         if let Some(val) = attr_value(e, b"w:val") {
                             control.tag = Some(val);
                             #[cfg(test)]
                             eprintln!("parse_sdt_properties tag={:?}", control.tag);
                         }
                     }
-                    b"w:alias" => {
+                    b"alias" => {
                         if let Some(val) = attr_value(e, b"w:val") {
                             control.alias = Some(val);
                             #[cfg(test)]
                             eprintln!("parse_sdt_properties alias={:?}", control.alias);
                         }
                     }
-                    b"w:id" => {
+                    b"id" => {
                         if let Some(val) = attr_value(e, b"w:val") {
                             control.sdt_id = Some(val);
                         }
                     }
-                    b"w:comboBox" => control.control_type = Some("comboBox".to_string()),
-                    b"w:dropDownList" => control.control_type = Some("dropDownList".to_string()),
-                    b"w:date" => control.control_type = Some("date".to_string()),
-                    b"w:checkbox" => control.control_type = Some("checkbox".to_string()),
-                    b"w:text" => control.control_type = Some("text".to_string()),
-                    b"w:picture" => control.control_type = Some("picture".to_string()),
-                    b"w:dataBinding" => {
+                    b"comboBox" => control.control_type = Some("comboBox".to_string()),
+                    b"dropDownList" => control.control_type = Some("dropDownList".to_string()),
+                    b"date" => control.control_type = Some("date".to_string()),
+                    b"checkbox" => control.control_type = Some("checkbox".to_string()),
+                    b"text" => control.control_type = Some("text".to_string()),
+                    b"picture" => control.control_type = Some("picture".to_string()),
+                    b"dataBinding" => {
                         control.data_binding_xpath = attr_value(e, b"w:xpath");
                         control.data_binding_store_item_id = attr_value(e, b"w:storeItemID");
                         control.data_binding_prefix_mappings = attr_value(e, b"w:prefixMappings");
@@ -405,18 +399,18 @@ fn parse_sdt_content_block(
     super::scan_docx_xml_events_until_end_start_only(
         reader,
         &mut buf,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"w:sdtContent"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"sdtContent"),
         |reader, start| {
-            match start.name().as_ref() {
-                b"w:p" => {
+            match local_name(start.name().as_ref()) {
+                b"p" => {
                     let para_id = parse_paragraph_simple(parser, reader, rels)?;
                     content.push(para_id);
                 }
-                b"w:tbl" => {
+                b"tbl" => {
                     let table_id = parse_table(parser, reader, rels)?;
                     content.push(table_id);
                 }
-                b"w:sdt" => {
+                b"sdt" => {
                     let sdt_id = parse_sdt(parser, reader, rels, SdtMode::Block)?;
                     content.push(sdt_id);
                 }
@@ -439,7 +433,7 @@ fn parse_sdt_content_inline(
     super::scan_docx_xml_events_until_end_start_only(
         reader,
         &mut buf,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"w:sdtContent"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"sdtContent"),
         |reader, start| {
             handle_sdt_content_inline_start(parser, reader, rels, start, &mut runs)?;
             Ok(())
@@ -456,51 +450,51 @@ fn handle_sdt_content_inline_start(
     start: &BytesStart<'_>,
     runs: &mut Vec<NodeId>,
 ) -> Result<(), ParseError> {
-    match start.name().as_ref() {
-        b"w:r" => {
+    match local_name(start.name().as_ref()) {
+        b"r" => {
             let run = parse_run(parser, reader, rels)?;
             runs.push(run.run_id);
             runs.extend(run.embedded);
         }
-        b"w:hyperlink" => {
+        b"hyperlink" => {
             let link_id = super::parse_hyperlink(parser, reader, rels, start)?;
             runs.push(link_id);
         }
-        b"w:fldSimple" => {
+        b"fldSimple" => {
             let instr = attr_value(start, b"w:instr");
             let field_id = super::parse_field(parser, reader, instr)?;
             runs.push(field_id);
         }
-        b"w:commentRangeStart" => {
+        b"commentRangeStart" => {
             if let Some(node_id) = insert_comment_range_start(parser, start) {
                 runs.push(node_id);
             }
         }
-        b"w:commentRangeEnd" => {
+        b"commentRangeEnd" => {
             if let Some(node_id) = insert_comment_range_end(parser, start) {
                 runs.push(node_id);
             }
         }
-        b"w:commentReference" => {
+        b"commentReference" => {
             if let Some(node_id) = insert_comment_reference(parser, start) {
                 runs.push(node_id);
             }
         }
-        b"w:bookmarkStart" => {
+        b"bookmarkStart" => {
             if let Some(node_id) = insert_bookmark_start(parser, start) {
                 runs.push(node_id);
             }
         }
-        b"w:bookmarkEnd" => {
+        b"bookmarkEnd" => {
             if let Some(node_id) = insert_bookmark_end(parser, start) {
                 runs.push(node_id);
             }
         }
-        b"w:ins" => {
+        b"ins" => {
             let rev_id = parse_revision_inline(parser, reader, rels, start, RevisionType::Insert)?;
             runs.push(rev_id);
         }
-        b"w:del" => {
+        b"del" => {
             let rev_id = parse_revision_inline(parser, reader, rels, start, RevisionType::Delete)?;
             runs.push(rev_id);
         }

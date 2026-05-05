@@ -1,7 +1,7 @@
 use super::super::{parse_border, parse_paragraph_simple, span_from_reader, DocxParser};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{attr_value, xml_error};
+use crate::xml_utils::{attr_value, local_name, xml_error};
 use docir_core::ir::{
     CellMargins, CellVerticalAlignment, MergeType, RowHeight, RowHeightRule, Table, TableAlignment,
     TableBorders, TableCell, TableCellProperties, TableRow, TableWidth, TableWidthType,
@@ -20,21 +20,21 @@ pub(crate) fn parse_table(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"w:tblPr" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"tblPr" => {
                     parse_table_properties(reader, &mut table.properties)?;
                 }
-                b"w:tblGrid" => {
+                b"tblGrid" => {
                     table.grid = parse_table_grid(reader)?;
                 }
-                b"w:tr" => {
+                b"tr" => {
                     let row_id = parse_table_row(parser, reader, rels)?;
                     table.rows.push(row_id);
                 }
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:tbl" {
+                if local_name(e.name().as_ref()) == b"tbl" {
                     break;
                 }
             }
@@ -63,18 +63,18 @@ pub(crate) fn parse_table_row(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"w:trPr" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"trPr" => {
                     parse_table_row_properties(reader, &mut row.properties)?;
                 }
-                b"w:tc" => {
+                b"tc" => {
                     let cell_id = parse_table_cell(parser, reader, rels)?;
                     row.cells.push(cell_id);
                 }
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:tr" {
+                if local_name(e.name().as_ref()) == b"tr" {
                     break;
                 }
             }
@@ -103,22 +103,22 @@ pub(crate) fn parse_table_cell(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"w:tcPr" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"tcPr" => {
                     parse_table_cell_properties(reader, &mut cell.properties)?;
                 }
-                b"w:p" => {
+                b"p" => {
                     let para_id = parse_paragraph_simple(parser, reader, rels)?;
                     cell.content.push(para_id);
                 }
-                b"w:tbl" => {
+                b"tbl" => {
                     let table_id = parse_table(parser, reader, rels)?;
                     cell.content.push(table_id);
                 }
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:tc" {
+                if local_name(e.name().as_ref()) == b"tc" {
                     break;
                 }
             }
@@ -148,7 +148,7 @@ pub(crate) fn parse_table_cell_properties(
                 apply_table_cell_property_event(reader, &e, props)?
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:tcPr" {
+                if local_name(e.name().as_ref()) == b"tcPr" {
                     break;
                 }
             }
@@ -168,8 +168,8 @@ fn apply_table_cell_property_event(
     event: &BytesStart<'_>,
     props: &mut TableCellProperties,
 ) -> Result<(), ParseError> {
-    match event.name().as_ref() {
-        b"w:tcW" => {
+    match local_name(event.name().as_ref()) {
+        b"tcW" => {
             if let Some(val) = attr_value(event, b"w:w").and_then(|v| v.parse().ok()) {
                 let width_type = match attr_value(event, b"w:type").as_deref() {
                     Some("dxa") => TableWidthType::Dxa,
@@ -183,12 +183,12 @@ fn apply_table_cell_property_event(
                 });
             }
         }
-        b"w:gridSpan" => {
+        b"gridSpan" => {
             if let Some(val) = attr_value(event, b"w:val").and_then(|v| v.parse().ok()) {
                 props.grid_span = Some(val);
             }
         }
-        b"w:vMerge" => {
+        b"vMerge" => {
             let merge = match attr_value(event, b"w:val").as_deref() {
                 Some("restart") => MergeType::Restart,
                 Some("continue") => MergeType::Continue,
@@ -196,7 +196,7 @@ fn apply_table_cell_property_event(
             };
             props.vertical_merge = Some(merge);
         }
-        b"w:vAlign" => {
+        b"vAlign" => {
             if let Some(val) = attr_value(event, b"w:val") {
                 props.vertical_align = match val.as_str() {
                     "center" => Some(CellVerticalAlignment::Center),
@@ -205,12 +205,12 @@ fn apply_table_cell_property_event(
                 };
             }
         }
-        b"w:tcBorders" => {
-            if let Some(borders) = parse_table_borders(reader, b"w:tcBorders")? {
+        b"tcBorders" => {
+            if let Some(borders) = parse_table_borders(reader, b"tcBorders")? {
                 props.borders = Some(borders);
             }
         }
-        b"w:shd" => {
+        b"shd" => {
             if let Some(fill) = attr_value(event, b"w:fill") {
                 props.shading = Some(fill);
             }
@@ -229,13 +229,13 @@ pub(crate) fn parse_table_properties(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
                 apply_table_property_attrs(&e, props);
-                match e.name().as_ref() {
-                    b"w:tblBorders" => {
-                        if let Some(borders) = parse_table_borders(reader, b"w:tblBorders")? {
+                match local_name(e.name().as_ref()) {
+                    b"tblBorders" => {
+                        if let Some(borders) = parse_table_borders(reader, b"tblBorders")? {
                             props.borders = Some(borders);
                         }
                     }
-                    b"w:tblCellMar" => {
+                    b"tblCellMar" => {
                         if let Some(margins) = parse_cell_margins(reader)? {
                             props.cell_margins = Some(margins);
                         }
@@ -247,7 +247,7 @@ pub(crate) fn parse_table_properties(
                 apply_table_property_attrs(&e, props);
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:tblPr" {
+                if local_name(e.name().as_ref()) == b"tblPr" {
                     break;
                 }
             }
@@ -263,8 +263,8 @@ pub(crate) fn parse_table_properties(
 }
 
 fn apply_table_property_attrs(event: &BytesStart<'_>, props: &mut docir_core::ir::TableProperties) {
-    match event.name().as_ref() {
-        b"w:tblW" => {
+    match local_name(event.name().as_ref()) {
+        b"tblW" => {
             if let Some(val) = attr_value(event, b"w:w").and_then(|v| v.parse().ok()) {
                 let width_type = match attr_value(event, b"w:type").as_deref() {
                     Some("dxa") => TableWidthType::Dxa,
@@ -278,7 +278,7 @@ fn apply_table_property_attrs(event: &BytesStart<'_>, props: &mut docir_core::ir
                 });
             }
         }
-        b"w:jc" => {
+        b"jc" => {
             if let Some(val) = attr_value(event, b"w:val") {
                 props.alignment = match val.as_str() {
                     "center" => Some(TableAlignment::Center),
@@ -287,7 +287,7 @@ fn apply_table_property_attrs(event: &BytesStart<'_>, props: &mut docir_core::ir
                 };
             }
         }
-        b"w:tblStyle" => {
+        b"tblStyle" => {
             if let Some(val) = attr_value(event, b"w:val") {
                 props.style_id = Some(val);
             }
@@ -304,14 +304,14 @@ pub(crate) fn parse_table_grid(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"w:gridCol" {
+                if local_name(e.name().as_ref()) == b"gridCol" {
                     if let Some(val) = attr_value(&e, b"w:w").and_then(|v| v.parse().ok()) {
                         grid.push(docir_core::ir::GridColumn { width: val });
                     }
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:tblGrid" {
+                if local_name(e.name().as_ref()) == b"tblGrid" {
                     break;
                 }
             }
@@ -333,8 +333,8 @@ pub(crate) fn parse_table_row_properties(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"w:trHeight" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"trHeight" => {
                     if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
                         let rule = match attr_value(&e, b"w:hRule").as_deref() {
                             Some("exact") => RowHeightRule::Exact,
@@ -344,14 +344,14 @@ pub(crate) fn parse_table_row_properties(
                         props.height = Some(RowHeight { value: val, rule });
                     }
                 }
-                b"w:tblHeader" => {
+                b"tblHeader" => {
                     let is_header = !matches!(
                         attr_value(&e, b"w:val").as_deref(),
                         Some("0") | Some("false")
                     );
                     props.is_header = Some(is_header);
                 }
-                b"w:cantSplit" => {
+                b"cantSplit" => {
                     let cant_split = !matches!(
                         attr_value(&e, b"w:val").as_deref(),
                         Some("0") | Some("false")
@@ -361,7 +361,7 @@ pub(crate) fn parse_table_row_properties(
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:trPr" {
+                if local_name(e.name().as_ref()) == b"trPr" {
                     break;
                 }
             }
@@ -390,28 +390,28 @@ fn parse_table_borders(
                 if border.is_none() {
                     continue;
                 }
-                match e.name().as_ref() {
-                    b"w:top" => {
+                match local_name(e.name().as_ref()) {
+                    b"top" => {
                         borders.top = border;
                         has_any = true;
                     }
-                    b"w:bottom" => {
+                    b"bottom" => {
                         borders.bottom = border;
                         has_any = true;
                     }
-                    b"w:left" => {
+                    b"left" => {
                         borders.left = border;
                         has_any = true;
                     }
-                    b"w:right" => {
+                    b"right" => {
                         borders.right = border;
                         has_any = true;
                     }
-                    b"w:insideH" => {
+                    b"insideH" => {
                         borders.inside_h = border;
                         has_any = true;
                     }
-                    b"w:insideV" => {
+                    b"insideV" => {
                         borders.inside_v = border;
                         has_any = true;
                     }
@@ -419,7 +419,7 @@ fn parse_table_borders(
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == end_tag {
+                if local_name(e.name().as_ref()) == local_name(end_tag) {
                     break;
                 }
             }
@@ -446,20 +446,20 @@ fn parse_cell_margins(reader: &mut Reader<&[u8]>) -> Result<Option<CellMargins>,
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let val = attr_value(&e, b"w:w").and_then(|v| v.parse().ok());
-                match e.name().as_ref() {
-                    b"w:top" => {
+                match local_name(e.name().as_ref()) {
+                    b"top" => {
                         margins.top = val;
                         has_any = true;
                     }
-                    b"w:bottom" => {
+                    b"bottom" => {
                         margins.bottom = val;
                         has_any = true;
                     }
-                    b"w:left" => {
+                    b"left" => {
                         margins.left = val;
                         has_any = true;
                     }
-                    b"w:right" => {
+                    b"right" => {
                         margins.right = val;
                         has_any = true;
                     }
@@ -467,7 +467,7 @@ fn parse_cell_margins(reader: &mut Reader<&[u8]>) -> Result<Option<CellMargins>,
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:tblCellMar" {
+                if local_name(e.name().as_ref()) == b"tblCellMar" {
                     break;
                 }
             }

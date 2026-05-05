@@ -1,8 +1,8 @@
 #[cfg(test)]
 use super::ShapeType;
 use super::{map_shape_type, parse_transform, ParseError, Reader, Shape};
-use crate::xml_utils::{lossy_attr_value, xml_error};
-use quick_xml::events::Event;
+use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
+use quick_xml::events::{BytesStart, Event};
 
 pub(super) fn parse_shape_properties(
     reader: &mut Reader<&[u8]>,
@@ -12,21 +12,22 @@ pub(super) fn parse_shape_properties(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"a:prstGeom" => {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"prst" {
-                            shape.shape_type = map_shape_type(&lossy_attr_value(&attr));
-                        }
-                    }
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"prstGeom" => {
+                    apply_preset_geometry(&e, shape);
                 }
-                b"a:xfrm" => {
+                b"xfrm" => {
                     parse_transform(reader, &mut shape.transform, slide_path)?;
                 }
                 _ => {}
             },
+            Ok(Event::Empty(e)) => {
+                if local_name(e.name().as_ref()) == b"prstGeom" {
+                    apply_preset_geometry(&e, shape);
+                }
+            }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"p:spPr" {
+                if local_name(e.name().as_ref()) == b"spPr" {
                     break;
                 }
             }
@@ -40,6 +41,14 @@ pub(super) fn parse_shape_properties(
     }
 
     Ok(())
+}
+
+fn apply_preset_geometry(start: &BytesStart<'_>, shape: &mut Shape) {
+    for attr in start.attributes().flatten() {
+        if local_name(attr.key.as_ref()) == b"prst" {
+            shape.shape_type = map_shape_type(&lossy_attr_value(&attr));
+        }
+    }
 }
 
 #[cfg(test)]

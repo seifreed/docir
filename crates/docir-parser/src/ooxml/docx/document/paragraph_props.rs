@@ -1,6 +1,6 @@
 use super::super::{apply_section_refs, bool_from_val, parse_border, parse_numbering, SectionRef};
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value, xml_error};
+use crate::xml_utils::{attr_value, local_name, xml_error};
 use docir_core::ir::Paragraph;
 use docir_core::ir::{LineSpacingRule, TextAlignment};
 use docir_core::types::NodeId;
@@ -27,30 +27,30 @@ pub(crate) fn parse_paragraph_properties(
     let mut section_ref: Option<SectionRef> = None;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"w:pStyle" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"pStyle" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
                         para.style_id = Some(val);
                     }
                 }
-                b"w:keepNext" => {
+                b"keepNext" => {
                     para.properties.keep_next = Some(bool_from_val(&e));
                 }
-                b"w:keepLines" => {
+                b"keepLines" => {
                     para.properties.keep_lines = Some(bool_from_val(&e));
                 }
-                b"w:pageBreakBefore" => {
+                b"pageBreakBefore" => {
                     para.properties.page_break_before = Some(bool_from_val(&e));
                 }
-                b"w:widowControl" => {
+                b"widowControl" => {
                     para.properties.widow_control = Some(bool_from_val(&e));
                 }
-                b"w:jc" => {
+                b"jc" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
                         para.properties.alignment = Some(alignment_from_val(val.as_str()));
                     }
                 }
-                b"w:ind" => {
+                b"ind" => {
                     let mut indent = para.properties.indentation.clone().unwrap_or_default();
                     if let Some(val) = attr_value(&e, b"w:left").and_then(|v| v.parse().ok()) {
                         indent.left = Some(val);
@@ -66,7 +66,7 @@ pub(crate) fn parse_paragraph_properties(
                     }
                     para.properties.indentation = Some(indent);
                 }
-                b"w:spacing" => {
+                b"spacing" => {
                     let mut spacing = para.properties.spacing.clone().unwrap_or_default();
                     if let Some(val) = attr_value(&e, b"w:before").and_then(|v| v.parse().ok()) {
                         spacing.before = Some(val);
@@ -87,26 +87,26 @@ pub(crate) fn parse_paragraph_properties(
                     }
                     para.properties.spacing = Some(spacing);
                 }
-                b"w:pBdr" => {
+                b"pBdr" => {
                     if let Some(borders) = parse_paragraph_borders(reader)? {
                         para.properties.borders = Some(borders);
                     }
                 }
-                b"w:outlineLvl" => {
+                b"outlineLvl" => {
                     if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
                         para.properties.outline_level = Some(val);
                     }
                 }
-                b"w:numPr" => {
+                b"numPr" => {
                     parse_numbering(reader, &mut para.properties)?;
                 }
-                b"w:sectPr" => {
+                b"sectPr" => {
                     section_ref = Some(apply_section_refs(reader, header_footer_map)?);
                 }
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:pPr" {
+                if local_name(e.name().as_ref()) == b"pPr" {
                     break;
                 }
             }
@@ -134,20 +134,20 @@ pub(crate) fn parse_paragraph_borders(
                 if border.is_none() {
                     continue;
                 }
-                match e.name().as_ref() {
-                    b"w:top" => {
+                match local_name(e.name().as_ref()) {
+                    b"top" => {
                         borders.top = border;
                         has_any = true;
                     }
-                    b"w:bottom" => {
+                    b"bottom" => {
                         borders.bottom = border;
                         has_any = true;
                     }
-                    b"w:left" => {
+                    b"left" => {
                         borders.left = border;
                         has_any = true;
                     }
-                    b"w:right" => {
+                    b"right" => {
                         borders.right = border;
                         has_any = true;
                     }
@@ -155,7 +155,7 @@ pub(crate) fn parse_paragraph_borders(
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:pBdr" {
+                if local_name(e.name().as_ref()) == b"pBdr" {
                     break;
                 }
             }

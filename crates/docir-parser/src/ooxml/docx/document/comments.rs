@@ -1,7 +1,7 @@
 use super::{parse_block_until, DocxParser, NoteKind};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{attr_value, xml_error};
+use crate::xml_utils::{attr_value, local_name, xml_error};
 use docir_core::ir::{
     Comment, CommentExtension, CommentExtensionSet, CommentIdMap, CommentIdMapEntry, Endnote,
     Footnote, IRNode,
@@ -40,7 +40,7 @@ impl DocxParser {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
-                    if e.name().as_ref() == b"w16cid:commentExt" {
+                    if local_name(e.name().as_ref()) == b"commentExt" {
                         let comment_id = attr_value(&e, b"w:id").unwrap_or_default();
                         let entry = CommentExtension {
                             comment_id,
@@ -76,7 +76,7 @@ impl DocxParser {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
-                    if e.name().as_ref() == b"w16cid:commentId" {
+                    if local_name(e.name().as_ref()) == b"commentId" {
                         let entry = CommentIdMapEntry {
                             comment_id: attr_value(&e, b"w:id").unwrap_or_default(),
                             para_id: attr_value(&e, b"w16cid:paraId"),
@@ -114,8 +114,8 @@ fn parse_comments_like(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"w:comment" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"comment" => {
                     let comment_id = attr_value(&e, b"w:id").unwrap_or_default();
                     let mut comment = Comment::new(comment_id);
                     comment.author = attr_value(&e, b"w:author");
@@ -127,28 +127,28 @@ fn parse_comments_like(
                         comment.done = Some(v == "1" || v.eq_ignore_ascii_case("true"));
                     }
                     comment.date = attr_value(&e, b"w:date");
-                    comment.content = parse_block_until(parser, &mut reader, rels, b"w:comment")?;
+                    comment.content = parse_block_until(parser, &mut reader, rels, b"comment")?;
                     let id = comment.id;
                     parser.store.insert(IRNode::Comment(comment));
                     nodes.push(id);
                 }
-                b"w:footnote" => {
+                b"footnote" => {
                     if matches!(kind, Some(NoteKind::Footnote)) {
                         let note_id = attr_value(&e, b"w:id").unwrap_or_default();
                         let mut note = Footnote::new(note_id);
                         note.note_type = attr_value(&e, b"w:type");
-                        note.content = parse_block_until(parser, &mut reader, rels, b"w:footnote")?;
+                        note.content = parse_block_until(parser, &mut reader, rels, b"footnote")?;
                         let id = note.id;
                         parser.store.insert(IRNode::Footnote(note));
                         nodes.push(id);
                     }
                 }
-                b"w:endnote" => {
+                b"endnote" => {
                     if matches!(kind, Some(NoteKind::Endnote)) {
                         let note_id = attr_value(&e, b"w:id").unwrap_or_default();
                         let mut note = Endnote::new(note_id);
                         note.note_type = attr_value(&e, b"w:type");
-                        note.content = parse_block_until(parser, &mut reader, rels, b"w:endnote")?;
+                        note.content = parse_block_until(parser, &mut reader, rels, b"endnote")?;
                         let id = note.id;
                         parser.store.insert(IRNode::Endnote(note));
                         nodes.push(id);

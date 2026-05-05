@@ -5,7 +5,7 @@ use super::{parse_field_instruction, parse_run, DOC_XML_PATH};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::relationships::TargetMode;
-use crate::xml_utils::{attr_value_by_suffix, xml_error};
+use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 use docir_core::ir::RunProperties;
 use docir_core::ir::{Hyperlink, NumberingInfo, UnderlineStyle, VerticalTextAlignment};
 use docir_core::types::NodeId;
@@ -22,17 +22,17 @@ pub(crate) fn parse_numbering(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"w:numId" => {
+            Ok(Event::Empty(e)) | Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"numId" => {
                     num_id = attr_value(&e, b"w:val").and_then(|v| v.parse().ok());
                 }
-                b"w:ilvl" => {
+                b"ilvl" => {
                     level = attr_value(&e, b"w:val").and_then(|v| v.parse().ok());
                 }
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:numPr" {
+                if local_name(e.name().as_ref()) == b"numPr" {
                     break;
                 }
             }
@@ -62,25 +62,25 @@ pub(crate) fn parse_run_properties(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"w:rStyle" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"rStyle" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
                         props.style_id = Some(val);
                     }
                 }
-                b"w:rFonts" => {
+                b"rFonts" => {
                     if let Some(val) = attr_value(&e, b"w:ascii") {
                         props.font_family = Some(val);
                     }
                 }
-                b"w:sz" => {
+                b"sz" => {
                     if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
                         props.font_size = Some(val);
                     }
                 }
-                b"w:b" => props.bold = Some(true),
-                b"w:i" => props.italic = Some(true),
-                b"w:u" => {
+                b"b" => props.bold = Some(true),
+                b"i" => props.italic = Some(true),
+                b"u" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
                         props.underline = match val.as_str() {
                             "double" => Some(UnderlineStyle::Double),
@@ -93,24 +93,24 @@ pub(crate) fn parse_run_properties(
                         props.underline = Some(UnderlineStyle::Single);
                     }
                 }
-                b"w:strike" => props.strike = Some(true),
-                b"w:color" => {
+                b"strike" => props.strike = Some(true),
+                b"color" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
                         props.color = Some(val);
                     }
                 }
-                b"w:highlight" => {
+                b"highlight" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
                         props.highlight = Some(val);
                     }
                 }
-                b"w:caps" => {
+                b"caps" => {
                     props.all_caps = Some(bool_from_val(&e));
                 }
-                b"w:smallCaps" => {
+                b"smallCaps" => {
                     props.small_caps = Some(bool_from_val(&e));
                 }
-                b"w:vertAlign" => {
+                b"vertAlign" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
                         props.vertical_align = match val.as_str() {
                             "superscript" => Some(VerticalTextAlignment::Superscript),
@@ -122,7 +122,7 @@ pub(crate) fn parse_run_properties(
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:rPr" {
+                if local_name(e.name().as_ref()) == b"rPr" {
                     break;
                 }
             }
@@ -171,9 +171,9 @@ pub(crate) fn parse_hyperlink(
     super::scan_docx_xml_events_until_end_start_only(
         reader,
         &mut buf,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"w:hyperlink"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"hyperlink"),
         |reader, start| {
-            if start.name().as_ref() == b"w:r" {
+            if local_name(start.name().as_ref()) == b"r" {
                 let run = parse_run(parser, reader, rels)?;
                 link.runs.push(run.run_id);
             }
@@ -202,9 +202,9 @@ pub(crate) fn parse_field(
     super::scan_docx_xml_events_until_end_start_only(
         reader,
         &mut buf,
-        |event| matches!(event, Event::End(e) if e.name().as_ref() == b"w:fldSimple"),
+        |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"fldSimple"),
         |reader, start| {
-            if start.name().as_ref() == b"w:r" {
+            if local_name(start.name().as_ref()) == b"r" {
                 let run = parse_run(parser, reader, &Relationships::default())?;
                 field.runs.push(run.run_id);
             }

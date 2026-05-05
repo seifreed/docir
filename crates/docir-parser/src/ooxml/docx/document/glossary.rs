@@ -1,7 +1,7 @@
 use super::{parse_block_until, DocxParser};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{attr_value, read_event};
+use crate::xml_utils::{attr_value, local_name, read_event};
 use docir_core::ir::GlossaryEntry;
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -19,20 +19,20 @@ pub(super) fn parse_doc_part(
     loop {
         let event = read_event(reader, &mut buf, "word/glossary/document.xml")?;
         match event {
-            Event::Start(e) => match e.name().as_ref() {
-                b"w:docPartPr" => {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
+                b"docPartPr" => {
                     let (name, gallery) = parse_doc_part_pr(reader)?;
                     entry.name = name;
                     entry.gallery = gallery;
                 }
-                b"w:docPartBody" => {
-                    let content = parse_block_until(parser, reader, rels, b"w:docPartBody")?;
+                b"docPartBody" => {
+                    let content = parse_block_until(parser, reader, rels, b"docPartBody")?;
                     entry.content.extend(content);
                 }
                 _ => {}
             },
             Event::End(e) => {
-                if e.name().as_ref() == b"w:docPart" {
+                if local_name(e.name().as_ref()) == b"docPart" {
                     break;
                 }
             }
@@ -55,13 +55,13 @@ fn parse_doc_part_pr(
     loop {
         let event = read_event(reader, &mut buf, "word/glossary/document.xml")?;
         match event {
-            Event::Start(e) | Event::Empty(e) => match e.name().as_ref() {
-                b"w:name" => {
+            Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
+                b"name" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
                         name = Some(val);
                     }
                 }
-                b"w:gallery" => {
+                b"gallery" => {
                     if let Some(val) = attr_value(&e, b"w:val") {
                         gallery = Some(val);
                     }
@@ -69,7 +69,7 @@ fn parse_doc_part_pr(
                 _ => {}
             },
             Event::End(e) => {
-                if e.name().as_ref() == b"w:docPartPr" {
+                if local_name(e.name().as_ref()) == b"docPartPr" {
                     break;
                 }
             }

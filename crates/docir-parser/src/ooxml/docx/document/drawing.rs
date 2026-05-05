@@ -3,7 +3,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{
-    attr_bool_like, attr_u32_from_bytes, attr_value, attr_value_by_suffix, xml_error,
+    attr_bool_like, attr_u32_from_bytes, attr_value, attr_value_by_suffix, local_name, xml_error,
 };
 use docir_core::ir::{
     Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeTransform, ShapeType, TextAlignment,
@@ -33,13 +33,13 @@ pub(super) fn parse_drawing(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let name_bytes = e.name().as_ref().to_vec();
-                let name_slice = name_bytes.as_slice();
-                if name_slice == b"a:blip" {
+                let name_slice = local_name(name_bytes.as_slice());
+                if name_slice == b"blip" {
                     rel_id = attr_value_by_suffix(&e, &[b":embed", b":link"]);
-                } else if name_slice == b"wp:docPr" {
+                } else if name_slice == b"docPr" {
                     name = attr_value(&e, b"name");
                     alt_text = attr_value(&e, b"descr");
-                } else if name_slice == b"a:graphicData" {
+                } else if name_slice == b"graphicData" {
                     if let Some(uri) = attr_value(&e, b"uri") {
                         if uri.contains("chart") {
                             shape_type = docir_core::ir::ShapeType::Chart;
@@ -47,25 +47,25 @@ pub(super) fn parse_drawing(
                             shape_type = docir_core::ir::ShapeType::Custom;
                         }
                     }
-                } else if name_slice == b"a:prstGeom" {
+                } else if name_slice == b"prstGeom" {
                     if let Some(val) = attr_value(&e, b"prst") {
                         shape_type = map_shape_type(&val);
                     }
-                } else if name_slice == b"wp:extent" || name_slice == b"a:ext" {
+                } else if name_slice == b"extent" || name_slice == b"ext" {
                     if let Some(val) = attr_value(&e, b"cx").and_then(|v| v.parse().ok()) {
                         transform.width = val;
                     }
                     if let Some(val) = attr_value(&e, b"cy").and_then(|v| v.parse().ok()) {
                         transform.height = val;
                     }
-                } else if name_slice == b"a:off" {
+                } else if name_slice == b"off" {
                     if let Some(val) = attr_value(&e, b"x").and_then(|v| v.parse().ok()) {
                         transform.x = val;
                     }
                     if let Some(val) = attr_value(&e, b"y").and_then(|v| v.parse().ok()) {
                         transform.y = val;
                     }
-                } else if name_slice == b"wp:posOffset" {
+                } else if name_slice == b"posOffset" {
                     if let Ok(text) = reader.read_text(e.name()) {
                         if let Ok(val) = text.parse::<i64>() {
                             if next_pos_is_x {
@@ -76,11 +76,11 @@ pub(super) fn parse_drawing(
                             next_pos_is_x = !next_pos_is_x;
                         }
                     }
-                } else if name_slice == b"a:txBody" {
+                } else if name_slice == b"txBody" {
                     text = Some(parse_drawing_text_body(reader, "word/document.xml")?);
-                } else if name_slice.ends_with(b":chart") || name_slice == b"c:chart" {
+                } else if name_slice == b"chart" {
                     chart_rel = attr_value_by_suffix(&e, &[b":id"]);
-                } else if name_slice == b"dgm:relIds" {
+                } else if name_slice == b"relIds" {
                     if let Some(val) = attr_value_by_suffix(&e, &[b":dm"]) {
                         diagram_rel_ids.push(val);
                     }
@@ -93,12 +93,12 @@ pub(super) fn parse_drawing(
                     if let Some(val) = attr_value_by_suffix(&e, &[b":cs"]) {
                         diagram_rel_ids.push(val);
                     }
-                } else if name_slice == b"a:hlinkClick" {
+                } else if name_slice == b"hlinkClick" {
                     hyperlink_rel = attr_value_by_suffix(&e, &[b":id"]);
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:drawing" {
+                if local_name(e.name().as_ref()) == b"drawing" {
                     break;
                 }
             }
@@ -157,13 +157,13 @@ fn parse_drawing_text_body(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                if e.name().as_ref() == b"a:p" {
+                if local_name(e.name().as_ref()) == b"p" {
                     let paragraph = parse_drawing_text_paragraph(reader, doc_path)?;
                     paragraphs.push(paragraph);
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"a:txBody" {
+                if local_name(e.name().as_ref()) == b"txBody" {
                     break;
                 }
             }
@@ -189,15 +189,15 @@ fn parse_drawing_text_paragraph(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"a:pPr" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"pPr" => {
                     alignment = parse_paragraph_alignment(&e);
                 }
-                b"a:r" => {
+                b"r" => {
                     let run = parse_drawing_text_run(reader, doc_path)?;
                     runs.push(run);
                 }
-                b"a:br" => {
+                b"br" => {
                     runs.push(ShapeTextRun {
                         text: "\n".to_string(),
                         bold: None,
@@ -209,7 +209,7 @@ fn parse_drawing_text_paragraph(
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"a:p" {
+                if local_name(e.name().as_ref()) == b"p" {
                     break;
                 }
             }
@@ -238,23 +238,23 @@ fn parse_drawing_text_run(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"a:t" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"t" => {
                     let t = reader
                         .read_text(e.name())
                         .map_err(|e| xml_error(doc_path, e))?;
                     text.push_str(&t);
                 }
-                b"a:rPr" => {
+                b"rPr" => {
                     parse_run_style_attrs(&e, &mut bold, &mut italic, &mut font_size);
                 }
-                b"a:latin" => {
+                b"latin" => {
                     font_family = parse_run_font_family(&e);
                 }
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"a:r" {
+                if local_name(e.name().as_ref()) == b"r" {
                     break;
                 }
             }

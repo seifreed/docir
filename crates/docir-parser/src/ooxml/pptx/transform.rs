@@ -1,5 +1,5 @@
 use super::{ParseError, Reader, ShapeTransform};
-use crate::xml_utils::{lossy_attr_value, xml_error};
+use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
 use quick_xml::events::Event;
 
 pub(super) fn parse_transform(
@@ -10,8 +10,8 @@ pub(super) fn parse_transform(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"a:off" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"off" => {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"x" => {
@@ -24,7 +24,7 @@ pub(super) fn parse_transform(
                         }
                     }
                 }
-                b"a:ext" => {
+                b"ext" => {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"cx" => {
@@ -41,8 +41,8 @@ pub(super) fn parse_transform(
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"a:off" => {
+            Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"off" => {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"x" => {
@@ -55,7 +55,7 @@ pub(super) fn parse_transform(
                         }
                     }
                 }
-                b"a:ext" => {
+                b"ext" => {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"cx" => {
@@ -73,7 +73,7 @@ pub(super) fn parse_transform(
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"a:xfrm" || e.name().as_ref() == b"p:xfrm" {
+                if local_name(e.name().as_ref()) == b"xfrm" {
                     break;
                 }
             }

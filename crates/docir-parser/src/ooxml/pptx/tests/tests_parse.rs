@@ -64,6 +64,22 @@ fn test_parse_slide_list() {
 }
 
 #[test]
+fn test_parse_slide_list_accepts_alternate_namespace_prefixes() {
+    let xml = r#"
+        <pres:presentation xmlns:pres="http://schemas.openxmlformats.org/presentationml/2006/main"
+                           xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <pres:sldIdLst>
+            <pres:sldId rel:id="rId1"/>
+            <pres:sldId rel:id="rId2"/>
+          </pres:sldIdLst>
+        </pres:presentation>
+        "#;
+
+    let slides = parse_slide_list(xml).expect("parse prefixed slide list");
+    assert_eq!(slides, vec!["rId1", "rId2"]);
+}
+
+#[test]
 fn test_parse_slide_list_returns_xml_error_for_malformed_input() {
     let xml = r#"
         <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -149,6 +165,88 @@ fn test_parse_presentation_and_view_properties_extended() {
 }
 
 #[test]
+fn test_parse_pptx_metadata_accepts_alternate_namespace_prefixes() {
+    let presentation_xml = r#"
+        <pres:presentation xmlns:pres="http://schemas.openxmlformats.org/presentationml/2006/main"
+                           firstSlideNum="7">
+          <pres:sldSz cx="9144000" cy="6858000" type="screen16x9"/>
+          <pres:notesSz cx="6858000" cy="9144000"/>
+          <pres:showPr showType="kiosk" loop="1" showNarration="0" showAnimation="1" useTimings="1"/>
+        </pres:presentation>
+        "#;
+    let info = parse_presentation_info(presentation_xml, "ppt/presentation.xml")
+        .expect("presentation info")
+        .expect("info present");
+    assert_eq!(info.first_slide_num, Some(7));
+    assert_eq!(info.slide_size.as_ref().unwrap().cx, 9144000);
+    assert_eq!(
+        info.slide_size.as_ref().unwrap().size_type.as_deref(),
+        Some("screen16x9")
+    );
+    assert_eq!(info.notes_size.as_ref().unwrap().cy, 9144000);
+    assert_eq!(info.show_type.as_deref(), Some("kiosk"));
+    assert_eq!(info.show_loop, Some(true));
+
+    let pres_props_xml = r#"
+        <props:presentationPr xmlns:props="http://schemas.openxmlformats.org/presentationml/2006/main"
+                              removePersonalInfoOnSave="1"
+                              showInkAnnotation="0"/>
+        "#;
+    let props =
+        parse_presentation_properties(pres_props_xml, "ppt/presProps.xml").expect("pres props");
+    assert_eq!(props.remove_personal_info_on_save, Some(true));
+    assert_eq!(props.show_ink_annotation, Some(false));
+
+    let view_xml = r#"
+        <view:viewPr xmlns:view="http://schemas.openxmlformats.org/presentationml/2006/main"
+                     lastView="slideSorterView"
+                     showHiddenSlides="1">
+          <view:zoom percent="85"/>
+        </view:viewPr>
+        "#;
+    let view = parse_view_properties(view_xml, "ppt/viewProps.xml").expect("view props");
+    assert_eq!(view.last_view.as_deref(), Some("slideSorterView"));
+    assert_eq!(view.show_hidden_slides, Some(true));
+    assert_eq!(view.zoom, Some(85));
+
+    let table_styles_xml = r#"
+        <draw:tblStyleLst xmlns:draw="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          def="{default-style}">
+          <draw:tblStyle styleId="{style-1}" name="Table Style"/>
+        </draw:tblStyleLst>
+        "#;
+    let styles = parse_table_styles(table_styles_xml, "ppt/tableStyles.xml").expect("table styles");
+    assert_eq!(styles.default_style_id.as_deref(), Some("{default-style}"));
+    assert_eq!(styles.styles.len(), 1);
+    assert_eq!(styles.styles[0].name.as_deref(), Some("Table Style"));
+
+    let layout_xml = r#"
+        <layout:sldLayout xmlns:layout="http://schemas.openxmlformats.org/presentationml/2006/main"
+                          type="titleOnly"
+                          matchingName="Title Only"
+                          preserve="0"
+                          showMasterSp="true"
+                          showMasterPhAnim="0"/>
+        "#;
+    let layout = parse_slide_layout_meta(layout_xml, "ppt/slideLayouts/slideLayout1.xml")
+        .expect("layout meta");
+    assert_eq!(layout.layout_type.as_deref(), Some("titleOnly"));
+    assert_eq!(layout.matching_name.as_deref(), Some("Title Only"));
+
+    let master_xml = r#"
+        <master:sldMaster xmlns:master="http://schemas.openxmlformats.org/presentationml/2006/main"
+                          preserve="1"
+                          showMasterSp="1"
+                          showMasterPhAnim="0"/>
+        "#;
+    let master = parse_slide_master_meta(master_xml, "ppt/slideMasters/slideMaster1.xml")
+        .expect("master meta");
+    assert_eq!(master.preserve, Some(true));
+    assert_eq!(master.show_master_sp, Some(true));
+    assert_eq!(master.show_master_ph_anim, Some(false));
+}
+
+#[test]
 fn test_parse_slide_shapes() {
     let slide_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -215,6 +313,161 @@ fn test_parse_slide_shapes() {
     assert_eq!(shape.transform.width, 300);
     assert_eq!(shape.transform.height, 400);
     assert!(shape.text.is_some());
+}
+
+#[test]
+fn test_parse_slide_accepts_alternate_namespace_prefixes() {
+    let slide_xml = r#"
+        <deck:sld xmlns:deck="http://schemas.openxmlformats.org/presentationml/2006/main"
+                  xmlns:draw="http://schemas.openxmlformats.org/drawingml/2006/main"
+                  xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                  show="0">
+          <deck:cSld name="Prefixed Slide">
+            <deck:spTree>
+              <deck:sp>
+                <deck:nvSpPr>
+                  <deck:cNvPr id="1" name="Title" descr="Title alt"/>
+                </deck:nvSpPr>
+                <deck:spPr>
+                  <draw:xfrm>
+                    <draw:off x="100" y="200"/>
+                    <draw:ext cx="300" cy="400"/>
+                  </draw:xfrm>
+                  <draw:prstGeom prst="ellipse"/>
+                </deck:spPr>
+                <deck:txBody>
+                  <draw:p>
+                    <draw:pPr algn="ctr"/>
+                    <draw:r>
+                      <draw:rPr b="1" sz="2400"/>
+                      <draw:t>Hello</draw:t>
+                      <draw:latin typeface="Aptos"/>
+                    </draw:r>
+                  </draw:p>
+                </deck:txBody>
+              </deck:sp>
+              <deck:pic>
+                <deck:nvPicPr>
+                  <deck:cNvPr id="2" name="Picture 1" descr="Alt text"/>
+                </deck:nvPicPr>
+                <deck:blipFill>
+                  <draw:blip rel:embed="rIdImage"/>
+                </deck:blipFill>
+                <deck:spPr>
+                  <draw:xfrm>
+                    <draw:off x="10" y="20"/>
+                    <draw:ext cx="30" cy="40"/>
+                  </draw:xfrm>
+                </deck:spPr>
+              </deck:pic>
+              <deck:graphicFrame>
+                <deck:nvGraphicFramePr>
+                  <deck:cNvPr id="3" name="Table 1"/>
+                </deck:nvGraphicFramePr>
+                <draw:graphic>
+                  <draw:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">
+                    <draw:tbl>
+                      <draw:tblGrid><draw:gridCol w="1000"/></draw:tblGrid>
+                      <draw:tr>
+                        <draw:tc>
+                          <draw:txBody>
+                            <draw:p><draw:r><draw:t>Cell</draw:t></draw:r></draw:p>
+                          </draw:txBody>
+                        </draw:tc>
+                      </draw:tr>
+                    </draw:tbl>
+                  </draw:graphicData>
+                </draw:graphic>
+              </deck:graphicFrame>
+            </deck:spTree>
+          </deck:cSld>
+          <deck:transition spd="fast" advClick="1" advTm="500">
+            <deck:fade/>
+          </deck:transition>
+          <deck:timing>
+            <deck:tnLst>
+              <deck:par>
+                <deck:anim dur="300" presetID="1" presetClass="entr">
+                  <deck:tgtEl><deck:spTgt spid="1"/></deck:tgtEl>
+                </deck:anim>
+              </deck:par>
+            </deck:tnLst>
+          </deck:timing>
+        </deck:sld>
+        "#;
+    let rels = Relationships::parse(
+        r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rIdImage"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+            Target="../media/image1.png"/>
+        </Relationships>
+        "#,
+    )
+    .expect("rels");
+
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+    let slide_id = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/slide1.xml",
+            &rels,
+            (None, None),
+        )
+        .expect("parse prefixed slide");
+    let store = parser.into_store();
+
+    let slide = match store.get(slide_id) {
+        Some(IRNode::Slide(slide)) => slide,
+        _ => panic!("missing slide"),
+    };
+    assert!(slide.hidden);
+    assert_eq!(slide.name.as_deref(), Some("Prefixed Slide"));
+    assert_eq!(slide.shapes.len(), 3);
+    assert!(slide.transition.is_some());
+    assert_eq!(slide.animations.len(), 1);
+    assert_eq!(slide.animations[0].target.as_deref(), Some("1"));
+
+    let text_shape = match store.get(slide.shapes[0]) {
+        Some(IRNode::Shape(shape)) => shape,
+        _ => panic!("missing text shape"),
+    };
+    assert_eq!(text_shape.name.as_deref(), Some("Title"));
+    assert_eq!(text_shape.alt_text.as_deref(), Some("Title alt"));
+    assert_eq!(text_shape.shape_type, ShapeType::Ellipse);
+    assert_eq!(text_shape.transform.x, 100);
+    assert_eq!(text_shape.transform.width, 300);
+    assert_eq!(
+        shape_text_to_plain(text_shape.text.as_ref().expect("shape text")).as_str(),
+        "Hello"
+    );
+
+    let picture = match store.get(slide.shapes[1]) {
+        Some(IRNode::Shape(shape)) => shape,
+        _ => panic!("missing picture"),
+    };
+    assert_eq!(picture.shape_type, ShapeType::Picture);
+    assert_eq!(
+        picture.media_target.as_deref(),
+        Some("ppt/media/image1.png")
+    );
+    assert_eq!(picture.alt_text.as_deref(), Some("Alt text"));
+
+    let table_shape = match store.get(slide.shapes[2]) {
+        Some(IRNode::Shape(shape)) => shape,
+        _ => panic!("missing table shape"),
+    };
+    assert_eq!(table_shape.shape_type, ShapeType::Table);
+    let table_id = table_shape.table.expect("table id");
+    let table = match store.get(table_id) {
+        Some(IRNode::Table(table)) => table,
+        _ => panic!("missing table"),
+    };
+    assert_eq!(table.grid.len(), 1);
+    assert_eq!(table.rows.len(), 1);
 }
 
 #[test]

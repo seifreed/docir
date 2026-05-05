@@ -1,5 +1,5 @@
 use super::graphic_frame::GraphicFrameState;
-use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::{local_name, lossy_attr_value};
 use docir_core::ir::{Shape, ShapeType};
 use quick_xml::events::BytesStart;
 
@@ -34,8 +34,7 @@ pub(super) fn apply_graphic_data_shape_type(shape: &mut Shape, e: &BytesStart<'_
 
 pub(super) fn capture_chart_rel(state: &mut GraphicFrameState, e: &BytesStart<'_>) {
     for attr in e.attributes().flatten() {
-        let key = attr.key.as_ref();
-        if state.chart_rel.is_none() && (key == b"r:id" || key == b"id" || key.ends_with(b":id")) {
+        if state.chart_rel.is_none() && local_name(attr.key.as_ref()) == b"id" {
             let val = lossy_attr_value(&attr).to_string();
             if val.starts_with("rId") {
                 state.chart_rel = Some(val);
@@ -46,7 +45,7 @@ pub(super) fn capture_chart_rel(state: &mut GraphicFrameState, e: &BytesStart<'_
 
 pub(super) fn capture_ole_rel(state: &mut GraphicFrameState, e: &BytesStart<'_>) {
     for attr in e.attributes().flatten() {
-        if attr.key.as_ref().ends_with(b":id") {
+        if local_name(attr.key.as_ref()) == b"id" {
             state.ole_rel = Some(lossy_attr_value(&attr).to_string());
         }
     }

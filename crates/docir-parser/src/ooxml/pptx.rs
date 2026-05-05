@@ -7,7 +7,8 @@ use crate::ooxml::part_utils::{
 };
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
 use crate::xml_utils::{
-    attr_u32, attr_u64_from_bytes, attr_value, attr_value_by_suffix, read_event, xml_error,
+    attr_u32, attr_u64_from_bytes, attr_value, attr_value_by_suffix, local_name, read_event,
+    xml_error,
 };
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
@@ -97,11 +98,11 @@ impl PptxParser {
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"a:gridCol" => {
+                Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                    b"gridCol" => {
                         parse_grid_column(&e, &mut table);
                     }
-                    b"a:tr" => {
+                    b"tr" => {
                         let row = self.parse_pptx_table_row(reader, slide_path)?;
                         let id = row.id;
                         self.store.insert(IRNode::TableRow(row));
@@ -110,12 +111,12 @@ impl PptxParser {
                     _ => {}
                 },
                 Ok(Event::Empty(e)) => {
-                    if e.name().as_ref() == b"a:gridCol" {
+                    if local_name(e.name().as_ref()) == b"gridCol" {
                         parse_grid_column(&e, &mut table);
                     }
                 }
                 Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"a:tbl" {
+                    if local_name(e.name().as_ref()) == b"tbl" {
                         break;
                     }
                 }
@@ -143,7 +144,7 @@ impl PptxParser {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => {
-                    if e.name().as_ref() == b"a:tc" {
+                    if local_name(e.name().as_ref()) == b"tc" {
                         let cell = self.parse_pptx_table_cell(reader, slide_path)?;
                         let id = cell.id;
                         self.store.insert(IRNode::TableCell(cell));
@@ -151,7 +152,7 @@ impl PptxParser {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"a:tr" {
+                    if local_name(e.name().as_ref()) == b"tr" {
                         break;
                     }
                 }
@@ -179,7 +180,7 @@ impl PptxParser {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => {
-                    if e.name().as_ref() == b"a:txBody" {
+                    if local_name(e.name().as_ref()) == b"txBody" {
                         let text = parse_text_body_table(reader, slide_path)?;
                         let plain = shape_text_to_plain(&text);
                         if !plain.is_empty() {
@@ -195,7 +196,7 @@ impl PptxParser {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    if e.name().as_ref() == b"a:tc" {
+                    if local_name(e.name().as_ref()) == b"tc" {
                         break;
                     }
                 }
@@ -228,7 +229,7 @@ fn parse_slide_list(xml: &str) -> Result<Vec<String>, ParseError> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
-                if e.name().as_ref() == b"p:sldId" {
+                if local_name(e.name().as_ref()) == b"sldId" {
                     if let Some(rel_id) = attr_value_by_suffix(&e, &[b":id"]) {
                         slide_ids.push(rel_id);
                     }
@@ -308,13 +309,14 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let name_bytes = e.name().as_ref().to_vec();
                 let name = name_bytes.as_slice();
-                if name == b"p:sldSz" {
+                let name = local_name(name);
+                if name == b"sldSz" {
                     if let Some((cx, cy)) = parse_size_attrs(&e) {
                         let size_type = parse_size_type_attr(&e);
                         info.slide_size = Some(SlideSize { cx, cy, size_type });
                         found = true;
                     }
-                } else if name == b"p:notesSz" {
+                } else if name == b"notesSz" {
                     if let Some((cx, cy)) = parse_size_attrs(&e) {
                         info.notes_size = Some(SlideSize {
                             cx,
@@ -323,10 +325,10 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                         });
                         found = true;
                     }
-                } else if name == b"p:showPr" {
+                } else if name == b"showPr" {
                     apply_show_properties(&e, &mut info);
                     found = true;
-                } else if name == b"p:presentation" {
+                } else if name == b"presentation" {
                     if let Some(first_slide_num) = parse_u32_attr(&e, b"firstSlideNum") {
                         info.first_slide_num = Some(first_slide_num);
                         found = true;

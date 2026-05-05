@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{lossy_attr_value, xml_error};
+use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
 use docir_core::ir::{ShapeText, ShapeTextParagraph, ShapeTextRun, TextAlignment};
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -8,14 +8,14 @@ pub(super) fn parse_text_body(
     reader: &mut Reader<&[u8]>,
     slide_path: &str,
 ) -> Result<ShapeText, ParseError> {
-    parse_text_body_with_end(reader, slide_path, b"p:txBody")
+    parse_text_body_with_end(reader, slide_path, b"txBody")
 }
 
 pub(super) fn parse_text_body_table(
     reader: &mut Reader<&[u8]>,
     slide_path: &str,
 ) -> Result<ShapeText, ParseError> {
-    parse_text_body_with_end(reader, slide_path, b"a:txBody")
+    parse_text_body_with_end(reader, slide_path, b"txBody")
 }
 
 fn parse_text_body_with_end(
@@ -29,13 +29,13 @@ fn parse_text_body_with_end(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                if e.name().as_ref() == b"a:p" {
+                if local_name(e.name().as_ref()) == b"p" {
                     let paragraph = parse_text_paragraph(reader, slide_path)?;
                     paragraphs.push(paragraph);
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == end_tag {
+                if local_name(e.name().as_ref()) == end_tag {
                     break;
                 }
             }
@@ -74,19 +74,19 @@ fn parse_text_paragraph(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"a:pPr" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"pPr" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"algn" {
                             alignment = map_alignment(&lossy_attr_value(&attr));
                         }
                     }
                 }
-                b"a:r" => {
+                b"r" => {
                     let run = parse_text_run(reader, slide_path)?;
                     runs.push(run);
                 }
-                b"a:br" => {
+                b"br" => {
                     runs.push(ShapeTextRun {
                         text: "\n".to_string(),
                         bold: None,
@@ -98,7 +98,7 @@ fn parse_text_paragraph(
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"a:p" {
+                if local_name(e.name().as_ref()) == b"p" {
                     break;
                 }
             }
@@ -127,8 +127,8 @@ fn parse_text_run(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"a:rPr" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"rPr" => {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"b" => bold = Some(attr.value.as_ref() == b"1"),
@@ -138,13 +138,13 @@ fn parse_text_run(
                         }
                     }
                 }
-                b"a:t" => {
+                b"t" => {
                     let value = reader
                         .read_text(e.name())
                         .map_err(|e| xml_error(slide_path, e))?;
                     text.push_str(&value);
                 }
-                b"a:latin" => {
+                b"latin" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"typeface" {
                             font_family = Some(lossy_attr_value(&attr).to_string());
@@ -154,7 +154,7 @@ fn parse_text_run(
                 _ => {}
             },
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"a:r" {
+                if local_name(e.name().as_ref()) == b"r" {
                     break;
                 }
             }

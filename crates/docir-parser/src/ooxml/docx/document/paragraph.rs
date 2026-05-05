@@ -5,7 +5,7 @@ mod paragraph_props;
 use super::SectionRef;
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{attr_value, xml_error};
+use crate::xml_utils::{attr_value, local_name, xml_error};
 use docir_core::ir::RevisionType;
 use docir_core::ir::{CommentRangeEnd, CommentRangeStart, CommentReference, Field, Paragraph};
 use docir_core::types::NodeId;
@@ -35,7 +35,7 @@ pub(super) fn parse_paragraph(
             )?,
             Ok(Event::Empty(e)) => handle_paragraph_empty_event(parser, reader, &mut state, &e),
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:p" {
+                if local_name(e.name().as_ref()) == b"p" {
                     break;
                 }
             }
@@ -136,7 +136,7 @@ fn handle_paragraph_start_event(
     state: &mut ParagraphParseState,
     element: &BytesStart<'_>,
 ) -> Result<(), ParseError> {
-    if element.name().as_ref() == b"w:pPr" {
+    if local_name(element.name().as_ref()) == b"pPr" {
         state.section_ref = parse_paragraph_properties(reader, &mut state.para, header_footer_map)?;
         return Ok(());
     }
@@ -164,8 +164,8 @@ fn handle_inline_start(
     state: &mut ParagraphParseState,
     element: &BytesStart<'_>,
 ) -> Result<bool, ParseError> {
-    match element.name().as_ref() {
-        b"w:r" => {
+    match local_name(element.name().as_ref()) {
+        b"r" => {
             let run = parse_run(parser, reader, rels)?;
             let run_id = run.run_id;
             state.para.runs.push(run_id);
@@ -181,17 +181,17 @@ fn handle_inline_start(
             );
             Ok(true)
         }
-        b"w:hyperlink" => {
+        b"hyperlink" => {
             let link_id = parse_hyperlink(parser, reader, rels, element)?;
             state.para.runs.push(link_id);
             Ok(true)
         }
-        b"w:sdt" => {
+        b"sdt" => {
             let sdt_id = parse_sdt(parser, reader, rels, SdtMode::Inline)?;
             state.para.runs.push(sdt_id);
             Ok(true)
         }
-        b"w:fldSimple" => {
+        b"fldSimple" => {
             let instr = attr_value(element, b"w:instr");
             let field_id = parse_field(parser, reader, instr)?;
             state.para.runs.push(field_id);
@@ -207,10 +207,10 @@ fn handle_comment_start(
     state: &mut ParagraphParseState,
     element: &BytesStart<'_>,
 ) -> bool {
-    let kind = match element.name().as_ref() {
-        b"w:commentRangeStart" => CommentNodeKind::RangeStart,
-        b"w:commentRangeEnd" => CommentNodeKind::RangeEnd,
-        b"w:commentReference" => CommentNodeKind::Reference,
+    let kind = match local_name(element.name().as_ref()) {
+        b"commentRangeStart" => CommentNodeKind::RangeStart,
+        b"commentRangeEnd" => CommentNodeKind::RangeEnd,
+        b"commentReference" => CommentNodeKind::Reference,
         _ => return false,
     };
     insert_comment_node(parser, reader, &mut state.para, element, kind);
@@ -224,12 +224,12 @@ fn handle_revision_start(
     state: &mut ParagraphParseState,
     element: &BytesStart<'_>,
 ) -> Result<bool, ParseError> {
-    let revision_type = match element.name().as_ref() {
-        b"w:ins" => RevisionType::Insert,
-        b"w:del" => RevisionType::Delete,
-        b"w:moveFrom" => RevisionType::MoveFrom,
-        b"w:moveTo" => RevisionType::MoveTo,
-        b"w:pPrChange" | b"w:rPrChange" => RevisionType::FormatChange,
+    let revision_type = match local_name(element.name().as_ref()) {
+        b"ins" => RevisionType::Insert,
+        b"del" => RevisionType::Delete,
+        b"moveFrom" => RevisionType::MoveFrom,
+        b"moveTo" => RevisionType::MoveTo,
+        b"pPrChange" | b"rPrChange" => RevisionType::FormatChange,
         _ => return Ok(false),
     };
     push_revision_inline(
@@ -248,12 +248,12 @@ fn handle_bookmark_start(
     state: &mut ParagraphParseState,
     element: &BytesStart<'_>,
 ) -> bool {
-    match element.name().as_ref() {
-        b"w:bookmarkStart" => {
+    match local_name(element.name().as_ref()) {
+        b"bookmarkStart" => {
             insert_bookmark_start(parser, &mut state.para, element);
             true
         }
-        b"w:bookmarkEnd" => {
+        b"bookmarkEnd" => {
             insert_bookmark_end(parser, &mut state.para, element);
             true
         }
@@ -267,30 +267,30 @@ fn handle_paragraph_empty_event(
     state: &mut ParagraphParseState,
     element: &BytesStart<'_>,
 ) {
-    match element.name().as_ref() {
-        b"w:commentRangeStart" => insert_comment_node(
+    match local_name(element.name().as_ref()) {
+        b"commentRangeStart" => insert_comment_node(
             parser,
             reader,
             &mut state.para,
             element,
             CommentNodeKind::RangeStart,
         ),
-        b"w:commentRangeEnd" => insert_comment_node(
+        b"commentRangeEnd" => insert_comment_node(
             parser,
             reader,
             &mut state.para,
             element,
             CommentNodeKind::RangeEnd,
         ),
-        b"w:commentReference" => insert_comment_node(
+        b"commentReference" => insert_comment_node(
             parser,
             reader,
             &mut state.para,
             element,
             CommentNodeKind::Reference,
         ),
-        b"w:bookmarkStart" => insert_bookmark_start(parser, &mut state.para, element),
-        b"w:bookmarkEnd" => insert_bookmark_end(parser, &mut state.para, element),
+        b"bookmarkStart" => insert_bookmark_start(parser, &mut state.para, element),
+        b"bookmarkEnd" => insert_bookmark_end(parser, &mut state.para, element),
         _ => {}
     }
 }

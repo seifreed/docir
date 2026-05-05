@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
 use docir_core::ir::DigitalSignature;
@@ -22,29 +23,29 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"ds:Signature" | b"Signature" => {
+            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+                b"Signature" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"Id" {
                             sig.signature_id = Some(lossy_attr_value(&attr).to_string());
                         }
                     }
                 }
-                b"ds:SignatureMethod" | b"SignatureMethod" => {
+                b"SignatureMethod" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"Algorithm" {
                             sig.signature_method = Some(lossy_attr_value(&attr).to_string());
                         }
                     }
                 }
-                b"ds:DigestMethod" | b"DigestMethod" => {
+                b"DigestMethod" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == b"Algorithm" {
                             sig.digest_methods.push(lossy_attr_value(&attr).to_string());
                         }
                     }
                 }
-                b"ds:X509SubjectName" | b"X509SubjectName" => {
+                b"X509SubjectName" => {
                     if let Ok(text) = reader.read_text(e.name()) {
                         sig.signer = Some(text.to_string());
                     }

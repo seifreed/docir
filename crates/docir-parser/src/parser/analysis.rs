@@ -85,21 +85,17 @@ pub(super) fn parse_smartart_part(
                     root_element = Some(String::from_utf8_lossy(e.name().as_ref()).to_string());
                 }
                 let name_buf = e.name().as_ref().to_vec();
-                let name = name_buf.as_slice();
-                if name.ends_with(b":pt") || name == b"dgm:pt" {
+                let name = local_name(name_buf.as_slice());
+                if name == b"pt" {
                     point_count += 1;
                 }
-                if name.ends_with(b":cxn") || name == b"dgm:cxn" {
+                if name == b"cxn" {
                     connection_count += 1;
                 }
-                if name.ends_with(b":relIds") || name == b"dgm:relIds" {
+                if name == b"relIds" {
                     for attr in e.attributes().flatten() {
-                        let key = attr.key.as_ref();
-                        if key.ends_with(b":dm")
-                            || key.ends_with(b":lo")
-                            || key.ends_with(b":qs")
-                            || key.ends_with(b":cs")
-                        {
+                        let key = local_name(attr.key.as_ref());
+                        if matches!(key, b"dm" | b"lo" | b"qs" | b"cs") {
                             let value = lossy_attr_value(&attr).to_string();
                             if !value.is_empty() {
                                 rel_ids.push(value);

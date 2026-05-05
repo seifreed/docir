@@ -1,6 +1,6 @@
 use super::DocxParser;
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value, xml_error};
+use crate::xml_utils::{attr_value, local_name, xml_error};
 use docir_core::ir::{NumberingLevel, NumberingSet, Paragraph, RunProperties, TextAlignment};
 use docir_core::types::NodeId;
 use quick_xml::events::{BytesStart, Event};
@@ -31,13 +31,13 @@ impl DocxParser {
                     &mut current_level,
                 )?,
                 Ok(Event::Empty(e)) => handle_level_value_attrs(&e, current_level.as_mut()),
-                Ok(Event::End(e)) => match e.name().as_ref() {
-                    b"w:lvl" => {
+                Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
+                    b"lvl" => {
                         if let Some(level) = current_level.take() {
                             current_levels.push(level);
                         }
                     }
-                    b"w:abstractNum" => {
+                    b"abstractNum" => {
                         if let Some(abs_id) = current_abs.take() {
                             set.abstract_nums.push(docir_core::ir::AbstractNum {
                                 abstract_id: abs_id,
@@ -70,12 +70,12 @@ fn handle_numbering_start(
     current_levels: &mut Vec<NumberingLevel>,
     current_level: &mut Option<NumberingLevel>,
 ) -> Result<(), ParseError> {
-    match event.name().as_ref() {
-        b"w:abstractNum" => {
+    match local_name(event.name().as_ref()) {
+        b"abstractNum" => {
             *current_abs = attr_value(event, b"w:abstractNumId").and_then(|v| v.parse().ok());
             current_levels.clear();
         }
-        b"w:lvl" => {
+        b"lvl" => {
             let lvl = attr_value(event, b"w:ilvl")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0);
@@ -90,10 +90,10 @@ fn handle_numbering_start(
                 run_props: None,
             });
         }
-        b"w:numFmt" | b"w:lvlText" | b"w:start" | b"w:lvlJc" | b"w:suff" => {
+        b"numFmt" | b"lvlText" | b"start" | b"lvlJc" | b"suff" => {
             handle_level_value_attrs(event, current_level.as_mut());
         }
-        b"w:pPr" => {
+        b"pPr" => {
             let mut para = Paragraph::new();
             let _ = parse_paragraph_properties(reader, &mut para, None)?;
             if let Some(level) = current_level.as_mut() {
@@ -101,14 +101,14 @@ fn handle_numbering_start(
                     Some(super::style_paragraph_from_paragraph_props(para.properties));
             }
         }
-        b"w:rPr" => {
+        b"rPr" => {
             let mut props = RunProperties::default();
             super::parse_run_properties(reader, &mut props)?;
             if let Some(level) = current_level.as_mut() {
                 level.run_props = Some(super::style_run_from_run_props(props));
             }
         }
-        b"w:num" => {
+        b"num" => {
             let num_id = attr_value(event, b"w:numId")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0);
@@ -127,23 +127,23 @@ fn handle_level_value_attrs(event: &BytesStart<'_>, level: Option<&mut Numbering
     let Some(level) = level else {
         return;
     };
-    match event.name().as_ref() {
-        b"w:numFmt" => {
+    match local_name(event.name().as_ref()) {
+        b"numFmt" => {
             if let Some(val) = attr_value(event, b"w:val") {
                 level.format = Some(val);
             }
         }
-        b"w:lvlText" => {
+        b"lvlText" => {
             if let Some(val) = attr_value(event, b"w:val") {
                 level.text = Some(val);
             }
         }
-        b"w:start" => {
+        b"start" => {
             if let Some(val) = attr_value(event, b"w:val").and_then(|v| v.parse().ok()) {
                 level.start = Some(val);
             }
         }
-        b"w:lvlJc" => {
+        b"lvlJc" => {
             if let Some(val) = attr_value(event, b"w:val") {
                 level.alignment = match val.as_str() {
                     "center" => Some(TextAlignment::Center),
@@ -154,7 +154,7 @@ fn handle_level_value_attrs(event: &BytesStart<'_>, level: Option<&mut Numbering
                 };
             }
         }
-        b"w:suff" => {
+        b"suff" => {
             if let Some(val) = attr_value(event, b"w:val") {
                 level.suffix = Some(val);
             }

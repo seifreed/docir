@@ -190,6 +190,96 @@ fn test_docx_paragraph_and_run_properties() {
 }
 
 #[test]
+fn test_docx_accepts_alternate_namespace_prefixes() {
+    let body = r#"
+        <word:document xmlns:word="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <word:body>
+            <word:p>
+              <word:pPr>
+                <word:jc word:val="center"/>
+                <word:spacing word:before="120"/>
+              </word:pPr>
+              <word:r>
+                <word:rPr>
+                  <word:b/>
+                  <word:color word:val="00AA00"/>
+                </word:rPr>
+                <word:t>Alt text</word:t>
+              </word:r>
+            </word:p>
+            <word:tbl>
+              <word:tblPr>
+                <word:tblW word:w="5000" word:type="dxa"/>
+              </word:tblPr>
+              <word:tr>
+                <word:tc>
+                  <word:tcPr>
+                    <word:gridSpan word:val="2"/>
+                  </word:tcPr>
+                  <word:p><word:r><word:t>Cell</word:t></word:r></word:p>
+                </word:tc>
+              </word:tr>
+            </word:tbl>
+          </word:body>
+        </word:document>"#;
+    let path = create_docx_with_body(body);
+    let parser = OoxmlParser::new();
+    let parsed = parser
+        .parse_file(&path)
+        .expect("parse alternate-prefix docx");
+
+    let mut saw_centered_paragraph = false;
+    let mut saw_bold_green_run = false;
+    let mut saw_alt_text = false;
+    let mut saw_table = false;
+    let mut saw_spanned_cell = false;
+
+    for node in parsed.store.values() {
+        match node {
+            IRNode::Paragraph(p) => {
+                if matches!(
+                    p.properties.alignment,
+                    Some(docir_core::ir::TextAlignment::Center)
+                ) && p.properties.spacing.as_ref().and_then(|s| s.before) == Some(120)
+                {
+                    saw_centered_paragraph = true;
+                }
+            }
+            IRNode::Run(r) => {
+                if r.text == "Alt text" {
+                    saw_alt_text = true;
+                }
+                if r.properties.bold == Some(true)
+                    && r.properties.color.as_deref() == Some("00AA00")
+                {
+                    saw_bold_green_run = true;
+                }
+            }
+            IRNode::Table(t) => {
+                if t.rows.len() == 1
+                    && t.properties.width.as_ref().map(|width| width.value) == Some(5000)
+                {
+                    saw_table = true;
+                }
+            }
+            IRNode::TableCell(cell) => {
+                if cell.properties.grid_span == Some(2) {
+                    saw_spanned_cell = true;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    assert!(saw_centered_paragraph);
+    assert!(saw_bold_green_run);
+    assert!(saw_alt_text);
+    assert!(saw_table);
+    assert!(saw_spanned_cell);
+    std::fs::remove_file(path).ok();
+}
+
+#[test]
 fn test_docx_sections_with_headers_and_footers() {
     let (body, header1, footer1, header2, rels) = docx_sections_fixture();
 

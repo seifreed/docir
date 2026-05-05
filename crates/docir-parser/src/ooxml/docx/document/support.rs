@@ -3,6 +3,7 @@ use super::{
     NodeId, PageBorders, ParseError, Relationships, WordSettings,
 };
 use crate::xml_utils::attr_value_by_suffix;
+use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
 use quick_xml::events::{BytesStart, Event};
@@ -21,20 +22,20 @@ pub(super) fn parse_page_borders(
                 if border.is_none() {
                     continue;
                 }
-                match e.name().as_ref() {
-                    b"w:top" => {
+                match local_name(e.name().as_ref()) {
+                    b"top" => {
                         borders.top = border;
                         has_any = true;
                     }
-                    b"w:bottom" => {
+                    b"bottom" => {
                         borders.bottom = border;
                         has_any = true;
                     }
-                    b"w:left" => {
+                    b"left" => {
                         borders.left = border;
                         has_any = true;
                     }
-                    b"w:right" => {
+                    b"right" => {
                         borders.right = border;
                         has_any = true;
                     }
@@ -42,7 +43,7 @@ pub(super) fn parse_page_borders(
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:pgBorders" {
+                if local_name(e.name().as_ref()) == b"pgBorders" {
                     break;
                 }
             }
@@ -139,9 +140,9 @@ pub(super) fn parse_vml_pict(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"v:imagedata" {
+                if local_name(e.name().as_ref()) == b"imagedata" {
                     rel_id = attr_value_by_suffix(&e, &[b":id"]);
-                } else if e.name().as_ref() == b"v:shape" {
+                } else if local_name(e.name().as_ref()) == b"shape" {
                     name = attr_value(&e, b"name").or_else(|| attr_value(&e, b"id"));
                     alt_text = attr_value(&e, b"o:title").or_else(|| attr_value(&e, b"alt"));
                     if let Some(style) = attr_value(&e, b"style") {
@@ -161,7 +162,7 @@ pub(super) fn parse_vml_pict(
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:pict" {
+                if local_name(e.name().as_ref()) == b"pict" {
                     break;
                 }
             }
@@ -235,14 +236,14 @@ pub(super) fn parse_num_abstract_id(reader: &mut Reader<&[u8]>) -> Result<u32, P
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"w:abstractNumId" {
+                if local_name(e.name().as_ref()) == b"abstractNumId" {
                     if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
                         abstract_id = val;
                     }
                 }
             }
             Ok(Event::End(e)) => {
-                if e.name().as_ref() == b"w:num" {
+                if local_name(e.name().as_ref()) == b"num" {
                     break;
                 }
             }

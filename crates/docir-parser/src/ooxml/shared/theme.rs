@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{read_event, reader_from_str};
 use docir_core::ir::{Theme, ThemeColor, ThemeFontScheme};
@@ -39,17 +40,17 @@ pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
 }
 
 fn handle_start_event(start: &BytesStart<'_>, theme: &mut Theme, state: &mut ThemeParseState) {
-    match start.name().as_ref() {
-        b"a:theme" => set_theme_name(start, &mut theme.name),
-        b"a:clrScheme" => state.in_clr_scheme = true,
-        b"a:fontScheme" => {
+    match local_name(start.name().as_ref()) {
+        b"theme" => set_theme_name(start, &mut theme.name),
+        b"clrScheme" => state.in_clr_scheme = true,
+        b"fontScheme" => {
             if theme.name.is_none() {
                 set_theme_name(start, &mut theme.name);
             }
         }
-        b"a:majorFont" => state.in_major_font = true,
-        b"a:minorFont" => state.in_minor_font = true,
-        b"a:latin" => set_latin_typeface(start, state),
+        b"majorFont" => state.in_major_font = true,
+        b"minorFont" => state.in_minor_font = true,
+        b"latin" => set_latin_typeface(start, state),
         _ if state.in_clr_scheme => {
             let name = String::from_utf8_lossy(start.name().as_ref()).to_string();
             state.current_color_name = Some(name);
@@ -71,16 +72,16 @@ fn handle_empty_event(start: &BytesStart<'_>, theme: &mut Theme, state: &mut The
         }
     }
 
-    if start.name().as_ref() == b"a:latin" {
+    if local_name(start.name().as_ref()) == b"latin" {
         set_latin_typeface(start, state);
     }
 }
 
 fn handle_end_event(tag: &[u8], state: &mut ThemeParseState) {
-    match tag {
-        b"a:clrScheme" => state.in_clr_scheme = false,
-        b"a:majorFont" => state.in_major_font = false,
-        b"a:minorFont" => state.in_minor_font = false,
+    match local_name(tag) {
+        b"clrScheme" => state.in_clr_scheme = false,
+        b"majorFont" => state.in_major_font = false,
+        b"minorFont" => state.in_minor_font = false,
         _ => state.current_color_name = None,
     }
 }
@@ -112,7 +113,7 @@ fn set_latin_typeface(start: &BytesStart<'_>, state: &mut ThemeParseState) {
 }
 
 fn srgb_value(start: &BytesStart<'_>) -> Option<String> {
-    if start.name().as_ref() != b"a:srgbClr" {
+    if local_name(start.name().as_ref()) != b"srgbClr" {
         return None;
     }
     for attr in start.attributes().flatten() {

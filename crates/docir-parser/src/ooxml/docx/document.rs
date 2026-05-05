@@ -3,7 +3,9 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
-use crate::xml_utils::{attr_value, reader_from_str, scan_xml_events_with_reader, XmlScanControl};
+use crate::xml_utils::{
+    attr_value, local_name, reader_from_str, scan_xml_events_with_reader, XmlScanControl,
+};
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
     Footer, GlossaryDocument, Header, PageBorders, ParagraphProperties, Run, RunProperties,
@@ -100,7 +102,7 @@ impl DocxParser {
             "word/document.xml",
             |reader, event| {
                 if let Event::Start(e) = event {
-                    if e.name().as_ref() == b"w:body" {
+                    if local_name(e.name().as_ref()) == b"body" {
                         let sections = parse_body_sections(self, reader, rels, header_footer_map)?;
                         for section in sections {
                             let section_id = section.id;
@@ -136,7 +138,7 @@ impl DocxParser {
             "word/glossary/document.xml",
             |reader, event| {
                 if let Event::Start(e) = event {
-                    if e.name().as_ref() == b"w:docPart" {
+                    if local_name(e.name().as_ref()) == b"docPart" {
                         let entry = parse_doc_part(self, reader, rels)?;
                         let entry_id = entry.id;
                         self.store
@@ -165,8 +167,8 @@ impl DocxParser {
         let mut reader = reader_from_str(xml);
 
         let end_tag = match kind {
-            HeaderFooterKind::Header => b"w:hdr".as_ref(),
-            HeaderFooterKind::Footer => b"w:ftr".as_ref(),
+            HeaderFooterKind::Header => b"hdr".as_ref(),
+            HeaderFooterKind::Footer => b"ftr".as_ref(),
         };
         let content = parse_block_until(self, &mut reader, rels, end_tag)?;
         let node_id = match kind {
