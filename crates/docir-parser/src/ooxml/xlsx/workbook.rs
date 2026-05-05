@@ -124,7 +124,7 @@ fn parse_sheet_info(start: &BytesStart, sheets: &mut Vec<SheetInfo>) -> Result<(
         match attr.key.as_ref() {
             b"name" => name = Some(lossy_attr_value(&attr).to_string()),
             b"sheetId" => sheet_id = lossy_attr_value(&attr).parse::<u32>().ok(),
-            b"r:id" => rel_id = Some(lossy_attr_value(&attr).to_string()),
+            key if key.ends_with(b":id") => rel_id = Some(lossy_attr_value(&attr).to_string()),
             b"state" => {
                 let val = lossy_attr_value(&attr);
                 state = match val.as_ref() {
@@ -304,7 +304,7 @@ fn parse_pivot_cache_ref(start: &BytesStart, out: &mut Vec<PivotCacheRef>) {
             b"cacheId" => {
                 cache_id = lossy_attr_value(&attr).parse::<u32>().ok();
             }
-            b"r:id" => {
+            key if key.ends_with(b":id") => {
                 rel_id = Some(lossy_attr_value(&attr).to_string());
             }
             _ => {}

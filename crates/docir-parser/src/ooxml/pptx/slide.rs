@@ -311,9 +311,9 @@ impl PptxParser {
             }
             b"a:blip" => {
                 for attr in event.attributes().flatten() {
-                    if attr.key.as_ref() == b"r:embed" {
+                    if attr.key.as_ref().ends_with(b":embed") {
                         *embed_rel = Some(lossy_attr_value(&attr).to_string());
-                    } else if attr.key.as_ref() == b"r:link" {
+                    } else if attr.key.as_ref().ends_with(b":link") {
                         *link_rel = Some(lossy_attr_value(&attr).to_string());
                     }
                 }
@@ -552,7 +552,7 @@ where
             b"presetClass" => {
                 anim.preset_class = Some(lossy_attr_value(&attr).to_string());
             }
-            b"r:link" | b"r:embed" => {
+            key if key.ends_with(b":link") || key.ends_with(b":embed") => {
                 let rel_id = lossy_attr_value(&attr).to_string();
                 anim.target = Some(resolve_animation_target(slide_path, relationships, rel_id));
             }
@@ -569,7 +569,11 @@ fn resolve_animation_target(
     rel_id: String,
 ) -> String {
     if let Some(rel) = relationships.get(&rel_id) {
-        Relationships::resolve_target(slide_path, &rel.target)
+        if rel.target_mode == TargetMode::External {
+            rel.target.clone()
+        } else {
+            Relationships::resolve_target(slide_path, &rel.target)
+        }
     } else {
         rel_id
     }

@@ -2,7 +2,9 @@ use super::{span_from_reader, DocxParser};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
-use crate::xml_utils::{attr_bool_like, attr_u32_from_bytes, attr_value, xml_error};
+use crate::xml_utils::{
+    attr_bool_like, attr_u32_from_bytes, attr_value, attr_value_by_suffix, xml_error,
+};
 use docir_core::ir::{
     Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeTransform, ShapeType, TextAlignment,
 };
@@ -33,7 +35,7 @@ pub(super) fn parse_drawing(
                 let name_bytes = e.name().as_ref().to_vec();
                 let name_slice = name_bytes.as_slice();
                 if name_slice == b"a:blip" {
-                    rel_id = attr_value(&e, b"r:embed").or_else(|| attr_value(&e, b"r:link"));
+                    rel_id = attr_value_by_suffix(&e, &[b":embed", b":link"]);
                 } else if name_slice == b"wp:docPr" {
                     name = attr_value(&e, b"name");
                     alt_text = attr_value(&e, b"descr");
@@ -77,22 +79,22 @@ pub(super) fn parse_drawing(
                 } else if name_slice == b"a:txBody" {
                     text = Some(parse_drawing_text_body(reader, "word/document.xml")?);
                 } else if name_slice.ends_with(b":chart") || name_slice == b"c:chart" {
-                    chart_rel = attr_value(&e, b"r:id");
+                    chart_rel = attr_value_by_suffix(&e, &[b":id"]);
                 } else if name_slice == b"dgm:relIds" {
-                    if let Some(val) = attr_value(&e, b"r:dm") {
+                    if let Some(val) = attr_value_by_suffix(&e, &[b":dm"]) {
                         diagram_rel_ids.push(val);
                     }
-                    if let Some(val) = attr_value(&e, b"r:lo") {
+                    if let Some(val) = attr_value_by_suffix(&e, &[b":lo"]) {
                         diagram_rel_ids.push(val);
                     }
-                    if let Some(val) = attr_value(&e, b"r:qs") {
+                    if let Some(val) = attr_value_by_suffix(&e, &[b":qs"]) {
                         diagram_rel_ids.push(val);
                     }
-                    if let Some(val) = attr_value(&e, b"r:cs") {
+                    if let Some(val) = attr_value_by_suffix(&e, &[b":cs"]) {
                         diagram_rel_ids.push(val);
                     }
                 } else if name_slice == b"a:hlinkClick" {
-                    hyperlink_rel = attr_value(&e, b"r:id");
+                    hyperlink_rel = attr_value_by_suffix(&e, &[b":id"]);
                 }
             }
             Ok(Event::End(e)) => {

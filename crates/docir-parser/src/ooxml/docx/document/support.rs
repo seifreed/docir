@@ -2,6 +2,7 @@ use super::{
     attr_value, normalize_docx_target, parse_border, reader_from_str, span_from_reader, DocxParser,
     NodeId, PageBorders, ParseError, Relationships, WordSettings,
 };
+use crate::xml_utils::attr_value_by_suffix;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
 use quick_xml::events::{BytesStart, Event};
@@ -139,7 +140,7 @@ pub(super) fn parse_vml_pict(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 if e.name().as_ref() == b"v:imagedata" {
-                    rel_id = attr_value(&e, b"r:id");
+                    rel_id = attr_value_by_suffix(&e, &[b":id"]);
                 } else if e.name().as_ref() == b"v:shape" {
                     name = attr_value(&e, b"name").or_else(|| attr_value(&e, b"id"));
                     alt_text = attr_value(&e, b"o:title").or_else(|| attr_value(&e, b"alt"));

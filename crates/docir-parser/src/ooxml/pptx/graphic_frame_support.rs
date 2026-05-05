@@ -46,7 +46,7 @@ pub(super) fn capture_chart_rel(state: &mut GraphicFrameState, e: &BytesStart<'_
 
 pub(super) fn capture_ole_rel(state: &mut GraphicFrameState, e: &BytesStart<'_>) {
     for attr in e.attributes().flatten() {
-        if attr.key.as_ref() == b"r:id" {
+        if attr.key.as_ref().ends_with(b":id") {
             state.ole_rel = Some(lossy_attr_value(&attr).to_string());
         }
     }

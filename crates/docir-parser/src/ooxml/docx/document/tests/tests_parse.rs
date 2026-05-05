@@ -391,12 +391,12 @@ fn test_parse_drawing_text_and_hyperlink() {
     let xml = r#"
         <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
              xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+             xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
           <w:drawing>
             <a:graphic>
               <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
                 <a:prstGeom prst="rect"/>
-                <a:blip r:embed="rIdImg"/>
+                <a:blip rel:embed="rIdImg"/>
                 <a:txBody>
                   <a:p>
                     <a:r>
@@ -405,7 +405,7 @@ fn test_parse_drawing_text_and_hyperlink() {
                     </a:r>
                   </a:p>
                 </a:txBody>
-                <a:hlinkClick r:id="rIdLink"/>
+                <a:hlinkClick rel:id="rIdLink"/>
               </a:graphicData>
             </a:graphic>
           </w:drawing>

@@ -67,7 +67,7 @@ impl XlsxParser {
                     }
                     b"a:blip" => {
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"r:embed" {
+                            if attr.key.as_ref().ends_with(b":embed") {
                                 current_embed = Some(lossy_attr_value(&attr).to_string());
                             }
                         }
@@ -234,13 +234,13 @@ mod tests {
         let rels = Relationships::parse(relationships_xml()).expect("relationships");
         let mut zip = TestPackageReader::new(&[]);
         let drawing_xml = r#"
-            <xdr:wsDr xmlns:xdr="xdr" xmlns:a="a" xmlns:r="r">
+            <xdr:wsDr xmlns:xdr="xdr" xmlns:a="a" xmlns:rel="r">
               <xdr:pic>
                 <xdr:nvPicPr>
                   <xdr:cNvPr name="Picture 1" descr="Alt"/>
                 </xdr:nvPicPr>
                 <xdr:blipFill>
-                  <a:blip r:embed="rImgExternal"></a:blip>
+                  <a:blip rel:embed="rImgExternal"></a:blip>
                 </xdr:blipFill>
               </xdr:pic>
               <xdr:pic>
@@ -248,7 +248,7 @@ mod tests {
                   <xdr:cNvPr name="Picture 2"></xdr:cNvPr>
                 </xdr:nvPicPr>
                 <xdr:blipFill>
-                  <a:blip r:embed="rImgInternal"></a:blip>
+                  <a:blip rel:embed="rImgInternal"></a:blip>
                 </xdr:blipFill>
               </xdr:pic>
             </xdr:wsDr>

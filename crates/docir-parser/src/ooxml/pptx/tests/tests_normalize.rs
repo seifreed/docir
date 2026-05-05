@@ -116,6 +116,50 @@ fn test_parse_slide_timing_media() {
 }
 
 #[test]
+fn test_parse_slide_timing_external_media_preserves_url() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+               xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <p:cSld><p:spTree/></p:cSld>
+          <p:timing>
+            <p:audio rel:link="rIdAudio" dur="5000"/>
+          </p:timing>
+        </p:sld>
+        "#;
+    let rels_xml = r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rIdAudio"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio"
+            Target="https://example.com/audio.wav"
+            TargetMode="External"/>
+        </Relationships>
+        "#;
+    let rels = Relationships::parse(rels_xml).expect("rels");
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+    let slide_id = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/slide1.xml",
+            &rels,
+            (None, None),
+        )
+        .expect("slide");
+    let store = parser.into_store();
+    let slide = match store.get(slide_id) {
+        Some(IRNode::Slide(s)) => s,
+        _ => panic!("missing slide"),
+    };
+    assert_eq!(slide.animations.len(), 1);
+    assert_eq!(
+        slide.animations[0].target.as_deref(),
+        Some("https://example.com/audio.wav")
+    );
+}
+
+#[test]
 fn test_parse_slide_comments() {
     let slide_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">

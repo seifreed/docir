@@ -3,6 +3,7 @@ use super::{
     read_event, PackageReader, ParseError, PptxParser, Reader, Relationships, Shape, ShapeType,
     SourceSpan, TargetMode,
 };
+use crate::xml_utils::attr_value_by_suffix;
 use crate::xml_utils::xml_error;
 use docir_core::ir::IRNode;
 use docir_core::types::NodeId;
@@ -184,7 +185,7 @@ impl PptxParser {
         relationships: &Relationships,
         slide_path: &str,
     ) {
-        let Some(rel_id) = attr_value(element, b"r:id") else {
+        let Some(rel_id) = attr_value_by_suffix(element, &[b":id"]) else {
             return;
         };
         let Some(rel) = relationships.get(&rel_id) else {

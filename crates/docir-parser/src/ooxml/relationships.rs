@@ -1,6 +1,7 @@
 //! OOXML relationships parser (.rels files).
 
 use crate::error::ParseError;
+use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{read_event, reader_from_str};
 use quick_xml::events::Event;
@@ -49,7 +50,7 @@ impl Relationships {
         loop {
             match read_event(&mut reader, &mut buf, ".rels")? {
                 Event::Empty(e) | Event::Start(e) => {
-                    if e.name().as_ref() == b"Relationship" {
+                    if local_name(e.name().as_ref()) == b"Relationship" {
                         let mut id = None;
                         let mut rel_type = None;
                         let mut target = None;
@@ -126,6 +127,10 @@ impl Relationships {
 
     /// Resolves a relationship target relative to a base path.
     pub fn resolve_target(base_path: &str, target: &str) -> String {
+        if looks_like_external_target(target) {
+            return target.to_string();
+        }
+
         // Handle absolute targets
         if target.starts_with('/') {
             return target.strip_prefix('/').unwrap_or(target).to_string();
@@ -154,6 +159,55 @@ impl Relationships {
         }
 
         parts.join("/")
+    }
+}
+
+fn looks_like_external_target(target: &str) -> bool {
+    if target.starts_with("//") || target.starts_with("\\\\") {
+        return true;
+    }
+
+    let Some(colon_idx) = target.find(':') else {
+        return false;
+    };
+    let scheme = &target[..colon_idx];
+    let Some(first) = scheme.bytes().next() else {
+        return false;
+    };
+
+    first.is_ascii_alphabetic()
+        && scheme
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{rel_type, Relationships};
+
+    #[test]
+    fn parse_accepts_prefixed_relationship_elements() {
+        let xml = r#"
+            <rel:Relationships xmlns:rel="http://schemas.openxmlformats.org/package/2006/relationships">
+              <rel:Relationship Id="rId1"
+                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+                Target="word/document.xml"/>
+            </rel:Relationships>
+        "#;
+
+        let rels = Relationships::parse(xml).expect("relationships parse");
+        let rel = rels.get("rId1").expect("prefixed relationship");
+
+        assert_eq!(rel.rel_type, rel_type::OFFICE_DOCUMENT);
+        assert_eq!(rel.target, "word/document.xml");
+    }
+
+    #[test]
+    fn resolve_target_preserves_external_uris() {
+        assert_eq!(
+            Relationships::resolve_target("ppt/slides/slide1.xml", "https://example.com/a.wav"),
+            "https://example.com/a.wav"
+        );
     }
 }
 

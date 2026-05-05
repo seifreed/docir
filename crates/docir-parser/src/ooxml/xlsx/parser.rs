@@ -4,7 +4,7 @@ use crate::diagnostics::attach_diagnostics_if_any;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
-use crate::xml_utils::attr_value;
+use crate::xml_utils::{attr_value, attr_value_by_suffix};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     parse_cell_reference, CalcChain, Cell, CellError, CellFormula, ColumnDefinition,
@@ -196,7 +196,7 @@ impl XlsxParser {
         relationships: &Relationships,
         sheet_path: &str,
     ) {
-        let Some(rel_id) = attr_value(element, b"r:id") else {
+        let Some(rel_id) = attr_value_by_suffix(element, &[b":id"]) else {
             return;
         };
         let Some(rel) = relationships.get(&rel_id) else {

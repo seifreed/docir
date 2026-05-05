@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value, xml_error};
+use crate::xml_utils::{attr_value, attr_value_by_suffix, xml_error};
 use docir_core::ir::{
     LineNumberRestart, PageMargins, PageOrientation, SectionProperties, SectionType,
 };
@@ -71,7 +71,7 @@ fn apply_section_header_footer(
     let Some(map) = header_footer_map else {
         return;
     };
-    let Some(id) = attr_value(e, b"r:id") else {
+    let Some(id) = attr_value_by_suffix(e, &[b":id"]) else {
         return;
     };
     let Some(node_id) = map.get(&id) else {

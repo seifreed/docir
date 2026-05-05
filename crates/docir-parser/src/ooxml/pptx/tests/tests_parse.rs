@@ -51,10 +51,10 @@ fn build_master_layout_fixture() -> (&'static str, &'static str) {
 fn test_parse_slide_list() {
     let xml = r#"
         <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
-                        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                        xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
           <p:sldIdLst>
-            <p:sldId r:id="rId1"/>
-            <p:sldId r:id="rId2"/>
+            <p:sldId rel:id="rId1"/>
+            <p:sldId rel:id="rId2"/>
           </p:sldIdLst>
         </p:presentation>
         "#;
@@ -408,7 +408,7 @@ fn test_parse_shapes_from_xml_covers_sp_group_and_table_paths() {
     let xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+               xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
           <p:cSld>
             <p:spTree>
               <p:sp>
@@ -423,7 +423,7 @@ fn test_parse_shapes_from_xml_covers_sp_group_and_table_paths() {
                   <a:lstStyle/>
                   <a:p><a:r><a:t>Hello</a:t></a:r></a:p>
                 </p:txBody>
-                <a:hlinkClick r:id="rIdExt"/>
+                <a:hlinkClick rel:id="rIdExt"/>
               </p:sp>
               <p:grpSp>
                 <p:nvGrpSpPr><p:cNvPr id="2" name="Group 1"/></p:nvGrpSpPr>

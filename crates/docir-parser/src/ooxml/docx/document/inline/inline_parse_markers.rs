@@ -5,7 +5,7 @@ use super::{parse_field_instruction, parse_run, DOC_XML_PATH};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::relationships::TargetMode;
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{attr_value_by_suffix, xml_error};
 use docir_core::ir::RunProperties;
 use docir_core::ir::{Hyperlink, NumberingInfo, UnderlineStyle, VerticalTextAlignment};
 use docir_core::types::NodeId;
@@ -148,7 +148,7 @@ pub(crate) fn parse_hyperlink(
     if let Some(tooltip) = attr_value(start, b"w:tooltip") {
         link.tooltip = Some(tooltip);
     }
-    if let Some(rel_id) = attr_value(start, b"r:id") {
+    if let Some(rel_id) = attr_value_by_suffix(start, &[b":id"]) {
         if let Some(rel) = rels.get(&rel_id) {
             link.target = rel.target.clone();
             link.is_external = rel.target_mode == TargetMode::External;

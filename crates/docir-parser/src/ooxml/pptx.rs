@@ -6,7 +6,9 @@ use crate::ooxml::part_utils::{
     parse_xml_part_with_span, read_xml_part_and_rels, read_xml_part_and_rels_optional,
 };
 use crate::ooxml::relationships::{rel_type, Relationship, Relationships, TargetMode};
-use crate::xml_utils::{attr_u32, attr_u64_from_bytes, attr_value, read_event, xml_error};
+use crate::xml_utils::{
+    attr_u32, attr_u64_from_bytes, attr_value, attr_value_by_suffix, read_event, xml_error,
+};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     Diagnostics, Document, GridColumn, IRNode, NotesSlide, Paragraph, PptxCommentAuthor,
@@ -227,7 +229,7 @@ fn parse_slide_list(xml: &str) -> Result<Vec<String>, ParseError> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
                 if e.name().as_ref() == b"p:sldId" {
-                    if let Some(rel_id) = attr_value(&e, b"r:id") {
+                    if let Some(rel_id) = attr_value_by_suffix(&e, &[b":id"]) {
                         slide_ids.push(rel_id);
                     }
                 }

@@ -10,9 +10,9 @@ use quick_xml::Reader;
 #[test]
 fn test_parse_xlm_macro_sheet() {
     let workbook_xml = r#"
-        <workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <workbook xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
           <sheets>
-            <sheet name="Macro1" sheetId="1" r:id="rId1"/>
+            <sheet name="Macro1" sheetId="1" rel:id="rId1"/>
           </sheets>
         </workbook>
         "#;

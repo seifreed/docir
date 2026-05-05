@@ -6,7 +6,7 @@ fn test_parse_graphic_frame_ole_object() {
     let slide_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+               xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
           <p:cSld>
             <p:spTree>
               <p:graphicFrame>
@@ -15,7 +15,7 @@ fn test_parse_graphic_frame_ole_object() {
                 </p:nvGraphicFramePr>
                 <a:graphic>
                   <a:graphicData uri="http://schemas.openxmlformats.org/presentationml/2006/ole">
-                    <p:oleObj r:id="rId5"/>
+                    <p:oleObj rel:id="rId5"/>
                   </a:graphicData>
                 </a:graphic>
               </p:graphicFrame>
@@ -66,12 +66,12 @@ fn test_parse_pic_external_media_reference() {
     let slide_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+               xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
           <p:cSld>
             <p:spTree>
               <p:pic>
                 <p:blipFill>
-                  <a:blip r:embed="rIdAudio"/>
+                  <a:blip rel:embed="rIdAudio"/>
                 </p:blipFill>
               </p:pic>
             </p:spTree>

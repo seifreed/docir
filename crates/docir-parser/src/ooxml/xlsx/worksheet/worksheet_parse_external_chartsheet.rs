@@ -22,7 +22,7 @@ pub(super) fn parse_chartsheet_impl(
             Event::Start(e) | Event::Empty(e) => {
                 if e.name().as_ref().ends_with(b"chart") {
                     for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"r:id" {
+                        if attr.key.as_ref().ends_with(b":id") {
                             chart_rel = Some(lossy_attr_value(&attr).to_string());
                         }
                     }

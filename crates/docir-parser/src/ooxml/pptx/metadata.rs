@@ -253,7 +253,11 @@ pub(super) fn parse_smartart_part(xml: &str, path: &str) -> Result<SmartArtPart,
                 if name.ends_with(b":relIds") || name == b"dgm:relIds" {
                     for attr in e.attributes().flatten() {
                         let key = attr.key.as_ref();
-                        if key == b"r:dm" || key == b"r:lo" || key == b"r:qs" || key == b"r:cs" {
+                        if key.ends_with(b":dm")
+                            || key.ends_with(b":lo")
+                            || key.ends_with(b":qs")
+                            || key.ends_with(b":cs")
+                        {
                             let val = lossy_attr_value(&attr).to_string();
                             if !val.is_empty() {
                                 rel_ids.push(val);
