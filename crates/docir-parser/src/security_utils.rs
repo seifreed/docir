@@ -17,9 +17,9 @@ pub(crate) fn parse_dde_formula(
         } else {
             return None;
         }
-    } else if let Some(idx) = upper.find("DDEAUTO(") {
+    } else if let Some(idx) = find_formula_function(&upper, "DDEAUTO(") {
         (DdeFieldType::DdeAuto, idx + "DDEAUTO(".len())
-    } else if let Some(idx) = upper.find("DDE(") {
+    } else if let Some(idx) = find_formula_function(&upper, "DDE(") {
         (DdeFieldType::Dde, idx + "DDE(".len())
     } else {
         return None;
@@ -53,6 +53,21 @@ pub(crate) fn parse_dde_formula(
         instruction: formula.to_string(),
         location: Some(location),
     })
+}
+
+fn find_formula_function(formula_upper: &str, pattern: &str) -> Option<usize> {
+    formula_upper
+        .match_indices(pattern)
+        .find(|(idx, _)| is_formula_function_boundary(formula_upper, *idx))
+        .map(|(idx, _)| idx)
+}
+
+fn is_formula_function_boundary(input: &str, start: usize) -> bool {
+    start == 0
+        || matches!(
+            input.as_bytes().get(start.wrapping_sub(1)),
+            Some(b'=' | b'(' | b',' | b';' | b' ' | b'\t' | b'+' | b'-' | b'*' | b'/')
+        )
 }
 
 fn find_matching_paren(s: &str, open_pos: usize) -> Option<usize> {
@@ -134,4 +149,31 @@ fn normalize_arg(value: &str) -> String {
         .trim_matches('"')
         .trim_matches('\'')
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use docir_core::security::DdeFieldType;
+    use docir_core::types::SourceSpan;
+
+    #[test]
+    fn parse_dde_formula_requires_function_boundary_when_prefix_is_optional() {
+        let location = SourceSpan::new("content.xml");
+        assert!(parse_dde_formula(
+            r#"NOTDDE("soffice";"file:///tmp/test.ods";"A1")"#,
+            location.clone(),
+            false,
+        )
+        .is_none());
+
+        let dde = parse_dde_formula(
+            r#"IF(A1;DDE("soffice";"file:///tmp/test.ods";"A1");0)"#,
+            location,
+            false,
+        )
+        .expect("nested DDE");
+        assert_eq!(dde.field_type, DdeFieldType::Dde);
+        assert_eq!(dde.application, "soffice");
+    }
 }

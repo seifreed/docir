@@ -30,6 +30,7 @@ fn test_parse_xlm_macro_sheet() {
           <sheetData>
             <row r="1">
               <c r="A1"><f>EXEC(\"calc\")</f></c>
+              <c r="A2"><f>IF(A1;CALL(\"kernel32\",\"WinExec\");0)</f></c>
             </row>
           </sheetData>
         </worksheet>
@@ -49,6 +50,14 @@ fn test_parse_xlm_macro_sheet() {
     };
     assert_eq!(doc.security.xlm_macros.len(), 1);
     assert!(!doc.security.xlm_macros[0].macro_cells.is_empty());
+    assert!(doc.security.xlm_macros[0]
+        .dangerous_functions
+        .iter()
+        .any(|function| function.name == "EXEC" && function.cell_ref == "A1"));
+    assert!(doc.security.xlm_macros[0]
+        .dangerous_functions
+        .iter()
+        .any(|function| function.name == "CALL" && function.cell_ref == "A2"));
 }
 
 #[test]

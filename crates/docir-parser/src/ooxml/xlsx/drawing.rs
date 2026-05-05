@@ -10,6 +10,18 @@ use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
+fn drawing_relationship_target(
+    drawing_path: &str,
+    target_mode: TargetMode,
+    target: &str,
+) -> String {
+    if target_mode == TargetMode::External {
+        target.to_string()
+    } else {
+        Relationships::resolve_target(drawing_path, target)
+    }
+}
+
 impl XlsxParser {
     pub(super) fn parse_drawing(
         &mut self,
@@ -76,8 +88,9 @@ impl XlsxParser {
                             if let Some(rel_id) = current_embed.take() {
                                 if let Some(rel) = relationships.get(&rel_id) {
                                     shape.relationship_id = Some(rel_id.clone());
-                                    shape.media_target = Some(Relationships::resolve_target(
+                                    shape.media_target = Some(drawing_relationship_target(
                                         drawing_path,
+                                        rel.target_mode,
                                         &rel.target,
                                     ));
                                     if rel.target_mode == TargetMode::External {
@@ -105,13 +118,15 @@ impl XlsxParser {
                             if let Some(rel_id) = current_chart.take() {
                                 if let Some(rel) = relationships.get(&rel_id) {
                                     shape.relationship_id = Some(rel_id.clone());
-                                    shape.media_target = Some(Relationships::resolve_target(
+                                    let chart_path = drawing_relationship_target(
                                         drawing_path,
+                                        rel.target_mode,
                                         &rel.target,
-                                    ));
-                                    let chart_path =
-                                        Relationships::resolve_target(drawing_path, &rel.target);
-                                    if zip.contains(&chart_path) {
+                                    );
+                                    shape.media_target = Some(chart_path.clone());
+                                    if rel.target_mode != TargetMode::External
+                                        && zip.contains(&chart_path)
+                                    {
                                         let chart_xml = zip.read_file_string(&chart_path)?;
                                         if let Some(chart_id) =
                                             self.parse_chart(&chart_xml, &chart_path)
@@ -252,6 +267,18 @@ mod tests {
             })
             .expect("worksheet drawing node");
         assert_eq!(drawing.shapes.len(), 2);
+        let first_shape = parser
+            .store
+            .get(drawing.shapes[0])
+            .and_then(|node| match node {
+                IRNode::Shape(shape) => Some(shape),
+                _ => None,
+            })
+            .expect("first shape");
+        assert_eq!(
+            first_shape.media_target.as_deref(),
+            Some("https://cdn.example.test/image.png")
+        );
 
         let external_refs = parser
             .store

@@ -3,7 +3,7 @@
 use super::XlsxParser;
 use crate::ooxml::xlsx::workbook::SheetInfo;
 use docir_core::security::{XlmFunction, XlmMacro, XlmMacroCell};
-use docir_security::is_dangerous_xlm_function;
+use docir_security::contains_dangerous_xlm;
 
 impl XlsxParser {
     pub(super) fn begin_macro_sheet(&mut self, sheet: &SheetInfo) {
@@ -68,15 +68,17 @@ impl XlsxParser {
             xlm.has_auto_open = true;
         }
 
-        if let Some(func) = super::extract_formula_function(upper_text) {
-            if is_dangerous_xlm_function(&func) {
-                let args = super::parse_formula_args_text(formula_text);
-                xlm.dangerous_functions.push(XlmFunction {
-                    name: func.to_string(),
-                    arguments: args,
-                    cell_ref: cell_ref.to_string(),
-                });
-            }
+        let direct_function = super::extract_formula_function(upper_text);
+        for func in contains_dangerous_xlm(formula_text) {
+            let args = direct_function
+                .as_deref()
+                .filter(|direct| *direct == func)
+                .and_then(|_| super::parse_formula_args_text(formula_text));
+            xlm.dangerous_functions.push(XlmFunction {
+                name: func,
+                arguments: args,
+                cell_ref: cell_ref.to_string(),
+            });
         }
 
         let _ = sheet_path;

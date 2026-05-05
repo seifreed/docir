@@ -172,16 +172,28 @@ fn is_identifier_boundary(byte: Option<&u8>, at_edge: bool) -> bool {
 }
 
 fn is_comment_line(raw: &str) -> bool {
-    raw.starts_with('\'') || raw.starts_with("Rem ") || raw.starts_with("Rem:")
+    if raw.starts_with('\'') {
+        return true;
+    }
+    let Some(prefix) = raw.get(..3) else {
+        return false;
+    };
+    prefix.eq_ignore_ascii_case("Rem")
+        && (raw.len() == 3
+            || raw
+                .as_bytes()
+                .get(3)
+                .is_some_and(|b| b.is_ascii_whitespace() || *b == b':'))
 }
 
 fn parse_vba_procedure_name(raw: &str) -> Option<String> {
     let mut tokens = raw.split_whitespace();
-    let first = tokens.next()?;
-    let keyword = if is_visibility_modifier(first) {
-        tokens.next()?
-    } else {
-        first
+    let keyword = loop {
+        let token = tokens.next()?;
+        if is_procedure_modifier(token) {
+            continue;
+        }
+        break token;
     };
     if !(keyword.eq_ignore_ascii_case("sub") || keyword.eq_ignore_ascii_case("function")) {
         return None;
@@ -191,7 +203,7 @@ fn parse_vba_procedure_name(raw: &str) -> Option<String> {
     (!name.is_empty()).then(|| name.to_string())
 }
 
-fn is_visibility_modifier(token: &str) -> bool {
+fn is_procedure_modifier(token: &str) -> bool {
     token.eq_ignore_ascii_case("private")
         || token.eq_ignore_ascii_case("public")
         || token.eq_ignore_ascii_case("friend")
@@ -214,11 +226,19 @@ fn has_formula_boundary(input: &str, start: usize, len: usize) -> bool {
 }
 
 fn formula_boundary_before(byte: Option<&u8>, at_edge: bool) -> bool {
-    at_edge || matches!(byte, Some(b'=' | b'(' | b',' | b' ' | b'\t'))
+    at_edge
+        || matches!(
+            byte,
+            Some(b'=' | b'(' | b',' | b';' | b' ' | b'\t' | b'+' | b'-' | b'*' | b'/' | b'&')
+        )
 }
 
 fn formula_boundary_after(byte: Option<&u8>, at_edge: bool) -> bool {
-    at_edge || matches!(byte, Some(b'(' | b',' | b')' | b' ' | b'\t' | b'.' | b'!'))
+    at_edge
+        || matches!(
+            byte,
+            Some(b'(' | b',' | b';' | b')' | b' ' | b'\t' | b'.' | b'!')
+        )
 }
 
 #[cfg(test)]
@@ -283,6 +303,32 @@ mod tests {
     }
 
     #[test]
+    fn analyze_vba_source_handles_multiple_procedure_modifiers() {
+        let source = r#"
+            Private Static Sub AutoOpen()
+            End Sub
+        "#;
+        let analysis = analyze_vba_source(source);
+        assert!(analysis.procedures.iter().any(|p| p == "AutoOpen"));
+        assert!(analysis
+            .auto_exec_procedures
+            .iter()
+            .any(|p| p == "AutoOpen"));
+    }
+
+    #[test]
+    fn analyze_vba_source_ignores_case_insensitive_rem_comments() {
+        let source = r#"
+            rem Shell "calc.exe"
+            Rem	Shell "calc.exe"
+            REM CreateObject("WScript.Shell")
+            Rem
+        "#;
+        let analysis = analyze_vba_source(source);
+        assert!(analysis.suspicious_calls.is_empty());
+    }
+
+    #[test]
     fn auto_exec_procedures_constant_has_expected_entries() {
         assert!(AUTO_EXEC_PROCEDURES.contains(&"AutoOpen"));
         assert!(AUTO_EXEC_PROCEDURES.contains(&"Workbook_Open"));
@@ -293,5 +339,8 @@ mod tests {
         assert!(contains_dangerous_xlm("=SUM(A1:A10)").is_empty());
         assert!(!contains_dangerous_xlm("=EXEC(\"cmd /c calc\")").is_empty());
         assert!(!contains_dangerous_xlm("=CALL(\"kernel32\",\"WinExec\")").is_empty());
+        assert!(!contains_dangerous_xlm("=IF(A1;EXEC(\"cmd\");0)").is_empty());
+        assert!(!contains_dangerous_xlm("=1+EXEC(\"cmd\")").is_empty());
+        assert!(!contains_dangerous_xlm("=\"x\"&CALL(\"kernel32\",\"WinExec\")").is_empty());
     }
 }

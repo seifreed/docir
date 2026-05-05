@@ -516,7 +516,7 @@ fn test_parse_drawing_tracks_external_image_reference() {
     };
     assert_eq!(
         shape.media_target.as_deref(),
-        Some("xl/drawings/https:/example.com/image.png")
+        Some("https://example.com/image.png")
     );
     assert_eq!(shape.alt_text.as_deref(), Some("External image"));
 }

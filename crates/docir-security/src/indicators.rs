@@ -6,6 +6,7 @@ use crate::vba::{
 };
 use docir_core::security::{SuspiciousCall, ThreatIndicator, ThreatIndicatorType, ThreatLevel};
 use docir_core::types::NodeId;
+use std::net::IpAddr;
 
 /// Builds a threat indicator with standardized fields.
 pub fn make_indicator(
@@ -113,12 +114,17 @@ fn extract_host(url: &str) -> String {
     let no_auth = no_scheme.split('@').next_back().unwrap_or(no_scheme);
 
     // Strip port and path
-    let host_port = no_auth.split('/').next().unwrap_or(no_auth);
-    let host = host_port
-        .split(':')
+    let host_port = no_auth
+        .split('/')
         .next()
-        .unwrap_or(host_port)
+        .unwrap_or(no_auth)
         .trim_end_matches('.');
+    let host = if let Some(bracketed) = host_port.strip_prefix('[') {
+        bracketed.split(']').next().unwrap_or(bracketed)
+    } else {
+        host_port.split(':').next().unwrap_or(host_port)
+    }
+    .trim_end_matches('.');
 
     host.to_string()
 }
@@ -134,6 +140,9 @@ fn host_matches_domain(host: &str, domain: &str) -> bool {
 fn is_ip_address(host: &str) -> bool {
     let parts: Vec<&str> = host.split('.').collect();
     if parts.len() == 4 && parts.iter().all(|p| p.parse::<u8>().is_ok()) {
+        return true;
+    }
+    if host.parse::<IpAddr>().is_ok() {
         return true;
     }
     // Hex IP addresses (0xC0A80101 style)
@@ -180,6 +189,7 @@ End Sub
     #[test]
     fn test_is_suspicious_url() {
         assert!(is_suspicious_url("http://192.168.1.1/payload.exe"));
+        assert!(is_suspicious_url("http://[2001:db8::1]/payload.exe"));
         assert!(is_suspicious_url("http://evil.ru/malware.doc"));
         assert!(is_suspicious_url("https://pastebin.com/raw/abc123"));
         assert!(is_suspicious_url("https://pastebin.com./raw/abc123"));
