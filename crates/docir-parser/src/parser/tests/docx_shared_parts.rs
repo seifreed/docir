@@ -5,6 +5,58 @@ use std::io::Write;
 use zip::write::FileOptions;
 
 #[test]
+fn test_docx_reports_malformed_styles_part() {
+    let body = r#"
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body>
+            <w:p><w:r><w:t>Styled</w:t></w:r></w:p>
+          </w:body>
+        </w:document>"#;
+
+    let rels_xml = r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rStyles"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"
+            Target="styles.xml"/>
+        </Relationships>"#;
+
+    let content_types = r#"
+        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+          <Default Extension="xml" ContentType="application/xml"/>
+          <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+          <Override PartName="/word/document.xml"
+            ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+          <Override PartName="/word/styles.xml"
+            ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+        </Types>"#;
+
+    let path = create_docx_with_relationships(
+        body,
+        rels_xml,
+        content_types,
+        &[(
+            "word/styles.xml",
+            r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:style w:type="paragraph" w:styleId="Normal">
+            </w:styles>"#,
+        )],
+    );
+
+    let parser = OoxmlParser::new();
+    let err = parser
+        .parse_file(&path)
+        .expect_err("malformed DOCX styles part must fail instead of being ignored");
+    std::fs::remove_file(path).ok();
+
+    match err {
+        ParseError::Xml { file, .. } => {
+            assert_eq!(file, "word/styles.xml");
+        }
+        other => panic!("expected XML error, got {other}"),
+    }
+}
+
+#[test]
 fn test_docx_shared_parts_collects_multiple_part_kinds() {
     let body = r#"
         <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

@@ -10,6 +10,8 @@ use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
 use std::collections::HashMap;
 
+type DocxStylePartIds = (Option<NodeId>, Option<NodeId>, Option<NodeId>);
+
 impl OoxmlParser {
     pub(crate) fn parse_docx_word_parts(
         &self,
@@ -17,9 +19,9 @@ impl OoxmlParser {
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
-    ) -> DocxWordParts {
+    ) -> Result<DocxWordParts, ParseError> {
         let (styles_id, styles_with_effects_id, numbering_id) =
-            self.parse_docx_style_parts(zip, main_part_path, doc_rels, parser);
+            self.parse_docx_style_parts(zip, main_part_path, doc_rels, parser)?;
         let (comments, footnotes, endnotes, comments_ext_id, comments_id_map_id) =
             self.parse_docx_annotation_parts(zip, main_part_path, doc_rels, parser);
         let (settings_id, web_settings_id, font_table_id) =
@@ -30,7 +32,7 @@ impl OoxmlParser {
                 parser.parse_glossary_document(xml, doc_rels).ok()
             });
 
-        DocxWordParts {
+        Ok(DocxWordParts {
             styles_id,
             styles_with_effects_id,
             numbering_id,
@@ -43,7 +45,7 @@ impl OoxmlParser {
             comments_ext_id,
             comments_id_map_id,
             glossary_id,
-        }
+        })
     }
 
     fn parse_docx_style_parts(
@@ -52,50 +54,50 @@ impl OoxmlParser {
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
-    ) -> (Option<NodeId>, Option<NodeId>, Option<NodeId>) {
-        let styles_id = self.parse_docx_part_by_rel_with_span(
+    ) -> Result<DocxStylePartIds, ParseError> {
+        let styles_id = self.parse_docx_part_by_rel_with_span_result(
             zip,
             main_part_path,
             doc_rels,
             rel_type::STYLES,
             parser,
             |parser, part_path, xml| {
-                let id = parser.parse_styles(xml).ok()?;
+                let id = parser.parse_styles(xml)?;
                 if let Some(IRNode::StyleSet(set)) = parser.store_mut().get_mut(id) {
                     set.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
+                Ok(id)
             },
-        );
+        )?;
 
-        let styles_with_effects_id = self.parse_docx_part_by_path_with_span(
+        let styles_with_effects_id = self.parse_docx_part_by_path_with_span_result(
             zip,
             "word/stylesWithEffects.xml",
             parser,
-            |parser, _part_path, xml| parser.parse_styles_with_effects(xml).ok(),
+            |parser, _part_path, xml| parser.parse_styles_with_effects(xml),
             |store, id, part_path| {
                 if let Some(IRNode::StyleSet(set)) = store.get_mut(id) {
                     set.span = Some(SourceSpan::new(part_path));
                 }
             },
-        );
+        )?;
 
-        let numbering_id = self.parse_docx_part_by_rel_with_span(
+        let numbering_id = self.parse_docx_part_by_rel_with_span_result(
             zip,
             main_part_path,
             doc_rels,
             rel_type::NUMBERING,
             parser,
             |parser, part_path, xml| {
-                let id = parser.parse_numbering(xml).ok()?;
+                let id = parser.parse_numbering(xml)?;
                 if let Some(IRNode::NumberingSet(set)) = parser.store_mut().get_mut(id) {
                     set.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
+                Ok(id)
             },
-        );
+        )?;
 
-        (styles_id, styles_with_effects_id, numbering_id)
+        Ok((styles_id, styles_with_effects_id, numbering_id))
     }
 
     fn parse_docx_annotation_parts(
@@ -387,6 +389,25 @@ impl OoxmlParser {
         parse(parser, &part_path, &xml)
     }
 
+    fn parse_docx_part_by_rel_with_span_result<F>(
+        &self,
+        zip: &mut impl PackageReader,
+        main_part_path: &str,
+        doc_rels: &Relationships,
+        rel_type: &str,
+        parser: &mut DocxParser,
+        parse: F,
+    ) -> Result<Option<NodeId>, ParseError>
+    where
+        F: FnOnce(&mut DocxParser, &str, &str) -> Result<NodeId, ParseError>,
+    {
+        let Some((part_path, xml)) = read_xml_part_by_rel(zip, main_part_path, doc_rels, rel_type)?
+        else {
+            return Ok(None);
+        };
+        parse(parser, &part_path, &xml).map(Some)
+    }
+
     fn parse_docx_part_by_path<F>(
         &self,
         zip: &mut impl PackageReader,
@@ -416,6 +437,26 @@ impl OoxmlParser {
         let id = parse(parser, part_path, &xml)?;
         set_span(parser.store_mut(), id, part_path);
         Some(id)
+    }
+
+    fn parse_docx_part_by_path_with_span_result<F, S>(
+        &self,
+        zip: &mut impl PackageReader,
+        part_path: &str,
+        parser: &mut DocxParser,
+        parse: F,
+        set_span: S,
+    ) -> Result<Option<NodeId>, ParseError>
+    where
+        F: FnOnce(&mut DocxParser, &str, &str) -> Result<NodeId, ParseError>,
+        S: FnOnce(&mut IrStore, NodeId, &str),
+    {
+        let Some(xml) = read_xml_part(zip, part_path)? else {
+            return Ok(None);
+        };
+        let id = parse(parser, part_path, &xml)?;
+        set_span(parser.store_mut(), id, part_path);
+        Ok(Some(id))
     }
 
     fn read_xml_part_by_rel_optional(

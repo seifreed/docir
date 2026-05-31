@@ -23,7 +23,7 @@ impl OoxmlParser {
         let header_footer_map =
             self.parse_docx_headers_footers(zip, main_part_path, &doc_rels, &mut docx_parser)?;
 
-        let parts = self.parse_docx_word_parts(zip, main_part_path, &doc_rels, &mut docx_parser);
+        let parts = self.parse_docx_word_parts(zip, main_part_path, &doc_rels, &mut docx_parser)?;
 
         let root_id =
             docx_parser.parse_document(&document_xml, &doc_rels, Some(&header_footer_map))?;
