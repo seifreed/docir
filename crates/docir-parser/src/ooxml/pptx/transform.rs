@@ -1,6 +1,6 @@
 use super::{ParseError, Reader, ShapeTransform};
 use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 
 pub(super) fn parse_transform(
     reader: &mut Reader<&[u8]>,
@@ -10,68 +10,7 @@ pub(super) fn parse_transform(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
-                b"off" => {
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"x" => {
-                                transform.x = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0)
-                            }
-                            b"y" => {
-                                transform.y = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0)
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                b"ext" => {
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"cx" => {
-                                transform.width =
-                                    lossy_attr_value(&attr).parse::<u64>().unwrap_or(0)
-                            }
-                            b"cy" => {
-                                transform.height =
-                                    lossy_attr_value(&attr).parse::<u64>().unwrap_or(0)
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
-                b"off" => {
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"x" => {
-                                transform.x = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0)
-                            }
-                            b"y" => {
-                                transform.y = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0)
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                b"ext" => {
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"cx" => {
-                                transform.width =
-                                    lossy_attr_value(&attr).parse::<u64>().unwrap_or(0)
-                            }
-                            b"cy" => {
-                                transform.height =
-                                    lossy_attr_value(&attr).parse::<u64>().unwrap_or(0)
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => apply_transform_event(&e, transform),
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"xfrm" => {
                 break;
             }
@@ -85,6 +24,34 @@ pub(super) fn parse_transform(
     }
 
     Ok(())
+}
+
+fn apply_transform_event(e: &BytesStart<'_>, transform: &mut ShapeTransform) {
+    match local_name(e.name().as_ref()) {
+        b"off" => apply_transform_offset(e, transform),
+        b"ext" => apply_transform_extent(e, transform),
+        _ => {}
+    }
+}
+
+fn apply_transform_offset(e: &BytesStart<'_>, transform: &mut ShapeTransform) {
+    for attr in e.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"x" => transform.x = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0),
+            b"y" => transform.y = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0),
+            _ => {}
+        }
+    }
+}
+
+fn apply_transform_extent(e: &BytesStart<'_>, transform: &mut ShapeTransform) {
+    for attr in e.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"cx" => transform.width = lossy_attr_value(&attr).parse::<u64>().unwrap_or(0),
+            b"cy" => transform.height = lossy_attr_value(&attr).parse::<u64>().unwrap_or(0),
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
