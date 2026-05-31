@@ -46,7 +46,9 @@ impl PptxParser {
                 Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pic" => {
                     break;
                 }
-                Ok(Event::Eof) => break,
+                Ok(Event::Eof) => {
+                    return Err(xml_error(slide_path, "unexpected EOF in picture XML"));
+                }
                 Err(e) => {
                     return Err(xml_error(slide_path, e));
                 }

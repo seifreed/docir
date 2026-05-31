@@ -117,6 +117,40 @@ fn test_parse_pic_external_media_reference() {
 }
 
 #[test]
+fn test_parse_pic_reports_truncated_xml() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <p:cSld>
+            <p:spTree>
+              <p:pic>
+                <p:blipFill>
+                  <a:blip r:embed="rIdImage"/>
+                </p:blipFill>
+        "#;
+    let rels = Relationships::default();
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+
+    let err = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/broken-pic.xml",
+            &rels,
+            (None, None),
+        )
+        .expect_err("truncated picture XML must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/broken-pic.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_pic_linked_media_reference() {
     let slide_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
