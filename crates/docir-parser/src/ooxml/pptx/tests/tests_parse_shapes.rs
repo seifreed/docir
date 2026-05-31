@@ -165,6 +165,38 @@ fn test_parse_group_properties_reports_truncated_xml() {
 }
 
 #[test]
+fn test_parse_graphic_frame_reports_truncated_xml() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <p:cSld>
+            <p:spTree>
+              <p:graphicFrame>
+                <p:nvGraphicFramePr>
+                  <p:cNvPr id="3" name="Table 1"/>
+                </p:nvGraphicFramePr>
+    "#;
+
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+    let err = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/broken-graphic-frame.xml",
+            &Relationships::default(),
+            (None, None),
+        )
+        .expect_err("truncated graphic frame XML must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/broken-graphic-frame.xml"),
+        other => panic!("expected XML error, got {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_slide_accepts_alternate_namespace_prefixes() {
     let slide_xml = r#"
         <deck:sld xmlns:deck="http://schemas.openxmlformats.org/presentationml/2006/main"
