@@ -14,6 +14,8 @@ mod tests_parse_masters;
 #[cfg(test)]
 mod tests_parse_shapes;
 #[cfg(test)]
+mod tests_parse_slide_auxiliary;
+#[cfg(test)]
 mod tests_postprocess;
 #[cfg(test)]
 mod tests_tests;
