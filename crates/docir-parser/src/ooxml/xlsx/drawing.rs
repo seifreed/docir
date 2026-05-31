@@ -35,18 +35,30 @@ impl XlsxParser {
         let mut reader = Reader::from_str(xml);
         reader.config_mut().trim_text(true);
         let mut buf = Vec::new();
+        let mut depth = 0usize;
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => handle_xlsx_drawing_start(&e, &mut state),
-                Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
-                    b"pic" => self.finish_picture_shape(&mut state, drawing_path, relationships),
-                    b"graphicFrame" => {
-                        self.finish_chart_shape(&mut state, drawing_path, relationships, zip)?;
+                Ok(Event::Start(e)) => {
+                    depth += 1;
+                    handle_xlsx_drawing_start(&e, &mut state);
+                }
+                Ok(Event::End(e)) => {
+                    depth = depth.saturating_sub(1);
+                    match local_name(e.name().as_ref()) {
+                        b"pic" => {
+                            self.finish_picture_shape(&mut state, drawing_path, relationships);
+                        }
+                        b"graphicFrame" => {
+                            self.finish_chart_shape(&mut state, drawing_path, relationships, zip)?;
+                        }
+                        _ => {}
                     }
-                    _ => {}
-                },
-                Ok(Event::Eof) => break,
+                }
+                Ok(Event::Eof) if depth == 0 => break,
+                Ok(Event::Eof) => {
+                    return Err(xml_error(drawing_path, "unexpected EOF in drawing XML"));
+                }
                 Err(e) => {
                     return Err(xml_error(drawing_path, e));
                 }
@@ -402,27 +414,22 @@ mod tests {
     }
 
     #[test]
-    fn parse_drawing_tolerates_truncated_xml_and_returns_empty_drawing() {
+    fn parse_drawing_reports_truncated_xml() {
         let mut parser = XlsxParser::new();
         let rels = Relationships::parse(relationships_xml()).expect("relationships");
         let mut zip = TestPackageReader::new(&[]);
 
-        let id = parser
+        let err = parser
             .parse_drawing(
                 "<xdr:wsDr><xdr:pic>",
                 "xl/drawings/drawing1.xml",
                 &rels,
                 &mut zip,
             )
-            .expect("parser is tolerant for truncated drawing xml");
-        let drawing = parser
-            .store
-            .get(id)
-            .and_then(|node| match node {
-                IRNode::WorksheetDrawing(d) => Some(d),
-                _ => None,
-            })
-            .expect("worksheet drawing node");
-        assert!(drawing.shapes.is_empty());
+            .expect_err("truncated drawing XML must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/drawings/drawing1.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }
