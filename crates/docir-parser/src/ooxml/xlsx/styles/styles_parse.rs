@@ -100,11 +100,6 @@ fn handle_styles_start(
         || handle_border_start(e, state)
         || handle_xf_start(e, state)
         || handle_table_style_start(e, state, styles);
-    #[cfg(test)]
-    eprintln!(
-        "handle_styles_start event={} handled={handled}",
-        String::from_utf8_lossy(e.name().as_ref()),
-    );
     if handled {
         return Ok(());
     }
@@ -112,32 +107,18 @@ fn handle_styles_start(
     let name = local_name(raw_name.as_ref());
     if name == b"numFmts" {
         state.in_num_fmts = true;
-        #[cfg(test)]
-        eprintln!("handle_styles_start entered numFmts");
     } else if name == b"fonts" {
         state.in_fonts = true;
-        #[cfg(test)]
-        eprintln!("handle_styles_start entered fonts");
     } else if name == b"fills" {
         state.in_fills = true;
-        #[cfg(test)]
-        eprintln!("handle_styles_start entered fills");
     } else if name == b"borders" {
         state.in_borders = true;
-        #[cfg(test)]
-        eprintln!("handle_styles_start entered borders");
     } else if name == b"cellXfs" {
         state.in_cell_xfs = true;
-        #[cfg(test)]
-        eprintln!("handle_styles_start entered cellXfs");
     } else if name == b"cellStyleXfs" {
         state.in_cell_style_xfs = true;
-        #[cfg(test)]
-        eprintln!("handle_styles_start entered cellStyleXfs");
     } else if name == b"dxfs" {
         state.in_dxfs = true;
-        #[cfg(test)]
-        eprintln!("handle_styles_start entered dxfs");
     }
     Ok(())
 }
@@ -150,15 +131,8 @@ fn handle_num_fmt_start(
     if local_name(e.name().as_ref()) != b"numFmt" {
         return false;
     }
-    #[cfg(test)]
-    eprintln!(
-        "handle_num_fmt_start pre num_fmts={} in_dxfs={}",
-        state.in_num_fmts, state.in_dxfs
-    );
     if state.in_num_fmts {
         if let Some(fmt) = parse_number_format(e) {
-            #[cfg(test)]
-            eprintln!("handle_num_fmt_start push num_fmt id={}", fmt.id);
             styles.number_formats.push(fmt);
         }
     } else if state.in_dxfs
@@ -341,8 +315,6 @@ fn handle_border_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool
 fn handle_xf_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
     match local_name(e.name().as_ref()) {
         b"dxf" if state.in_dxfs => {
-            #[cfg(test)]
-            eprintln!("handle_xf_start entering dxf");
             state.current_dxf = Some(DxfStyle::new());
             true
         }
@@ -465,19 +437,11 @@ fn handle_styles_end(
             }
         }
         b"dxf" => {
-            #[cfg(test)]
-            eprintln!("handle_styles_end dxf");
             if let Some(dxf) = state.current_dxf.take() {
                 styles.dxfs.push(dxf);
             }
         }
         b"dxfs" => {
-            #[cfg(test)]
-            eprintln!(
-                "handle_styles_end dxfs before_push in_dxfs={} has_dxf={}",
-                state.in_dxfs,
-                state.current_dxf.is_some()
-            );
             if let Some(dxf) = state.current_dxf.take() {
                 styles.dxfs.push(dxf);
             }

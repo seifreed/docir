@@ -335,8 +335,6 @@ fn parse_sdt_properties(
     control: &mut docir_core::ir::ContentControl,
 ) -> Result<(), ParseError> {
     let mut buf = Vec::new();
-    #[cfg(test)]
-    eprintln!("parse_sdt_properties start");
     super::scan_docx_xml_events_until_end(
         reader,
         &mut buf,
@@ -347,15 +345,11 @@ fn parse_sdt_properties(
                     b"tag" => {
                         if let Some(val) = attr_value(e, b"w:val") {
                             control.tag = Some(val);
-                            #[cfg(test)]
-                            eprintln!("parse_sdt_properties tag={:?}", control.tag);
                         }
                     }
                     b"alias" => {
                         if let Some(val) = attr_value(e, b"w:val") {
                             control.alias = Some(val);
-                            #[cfg(test)]
-                            eprintln!("parse_sdt_properties alias={:?}", control.alias);
                         }
                     }
                     b"id" => {
@@ -381,11 +375,6 @@ fn parse_sdt_properties(
             Ok(XmlScanControl::Continue)
         },
     )?;
-    #[cfg(test)]
-    eprintln!(
-        "parse_sdt_properties done alias={:?} tag={:?}",
-        control.alias, control.tag
-    );
     Ok(())
 }
 
