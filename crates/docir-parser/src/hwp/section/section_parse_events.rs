@@ -17,19 +17,19 @@ pub(super) fn handle_hwpx_start(
 ) -> Result<(), ParseError> {
     let name = e.name().as_ref().to_vec();
     let local = local_name(&name);
-    if super::start_hwpx_note(e, local, state) {
+    if super::start_hwpx_note(e, local, source, state)? {
         return Ok(());
     }
-    if push_hwpx_comment_reference(e, local, source, store, state) {
+    if push_hwpx_comment_reference(e, local, source, store, state)? {
         return Ok(());
     }
-    if push_hwpx_revision(e, local, source, state) {
+    if push_hwpx_revision(e, local, source, state)? {
         return Ok(());
     }
-    if push_hwpx_shape(e, local, source, store, media_lookup, state) {
+    if push_hwpx_shape(e, local, source, store, media_lookup, state)? {
         return Ok(());
     }
-    apply_hwpx_start_element(local, e, source, store, state);
+    apply_hwpx_start_element(local, e, source, store, state)?;
     Ok(())
 }
 
@@ -39,11 +39,11 @@ pub(super) fn apply_hwpx_start_element(
     source: &str,
     store: &mut IrStore,
     state: &mut HwpxSectionState,
-) {
+) -> Result<(), ParseError> {
     match local {
-        b"p" => start_hwpx_paragraph(e, source, store, state),
+        b"p" => start_hwpx_paragraph(e, source, store, state)?,
         b"t" => state.in_text = true,
-        b"r" | b"run" | b"span" => state.run_props = Some(run_properties_from_attrs(e)),
+        b"r" | b"run" | b"span" => state.run_props = Some(run_properties_from_attrs(e, source)?),
         b"tbl" | b"table" => {
             finalize_paragraph_hwpx(
                 &mut state.current_para,
@@ -65,6 +65,7 @@ pub(super) fn apply_hwpx_start_element(
         b"li" | b"list-item" => ensure_list_item_paragraph(source, state),
         _ => {}
     }
+    Ok(())
 }
 
 pub(super) fn start_hwpx_paragraph(
@@ -72,13 +73,13 @@ pub(super) fn start_hwpx_paragraph(
     source: &str,
     store: &mut IrStore,
     state: &mut HwpxSectionState,
-) {
+) -> Result<(), ParseError> {
     if let Some(note) = state.note_stack.last_mut() {
         finalize_note_paragraph(note, store);
         let mut para = Paragraph::new();
         para.span = Some(SourceSpan::new(source));
         note.current_para = Some(para);
-        return;
+        return Ok(());
     }
     finalize_paragraph_hwpx(
         &mut state.current_para,
@@ -88,11 +89,12 @@ pub(super) fn start_hwpx_paragraph(
     );
     let mut para = Paragraph::new();
     para.span = Some(SourceSpan::new(source));
-    if let Some(style_id) = attr_any(e, &[b"styleId", b"style-id", b"style"]) {
+    if let Some(style_id) = attr_any(e, &[b"styleId", b"style-id", b"style"], source)? {
         para.style_id = Some(style_id);
     }
     apply_hwpx_numbering(&mut para, state.list_level);
     state.current_para = Some(para);
+    Ok(())
 }
 
 pub(super) fn ensure_list_item_paragraph(source: &str, state: &mut HwpxSectionState) {
@@ -125,10 +127,10 @@ pub(super) fn handle_hwpx_empty(
 ) -> Result<(), ParseError> {
     let name = e.name().as_ref().to_vec();
     let local = local_name(&name);
-    if push_hwpx_comment_reference(e, local, source, store, state) {
+    if push_hwpx_comment_reference(e, local, source, store, state)? {
         return Ok(());
     }
-    let _ = push_hwpx_shape(e, local, source, store, media_lookup, state);
+    push_hwpx_shape(e, local, source, store, media_lookup, state)?;
     Ok(())
 }
 

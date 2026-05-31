@@ -133,6 +133,36 @@ mod tests {
     }
 
     #[test]
+    fn parse_hwpx_section_reports_malformed_attributes() {
+        let xml = r#"
+            <hp:section xmlns:hp="http://www.hancom.co.kr/hwpml">
+              <hp:p styleId="Body" styleId="Duplicate"><hp:t>broken attrs</hp:t></hp:p>
+            </hp:section>
+        "#;
+        let mut store = IrStore::new();
+        let mut comments = Vec::new();
+        let mut footnotes = Vec::new();
+        let mut endnotes = Vec::new();
+        let media_lookup = HashMap::new();
+
+        let err = parse_hwpx_section(
+            xml,
+            "Contents/section0.xml",
+            &mut store,
+            &mut comments,
+            &mut footnotes,
+            &mut endnotes,
+            &media_lookup,
+        )
+        .expect_err("malformed section attributes must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "Contents/section0.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
     fn parse_hwpx_section_generates_note_ids_and_nested_list_numbering() {
         let xml = r#"
             <hp:section xmlns:hp="http://www.hancom.co.kr/hwpml">

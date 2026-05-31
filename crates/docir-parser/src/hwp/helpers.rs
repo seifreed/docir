@@ -1,6 +1,8 @@
 use super::part_registry;
 use crate::diagnostics::{push_info, push_warning};
+use crate::error::ParseError;
 use crate::text_utils::parse_text_alignment;
+use crate::xml_utils::{decoded_attr_value, visit_attributes};
 use docir_core::ir::{
     Diagnostics, MediaType, RunProperties, StyleParagraphProperties, StyleRunProperties,
     TableAlignment, TableProperties, TableWidth, TableWidthType,
@@ -24,22 +26,50 @@ pub(super) fn is_hwpx_master(path: &str) -> bool {
     path.starts_with("Contents/masterPage") && path.ends_with(".xml")
 }
 
-pub(super) fn attr_any(e: &BytesStart, names: &[&[u8]]) -> Option<String> {
-    for name in names {
-        for attr in e.attributes().flatten() {
-            if attr.key.as_ref() == *name {
-                return Some(crate::xml_utils::decoded_attr_value(&attr, e.decoder()));
-            }
+pub(super) fn attr_any(
+    e: &BytesStart<'_>,
+    names: &[&[u8]],
+    source: &str,
+) -> Result<Option<String>, ParseError> {
+    let mut value = None;
+    visit_attributes(e, source, |attr| {
+        if value.is_none()
+            && names
+                .iter()
+                .any(|candidate| attr.key.as_ref() == *candidate)
+        {
+            value = Some(decoded_attr_value(attr, e.decoder()));
         }
-    }
-    None
+    })?;
+    Ok(value)
 }
 
-pub(super) fn run_properties_from_attrs(e: &BytesStart) -> RunProperties {
+pub(super) fn attr_any_by_suffix(
+    e: &BytesStart<'_>,
+    suffixes: &[&[u8]],
+    source: &str,
+) -> Result<Option<String>, ParseError> {
+    let mut value = None;
+    visit_attributes(e, source, |attr| {
+        if value.is_none()
+            && suffixes
+                .iter()
+                .any(|suffix| attr.key.as_ref().ends_with(suffix))
+        {
+            value = Some(decoded_attr_value(attr, e.decoder()));
+        }
+    })?;
+    Ok(value)
+}
+
+pub(super) fn run_properties_from_attrs(
+    e: &BytesStart<'_>,
+    source: &str,
+) -> Result<RunProperties, ParseError> {
     let mut props = RunProperties::default();
-    for attr in e.attributes().flatten() {
+    visit_attributes(e, source, |attr| {
         let key = attr.key.as_ref();
-        let value = crate::xml_utils::decoded_attr_value(&attr, e.decoder());
+        let value = decoded_attr_value(attr, e.decoder());
         match key {
             b"bold" | b"b" => {
                 props.bold = Some(value == "1" || value.eq_ignore_ascii_case("true"));
@@ -66,8 +96,8 @@ pub(super) fn run_properties_from_attrs(e: &BytesStart) -> RunProperties {
             }
             _ => {}
         }
-    }
-    props
+    })?;
+    Ok(props)
 }
 
 pub(super) fn style_run_props_from_run(run: RunProperties) -> StyleRunProperties {
@@ -86,26 +116,29 @@ pub(super) fn style_run_props_from_run(run: RunProperties) -> StyleRunProperties
     }
 }
 
-pub(super) fn parse_hwpx_paragraph_props(e: &BytesStart) -> StyleParagraphProperties {
+pub(super) fn parse_hwpx_paragraph_props(
+    e: &BytesStart<'_>,
+    source: &str,
+) -> Result<StyleParagraphProperties, ParseError> {
     let mut props = StyleParagraphProperties::default();
-    if let Some(align) = attr_any(e, &[b"align", b"alignment", b"textAlign"]) {
+    if let Some(align) = attr_any(e, &[b"align", b"alignment", b"textAlign"], source)? {
         props.alignment = parse_text_alignment(&align);
     }
     let mut indent = docir_core::ir::Indentation::default();
     let mut has_indent = false;
-    if let Some(value) = attr_any(e, &[b"indentLeft", b"indent-left", b"left"])
+    if let Some(value) = attr_any(e, &[b"indentLeft", b"indent-left", b"left"], source)?
         && let Ok(left) = value.parse::<i32>()
     {
         indent.left = Some(left);
         has_indent = true;
     }
-    if let Some(value) = attr_any(e, &[b"indentRight", b"indent-right", b"right"])
+    if let Some(value) = attr_any(e, &[b"indentRight", b"indent-right", b"right"], source)?
         && let Ok(right) = value.parse::<i32>()
     {
         indent.right = Some(right);
         has_indent = true;
     }
-    if let Some(value) = attr_any(e, &[b"firstIndent", b"first-indent", b"first"])
+    if let Some(value) = attr_any(e, &[b"firstIndent", b"first-indent", b"first"], source)?
         && let Ok(first) = value.parse::<i32>()
     {
         indent.first_line = Some(first);
@@ -114,13 +147,16 @@ pub(super) fn parse_hwpx_paragraph_props(e: &BytesStart) -> StyleParagraphProper
     if has_indent {
         props.indentation = Some(indent);
     }
-    props
+    Ok(props)
 }
 
-pub(super) fn parse_hwpx_table_props(e: &BytesStart) -> Option<TableProperties> {
+pub(super) fn parse_hwpx_table_props(
+    e: &BytesStart<'_>,
+    source: &str,
+) -> Result<Option<TableProperties>, ParseError> {
     let mut props = TableProperties::default();
     let mut has_value = false;
-    if let Some(width) = attr_any(e, &[b"width", b"w", b"tableWidth"])
+    if let Some(width) = attr_any(e, &[b"width", b"w", b"tableWidth"], source)?
         && let Ok(value) = width.parse::<u32>()
     {
         props.width = Some(TableWidth {
@@ -129,7 +165,7 @@ pub(super) fn parse_hwpx_table_props(e: &BytesStart) -> Option<TableProperties> 
         });
         has_value = true;
     }
-    if let Some(align) = attr_any(e, &[b"align", b"alignment", b"tableAlign"]) {
+    if let Some(align) = attr_any(e, &[b"align", b"alignment", b"tableAlign"], source)? {
         let align = align.to_ascii_lowercase();
         props.alignment = match align.as_str() {
             "left" => Some(TableAlignment::Left),
@@ -141,7 +177,7 @@ pub(super) fn parse_hwpx_table_props(e: &BytesStart) -> Option<TableProperties> 
             has_value = true;
         }
     }
-    if has_value { Some(props) } else { None }
+    Ok(if has_value { Some(props) } else { None })
 }
 
 pub(super) fn media_type_from_path(path: &str) -> MediaType {

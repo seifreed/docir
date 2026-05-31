@@ -4,7 +4,7 @@ use crate::diagnostics::attach_diagnostics_if_any;
 use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::parser::{ParsedDocument, ParserConfig};
-use crate::xml_utils::{attr_value_by_suffix, local_name};
+use crate::xml_utils::local_name;
 use docir_core::ir::{IRNode, Shape, ShapeType, Table, TableCell, TableRow};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -25,8 +25,8 @@ pub mod part_registry;
 mod section;
 
 use helpers::{
-    attr_any, parse_hwpx_paragraph_props, parse_hwpx_table_props, run_properties_from_attrs,
-    style_run_props_from_run,
+    attr_any, attr_any_by_suffix, parse_hwpx_paragraph_props, parse_hwpx_table_props,
+    run_properties_from_attrs, style_run_props_from_run,
 };
 use legacy::{maybe_decompress_stream, parse_file_header, scan_hwp_external_refs};
 use security::scan_hwpx_security;
@@ -109,7 +109,7 @@ fn parse_hwpx_shape(
     source: &str,
     media_lookup: &HashMap<String, NodeId>,
     store: &mut IrStore,
-) -> Option<NodeId> {
+) -> Result<Option<NodeId>, ParseError> {
     let shape_type = match local {
         b"pic" | b"image" | b"img" => ShapeType::Picture,
         b"chart" => ShapeType::Chart,
@@ -120,14 +120,14 @@ fn parse_hwpx_shape(
         _ => ShapeType::Unknown,
     };
     if matches!(shape_type, ShapeType::Unknown) {
-        return None;
+        return Ok(None);
     }
 
     let mut shape = Shape::new(shape_type);
-    shape.name = attr_any(e, &[b"name", b"id", b"shapeId", b"shape-id"]);
-    shape.alt_text = attr_any(e, &[b"alt", b"altText", b"alt-text"]);
-    shape.hyperlink = attr_any(e, &[b"href", b"link", b"xlink:href"]);
-    shape.media_target = attr_value_by_suffix(
+    shape.name = attr_any(e, &[b"name", b"id", b"shapeId", b"shape-id"], source)?;
+    shape.alt_text = attr_any(e, &[b"alt", b"altText", b"alt-text"], source)?;
+    shape.hyperlink = attr_any(e, &[b"href", b"link", b"xlink:href"], source)?;
+    shape.media_target = attr_any_by_suffix(
         e,
         &[
             b"href",
@@ -137,29 +137,37 @@ fn parse_hwpx_shape(
             b"binData",
             b"binDataId",
         ],
-    );
+        source,
+    )?;
     if let Some(target) = shape.media_target.as_deref()
         && let Some(id) = media_lookup.get(target)
     {
         shape.media_asset = Some(*id);
     }
-    if let Some(x) = attr_any(e, &[b"x", b"posX", b"left"]).and_then(|v| v.parse::<i64>().ok()) {
+    if let Some(x) =
+        attr_any(e, &[b"x", b"posX", b"left"], source)?.and_then(|v| v.parse::<i64>().ok())
+    {
         shape.transform.x = x;
     }
-    if let Some(y) = attr_any(e, &[b"y", b"posY", b"top"]).and_then(|v| v.parse::<i64>().ok()) {
+    if let Some(y) =
+        attr_any(e, &[b"y", b"posY", b"top"], source)?.and_then(|v| v.parse::<i64>().ok())
+    {
         shape.transform.y = y;
     }
-    if let Some(width) = attr_any(e, &[b"width", b"w"]).and_then(|v| v.parse::<u64>().ok()) {
+    if let Some(width) = attr_any(e, &[b"width", b"w"], source)?.and_then(|v| v.parse::<u64>().ok())
+    {
         shape.transform.width = width;
     }
-    if let Some(height) = attr_any(e, &[b"height", b"h"]).and_then(|v| v.parse::<u64>().ok()) {
+    if let Some(height) =
+        attr_any(e, &[b"height", b"h"], source)?.and_then(|v| v.parse::<u64>().ok())
+    {
         shape.transform.height = height;
     }
     shape.span = Some(SourceSpan::new(source));
 
     let shape_id = shape.id;
     store.insert(IRNode::Shape(shape));
-    Some(shape_id)
+    Ok(Some(shape_id))
 }
 
 fn finalize_cell_hwpx(

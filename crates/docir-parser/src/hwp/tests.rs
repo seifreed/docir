@@ -108,11 +108,22 @@ fn test_media_type_and_attr_helpers() {
 
     let e = start_event(r#"<hp:run name="shape-1" altText="preview" unknown="x"/>"#);
     assert_eq!(
-        attr_any(&e, &[b"missing", b"name"]).as_deref(),
+        attr_any(&e, &[b"missing", b"name"], "test.xml")
+            .expect("attr")
+            .as_deref(),
         Some("shape-1")
     );
-    assert_eq!(attr_any(&e, &[b"altText"]).as_deref(), Some("preview"));
-    assert!(attr_any(&e, &[b"nope"]).is_none());
+    assert_eq!(
+        attr_any(&e, &[b"altText"], "test.xml")
+            .expect("attr")
+            .as_deref(),
+        Some("preview")
+    );
+    assert!(
+        attr_any(&e, &[b"nope"], "test.xml")
+            .expect("attr")
+            .is_none()
+    );
 }
 
 #[test]
@@ -120,7 +131,7 @@ fn test_run_and_style_property_helpers() {
     let e = start_event(
         r##"<hp:r bold="1" italic="true" underline="single" color="#AABBCC" highlight="#00FF00" font="Malgun" size="12"/>"##,
     );
-    let run = run_properties_from_attrs(&e);
+    let run = run_properties_from_attrs(&e, "test.xml").expect("run props");
     assert_eq!(run.bold, Some(true));
     assert_eq!(run.italic, Some(true));
     assert!(run.underline.is_some());
@@ -139,7 +150,7 @@ fn test_run_and_style_property_helpers() {
 fn test_paragraph_and_table_property_helpers() {
     let para =
         start_event(r#"<hp:p align="center" indentLeft="10" indentRight="20" firstIndent="30"/>"#);
-    let para_props = parse_hwpx_paragraph_props(&para);
+    let para_props = parse_hwpx_paragraph_props(&para, "test.xml").expect("paragraph props");
     assert!(para_props.alignment.is_some());
     let indent = para_props.indentation.expect("indentation");
     assert_eq!(indent.left, Some(10));
@@ -147,14 +158,20 @@ fn test_paragraph_and_table_property_helpers() {
     assert_eq!(indent.first_line, Some(30));
 
     let table = start_event(r#"<hp:tbl width="7200" align="right"/>"#);
-    let table_props = parse_hwpx_table_props(&table).expect("table props");
+    let table_props = parse_hwpx_table_props(&table, "test.xml")
+        .expect("table attrs")
+        .expect("table props");
     let width = table_props.width.expect("table width");
     assert_eq!(width.value, 7200);
     assert_eq!(width.width_type, TableWidthType::Dxa);
     assert_eq!(table_props.alignment, Some(TableAlignment::Right));
 
     let empty = start_event(r#"<hp:tbl align="unknown"/>"#);
-    assert!(parse_hwpx_table_props(&empty).is_none());
+    assert!(
+        parse_hwpx_table_props(&empty, "test.xml")
+            .expect("table attrs")
+            .is_none()
+    );
 }
 
 #[test]
@@ -295,6 +312,31 @@ fn test_hwpx_styles_reports_malformed_content_hpf() {
     let err = parser
         .parse_bytes(&data)
         .expect_err("malformed HWPX styles must fail instead of returning partial styles");
+
+    match err {
+        crate::error::ParseError::Xml { file, .. } => {
+            assert_eq!(file, "Contents/content.hpf");
+        }
+        other => panic!("expected XML error, got {other}"),
+    }
+}
+
+#[test]
+fn test_hwpx_styles_reports_malformed_attributes() {
+    let styles_xml = r##"<hp:package xmlns:hp="http://www.hancom.co.kr/hwpml">
+  <hp:styles>
+    <hp:style id="s1" id="duplicate" name="Body" />
+  </hp:styles>
+</hp:package>"##;
+    let section_xml = r#"<hp:section xmlns:hp="http://www.hancom.co.kr/hwpml">
+  <hp:p><hp:t>Texto</hp:t></hp:p>
+</hp:section>"#;
+    let data = build_hwpx_zip_with_parts(section_xml, Some(styles_xml), Vec::new());
+    let parser = HwpxParser::new();
+
+    let err = parser
+        .parse_bytes(&data)
+        .expect_err("malformed HWPX style attributes must fail");
 
     match err {
         crate::error::ParseError::Xml { file, .. } => {

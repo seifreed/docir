@@ -20,18 +20,18 @@ pub(super) fn parse_hwpx_styles(xml: &str, source: &str) -> Result<Option<StyleS
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
                 if local == b"style" {
-                    current = Some(parse_style_attrs(&e));
+                    current = Some(parse_style_attrs(&e, source)?);
                 } else {
-                    apply_style_props(local, &e, &mut current);
+                    apply_style_props(local, &e, source, &mut current)?;
                 }
             }
             Event::Empty(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
                 if local == b"style" {
-                    styles.push(parse_style_attrs(&e));
+                    styles.push(parse_style_attrs(&e, source)?);
                 } else {
-                    apply_style_props(local, &e, &mut current);
+                    apply_style_props(local, &e, source, &mut current)?;
                 }
             }
             Event::End(e) => {
@@ -48,11 +48,14 @@ pub(super) fn parse_hwpx_styles(xml: &str, source: &str) -> Result<Option<StyleS
     Ok(finalize_style_set(styles, source))
 }
 
-fn parse_style_attrs(e: &quick_xml::events::BytesStart<'_>) -> Style {
-    let style_id =
-        attr_any(e, &[b"id", b"styleId", b"style-id"]).unwrap_or_else(|| "style".to_string());
-    let name = attr_any(e, &[b"name", b"styleName", b"style-name"]);
-    let style_type = match attr_any(e, &[b"type", b"styleType"])
+fn parse_style_attrs(
+    e: &quick_xml::events::BytesStart<'_>,
+    source: &str,
+) -> Result<Style, ParseError> {
+    let style_id = attr_any(e, &[b"id", b"styleId", b"style-id"], source)?
+        .unwrap_or_else(|| "style".to_string());
+    let name = attr_any(e, &[b"name", b"styleName", b"style-name"], source)?;
+    let style_type = match attr_any(e, &[b"type", b"styleType"], source)?
         .as_deref()
         .map(|v| v.to_ascii_lowercase())
     {
@@ -61,36 +64,38 @@ fn parse_style_attrs(e: &quick_xml::events::BytesStart<'_>) -> Style {
         Some(t) if t == "table" => StyleType::Table,
         _ => StyleType::Other,
     };
-    Style {
+    Ok(Style {
         style_id,
         name,
         style_type,
-        based_on: attr_any(e, &[b"basedOn", b"based-on"]),
-        next: attr_any(e, &[b"next", b"next-style"]),
-        is_default: attr_any(e, &[b"default", b"isDefault"])
+        based_on: attr_any(e, &[b"basedOn", b"based-on"], source)?,
+        next: attr_any(e, &[b"next", b"next-style"], source)?,
+        is_default: attr_any(e, &[b"default", b"isDefault"], source)?
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false),
         run_props: None,
         paragraph_props: None,
         table_props: None,
-    }
+    })
 }
 
 fn apply_style_props(
     local: &[u8],
     e: &quick_xml::events::BytesStart<'_>,
+    source: &str,
     current: &mut Option<Style>,
-) {
+) -> Result<(), ParseError> {
     if let Some(style) = current.as_mut() {
         if local == b"charPr" || local == b"characterPr" {
-            let run_props = run_properties_from_attrs(e);
+            let run_props = run_properties_from_attrs(e, source)?;
             style.run_props = Some(style_run_props_from_run(run_props));
         } else if local == b"paraPr" || local == b"paragraphPr" {
-            style.paragraph_props = Some(parse_hwpx_paragraph_props(e));
+            style.paragraph_props = Some(parse_hwpx_paragraph_props(e, source)?);
         } else if local == b"tblPr" || local == b"tablePr" {
-            style.table_props = parse_hwpx_table_props(e);
+            style.table_props = parse_hwpx_table_props(e, source)?;
         }
     }
+    Ok(())
 }
 
 fn finalize_style_set(styles: Vec<Style>, source: &str) -> Option<StyleSet> {

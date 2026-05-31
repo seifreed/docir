@@ -1,5 +1,6 @@
 use super::{
-    HwpxSectionState, SourceSpan, attr_any, push_node_to_hwpx_context, revision_type_from_local,
+    HwpxSectionState, ParseError, SourceSpan, attr_any, push_node_to_hwpx_context,
+    revision_type_from_local,
 };
 use docir_core::ir::{IRNode, Revision};
 use docir_core::visitor::IrStore;
@@ -10,17 +11,17 @@ pub(super) fn push_hwpx_revision(
     local: &[u8],
     source: &str,
     state: &mut HwpxSectionState,
-) -> bool {
+) -> Result<bool, ParseError> {
     let Some(change_type) = revision_type_from_local(local) else {
-        return false;
+        return Ok(false);
     };
     let mut revision = Revision::new(change_type);
-    revision.revision_id = attr_any(e, &[b"id", b"revId", b"revisionId", b"revision-id"]);
-    revision.author = attr_any(e, &[b"author", b"writer"]);
-    revision.date = attr_any(e, &[b"date", b"created", b"time"]);
+    revision.revision_id = attr_any(e, &[b"id", b"revId", b"revisionId", b"revision-id"], source)?;
+    revision.author = attr_any(e, &[b"author", b"writer"], source)?;
+    revision.date = attr_any(e, &[b"date", b"created", b"time"], source)?;
     revision.span = Some(SourceSpan::new(source));
     state.revision_stack.push(revision);
-    true
+    Ok(true)
 }
 
 pub(super) fn close_hwpx_revision(

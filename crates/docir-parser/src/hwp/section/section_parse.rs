@@ -173,9 +173,9 @@ fn push_hwpx_shape(
     store: &mut IrStore,
     media_lookup: &HashMap<String, NodeId>,
     state: &mut HwpxSectionState,
-) -> bool {
-    let Some(shape_id) = parse_hwpx_shape(e, local, source, media_lookup, store) else {
-        return false;
+) -> Result<bool, ParseError> {
+    let Some(shape_id) = parse_hwpx_shape(e, local, source, media_lookup, store)? else {
+        return Ok(false);
     };
     push_node_to_hwpx_context(
         shape_id,
@@ -183,7 +183,7 @@ fn push_hwpx_shape(
         state.note_stack.as_mut_slice(),
         source,
     );
-    true
+    Ok(true)
 }
 
 fn handle_hwpx_empty(

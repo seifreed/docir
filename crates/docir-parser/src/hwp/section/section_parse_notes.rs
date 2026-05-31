@@ -1,6 +1,6 @@
 use super::{
-    HwpxNoteKind, HwpxNoteState, HwpxSectionState, NodeId, Paragraph, SourceSpan, attr_any,
-    note_kind_from_local,
+    HwpxNoteKind, HwpxNoteState, HwpxSectionState, NodeId, Paragraph, ParseError, SourceSpan,
+    attr_any, note_kind_from_local,
 };
 use docir_core::ir::{Comment, CommentReference, Endnote, Footnote, IRNode};
 use docir_core::visitor::IrStore;
@@ -9,26 +9,28 @@ use quick_xml::events::BytesStart;
 pub(super) fn start_hwpx_note(
     e: &BytesStart<'_>,
     local: &[u8],
+    source: &str,
     state: &mut HwpxSectionState,
-) -> bool {
+) -> Result<bool, ParseError> {
     let Some(kind) = note_kind_from_local(local) else {
-        return false;
+        return Ok(false);
     };
     let id = attr_any(
         e,
         &[b"id", b"commentId", b"comment-id", b"refId", b"ref-id"],
-    )
+        source,
+    )?
     .unwrap_or_else(|| next_hwpx_note_id(kind, state));
     state.note_stack.push(HwpxNoteState {
         kind,
         id,
-        author: attr_any(e, &[b"author", b"writer"]),
-        date: attr_any(e, &[b"date", b"created", b"time"]),
-        parent: attr_any(e, &[b"parent", b"parentId", b"parent-id"]),
+        author: attr_any(e, &[b"author", b"writer"], source)?,
+        date: attr_any(e, &[b"date", b"created", b"time"], source)?,
+        parent: attr_any(e, &[b"parent", b"parentId", b"parent-id"], source)?,
         content: Vec::new(),
         current_para: None,
     });
-    true
+    Ok(true)
 }
 
 pub(super) fn push_hwpx_comment_reference(
@@ -37,14 +39,14 @@ pub(super) fn push_hwpx_comment_reference(
     source: &str,
     store: &mut IrStore,
     state: &mut HwpxSectionState,
-) -> bool {
+) -> Result<bool, ParseError> {
     if !matches!(
         local,
         b"commentRef" | b"comment-ref" | b"annotationRef" | b"noteRef" | b"note-ref"
     ) {
-        return false;
+        return Ok(false);
     }
-    if let Some(comment_id) = attr_any(e, &[b"id", b"ref", b"refId", b"ref-id"]) {
+    if let Some(comment_id) = attr_any(e, &[b"id", b"ref", b"refId", b"ref-id"], source)? {
         let mut node = CommentReference::new(comment_id);
         node.span = Some(SourceSpan::new(source));
         let node_id = node.id;
@@ -56,7 +58,7 @@ pub(super) fn push_hwpx_comment_reference(
             source,
         );
     }
-    true
+    Ok(true)
 }
 
 pub(super) fn close_hwpx_note(
