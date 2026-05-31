@@ -4,7 +4,10 @@ use super::{
     is_manifest_entry_encrypted, parse_content, parse_manifest, parse_styles, spreadsheet,
 };
 use crate::diagnostics::{push_info, push_warning};
-use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events};
+use crate::xml_utils::{
+    XmlScanControl, decoded_general_ref_or_default, decoded_text_or_default, local_name,
+    scan_xml_events,
+};
 use aes::{Aes128, Aes256};
 use cbc::Decryptor;
 use cbc::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
@@ -17,6 +20,17 @@ use std::io::{Read, Seek};
 use std::sync::Arc;
 
 type StylesSettingsSignatures = (Option<String>, Option<String>, Option<String>);
+
+#[derive(Clone, Copy)]
+enum MetaField {
+    Title,
+    Subject,
+    Creator,
+    Keywords,
+    Description,
+    Created,
+    Modified,
+}
 
 impl OdfParser {
     pub(super) fn load_mimetype_and_manifest<R: Read + Seek>(
@@ -307,57 +321,19 @@ fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
     let mut meta = DocumentMetadata::new();
     let mut current = None;
 
-    #[derive(Clone, Copy)]
-    enum MetaField {
-        Title,
-        Subject,
-        Creator,
-        Keywords,
-        Description,
-        Created,
-        Modified,
-    }
-
     if scan_xml_events(&mut reader, &mut buf, "meta.xml", |event| {
         match event {
             Event::Start(e) => {
-                current = match local_name(e.name().as_ref()) {
-                    b"title" => Some(MetaField::Title),
-                    b"subject" => Some(MetaField::Subject),
-                    b"creator" => Some(MetaField::Creator),
-                    b"keyword" => Some(MetaField::Keywords),
-                    b"description" => Some(MetaField::Description),
-                    b"creation-date" => Some(MetaField::Created),
-                    b"date" => Some(MetaField::Modified),
-                    _ => None,
-                };
+                current = meta_field_for_name(local_name(e.name().as_ref()));
             }
             Event::Text(e) => {
                 if let Some(field) = current {
-                    let value = crate::xml_utils::decoded_text_or_default(&e);
-                    match field {
-                        MetaField::Title => meta.title = Some(value),
-                        MetaField::Subject => meta.subject = Some(value),
-                        MetaField::Creator => meta.creator = Some(value),
-                        MetaField::Keywords => meta.keywords = Some(value),
-                        MetaField::Description => meta.description = Some(value),
-                        MetaField::Created => meta.created = Some(value),
-                        MetaField::Modified => meta.modified = Some(value),
-                    }
+                    set_meta_field(&mut meta, field, decoded_text_or_default(&e));
                 }
             }
             Event::GeneralRef(e) => {
                 if let Some(field) = current {
-                    let value = crate::xml_utils::decoded_general_ref_or_default(&e);
-                    match field {
-                        MetaField::Title => meta.title = Some(value),
-                        MetaField::Subject => meta.subject = Some(value),
-                        MetaField::Creator => meta.creator = Some(value),
-                        MetaField::Keywords => meta.keywords = Some(value),
-                        MetaField::Description => meta.description = Some(value),
-                        MetaField::Created => meta.created = Some(value),
-                        MetaField::Modified => meta.modified = Some(value),
-                    }
+                    set_meta_field(&mut meta, field, decoded_general_ref_or_default(&e));
                 }
             }
             Event::End(_) => {
@@ -372,15 +348,46 @@ fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
         return None;
     }
 
-    let has_any = meta.title.is_some()
+    if meta_has_any_field(&meta) {
+        Some(meta)
+    } else {
+        None
+    }
+}
+
+fn meta_field_for_name(name: &[u8]) -> Option<MetaField> {
+    match name {
+        b"title" => Some(MetaField::Title),
+        b"subject" => Some(MetaField::Subject),
+        b"creator" => Some(MetaField::Creator),
+        b"keyword" => Some(MetaField::Keywords),
+        b"description" => Some(MetaField::Description),
+        b"creation-date" => Some(MetaField::Created),
+        b"date" => Some(MetaField::Modified),
+        _ => None,
+    }
+}
+
+fn set_meta_field(meta: &mut DocumentMetadata, field: MetaField, value: String) {
+    match field {
+        MetaField::Title => meta.title = Some(value),
+        MetaField::Subject => meta.subject = Some(value),
+        MetaField::Creator => meta.creator = Some(value),
+        MetaField::Keywords => meta.keywords = Some(value),
+        MetaField::Description => meta.description = Some(value),
+        MetaField::Created => meta.created = Some(value),
+        MetaField::Modified => meta.modified = Some(value),
+    }
+}
+
+fn meta_has_any_field(meta: &DocumentMetadata) -> bool {
+    meta.title.is_some()
         || meta.subject.is_some()
         || meta.creator.is_some()
         || meta.keywords.is_some()
         || meta.description.is_some()
         || meta.created.is_some()
-        || meta.modified.is_some();
-
-    if has_any { Some(meta) } else { None }
+        || meta.modified.is_some()
 }
 
 #[cfg(test)]
