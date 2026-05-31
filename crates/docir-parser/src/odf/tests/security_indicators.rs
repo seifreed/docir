@@ -24,6 +24,39 @@ fn test_parse_odf_security_indicators() {
     assert_signature_and_encryption_diagnostics(&parsed);
 }
 
+#[test]
+fn test_parse_odf_reports_malformed_signatures_xml() {
+    let mimetype = "application/vnd.oasis.opendocument.text";
+    let content_xml = odf_security_content_xml();
+    let signatures_xml = br#"
+<ds:Signatures xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+  <ds:Signature>
+    <ds:SignedInfo>
+      <ds:SignatureMethod Algorithm="rsa-sha256"/>
+    </ds:SignedInfo>
+</ds:Signatures>
+"#;
+    let zip_data = build_odf_zip_custom(
+        mimetype,
+        &content_xml,
+        None,
+        None,
+        vec![("META-INF/documentsignatures.xml", signatures_xml)],
+    );
+    let parser = DocumentParser::new();
+
+    let err = parser
+        .parse_reader(Cursor::new(zip_data))
+        .expect_err("malformed ODF signatures must fail instead of returning partial signatures");
+
+    match err {
+        crate::error::ParseError::Xml { file, .. } => {
+            assert_eq!(file, "META-INF/documentsignatures.xml");
+        }
+        other => panic!("expected XML error, got {other}"),
+    }
+}
+
 fn odf_security_content_xml() -> String {
     r#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"

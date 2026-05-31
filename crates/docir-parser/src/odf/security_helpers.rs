@@ -1,4 +1,8 @@
-use crate::xml_utils::{attr_value, attr_value_by_suffix, local_name};
+use crate::error::ParseError;
+use crate::xml_utils::{
+    XmlScanControl, attr_value, attr_value_by_suffix, local_name, reader_from_str, scan_xml_events,
+    xml_error,
+};
 use docir_core::ir::IRNode;
 use docir_core::security::{MacroModule, MacroModuleType, MacroProject};
 use docir_core::visitor::IrStore;
@@ -82,16 +86,18 @@ pub(crate) fn scan_script_links(xml: &str) -> Vec<String> {
     links
 }
 
-pub(crate) fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSignature> {
+pub(crate) fn parse_odf_signatures(
+    xml: &str,
+    source: &str,
+) -> Result<Vec<docir_core::ir::DigitalSignature>, ParseError> {
     let mut sigs = Vec::new();
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let mut reader = reader_from_str(xml);
     let mut buf = Vec::new();
     let mut current: Option<docir_core::ir::DigitalSignature> = None;
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+    scan_xml_events(&mut reader, &mut buf, source, |event| {
+        match event {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"Signature" => current = Some(docir_core::ir::DigitalSignature::new()),
                 b"SignatureMethod" => {
                     if let Some(sig) = current.as_mut() {
@@ -107,7 +113,7 @@ pub(crate) fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSign
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+            Event::Empty(e) => match local_name(e.name().as_ref()) {
                 b"SignatureMethod" => {
                     if let Some(sig) = current.as_mut() {
                         sig.signature_method = attr_value(&e, b"Algorithm");
@@ -122,36 +128,37 @@ pub(crate) fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSign
                 }
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
+            Event::Text(e) => {
                 if let Some(sig) = current.as_mut() {
-                    let text = crate::xml_utils::decoded_text_or_default(&e);
+                    let text =
+                        crate::xml_utils::decoded_text(&e).map_err(|err| xml_error(source, err))?;
                     if sig.signer.is_none() && text.contains("CN=") {
                         sig.signer = Some(text);
                     }
                 }
             }
-            Ok(Event::GeneralRef(e)) => {
+            Event::GeneralRef(e) => {
                 if let Some(sig) = current.as_mut() {
-                    let text = crate::xml_utils::decoded_general_ref_or_default(&e);
+                    let text = crate::xml_utils::decoded_general_ref(&e)
+                        .map_err(|err| xml_error(source, err))?;
                     if sig.signer.is_none() && text.contains("CN=") {
                         sig.signer = Some(text);
                     }
                 }
             }
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if local_name(e.name().as_ref()) == b"Signature"
                     && let Some(sig) = current.take()
                 {
                     sigs.push(sig);
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
             _ => {}
         }
-        buf.clear();
-    }
-    sigs
+        Ok(XmlScanControl::Continue)
+    })?;
+
+    Ok(sigs)
 }
 
 #[cfg(test)]
@@ -192,7 +199,8 @@ mod tests {
             </sig:Signatures>
         "#;
 
-        let signatures = parse_odf_signatures(xml);
+        let signatures = parse_odf_signatures(xml, "META-INF/documentsignatures.xml")
+            .expect("valid signatures XML");
         assert_eq!(signatures.len(), 1);
         assert_eq!(
             signatures[0].signature_method.as_deref(),

@@ -116,7 +116,7 @@ impl ParseStage for OdfParser {
             &mut store,
             &mut doc,
             diagnostics,
-        );
+        )?;
 
         Ok(finalize_document(format, store, doc))
     }
@@ -176,12 +176,13 @@ impl OdfParser {
         store: &mut IrStore,
         doc: &mut Document,
         mut diagnostics: Diagnostics,
-    ) {
-        self.insert_signatures(read_state.signatures_xml.as_deref(), store, doc);
+    ) -> Result<(), ParseError> {
+        self.insert_signatures(read_state.signatures_xml.as_deref(), store, doc)?;
         self.emit_encryption_diagnostics(manifest_entries, &mut diagnostics);
         attach_diagnostics_if_any(store, doc, diagnostics);
         self.add_filter_diagnostics(read_state.content_xml.as_deref(), store, doc);
         self.add_defined_names(format, read_state.content_bytes.as_deref(), store, doc);
+        Ok(())
     }
 
     fn capture_fast_mode_spreadsheet_chunks(
@@ -244,16 +245,17 @@ impl OdfParser {
         signatures_xml: Option<&str>,
         store: &mut IrStore,
         doc: &mut Document,
-    ) {
+    ) -> Result<(), ParseError> {
         let Some(sig_xml) = signatures_xml else {
-            return;
+            return Ok(());
         };
-        let sigs = parse_odf_signatures(sig_xml);
+        let sigs = parse_odf_signatures(sig_xml, "META-INF/documentsignatures.xml")?;
         for sig in sigs {
             let sig_id = sig.id;
             store.insert(IRNode::DigitalSignature(sig));
             doc.shared_parts.push(sig_id);
         }
+        Ok(())
     }
 
     fn emit_encryption_diagnostics(
