@@ -1,5 +1,6 @@
 use super::get_cell;
 use super::{Relationships, SheetKind, SheetState, build_empty_zip};
+use crate::error::ParseError;
 use crate::ooxml::xlsx::XlsxParser;
 use crate::ooxml::xlsx::relationships::classify_relationship;
 use crate::ooxml::xlsx::workbook::{
@@ -145,6 +146,48 @@ fn test_parse_workbook_info_defined_names_and_props() {
     assert_eq!(props.calc_full, Some(true));
     assert_eq!(props.calc_on_save, Some(false));
     assert!(props.workbook_protected);
+}
+
+#[test]
+fn test_parse_workbook_info_reports_malformed_attributes() {
+    let cases = [
+        r#"
+        <workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheets><sheet name="Sheet1" name="Other" sheetId="1" r:id="rId1"/></sheets>
+        </workbook>
+        "#,
+        r#"
+        <workbook>
+          <definedNames><definedName name="A" name="B">Sheet1!$A$1</definedName></definedNames>
+        </workbook>
+        "#,
+        r#"
+        <workbook>
+          <definedNames><definedName name="A" name="B"/></definedNames>
+        </workbook>
+        "#,
+        r#"
+        <workbook><workbookPr date1904="1" date1904="0"/></workbook>
+        "#,
+        r#"
+        <workbook><calcPr calcMode="manual" calcMode="auto"/></workbook>
+        "#,
+        r#"
+        <workbook><bookViews><workbookView activeTab="1" activeTab="2"/></bookViews></workbook>
+        "#,
+        r#"
+        <workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <pivotCaches><pivotCache cacheId="1" cacheId="2" r:id="rIdPivot"/></pivotCaches>
+        </workbook>
+        "#,
+    ];
+
+    for xml in cases {
+        match parse_workbook_info(xml).expect_err("malformed workbook attributes must fail") {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/workbook.xml"),
+            other => panic!("expected XML error, got {other:?}"),
+        }
+    }
 }
 
 #[test]
