@@ -5,7 +5,20 @@ use super::{
 use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
 use docir_core::types::NodeId;
 use quick_xml::Reader;
+use quick_xml::events::BytesStart;
 use quick_xml::events::Event;
+use quick_xml::events::attributes::Attribute;
+
+fn visit_attributes<F>(start: &BytesStart<'_>, path: &str, mut visit: F) -> Result<(), ParseError>
+where
+    F: FnMut(&Attribute<'_>),
+{
+    for attr in start.attributes() {
+        let attr = attr.map_err(|err| xml_error(path, err))?;
+        visit(&attr);
+    }
+    Ok(())
+}
 
 pub(super) fn parse_presentation_properties(
     xml: &str,
@@ -23,38 +36,36 @@ pub(super) fn parse_presentation_properties(
             Ok(Event::Start(e)) | Ok(Event::Empty(e))
                 if local_name(e.name().as_ref()) == b"presentationPr" =>
             {
-                for attr in e.attributes().flatten() {
-                    match attr.key.as_ref() {
-                        b"autoCompressPictures" => {
-                            let value = lossy_attr_value(&attr);
-                            props.auto_compress_pictures =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                        }
-                        b"compatMode" => {
-                            props.compat_mode = Some(lossy_attr_value(&attr).to_string());
-                        }
-                        b"rtl" => {
-                            let value = lossy_attr_value(&attr);
-                            props.rtl = Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                        }
-                        b"showSpecialPlsOnTitleSld" => {
-                            let value = lossy_attr_value(&attr);
-                            props.show_special_placeholders =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                        }
-                        b"removePersonalInfoOnSave" => {
-                            let value = lossy_attr_value(&attr);
-                            props.remove_personal_info_on_save =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                        }
-                        b"showInkAnnotation" => {
-                            let value = lossy_attr_value(&attr);
-                            props.show_ink_annotation =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                        }
-                        _ => {}
+                visit_attributes(&e, path, |attr| match attr.key.as_ref() {
+                    b"autoCompressPictures" => {
+                        let value = lossy_attr_value(attr);
+                        props.auto_compress_pictures =
+                            Some(value == "1" || value.eq_ignore_ascii_case("true"));
                     }
-                }
+                    b"compatMode" => {
+                        props.compat_mode = Some(lossy_attr_value(attr).to_string());
+                    }
+                    b"rtl" => {
+                        let value = lossy_attr_value(attr);
+                        props.rtl = Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                    }
+                    b"showSpecialPlsOnTitleSld" => {
+                        let value = lossy_attr_value(attr);
+                        props.show_special_placeholders =
+                            Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                    }
+                    b"removePersonalInfoOnSave" => {
+                        let value = lossy_attr_value(attr);
+                        props.remove_personal_info_on_save =
+                            Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                    }
+                    b"showInkAnnotation" => {
+                        let value = lossy_attr_value(attr);
+                        props.show_ink_annotation =
+                            Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                    }
+                    _ => {}
+                })?;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -80,46 +91,44 @@ pub(super) fn parse_view_properties(xml: &str, path: &str) -> Result<ViewPropert
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                 b"viewPr" => {
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"lastView" => {
-                                props.last_view = Some(lossy_attr_value(&attr).to_string());
-                            }
-                            b"showComments" => {
-                                let value = lossy_attr_value(&attr);
-                                props.show_comments =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"showHiddenSlides" => {
-                                let value = lossy_attr_value(&attr);
-                                props.show_hidden_slides =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"showGuides" => {
-                                let value = lossy_attr_value(&attr);
-                                props.show_guides =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"showGrid" => {
-                                let value = lossy_attr_value(&attr);
-                                props.show_grid =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"showOutlineIcons" => {
-                                let value = lossy_attr_value(&attr);
-                                props.show_outline_icons =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            _ => {}
+                    visit_attributes(&e, path, |attr| match attr.key.as_ref() {
+                        b"lastView" => {
+                            props.last_view = Some(lossy_attr_value(attr).to_string());
                         }
-                    }
+                        b"showComments" => {
+                            let value = lossy_attr_value(attr);
+                            props.show_comments =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        b"showHiddenSlides" => {
+                            let value = lossy_attr_value(attr);
+                            props.show_hidden_slides =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        b"showGuides" => {
+                            let value = lossy_attr_value(attr);
+                            props.show_guides =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        b"showGrid" => {
+                            let value = lossy_attr_value(attr);
+                            props.show_grid =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        b"showOutlineIcons" => {
+                            let value = lossy_attr_value(attr);
+                            props.show_outline_icons =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        _ => {}
+                    })?;
                 }
                 b"zoom" => {
-                    for attr in e.attributes().flatten() {
+                    visit_attributes(&e, path, |attr| {
                         if attr.key.as_ref() == b"percent" {
-                            props.zoom = lossy_attr_value(&attr).parse::<u32>().ok();
+                            props.zoom = lossy_attr_value(attr).parse::<u32>().ok();
                         }
-                    }
+                    })?;
                 }
                 _ => {}
             },
@@ -147,24 +156,22 @@ pub(super) fn parse_table_styles(xml: &str, path: &str) -> Result<TableStyleSet,
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                 b"tblStyleLst" => {
-                    for attr in e.attributes().flatten() {
+                    visit_attributes(&e, path, |attr| {
                         if attr.key.as_ref() == b"def" {
-                            styles.default_style_id = Some(lossy_attr_value(&attr).to_string());
+                            styles.default_style_id = Some(lossy_attr_value(attr).to_string());
                         }
-                    }
+                    })?;
                 }
                 b"tblStyle" => {
                     let mut style_id = None;
                     let mut name = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"styleId" => {
-                                style_id = Some(lossy_attr_value(&attr).to_string());
-                            }
-                            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
-                            _ => {}
+                    visit_attributes(&e, path, |attr| match attr.key.as_ref() {
+                        b"styleId" => {
+                            style_id = Some(lossy_attr_value(attr).to_string());
                         }
-                    }
+                        b"name" => name = Some(lossy_attr_value(attr).to_string()),
+                        _ => {}
+                    })?;
                     if let Some(style_id) = style_id {
                         styles.styles.push(TableStyle { style_id, name });
                     }
@@ -199,13 +206,11 @@ pub(super) fn parse_presentation_tags(
             {
                 let mut name = None;
                 let mut val = None;
-                for attr in e.attributes().flatten() {
-                    match attr.key.as_ref() {
-                        b"name" => name = Some(lossy_attr_value(&attr).to_string()),
-                        b"val" => val = Some(lossy_attr_value(&attr).to_string()),
-                        _ => {}
-                    }
-                }
+                visit_attributes(&e, path, |attr| match attr.key.as_ref() {
+                    b"name" => name = Some(lossy_attr_value(attr).to_string()),
+                    b"val" => val = Some(lossy_attr_value(attr).to_string()),
+                    _ => {}
+                })?;
                 if let Some(name) = name {
                     tags.push(PresentationTag {
                         id: NodeId::new(),
@@ -250,15 +255,15 @@ pub(super) fn parse_smartart_part(xml: &str, path: &str) -> Result<SmartArtPart,
                     connection_count += 1;
                 }
                 if name == b"relIds" {
-                    for attr in e.attributes().flatten() {
+                    visit_attributes(&e, path, |attr| {
                         let key = local_name(attr.key.as_ref());
                         if matches!(key, b"dm" | b"lo" | b"qs" | b"cs") {
-                            let val = lossy_attr_value(&attr).to_string();
+                            let val = lossy_attr_value(attr).to_string();
                             if !val.is_empty() {
                                 rel_ids.push(val);
                             }
                         }
-                    }
+                    })?;
                 }
             }
             Ok(Event::Eof) => break,
@@ -320,8 +325,8 @@ pub(super) fn parse_slide_master_meta(
             Ok(Event::Start(e)) | Ok(Event::Empty(e))
                 if local_name(e.name().as_ref()) == b"sldMaster" =>
             {
-                for attr in e.attributes().flatten() {
-                    let value = lossy_attr_value(&attr);
+                visit_attributes(&e, path, |attr| {
+                    let value = lossy_attr_value(attr);
                     match attr.key.as_ref() {
                         b"preserve" => {
                             meta.preserve =
@@ -337,7 +342,7 @@ pub(super) fn parse_slide_master_meta(
                         }
                         _ => {}
                     }
-                }
+                })?;
                 break;
             }
             Ok(Event::Eof) => break,
@@ -373,8 +378,8 @@ pub(super) fn parse_slide_layout_meta(
             Ok(Event::Start(e)) | Ok(Event::Empty(e))
                 if local_name(e.name().as_ref()) == b"sldLayout" =>
             {
-                for attr in e.attributes().flatten() {
-                    let value = lossy_attr_value(&attr);
+                visit_attributes(&e, path, |attr| {
+                    let value = lossy_attr_value(attr);
                     match attr.key.as_ref() {
                         b"type" => meta.layout_type = Some(value.to_string()),
                         b"matchingName" => meta.matching_name = Some(value.to_string()),
@@ -392,7 +397,7 @@ pub(super) fn parse_slide_layout_meta(
                         }
                         _ => {}
                     }
-                }
+                })?;
                 break;
             }
             Ok(Event::Eof) => break,

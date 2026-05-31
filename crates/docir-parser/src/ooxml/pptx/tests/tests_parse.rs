@@ -117,6 +117,73 @@ fn test_parse_presentation_and_view_properties_extended() {
     assert_eq!(view.zoom, Some(85));
 }
 
+fn assert_pptx_metadata_xml_error<T>(result: Result<T, ParseError>, expected_file: &str) {
+    match result {
+        Err(ParseError::Xml { file, .. }) => assert_eq!(file, expected_file),
+        Err(other) => panic!("unexpected error: {other:?}"),
+        Ok(_) => panic!("expected pptx metadata xml error"),
+    }
+}
+
+#[test]
+fn test_parse_pptx_metadata_reports_malformed_attributes() {
+    assert_pptx_metadata_xml_error(
+        parse_presentation_properties(
+            r#"<p:presentationPr xmlns:p="x" rtl="1" rtl="0"/>"#,
+            "ppt/presProps.xml",
+        ),
+        "ppt/presProps.xml",
+    );
+
+    assert_pptx_metadata_xml_error(
+        parse_view_properties(
+            r#"<p:viewPr xmlns:p="x"><p:zoom percent="85" percent="90"/></p:viewPr>"#,
+            "ppt/viewProps.xml",
+        ),
+        "ppt/viewProps.xml",
+    );
+
+    assert_pptx_metadata_xml_error(
+        parse_table_styles(
+            r#"<a:tblStyleLst xmlns:a="x"><a:tblStyle styleId="{a}" styleId="{b}"/></a:tblStyleLst>"#,
+            "ppt/tableStyles.xml",
+        ),
+        "ppt/tableStyles.xml",
+    );
+
+    assert_pptx_metadata_xml_error(
+        parse_presentation_tags(
+            r#"<p:tagLst xmlns:p="x"><p:tag name="Department" name="Finance"/></p:tagLst>"#,
+            "ppt/tags/tag1.xml",
+        ),
+        "ppt/tags/tag1.xml",
+    );
+
+    assert_pptx_metadata_xml_error(
+        parse_smartart_part(
+            r#"<dgm:dataModel xmlns:dgm="x" xmlns:r="r"><dgm:relIds r:dm="a" r:dm="b"/></dgm:dataModel>"#,
+            "ppt/diagrams/data1.xml",
+        ),
+        "ppt/diagrams/data1.xml",
+    );
+
+    assert_pptx_metadata_xml_error(
+        parse_slide_layout_meta(
+            r#"<p:sldLayout xmlns:p="x" preserve="1" preserve="0"/>"#,
+            "ppt/slideLayouts/slideLayout1.xml",
+        ),
+        "ppt/slideLayouts/slideLayout1.xml",
+    );
+
+    assert_pptx_metadata_xml_error(
+        parse_slide_master_meta(
+            r#"<p:sldMaster xmlns:p="x" preserve="1" preserve="0"/>"#,
+            "ppt/slideMasters/slideMaster1.xml",
+        ),
+        "ppt/slideMasters/slideMaster1.xml",
+    );
+}
+
 #[test]
 fn test_parse_pptx_metadata_accepts_alternate_namespace_prefixes() {
     let presentation_xml = r#"
