@@ -113,7 +113,9 @@ impl PptxParser {
                 Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"sp" => {
                     break;
                 }
-                Ok(Event::Eof) => break,
+                Ok(Event::Eof) => {
+                    return Err(xml_error(slide_path, "unexpected EOF in shape XML"));
+                }
                 Err(e) => {
                     return Err(xml_error(slide_path, e));
                 }
