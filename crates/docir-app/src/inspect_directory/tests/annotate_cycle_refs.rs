@@ -1,7 +1,10 @@
-use super::{DirectoryEntry, annotate_incoming_references};
+use super::{
+    DirectoryEntry, annotate_incoming_references, build_anomaly_severity_counts,
+    build_dead_reference_counts,
+};
 
 #[test]
-fn annotate_incoming_references_marks_unreferenced_and_multi_referenced_entries() {
+fn annotate_incoming_references_marks_short_cycles() {
     let mut entries = vec![
         DirectoryEntry {
             entry_index: 0,
@@ -58,10 +61,10 @@ fn annotate_incoming_references_marks_unreferenced_and_multi_referenced_entries(
             incoming_from: Vec::new(),
             size_bytes: 1,
             start_sector: 1,
-            left_sibling_raw: u32::MAX,
+            left_sibling_raw: 2,
             right_sibling_raw: u32::MAX,
             child_raw: u32::MAX,
-            left_sibling: None,
+            left_sibling: Some(2),
             right_sibling: None,
             child: None,
             created_filetime: None,
@@ -90,10 +93,10 @@ fn annotate_incoming_references_marks_unreferenced_and_multi_referenced_entries(
             incoming_from: Vec::new(),
             size_bytes: 1,
             start_sector: 2,
-            left_sibling_raw: 1,
+            left_sibling_raw: u32::MAX,
             right_sibling_raw: 1,
             child_raw: u32::MAX,
-            left_sibling: Some(1),
+            left_sibling: None,
             right_sibling: Some(1),
             child: None,
             created_filetime: None,
@@ -102,24 +105,13 @@ fn annotate_incoming_references_marks_unreferenced_and_multi_referenced_entries(
     ];
 
     annotate_incoming_references(&mut entries);
-
     let a = entries.iter().find(|entry| entry.entry_index == 1).unwrap();
-    let b = entries.iter().find(|entry| entry.entry_index == 2).unwrap();
-    assert_eq!(a.incoming_reference_count, 3);
-    assert!(
-        a.anomaly_tags
-            .iter()
-            .any(|tag| tag == "multi-referenced-entry")
-    );
-    assert!(
-        b.anomaly_tags
-            .iter()
-            .any(|tag| tag == "unreferenced-live-entry")
-    );
+    assert!(a.short_cycles.iter().any(|tag| tag == "sibling-2-cycle"));
+    assert!(a.anomaly_tags.iter().any(|tag| tag == "sibling-2-cycle"));
 }
 
 #[test]
-fn annotate_incoming_references_marks_unreachable_and_incoming_source_quality() {
+fn annotate_incoming_references_marks_mixed_cycles_and_dead_sources() {
     let mut entries = vec![
         DirectoryEntry {
             entry_index: 0,
@@ -134,30 +126,30 @@ fn annotate_incoming_references_marks_unreachable_and_incoming_source_quality() 
             anomaly_tags: Vec::new(),
             short_cycles: Vec::new(),
             reachable_from_root: false,
+            fanout_count: 0,
             incoming_reference_count: 0,
             incoming_normal_reference_count: 0,
             incoming_anomalous_reference_count: 0,
             incoming_from_root_storage_count: 0,
             incoming_from_storage_count: 0,
             incoming_from_stream_count: 0,
-            fanout_count: 0,
             incoming_from: Vec::new(),
             size_bytes: 0,
             start_sector: 0,
             left_sibling_raw: u32::MAX,
             right_sibling_raw: u32::MAX,
-            child_raw: u32::MAX,
+            child_raw: 1,
             left_sibling: None,
             right_sibling: None,
-            child: None,
+            child: Some(1),
             created_filetime: None,
             modified_filetime: None,
         },
         DirectoryEntry {
             entry_index: 1,
-            path: "Live".to_string(),
+            path: "A".to_string(),
             entry_type: "stream".to_string(),
-            name_len_raw: 10,
+            name_len_raw: 4,
             object_type_raw: 2,
             color_flag_raw: 0,
             state: "normal".to_string(),
@@ -166,22 +158,22 @@ fn annotate_incoming_references_marks_unreachable_and_incoming_source_quality() 
             anomaly_tags: Vec::new(),
             short_cycles: Vec::new(),
             reachable_from_root: false,
+            fanout_count: 0,
             incoming_reference_count: 0,
             incoming_normal_reference_count: 0,
             incoming_anomalous_reference_count: 0,
             incoming_from_root_storage_count: 0,
             incoming_from_storage_count: 0,
             incoming_from_stream_count: 0,
-            fanout_count: 0,
             incoming_from: Vec::new(),
-            size_bytes: 4,
+            size_bytes: 1,
             start_sector: 1,
             left_sibling_raw: u32::MAX,
             right_sibling_raw: u32::MAX,
-            child_raw: u32::MAX,
+            child_raw: 2,
             left_sibling: None,
             right_sibling: None,
-            child: None,
+            child: Some(2),
             created_filetime: None,
             modified_filetime: None,
         },
@@ -189,7 +181,7 @@ fn annotate_incoming_references_marks_unreachable_and_incoming_source_quality() 
             entry_index: 2,
             path: "Ghost".to_string(),
             entry_type: "stream".to_string(),
-            name_len_raw: 10,
+            name_len_raw: 4,
             object_type_raw: 2,
             color_flag_raw: 0,
             state: "orphaned".to_string(),
@@ -198,15 +190,15 @@ fn annotate_incoming_references_marks_unreachable_and_incoming_source_quality() 
             anomaly_tags: Vec::new(),
             short_cycles: Vec::new(),
             reachable_from_root: false,
+            fanout_count: 0,
             incoming_reference_count: 0,
             incoming_normal_reference_count: 0,
             incoming_anomalous_reference_count: 0,
             incoming_from_root_storage_count: 0,
             incoming_from_storage_count: 0,
             incoming_from_stream_count: 0,
-            fanout_count: 0,
             incoming_from: Vec::new(),
-            size_bytes: 4,
+            size_bytes: 1,
             start_sector: 2,
             left_sibling_raw: u32::MAX,
             right_sibling_raw: 1,
@@ -221,18 +213,162 @@ fn annotate_incoming_references_marks_unreachable_and_incoming_source_quality() 
 
     annotate_incoming_references(&mut entries);
     let live = entries.iter().find(|entry| entry.entry_index == 1).unwrap();
-    assert!(!live.reachable_from_root);
-    assert_eq!(live.incoming_reference_count, 1);
-    assert_eq!(live.incoming_normal_reference_count, 0);
-    assert_eq!(live.incoming_anomalous_reference_count, 1);
+    assert!(live.short_cycles.iter().any(|tag| tag == "mixed-2-cycle"));
+    let dead_counts = build_dead_reference_counts(&entries);
     assert!(
-        live.anomaly_tags
+        dead_counts
             .iter()
-            .any(|tag| tag == "unreachable-live-entry")
+            .any(|entry| entry.bucket == "dead-reference:state:orphaned" && entry.count == 1)
     );
     assert!(
-        live.anomaly_tags
+        dead_counts
             .iter()
-            .any(|tag| tag == "incoming-from-anomalous-entry")
+            .any(|entry| entry.bucket == "dead-reference:source-type:stream" && entry.count == 1)
     );
+    let severity_counts = build_anomaly_severity_counts(&entries);
+    assert!(
+        severity_counts
+            .iter()
+            .any(|entry| entry.bucket == "high" && entry.count >= 1)
+    );
+}
+
+#[test]
+fn annotate_incoming_references_marks_mixed_three_cycles() {
+    let mut entries = vec![
+        DirectoryEntry {
+            entry_index: 0,
+            path: "Root Entry".to_string(),
+            entry_type: "root-storage".to_string(),
+            name_len_raw: 20,
+            object_type_raw: 5,
+            color_flag_raw: 0,
+            state: "normal".to_string(),
+            classification: "root-storage".to_string(),
+            anomaly_severity: "none".to_string(),
+            anomaly_tags: Vec::new(),
+            short_cycles: Vec::new(),
+            reachable_from_root: false,
+            fanout_count: 0,
+            incoming_reference_count: 0,
+            incoming_normal_reference_count: 0,
+            incoming_anomalous_reference_count: 0,
+            incoming_from_root_storage_count: 0,
+            incoming_from_storage_count: 0,
+            incoming_from_stream_count: 0,
+            incoming_from: Vec::new(),
+            size_bytes: 0,
+            start_sector: 0,
+            left_sibling_raw: u32::MAX,
+            right_sibling_raw: u32::MAX,
+            child_raw: 1,
+            left_sibling: None,
+            right_sibling: None,
+            child: Some(1),
+            created_filetime: None,
+            modified_filetime: None,
+        },
+        DirectoryEntry {
+            entry_index: 1,
+            path: "A".to_string(),
+            entry_type: "stream".to_string(),
+            name_len_raw: 4,
+            object_type_raw: 2,
+            color_flag_raw: 0,
+            state: "normal".to_string(),
+            classification: "stream".to_string(),
+            anomaly_severity: "none".to_string(),
+            anomaly_tags: Vec::new(),
+            short_cycles: Vec::new(),
+            reachable_from_root: false,
+            fanout_count: 0,
+            incoming_reference_count: 0,
+            incoming_normal_reference_count: 0,
+            incoming_anomalous_reference_count: 0,
+            incoming_from_root_storage_count: 0,
+            incoming_from_storage_count: 0,
+            incoming_from_stream_count: 0,
+            incoming_from: Vec::new(),
+            size_bytes: 1,
+            start_sector: 1,
+            left_sibling_raw: u32::MAX,
+            right_sibling_raw: 2,
+            child_raw: u32::MAX,
+            left_sibling: None,
+            right_sibling: Some(2),
+            child: None,
+            created_filetime: None,
+            modified_filetime: None,
+        },
+        DirectoryEntry {
+            entry_index: 2,
+            path: "B".to_string(),
+            entry_type: "stream".to_string(),
+            name_len_raw: 4,
+            object_type_raw: 2,
+            color_flag_raw: 0,
+            state: "normal".to_string(),
+            classification: "stream".to_string(),
+            anomaly_severity: "none".to_string(),
+            anomaly_tags: Vec::new(),
+            short_cycles: Vec::new(),
+            reachable_from_root: false,
+            fanout_count: 0,
+            incoming_reference_count: 0,
+            incoming_normal_reference_count: 0,
+            incoming_anomalous_reference_count: 0,
+            incoming_from_root_storage_count: 0,
+            incoming_from_storage_count: 0,
+            incoming_from_stream_count: 0,
+            incoming_from: Vec::new(),
+            size_bytes: 1,
+            start_sector: 2,
+            left_sibling_raw: u32::MAX,
+            right_sibling_raw: u32::MAX,
+            child_raw: 3,
+            left_sibling: None,
+            right_sibling: None,
+            child: Some(3),
+            created_filetime: None,
+            modified_filetime: None,
+        },
+        DirectoryEntry {
+            entry_index: 3,
+            path: "C".to_string(),
+            entry_type: "stream".to_string(),
+            name_len_raw: 4,
+            object_type_raw: 2,
+            color_flag_raw: 0,
+            state: "normal".to_string(),
+            classification: "stream".to_string(),
+            anomaly_severity: "none".to_string(),
+            anomaly_tags: Vec::new(),
+            short_cycles: Vec::new(),
+            reachable_from_root: false,
+            fanout_count: 0,
+            incoming_reference_count: 0,
+            incoming_normal_reference_count: 0,
+            incoming_anomalous_reference_count: 0,
+            incoming_from_root_storage_count: 0,
+            incoming_from_storage_count: 0,
+            incoming_from_stream_count: 0,
+            incoming_from: Vec::new(),
+            size_bytes: 1,
+            start_sector: 3,
+            left_sibling_raw: 1,
+            right_sibling_raw: u32::MAX,
+            child_raw: u32::MAX,
+            left_sibling: Some(1),
+            right_sibling: None,
+            child: None,
+            created_filetime: None,
+            modified_filetime: None,
+        },
+    ];
+
+    annotate_incoming_references(&mut entries);
+    let a = entries.iter().find(|entry| entry.entry_index == 1).unwrap();
+    assert!(a.short_cycles.iter().any(|tag| tag == "mixed-3-cycle"));
+    assert!(a.anomaly_tags.iter().any(|tag| tag == "mixed-3-cycle"));
+    assert_eq!(a.anomaly_severity, "high");
 }

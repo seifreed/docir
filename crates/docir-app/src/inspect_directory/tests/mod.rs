@@ -6,6 +6,7 @@ pub(super) use super::{
 };
 pub(super) use crate::test_support::{build_test_cfb, build_test_cfb_with_times};
 
+mod annotate_cycle_refs;
 mod annotate_incoming_refs;
 mod bucket_counts;
 
