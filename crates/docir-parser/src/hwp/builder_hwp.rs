@@ -1,4 +1,4 @@
-use super::super::{parse_file_header, scan_hwp_external_refs, HwpParser};
+use super::super::{HwpParser, parse_file_header, scan_hwp_external_refs};
 use crate::diagnostics::{push_info, push_warning};
 use crate::error::ParseError;
 use crate::ole::Cfb;

@@ -1,6 +1,6 @@
 use super::utils::find_stream_case;
 use super::vba::{normalize_vba_source_text, parse_vba_project_text, vba_decompress};
-use super::{hex, ParseError, ParserConfig};
+use super::{ParseError, ParserConfig, hex};
 use crate::ole::Cfb;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::IRNode;

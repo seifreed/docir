@@ -7,8 +7,8 @@ use docir_core::security::{
 };
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::io::{Read, Seek};
 
 use super::attach_diagnostics_if_any;
@@ -189,17 +189,16 @@ fn scan_hwpx_external_refs(xml: &str, source: &str) -> Vec<ExternalReference> {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 for attr in e.attributes().flatten() {
                     let key = attr.key.as_ref();
-                    if key.ends_with(b"href") || key.ends_with(b"src") || key.ends_with(b"link") {
-                        if let Ok(value) = attr.unescape_value() {
-                            let target = value.to_string();
-                            if target.is_empty() {
-                                continue;
-                            }
-                            let mut ext =
-                                ExternalReference::new(ExternalRefType::Hyperlink, target);
-                            ext.span = Some(SourceSpan::new(source));
-                            refs.push(ext);
+                    if (key.ends_with(b"href") || key.ends_with(b"src") || key.ends_with(b"link"))
+                        && let Ok(value) = attr.unescape_value()
+                    {
+                        let target = value.to_string();
+                        if target.is_empty() {
+                            continue;
                         }
+                        let mut ext = ExternalReference::new(ExternalRefType::Hyperlink, target);
+                        ext.span = Some(SourceSpan::new(source));
+                        refs.push(ext);
                     }
                 }
             }

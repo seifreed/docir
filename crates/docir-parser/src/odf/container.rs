@@ -1,17 +1,17 @@
 use super::{
-    is_manifest_entry_encrypted, parse_content, parse_manifest, parse_styles, spreadsheet,
     Diagnostics, Document, DocumentFormat, IRNode, IrStore, OdfAtomicLimits, OdfEncryptionData,
     OdfLimits, OdfManifestEntry, OdfParser, ParseError, ParserConfig, SecureZipReader,
+    is_manifest_entry_encrypted, parse_content, parse_manifest, parse_styles, spreadsheet,
 };
 use crate::diagnostics::{push_info, push_warning};
-use crate::xml_utils::{local_name, scan_xml_events, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events};
 use aes::{Aes128, Aes256};
-use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
 use cbc::Decryptor;
+use cbc::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
 use docir_core::ir::DocumentMetadata;
 use pbkdf2::pbkdf2_hmac;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use sha1::Sha1;
 use std::io::{Read, Seek};
 use std::sync::Arc;
@@ -143,13 +143,13 @@ fn determine_content_mode<R: Read + Seek>(
     }
 
     let size = zip.file_size("content.xml")?;
-    if let Some(max_bytes) = config.odf.max_bytes {
-        if size > max_bytes {
-            return Err(ParseError::ResourceLimit(format!(
-                "ODF content.xml too large: {} bytes (max: {} bytes)",
-                size, max_bytes
-            )));
-        }
+    if let Some(max_bytes) = config.odf.max_bytes
+        && size > max_bytes
+    {
+        return Err(ParseError::ResourceLimit(format!(
+            "ODF content.xml too large: {} bytes (max: {} bytes)",
+            size, max_bytes
+        )));
     }
 
     let fast_mode = format == DocumentFormat::OdfSpreadsheet
@@ -366,11 +366,7 @@ fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
         || meta.created.is_some()
         || meta.modified.is_some();
 
-    if has_any {
-        Some(meta)
-    } else {
-        None
-    }
+    if has_any { Some(meta) } else { None }
 }
 
 #[cfg(test)]

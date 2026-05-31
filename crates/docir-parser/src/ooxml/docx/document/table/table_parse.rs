@@ -1,4 +1,4 @@
-use super::super::{parse_border, parse_paragraph_simple, span_from_reader, DocxParser};
+use super::super::{DocxParser, parse_border, parse_paragraph_simple, span_from_reader};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::{attr_value, local_name, xml_error};
@@ -7,8 +7,8 @@ use docir_core::ir::{
     TableBorders, TableCell, TableCellProperties, TableRow, TableWidth, TableWidthType,
 };
 use docir_core::types::NodeId;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 pub(crate) fn parse_table(
     parser: &mut DocxParser,
@@ -33,10 +33,8 @@ pub(crate) fn parse_table(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"tbl" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tbl" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -73,10 +71,8 @@ pub(crate) fn parse_table_row(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"tr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -117,10 +113,8 @@ pub(crate) fn parse_table_cell(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"tc" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tc" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -147,10 +141,8 @@ pub(crate) fn parse_table_cell_properties(
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 apply_table_cell_property_event(reader, &e, props)?
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"tcPr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tcPr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -246,10 +238,8 @@ pub(crate) fn parse_table_properties(
             Ok(Event::Empty(e)) => {
                 apply_table_property_attrs(&e, props);
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"tblPr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tblPr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -304,16 +294,14 @@ pub(crate) fn parse_table_grid(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"gridCol" {
-                    if let Some(val) = attr_value(&e, b"w:w").and_then(|v| v.parse().ok()) {
-                        grid.push(docir_core::ir::GridColumn { width: val });
-                    }
+                if local_name(e.name().as_ref()) == b"gridCol"
+                    && let Some(val) = attr_value(&e, b"w:w").and_then(|v| v.parse().ok())
+                {
+                    grid.push(docir_core::ir::GridColumn { width: val });
                 }
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"tblGrid" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tblGrid" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -360,10 +348,8 @@ pub(crate) fn parse_table_row_properties(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"trPr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"trPr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -418,10 +404,8 @@ fn parse_table_borders(
                     _ => {}
                 }
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == local_name(end_tag) {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == local_name(end_tag) => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -431,11 +415,7 @@ fn parse_table_borders(
         }
         buf.clear();
     }
-    if has_any {
-        Ok(Some(borders))
-    } else {
-        Ok(None)
-    }
+    if has_any { Ok(Some(borders)) } else { Ok(None) }
 }
 
 fn parse_cell_margins(reader: &mut Reader<&[u8]>) -> Result<Option<CellMargins>, ParseError> {
@@ -466,10 +446,8 @@ fn parse_cell_margins(reader: &mut Reader<&[u8]>) -> Result<Option<CellMargins>,
                     _ => {}
                 }
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"tblCellMar" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tblCellMar" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -479,9 +457,5 @@ fn parse_cell_margins(reader: &mut Reader<&[u8]>) -> Result<Option<CellMargins>,
         }
         buf.clear();
     }
-    if has_any {
-        Ok(Some(margins))
-    } else {
-        Ok(None)
-    }
+    if has_any { Ok(Some(margins)) } else { Ok(None) }
 }

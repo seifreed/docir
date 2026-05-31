@@ -223,7 +223,7 @@ const XLS_RECORD_NAMES: &[(u16, &str)] = &[
 
 #[cfg(test)]
 mod tests {
-    use super::{read_xls_records, XlsSubstreamKind};
+    use super::{XlsSubstreamKind, read_xls_records};
 
     fn record(record_type: u16, payload: &[u8]) -> Vec<u8> {
         let mut out = Vec::with_capacity(4 + payload.len());

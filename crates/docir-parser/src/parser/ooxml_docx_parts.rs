@@ -1,7 +1,7 @@
 use super::HeaderFooterSpec;
 use super::{
-    rel_type, DocxAnnotationParts, DocxWordParts, IRNode, NodeId, OoxmlParser, PackageReader,
-    ParseError, Relationships,
+    DocxAnnotationParts, DocxWordParts, IRNode, NodeId, OoxmlParser, PackageReader, ParseError,
+    Relationships, rel_type,
 };
 use crate::ooxml::docx::DocxParser;
 use crate::ooxml::part_utils::read_relationships_optional;
@@ -281,15 +281,15 @@ impl OoxmlParser {
         }
 
         let rels = read_relationships_optional(zip, "word/comments.xml");
-        if let Ok(xml) = zip.read_file_string("word/comments.xml") {
-            if let Ok(ids) = parser.parse_comments(&xml, &rels) {
-                for id in &ids {
-                    if let Some(IRNode::Comment(comment)) = parser.store_mut().get_mut(*id) {
-                        comment.span = Some(SourceSpan::new("word/comments.xml"));
-                    }
+        if let Ok(xml) = zip.read_file_string("word/comments.xml")
+            && let Ok(ids) = parser.parse_comments(&xml, &rels)
+        {
+            for id in &ids {
+                if let Some(IRNode::Comment(comment)) = parser.store_mut().get_mut(*id) {
+                    comment.span = Some(SourceSpan::new("word/comments.xml"));
                 }
-                return ids;
             }
+            return ids;
         }
 
         comments
@@ -356,15 +356,15 @@ impl OoxmlParser {
             },
         );
 
-        if font_table_id.is_none() && zip.contains("word/fontTable.xml") {
-            if let Ok(xml) = zip.read_file_string("word/fontTable.xml") {
-                if let Ok(id) = parser.parse_font_table(&xml) {
-                    if let Some(IRNode::FontTable(table)) = parser.store_mut().get_mut(id) {
-                        table.span = Some(SourceSpan::new("word/fontTable.xml"));
-                    }
-                    font_table_id = Some(id);
-                }
+        if font_table_id.is_none()
+            && zip.contains("word/fontTable.xml")
+            && let Ok(xml) = zip.read_file_string("word/fontTable.xml")
+            && let Ok(id) = parser.parse_font_table(&xml)
+        {
+            if let Some(IRNode::FontTable(table)) = parser.store_mut().get_mut(id) {
+                table.span = Some(SourceSpan::new("word/fontTable.xml"));
             }
+            font_table_id = Some(id);
         }
 
         font_table_id

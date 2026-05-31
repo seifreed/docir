@@ -100,11 +100,13 @@ fn test_parse_section_properties_extended() {
         props.line_numbering.as_ref().and_then(|n| n.restart),
         Some(LineNumberRestart::NewPage)
     );
-    assert!(props
-        .page_borders
-        .as_ref()
-        .and_then(|b| b.top.as_ref())
-        .is_some());
+    assert!(
+        props
+            .page_borders
+            .as_ref()
+            .and_then(|b| b.top.as_ref())
+            .is_some()
+    );
 }
 #[test]
 fn test_parse_styles_with_table_props() {
@@ -147,11 +149,13 @@ fn test_parse_styles_with_table_props() {
         para_props.spacing.as_ref().and_then(|s| s.before),
         Some(120)
     );
-    assert!(style
-        .table_props
-        .as_ref()
-        .and_then(|t| t.width.as_ref())
-        .is_some());
+    assert!(
+        style
+            .table_props
+            .as_ref()
+            .and_then(|t| t.width.as_ref())
+            .is_some()
+    );
 }
 #[test]
 fn test_parse_font_table_collects_font_entries() {
@@ -308,15 +312,21 @@ fn test_parse_drawing_smartart_targets() {
         _ => panic!("missing shape"),
     };
     assert_eq!(shape.related_targets.len(), 3);
-    assert!(shape
-        .related_targets
-        .contains(&"word/diagrams/data1.xml".to_string()));
-    assert!(shape
-        .related_targets
-        .contains(&"word/diagrams/layout1.xml".to_string()));
-    assert!(shape
-        .related_targets
-        .contains(&"word/diagrams/colors1.xml".to_string()));
+    assert!(
+        shape
+            .related_targets
+            .contains(&"word/diagrams/data1.xml".to_string())
+    );
+    assert!(
+        shape
+            .related_targets
+            .contains(&"word/diagrams/layout1.xml".to_string())
+    );
+    assert!(
+        shape
+            .related_targets
+            .contains(&"word/diagrams/colors1.xml".to_string())
+    );
 }
 
 #[test]
@@ -378,12 +388,16 @@ fn test_parse_drawing_normalizes_targets() {
         shape.media_target.as_deref(),
         Some("word/diagrams/data1.xml")
     );
-    assert!(shape
-        .related_targets
-        .contains(&"word/diagrams/data1.xml".to_string()));
-    assert!(shape
-        .related_targets
-        .contains(&"word/diagrams/layout1.xml".to_string()));
+    assert!(
+        shape
+            .related_targets
+            .contains(&"word/diagrams/data1.xml".to_string())
+    );
+    assert!(
+        shape
+            .related_targets
+            .contains(&"word/diagrams/layout1.xml".to_string())
+    );
 }
 
 #[test]

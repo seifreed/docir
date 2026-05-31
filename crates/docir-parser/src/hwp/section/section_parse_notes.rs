@@ -1,6 +1,6 @@
 use super::{
-    attr_any, note_kind_from_local, HwpxNoteKind, HwpxNoteState, HwpxSectionState, NodeId,
-    Paragraph, SourceSpan,
+    HwpxNoteKind, HwpxNoteState, HwpxSectionState, NodeId, Paragraph, SourceSpan, attr_any,
+    note_kind_from_local,
 };
 use docir_core::ir::{Comment, CommentReference, Endnote, Footnote, IRNode};
 use docir_core::visitor::IrStore;

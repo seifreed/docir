@@ -1,17 +1,17 @@
 use super::WorksheetParseAccum;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::xlsx::{
-    parse_color_attr, parse_column, parse_merge_cell, ParseError, Worksheet, XlsxParser,
+    ParseError, Worksheet, XlsxParser, parse_color_attr, parse_column, parse_merge_cell,
 };
 use crate::xml_utils::attr_value;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{is_end_event_local, local_name, scan_xml_events_until_end, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, is_end_event_local, local_name, scan_xml_events_until_end};
 use docir_core::ir::ConditionalFormat;
 use docir_core::ir::{DataValidation, SheetPageMargins};
 use docir_core::types::{NodeId, SourceSpan};
+use quick_xml::Reader;
 use quick_xml::events::Event;
 use quick_xml::events::{BytesEnd, BytesStart};
-use quick_xml::Reader;
 
 pub(crate) fn handle_worksheet_common_tag(
     e: &BytesStart<'_>,
@@ -93,11 +93,7 @@ pub(crate) fn parse_page_margins(start: &BytesStart) -> Option<SheetPageMargins>
             _ => {}
         }
     }
-    if found {
-        Some(margins)
-    } else {
-        None
-    }
+    if found { Some(margins) } else { None }
 }
 
 pub(crate) fn parse_conditional_formatting_empty(
@@ -208,19 +204,19 @@ impl DataValidationFormulaCapture {
     }
 
     fn track_start_with_context(&mut self, e: &BytesStart<'_>, validation: &mut DataValidation) {
-        if local_name(e.name().as_ref()) == b"formula1" {
-            if let Some(val) = attr_value(e, b"val") {
-                validation.formula1 = Some(val);
-                self.in_formula = None;
-                self.formula1.clear();
-            }
+        if local_name(e.name().as_ref()) == b"formula1"
+            && let Some(val) = attr_value(e, b"val")
+        {
+            validation.formula1 = Some(val);
+            self.in_formula = None;
+            self.formula1.clear();
         }
-        if local_name(e.name().as_ref()) == b"formula2" {
-            if let Some(val) = attr_value(e, b"val") {
-                validation.formula2 = Some(val);
-                self.in_formula = None;
-                self.formula2.clear();
-            }
+        if local_name(e.name().as_ref()) == b"formula2"
+            && let Some(val) = attr_value(e, b"val")
+        {
+            validation.formula2 = Some(val);
+            self.in_formula = None;
+            self.formula2.clear();
         }
     }
 

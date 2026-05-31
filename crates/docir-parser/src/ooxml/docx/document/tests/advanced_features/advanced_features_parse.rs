@@ -211,11 +211,13 @@ fn test_parse_table_grid_and_properties() {
     assert_eq!(props.style_id.as_deref(), Some("TableStyle1"));
     assert_eq!(props.cell_margins.as_ref().and_then(|m| m.top), Some(100));
     assert_eq!(props.cell_margins.as_ref().and_then(|m| m.left), Some(120));
-    assert!(props
-        .borders
-        .as_ref()
-        .and_then(|b| b.top.as_ref())
-        .is_some());
+    assert!(
+        props
+            .borders
+            .as_ref()
+            .and_then(|b| b.top.as_ref())
+            .is_some()
+    );
 
     let row = match store.get(table.rows[0]) {
         Some(docir_core::ir::IRNode::TableRow(r)) => r,
@@ -367,19 +369,23 @@ fn test_parse_note_references_as_fields() {
     let mut kinds = Vec::new();
     let mut args = Vec::new();
     for id in &para_node.runs {
-        if let Some(docir_core::ir::IRNode::Field(f)) = store.get(*id) {
-            if let Some(parsed) = f.instruction_parsed.as_ref() {
-                kinds.push(parsed.kind.clone());
-                args.extend(parsed.args.clone());
-            }
+        if let Some(docir_core::ir::IRNode::Field(f)) = store.get(*id)
+            && let Some(parsed) = f.instruction_parsed.as_ref()
+        {
+            kinds.push(parsed.kind.clone());
+            args.extend(parsed.args.clone());
         }
     }
-    assert!(kinds
-        .iter()
-        .any(|k| matches!(k, docir_core::ir::FieldKind::FootnoteRef)));
-    assert!(kinds
-        .iter()
-        .any(|k| matches!(k, docir_core::ir::FieldKind::EndnoteRef)));
+    assert!(
+        kinds
+            .iter()
+            .any(|k| matches!(k, docir_core::ir::FieldKind::FootnoteRef))
+    );
+    assert!(
+        kinds
+            .iter()
+            .any(|k| matches!(k, docir_core::ir::FieldKind::EndnoteRef))
+    );
     assert!(args.iter().any(|a| a == "1"));
     assert!(args.iter().any(|a| a == "2"));
 }
@@ -521,18 +527,22 @@ fn test_parse_table_cell_and_row_property_variants() {
         table.properties.alignment,
         Some(docir_core::ir::TableAlignment::Right)
     ));
-    assert!(table
-        .properties
-        .borders
-        .as_ref()
-        .and_then(|b| b.inside_h.as_ref())
-        .is_some());
-    assert!(table
-        .properties
-        .borders
-        .as_ref()
-        .and_then(|b| b.inside_v.as_ref())
-        .is_some());
+    assert!(
+        table
+            .properties
+            .borders
+            .as_ref()
+            .and_then(|b| b.inside_h.as_ref())
+            .is_some()
+    );
+    assert!(
+        table
+            .properties
+            .borders
+            .as_ref()
+            .and_then(|b| b.inside_v.as_ref())
+            .is_some()
+    );
     assert_eq!(
         table.properties.cell_margins.as_ref().and_then(|m| m.top),
         Some(20)
@@ -578,23 +588,29 @@ fn test_parse_table_cell_and_row_property_variants() {
         cell_a.properties.vertical_align,
         Some(docir_core::ir::CellVerticalAlignment::Center)
     ));
-    assert!(cell_a
-        .properties
-        .borders
-        .as_ref()
-        .and_then(|b| b.inside_h.as_ref())
-        .is_some());
-    assert!(cell_a
-        .properties
-        .borders
-        .as_ref()
-        .and_then(|b| b.inside_v.as_ref())
-        .is_some());
+    assert!(
+        cell_a
+            .properties
+            .borders
+            .as_ref()
+            .and_then(|b| b.inside_h.as_ref())
+            .is_some()
+    );
+    assert!(
+        cell_a
+            .properties
+            .borders
+            .as_ref()
+            .and_then(|b| b.inside_v.as_ref())
+            .is_some()
+    );
     assert_eq!(cell_a.properties.shading.as_deref(), Some("CCCCCC"));
-    assert!(cell_a
-        .content
-        .iter()
-        .any(|id| matches!(store.get(*id), Some(docir_core::ir::IRNode::Table(_)))));
+    assert!(
+        cell_a
+            .content
+            .iter()
+            .any(|id| matches!(store.get(*id), Some(docir_core::ir::IRNode::Table(_))))
+    );
 
     let cell_b = match store.get(row.cells[1]) {
         Some(docir_core::ir::IRNode::TableCell(c)) => c,

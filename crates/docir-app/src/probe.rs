@@ -2,7 +2,7 @@ use crate::io_support::with_file_bytes_and_config;
 use crate::{AppResult, ParserConfig};
 use docir_parser::hwp::is_hwpx_mimetype;
 use docir_parser::legacy_office::probe_legacy_office_format;
-use docir_parser::ole::{is_ole_container, Cfb};
+use docir_parser::ole::{Cfb, is_ole_container};
 use docir_parser::ooxml::content_types::ContentTypes;
 use docir_parser::zip_handler::SecureZipReader;
 use serde::Serialize;
@@ -398,8 +398,8 @@ fn is_swf(data: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{probe_format_bytes, FormatProbe};
-    use crate::{test_support::build_test_cfb, ParserConfig};
+    use super::{FormatProbe, probe_format_bytes};
+    use crate::{ParserConfig, test_support::build_test_cfb};
     use std::io::Write;
     use zip::write::FileOptions;
 

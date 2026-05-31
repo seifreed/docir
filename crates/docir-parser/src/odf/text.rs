@@ -1,17 +1,17 @@
 //! ODF text parsing helpers.
 
 use super::helpers::{
-    parse_annotation, parse_draw_frame, parse_note, parse_table, parse_tracked_changes, ListContext,
+    ListContext, parse_annotation, parse_draw_frame, parse_note, parse_table, parse_tracked_changes,
 };
 use super::spreadsheet::parse_content_spreadsheet_fast;
 use super::{
-    parse_paragraph, BookmarkEnd, BookmarkStart, CommentReference, Field, FieldInstruction,
-    FieldKind, IRNode, IrStore, NodeId, NumberingInfo, OdfContentResult, OdfLimitCounter,
-    Paragraph, ParagraphProperties, ParseError, Run, Section,
+    BookmarkEnd, BookmarkStart, CommentReference, Field, FieldInstruction, FieldKind, IRNode,
+    IrStore, NodeId, NumberingInfo, OdfContentResult, OdfLimitCounter, Paragraph,
+    ParagraphProperties, ParseError, Run, Section, parse_paragraph,
 };
 use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 struct OdfTextState {

@@ -2,11 +2,11 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, scan_xml_events, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events};
 use docir_core::ir::{PivotCacheRecords, PivotTable, TableColumn, TableDefinition};
 use docir_core::types::{NodeId, SourceSpan};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 pub(crate) fn parse_table_definition(
     xml: &str,
@@ -225,15 +225,13 @@ pub(crate) fn parse_pivot_cache_records(
                     current_fields = current_fields.saturating_add(1);
                 }
             }
-            Event::End(e) => {
-                if local_name(e.name().as_ref()) == b"r" {
-                    counted_records = counted_records.saturating_add(1);
-                    if max_fields < current_fields {
-                        max_fields = current_fields;
-                    }
-                    in_record = false;
-                    current_fields = 0;
+            Event::End(e) if local_name(e.name().as_ref()) == b"r" => {
+                counted_records = counted_records.saturating_add(1);
+                if max_fields < current_fields {
+                    max_fields = current_fields;
                 }
+                in_record = false;
+                current_fields = 0;
             }
             _ => {}
         }

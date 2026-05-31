@@ -19,54 +19,52 @@ impl DocxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => {
-                    if local_name(e.name().as_ref()) == b"font" {
-                        let name = attr_value(&e, b"w:name").unwrap_or_default();
-                        current = Some(FontEntry {
-                            name,
-                            alt_name: None,
-                            charset: None,
-                            family: None,
-                            panose: None,
-                        });
-                    }
+                Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"font" => {
+                    let name = attr_value(&e, b"w:name").unwrap_or_default();
+                    current = Some(FontEntry {
+                        name,
+                        alt_name: None,
+                        charset: None,
+                        family: None,
+                        panose: None,
+                    });
                 }
                 Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                     b"altName" => {
-                        if let Some(val) = attr_value(&e, b"w:val") {
-                            if let Some(font) = current.as_mut() {
-                                font.alt_name = Some(val);
-                            }
+                        if let Some(val) = attr_value(&e, b"w:val")
+                            && let Some(font) = current.as_mut()
+                        {
+                            font.alt_name = Some(val);
                         }
                     }
                     b"charset" => {
-                        if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
-                            if let Some(font) = current.as_mut() {
-                                font.charset = Some(val);
-                            }
+                        if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok())
+                            && let Some(font) = current.as_mut()
+                        {
+                            font.charset = Some(val);
                         }
                     }
                     b"family" => {
-                        if let Some(val) = attr_value(&e, b"w:val") {
-                            if let Some(font) = current.as_mut() {
-                                font.family = Some(val);
-                            }
+                        if let Some(val) = attr_value(&e, b"w:val")
+                            && let Some(font) = current.as_mut()
+                        {
+                            font.family = Some(val);
                         }
                     }
                     b"panose1" => {
-                        if let Some(val) = attr_value(&e, b"w:val") {
-                            if let Some(font) = current.as_mut() {
-                                font.panose = Some(val);
-                            }
+                        if let Some(val) = attr_value(&e, b"w:val")
+                            && let Some(font) = current.as_mut()
+                        {
+                            font.panose = Some(val);
                         }
                     }
                     _ => {}
                 },
                 Ok(Event::End(e)) => {
-                    if local_name(e.name().as_ref()) == b"font" {
-                        if let Some(font) = current.take() {
-                            table.fonts.push(font);
-                        }
+                    if local_name(e.name().as_ref()) == b"font"
+                        && let Some(font) = current.take()
+                    {
+                        table.fonts.push(font);
                     }
                 }
                 Ok(Event::Eof) => break,

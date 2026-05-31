@@ -88,14 +88,14 @@ pub(crate) fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
                 index += 1;
             }
             b'}' => {
-                if let Some(target_depth) = capture_depth {
-                    if depth <= target_depth {
-                        if let Some(blob) = decode_hex_blob(&hex) {
-                            blobs.push(blob);
-                        }
-                        hex.clear();
-                        capture_depth = None;
+                if let Some(target_depth) = capture_depth
+                    && depth <= target_depth
+                {
+                    if let Some(blob) = decode_hex_blob(&hex) {
+                        blobs.push(blob);
                     }
+                    hex.clear();
+                    capture_depth = None;
                 }
                 depth = depth.saturating_sub(1);
                 index += 1;
@@ -130,10 +130,10 @@ pub(crate) fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
         }
     }
 
-    if capture_depth.is_some() {
-        if let Some(blob) = decode_hex_blob(&hex) {
-            blobs.push(blob);
-        }
+    if capture_depth.is_some()
+        && let Some(blob) = decode_hex_blob(&hex)
+    {
+        blobs.push(blob);
     }
 
     blobs

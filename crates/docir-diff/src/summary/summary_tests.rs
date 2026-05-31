@@ -1,9 +1,9 @@
 mod tests {
     use crate::summary::{
-        abbreviate, cell_value_summary, content_signature, format_float, opt_bool, opt_u32,
+        IRNode, abbreviate, cell_value_summary, content_signature, format_float, opt_bool, opt_u32,
         paragraph_text, short_hash, style_signature, summarize, summarize_cell, summarize_formula,
         summarize_paragraph, summarize_primary, summarize_secondary, summarize_shape,
-        text_from_paragraph, IRNode,
+        text_from_paragraph,
     };
     use docir_core::ir::{
         BookmarkEnd, BookmarkStart, Cell, CellFormula, CellValue, Comment, ContentControl,
@@ -42,15 +42,19 @@ mod tests {
         let doc = IRNode::Document(docir_core::ir::Document::new(
             DocumentFormat::WordProcessing,
         ));
-        assert!(summarize_primary(&doc, &store)
-            .unwrap()
-            .contains("format=WordProcessing"));
+        assert!(
+            summarize_primary(&doc, &store)
+                .unwrap()
+                .contains("format=WordProcessing")
+        );
 
         let mut section = docir_core::ir::Section::new();
         section.name = Some("Body".to_string());
-        assert!(summarize_primary(&IRNode::Section(section), &store)
-            .unwrap()
-            .contains("name=Body"));
+        assert!(
+            summarize_primary(&IRNode::Section(section), &store)
+                .unwrap()
+                .contains("name=Body")
+        );
 
         let para_id = NodeId::new();
         let mut with_store = IrStore::new();
@@ -59,20 +63,26 @@ mod tests {
         let mut para = Paragraph::new();
         para.id = para_id;
         para.runs.push(run.id);
-        assert!(summarize_primary(&IRNode::Paragraph(para), &with_store)
-            .unwrap()
-            .contains("text=\"Hello\""));
+        assert!(
+            summarize_primary(&IRNode::Paragraph(para), &with_store)
+                .unwrap()
+                .contains("text=\"Hello\"")
+        );
 
         let run = Run::new("Run text");
-        assert!(summarize_primary(&IRNode::Run(run.clone()), &store)
-            .unwrap()
-            .contains("bold=-"));
+        assert!(
+            summarize_primary(&IRNode::Run(run.clone()), &store)
+                .unwrap()
+                .contains("bold=-")
+        );
 
         let mut link = Hyperlink::new("https://example.test", true);
         link.runs.push(run.id);
-        assert!(summarize_primary(&IRNode::Hyperlink(link), &with_store)
-            .unwrap()
-            .contains("external=true"));
+        assert!(
+            summarize_primary(&IRNode::Hyperlink(link), &with_store)
+                .unwrap()
+                .contains("external=true")
+        );
 
         let mut macro_project = docir_core::security::MacroProject::new();
         macro_project.name = Some("VBA".to_string());
@@ -88,9 +98,11 @@ mod tests {
             "http://example.test",
         );
         ext.ref_type = ExternalRefType::Hyperlink;
-        assert!(summarize_primary(&IRNode::ExternalReference(ext), &store)
-            .unwrap()
-            .contains("target=http://example.test"));
+        assert!(
+            summarize_primary(&IRNode::ExternalReference(ext), &store)
+                .unwrap()
+                .contains("target=http://example.test")
+        );
     }
 
     #[test]
@@ -145,9 +157,11 @@ mod tests {
             content_signature(&IRNode::Shape(shape.clone()), &store).unwrap(),
             "Title"
         );
-        assert!(style_signature(&IRNode::Shape(shape), &store)
-            .unwrap()
-            .contains("has_text=true"));
+        assert!(
+            style_signature(&IRNode::Shape(shape), &store)
+                .unwrap()
+                .contains("has_text=true")
+        );
 
         let secondary = summarize_secondary(&IRNode::CommentExtensionSet(
             docir_core::ir::CommentExtensionSet::new(),

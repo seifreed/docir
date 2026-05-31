@@ -17,10 +17,10 @@ pub(super) fn handle_encoding_controls(
 ) -> bool {
     match word {
         "ansicpg" => {
-            if let Some(cp) = param {
-                if let Some(enc) = encoding_for_codepage(cp as u32) {
-                    ctx.encoding = enc;
-                }
+            if let Some(cp) = param
+                && let Some(enc) = encoding_for_codepage(cp as u32)
+            {
+                ctx.encoding = enc;
             }
         }
         _ => return false,
@@ -155,18 +155,18 @@ pub(super) fn parse_font_entry(text: &str, ctx: &mut RtfParseContext) {
 
     let mut font_index = None;
     for_each_control_token(header, |token| {
-        if let Some(num) = token.strip_prefix('f') {
-            if let Ok(idx) = num.parse::<u32>() {
-                font_index = Some(idx);
-            }
+        if let Some(num) = token.strip_prefix('f')
+            && let Ok(idx) = num.parse::<u32>()
+        {
+            font_index = Some(idx);
         }
     });
 
     let name = parse_control_free_text(header).trim().to_string();
-    if let Some(idx) = font_index {
-        if !name.is_empty() {
-            ctx.font_table.fonts.insert(idx, name);
-        }
+    if let Some(idx) = font_index
+        && !name.is_empty()
+    {
+        ctx.font_table.fonts.insert(idx, name);
     }
 }
 
@@ -237,10 +237,10 @@ where
         while idx < bytes.len() && is_alpha_num_ascii(bytes[idx]) {
             idx += 1;
         }
-        if start < idx {
-            if let Ok(token) = std::str::from_utf8(&bytes[start..idx]) {
-                on_token(token);
-            }
+        if start < idx
+            && let Ok(token) = std::str::from_utf8(&bytes[start..idx])
+        {
+            on_token(token);
         }
     }
 }

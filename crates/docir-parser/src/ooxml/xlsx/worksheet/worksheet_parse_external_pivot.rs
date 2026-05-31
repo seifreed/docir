@@ -1,11 +1,11 @@
 use crate::ooxml::part_utils::read_relationships;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::xlsx::{
-    parse_pivot_cache_records, rel_type, IRNode, ParseError, PivotCache, XlsxParser,
+    IRNode, ParseError, PivotCache, XlsxParser, parse_pivot_cache_records, rel_type,
 };
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
-    is_end_event_local, local_name, reader_from_str, scan_xml_events_until_end, XmlScanControl,
+    XmlScanControl, is_end_event_local, local_name, reader_from_str, scan_xml_events_until_end,
 };
 use crate::zip_handler::PackageReader;
 use docir_core::types::SourceSpan;

@@ -7,19 +7,18 @@ use crate::security_utils::parse_dde_formula;
 use crate::xml_utils::{attr_value, attr_value_by_suffix};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
-    parse_cell_reference, CalcChain, Cell, CellError, CellFormula, ColumnDefinition,
-    ConditionalFormat, Diagnostics, Document, IRNode, MergedCellRange, SheetComment, SheetKind,
-    SheetState,
+    CalcChain, Cell, CellError, CellFormula, ColumnDefinition, ConditionalFormat, Diagnostics,
+    Document, IRNode, MergedCellRange, SheetComment, SheetKind, SheetState, parse_cell_reference,
 };
 use docir_core::security::SecurityInfo;
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
-use quick_xml::events::BytesStart;
 use quick_xml::Reader;
+use quick_xml::events::BytesStart;
 use std::collections::{HashMap, HashSet};
 
 use super::relationships::classify_relationship;
-use super::workbook::{parse_workbook_info, WorkbookInfo};
+use super::workbook::{WorkbookInfo, parse_workbook_info};
 #[path = "parser_xml.rs"]
 mod parser_xml;
 
@@ -220,14 +219,14 @@ impl XlsxParser {
         let upper = text.to_ascii_uppercase();
 
         // DDE detection in Excel formulas
-        if upper.starts_with("DDEAUTO") || upper.starts_with("DDE") {
-            if let Some(dde) = parse_dde_formula(
+        if (upper.starts_with("DDEAUTO") || upper.starts_with("DDE"))
+            && let Some(dde) = parse_dde_formula(
                 text,
                 SourceSpan::new(sheet_path).with_xml_path(cell_ref),
                 true,
-            ) {
-                self.security_info.dde_fields.push(dde);
-            }
+            )
+        {
+            self.security_info.dde_fields.push(dde);
         }
 
         self.record_xlm_formula(cell_ref, text, &upper, sheet_path);

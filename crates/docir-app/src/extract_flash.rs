@@ -1,6 +1,6 @@
 use crate::io_support::with_file_bytes_and_config;
 use crate::{AppResult, ParserConfig};
-use docir_parser::ole::{is_ole_container, Cfb};
+use docir_parser::ole::{Cfb, is_ole_container};
 use docir_parser::zip_handler::SecureZipReader;
 use serde::Serialize;
 use std::io::Cursor;
@@ -162,8 +162,8 @@ fn swf_signature(data: &[u8]) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{extract_flash_bytes, find_flash_objects_in_bytes};
-    use crate::test_support::build_test_cfb;
     use crate::ParserConfig;
+    use crate::test_support::build_test_cfb;
     use std::io::Write;
 
     fn swf(signature: &[u8; 3], version: u8, body: &[u8]) -> Vec<u8> {

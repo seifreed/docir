@@ -37,18 +37,22 @@ fn test_parse_field_instruction_ref_pageref() {
     };
     let mut kinds = Vec::new();
     for id in &para_node.runs {
-        if let Some(docir_core::ir::IRNode::Field(f)) = store.get(*id) {
-            if let Some(parsed) = f.instruction_parsed.as_ref() {
-                kinds.push(parsed.kind.clone());
-            }
+        if let Some(docir_core::ir::IRNode::Field(f)) = store.get(*id)
+            && let Some(parsed) = f.instruction_parsed.as_ref()
+        {
+            kinds.push(parsed.kind.clone());
         }
     }
-    assert!(kinds
-        .iter()
-        .any(|k| matches!(k, docir_core::ir::FieldKind::Ref)));
-    assert!(kinds
-        .iter()
-        .any(|k| matches!(k, docir_core::ir::FieldKind::PageRef)));
+    assert!(
+        kinds
+            .iter()
+            .any(|k| matches!(k, docir_core::ir::FieldKind::Ref))
+    );
+    assert!(
+        kinds
+            .iter()
+            .any(|k| matches!(k, docir_core::ir::FieldKind::PageRef))
+    );
 }
 
 #[test]

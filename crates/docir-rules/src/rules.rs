@@ -140,10 +140,10 @@ pub(super) fn for_each_external_hyperlink(
     mut f: impl FnMut(&IRNode, &docir_core::ir::Hyperlink),
 ) {
     visit_nodes(ctx, |node| {
-        if let IRNode::Hyperlink(link) = node {
-            if link.is_external {
-                f(node, link);
-            }
+        if let IRNode::Hyperlink(link) = node
+            && link.is_external
+        {
+            f(node, link);
         }
     });
 }

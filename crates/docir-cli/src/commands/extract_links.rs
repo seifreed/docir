@@ -52,9 +52,9 @@ mod tests {
     use docir_core::security::ThreatLevel;
     use std::fs;
     use std::io::Write;
-    use zip::write::SimpleFileOptions;
     use zip::CompressionMethod;
     use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
 
     fn build_test_ods_with_dde() -> Vec<u8> {
         let mut cursor = std::io::Cursor::new(Vec::new());

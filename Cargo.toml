@@ -14,9 +14,9 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Marc Rivero López"]
-license = "GPL-3.0"
+license = "GPL-3.0-only"
 repository = "https://github.com/seifreed/docir"
 description = "Document Intermediate Representation for Microsoft Office formats"
 

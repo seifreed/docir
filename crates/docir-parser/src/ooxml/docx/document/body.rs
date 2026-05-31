@@ -3,14 +3,14 @@ use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::{local_name, read_event};
 use docir_core::ir::Section;
 use docir_core::types::NodeId;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::collections::HashMap;
 
-use super::inline::{parse_revision_block, parse_sdt, SdtMode};
+use super::inline::{SdtMode, parse_revision_block, parse_sdt};
 use super::paragraph::{parse_paragraph, parse_paragraph_simple};
 use super::table::parse_table;
-use super::{apply_section_refs, DocxParser};
+use super::{DocxParser, apply_section_refs};
 use docir_core::ir::RevisionType;
 
 pub(crate) fn parse_body_sections(
@@ -80,10 +80,8 @@ pub(crate) fn parse_body_sections(
                 }
                 _ => {}
             },
-            Event::End(e) => {
-                if local_name(e.name().as_ref()) == b"body" {
-                    break;
-                }
+            Event::End(e) if local_name(e.name().as_ref()) == b"body" => {
+                break;
             }
             Event::Eof => break,
             _ => {}
@@ -133,10 +131,8 @@ pub(crate) fn parse_block_until(
                 }
                 _ => {}
             },
-            Event::End(e) => {
-                if local_name(e.name().as_ref()) == local_name(end_tag) {
-                    break;
-                }
+            Event::End(e) if local_name(e.name().as_ref()) == local_name(end_tag) => {
+                break;
             }
             Event::Eof => break,
             _ => {}

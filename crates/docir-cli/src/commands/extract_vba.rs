@@ -1,6 +1,6 @@
 //! Extract VBA modules and write a manifest to disk.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use docir_app::{
     ExportDocumentRef, ParserConfig, Phase0ArtifactManifestExport, VbaRecognitionReport,
 };
@@ -135,7 +135,7 @@ fn sanitize_name(input: &str) -> String {
 mod tests {
     use super::run;
     use crate::test_support;
-    use docir_app::{test_support::build_test_cfb, ParserConfig};
+    use docir_app::{ParserConfig, test_support::build_test_cfb};
     use std::fs;
 
     #[test]
@@ -337,9 +337,10 @@ Module=MissingMod/MissingMod
             &ParserConfig::default(),
         )
         .expect_err("extract without best effort should fail");
-        assert!(err
-            .to_string()
-            .contains("rerun with --best-effort to keep partial bundles"));
+        assert!(
+            err.to_string()
+                .contains("rerun with --best-effort to keep partial bundles")
+        );
 
         let _ = fs::remove_file(input);
         let _ = fs::remove_dir_all(out);

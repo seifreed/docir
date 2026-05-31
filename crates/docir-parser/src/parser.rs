@@ -10,7 +10,7 @@ use crate::ole::is_ole_container;
 use crate::ooxml::content_types::ContentTypes;
 use crate::ooxml::docx::DocxParser;
 use crate::ooxml::pptx::PptxParser;
-use crate::ooxml::relationships::{rel_type, Relationships};
+use crate::ooxml::relationships::{Relationships, rel_type};
 use crate::ooxml::xlsx::XlsxParser;
 use crate::rtf::is_rtf_bytes;
 use crate::zip_handler::{PackageReader, SecureZipReader};
@@ -45,7 +45,7 @@ mod ooxml;
 mod types;
 
 use analysis::{hex, map_calamine_error, parse_activex_xml, parse_chart_data, parse_smartart_part};
-pub(crate) use contracts::{run_parser_pipeline, NormalizeStage, ParseStage, PostprocessStage};
+pub(crate) use contracts::{NormalizeStage, ParseStage, PostprocessStage, run_parser_pipeline};
 pub use document::DocumentParser;
 pub use ooxml::OoxmlParser;
 pub(crate) use security::SecurityScanner as OoxmlSecurityScanner;

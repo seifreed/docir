@@ -1,12 +1,12 @@
-use super::{build_zip_with_entries, Relationships};
+use super::{Relationships, build_zip_with_entries};
 use crate::error::ParseError;
 use crate::ooxml::xlsx::{
-    extract_formula_function, map_cell_error, parse_formula, parse_formula_args_text,
-    parse_formula_empty, parse_inline_string, XlsxParser,
+    XlsxParser, extract_formula_function, map_cell_error, parse_formula, parse_formula_args_text,
+    parse_formula_empty, parse_inline_string,
 };
 use docir_core::ir::{CellError, FormulaType, IRNode};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 #[test]
 fn test_parse_xlm_macro_sheet() {
     let workbook_xml = r#"
@@ -50,14 +50,18 @@ fn test_parse_xlm_macro_sheet() {
     };
     assert_eq!(doc.security.xlm_macros.len(), 1);
     assert!(!doc.security.xlm_macros[0].macro_cells.is_empty());
-    assert!(doc.security.xlm_macros[0]
-        .dangerous_functions
-        .iter()
-        .any(|function| function.name == "EXEC" && function.cell_ref == "A1"));
-    assert!(doc.security.xlm_macros[0]
-        .dangerous_functions
-        .iter()
-        .any(|function| function.name == "CALL" && function.cell_ref == "A2"));
+    assert!(
+        doc.security.xlm_macros[0]
+            .dangerous_functions
+            .iter()
+            .any(|function| function.name == "EXEC" && function.cell_ref == "A1")
+    );
+    assert!(
+        doc.security.xlm_macros[0]
+            .dangerous_functions
+            .iter()
+            .any(|function| function.name == "CALL" && function.cell_ref == "A2")
+    );
 }
 
 #[test]

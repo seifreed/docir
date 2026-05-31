@@ -231,9 +231,11 @@ fn test_parse_pic_embed_and_link_external() {
             ext_targets.push(ext.target.clone());
         }
     }
-    assert!(ext_targets
-        .iter()
-        .any(|t| t == "https://example.com/video.mp4"));
+    assert!(
+        ext_targets
+            .iter()
+            .any(|t| t == "https://example.com/video.mp4")
+    );
 }
 
 #[test]

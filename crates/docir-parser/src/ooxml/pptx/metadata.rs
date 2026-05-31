@@ -4,8 +4,8 @@ use super::{
 };
 use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
 use docir_core::types::NodeId;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 pub(super) fn parse_presentation_properties(
     xml: &str,
@@ -20,40 +20,39 @@ pub(super) fn parse_presentation_properties(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"presentationPr" {
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"autoCompressPictures" => {
-                                let value = lossy_attr_value(&attr);
-                                props.auto_compress_pictures =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"compatMode" => {
-                                props.compat_mode = Some(lossy_attr_value(&attr).to_string());
-                            }
-                            b"rtl" => {
-                                let value = lossy_attr_value(&attr);
-                                props.rtl =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"showSpecialPlsOnTitleSld" => {
-                                let value = lossy_attr_value(&attr);
-                                props.show_special_placeholders =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"removePersonalInfoOnSave" => {
-                                let value = lossy_attr_value(&attr);
-                                props.remove_personal_info_on_save =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"showInkAnnotation" => {
-                                let value = lossy_attr_value(&attr);
-                                props.show_ink_annotation =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            _ => {}
+            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                if local_name(e.name().as_ref()) == b"presentationPr" =>
+            {
+                for attr in e.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"autoCompressPictures" => {
+                            let value = lossy_attr_value(&attr);
+                            props.auto_compress_pictures =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
                         }
+                        b"compatMode" => {
+                            props.compat_mode = Some(lossy_attr_value(&attr).to_string());
+                        }
+                        b"rtl" => {
+                            let value = lossy_attr_value(&attr);
+                            props.rtl = Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        b"showSpecialPlsOnTitleSld" => {
+                            let value = lossy_attr_value(&attr);
+                            props.show_special_placeholders =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        b"removePersonalInfoOnSave" => {
+                            let value = lossy_attr_value(&attr);
+                            props.remove_personal_info_on_save =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        b"showInkAnnotation" => {
+                            let value = lossy_attr_value(&attr);
+                            props.show_ink_annotation =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -195,25 +194,25 @@ pub(super) fn parse_presentation_tags(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"tag" {
-                    let mut name = None;
-                    let mut val = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
-                            b"val" => val = Some(lossy_attr_value(&attr).to_string()),
-                            _ => {}
-                        }
+            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                if local_name(e.name().as_ref()) == b"tag" =>
+            {
+                let mut name = None;
+                let mut val = None;
+                for attr in e.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"name" => name = Some(lossy_attr_value(&attr).to_string()),
+                        b"val" => val = Some(lossy_attr_value(&attr).to_string()),
+                        _ => {}
                     }
-                    if let Some(name) = name {
-                        tags.push(PresentationTag {
-                            id: NodeId::new(),
-                            name,
-                            value: val,
-                            span: Some(SourceSpan::new(path)),
-                        });
-                    }
+                }
+                if let Some(name) = name {
+                    tags.push(PresentationTag {
+                        id: NodeId::new(),
+                        name,
+                        value: val,
+                        span: Some(SourceSpan::new(path)),
+                    });
                 }
             }
             Ok(Event::Eof) => break,
@@ -318,28 +317,28 @@ pub(super) fn parse_slide_master_meta(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"sldMaster" {
-                    for attr in e.attributes().flatten() {
-                        let value = lossy_attr_value(&attr);
-                        match attr.key.as_ref() {
-                            b"preserve" => {
-                                meta.preserve =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"showMasterSp" => {
-                                meta.show_master_sp =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"showMasterPhAnim" => {
-                                meta.show_master_ph_anim =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            _ => {}
+            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                if local_name(e.name().as_ref()) == b"sldMaster" =>
+            {
+                for attr in e.attributes().flatten() {
+                    let value = lossy_attr_value(&attr);
+                    match attr.key.as_ref() {
+                        b"preserve" => {
+                            meta.preserve =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
                         }
+                        b"showMasterSp" => {
+                            meta.show_master_sp =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        b"showMasterPhAnim" => {
+                            meta.show_master_ph_anim =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        _ => {}
                     }
-                    break;
                 }
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -371,30 +370,30 @@ pub(super) fn parse_slide_layout_meta(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"sldLayout" {
-                    for attr in e.attributes().flatten() {
-                        let value = lossy_attr_value(&attr);
-                        match attr.key.as_ref() {
-                            b"type" => meta.layout_type = Some(value.to_string()),
-                            b"matchingName" => meta.matching_name = Some(value.to_string()),
-                            b"preserve" => {
-                                meta.preserve =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"showMasterSp" => {
-                                meta.show_master_sp =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"showMasterPhAnim" => {
-                                meta.show_master_ph_anim =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            _ => {}
+            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                if local_name(e.name().as_ref()) == b"sldLayout" =>
+            {
+                for attr in e.attributes().flatten() {
+                    let value = lossy_attr_value(&attr);
+                    match attr.key.as_ref() {
+                        b"type" => meta.layout_type = Some(value.to_string()),
+                        b"matchingName" => meta.matching_name = Some(value.to_string()),
+                        b"preserve" => {
+                            meta.preserve =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
                         }
+                        b"showMasterSp" => {
+                            meta.show_master_sp =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        b"showMasterPhAnim" => {
+                            meta.show_master_ph_anim =
+                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        }
+                        _ => {}
                     }
-                    break;
                 }
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {

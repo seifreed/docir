@@ -1,7 +1,7 @@
 //! Extract embedded SWF/Flash payloads from containers.
 
 use anyhow::{Context, Result};
-use docir_app::{extract_flash_path, FlashExtractionReport, ParserConfig};
+use docir_app::{FlashExtractionReport, ParserConfig, extract_flash_path};
 use std::fs;
 use std::path::PathBuf;
 

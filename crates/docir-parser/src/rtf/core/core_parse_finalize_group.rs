@@ -1,5 +1,5 @@
 use super::{
-    finalize_object, finalize_picture, GroupKind, IrStore, RtfParseContext, StyleEntryContext,
+    GroupKind, IrStore, RtfParseContext, StyleEntryContext, finalize_object, finalize_picture,
 };
 use docir_core::ir::{Style, StyleSet, StyleType};
 
@@ -7,17 +7,17 @@ pub(super) fn handle_group_end(ctx: &mut RtfParseContext, store: &mut IrStore) {
     match ctx.current_group_kind() {
         GroupKind::Field => super::finalize_field(ctx, store),
         GroupKind::Picture => {
-            if let Some(obj) = ctx.object_stack.pop() {
-                if let Some(asset_id) = finalize_picture(obj, store) {
-                    ctx.media_assets.push(asset_id);
-                }
+            if let Some(obj) = ctx.object_stack.pop()
+                && let Some(asset_id) = finalize_picture(obj, store)
+            {
+                ctx.media_assets.push(asset_id);
             }
         }
         GroupKind::Object => {
-            if let Some(obj) = ctx.object_stack.pop() {
-                if let Some(ole_id) = finalize_object(obj, store) {
-                    ctx.ole_objects.push(ole_id);
-                }
+            if let Some(obj) = ctx.object_stack.pop()
+                && let Some(ole_id) = finalize_object(obj, store)
+            {
+                ctx.ole_objects.push(ole_id);
             }
         }
         GroupKind::StylesheetEntry => finalize_style_entry(ctx),

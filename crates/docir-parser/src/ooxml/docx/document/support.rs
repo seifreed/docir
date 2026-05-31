@@ -1,13 +1,13 @@
 use super::{
-    attr_value, normalize_docx_target, parse_border, reader_from_str, span_from_reader, DocxParser,
-    NodeId, PageBorders, ParseError, Relationships, WordSettings,
+    DocxParser, NodeId, PageBorders, ParseError, Relationships, WordSettings, attr_value,
+    normalize_docx_target, parse_border, reader_from_str, span_from_reader,
 };
 use crate::xml_utils::attr_value_by_suffix;
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 pub(super) fn parse_page_borders(
     reader: &mut Reader<&[u8]>,
@@ -42,10 +42,8 @@ pub(super) fn parse_page_borders(
                     _ => {}
                 }
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"pgBorders" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pgBorders" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -55,11 +53,7 @@ pub(super) fn parse_page_borders(
         }
         buf.clear();
     }
-    if has_any {
-        Ok(Some(borders))
-    } else {
-        Ok(None)
-    }
+    if has_any { Ok(Some(borders)) } else { Ok(None) }
 }
 
 pub(super) fn bool_from_val(start: &BytesStart) -> bool {
@@ -161,10 +155,8 @@ pub(super) fn parse_vml_pict(
                     }
                 }
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"pict" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pict" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -175,21 +167,21 @@ pub(super) fn parse_vml_pict(
         buf.clear();
     }
 
-    if let Some(rel_id) = rel_id {
-        if let Some(rel) = rels.get(&rel_id) {
-            let mut shape = docir_core::ir::Shape::new(docir_core::ir::ShapeType::Picture);
-            shape.name = name;
-            shape.alt_text = alt_text;
-            shape.transform = transform;
-            shape.relationship_id = Some(rel_id.clone());
-            shape.media_target = Some(normalize_docx_target(&rel.target));
-            let mut span = span_from_reader(reader, "word/document.xml");
-            span.relationship_id = Some(rel_id.clone());
-            shape.span = Some(span);
-            let shape_id = shape.id;
-            parser.store.insert(docir_core::ir::IRNode::Shape(shape));
-            return Ok(Some(shape_id));
-        }
+    if let Some(rel_id) = rel_id
+        && let Some(rel) = rels.get(&rel_id)
+    {
+        let mut shape = docir_core::ir::Shape::new(docir_core::ir::ShapeType::Picture);
+        shape.name = name;
+        shape.alt_text = alt_text;
+        shape.transform = transform;
+        shape.relationship_id = Some(rel_id.clone());
+        shape.media_target = Some(normalize_docx_target(&rel.target));
+        let mut span = span_from_reader(reader, "word/document.xml");
+        span.relationship_id = Some(rel_id.clone());
+        shape.span = Some(span);
+        let shape_id = shape.id;
+        parser.store.insert(docir_core::ir::IRNode::Shape(shape));
+        return Ok(Some(shape_id));
     }
     Ok(None)
 }
@@ -236,16 +228,14 @@ pub(super) fn parse_num_abstract_id(reader: &mut Reader<&[u8]>) -> Result<u32, P
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"abstractNumId" {
-                    if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
-                        abstract_id = val;
-                    }
+                if local_name(e.name().as_ref()) == b"abstractNumId"
+                    && let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok())
+                {
+                    abstract_id = val;
                 }
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"num" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"num" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {

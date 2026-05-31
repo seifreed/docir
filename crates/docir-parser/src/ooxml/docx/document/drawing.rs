@@ -1,4 +1,4 @@
-use super::{span_from_reader, DocxParser};
+use super::{DocxParser, span_from_reader};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
@@ -9,8 +9,8 @@ use docir_core::ir::{
     Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeTransform, ShapeType, TextAlignment,
 };
 use docir_core::types::NodeId;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 pub(super) fn parse_drawing(
     parser: &mut DocxParser,
@@ -66,15 +66,15 @@ pub(super) fn parse_drawing(
                         transform.y = val;
                     }
                 } else if name_slice == b"posOffset" {
-                    if let Ok(text) = reader.read_text(e.name()) {
-                        if let Ok(val) = text.parse::<i64>() {
-                            if next_pos_is_x {
-                                transform.x = val;
-                            } else {
-                                transform.y = val;
-                            }
-                            next_pos_is_x = !next_pos_is_x;
+                    if let Ok(text) = reader.read_text(e.name())
+                        && let Ok(val) = text.parse::<i64>()
+                    {
+                        if next_pos_is_x {
+                            transform.x = val;
+                        } else {
+                            transform.y = val;
                         }
+                        next_pos_is_x = !next_pos_is_x;
                     }
                 } else if name_slice == b"txBody" {
                     text = Some(parse_drawing_text_body(reader, "word/document.xml")?);
@@ -97,10 +97,8 @@ pub(super) fn parse_drawing(
                     hyperlink_rel = attr_value_by_suffix(&e, &[b":id"]);
                 }
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"drawing" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"drawing" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -115,34 +113,34 @@ pub(super) fn parse_drawing(
         .clone()
         .or(diagram_rel_ids.first().cloned())
         .or(rel_id);
-    if let Some(rel_id) = rel_id {
-        if let Some(rel) = rels.get(&rel_id) {
-            let mut shape = Shape::new(shape_type);
-            shape.name = name;
-            shape.alt_text = alt_text;
-            shape.transform = transform;
-            shape.text = text;
-            shape.relationship_id = Some(rel_id.clone());
-            shape.media_target = Some(normalize_docx_target(&rel.target));
-            let mut span = span_from_reader(reader, "word/document.xml");
-            span.relationship_id = Some(rel_id.clone());
-            shape.span = Some(span);
-            if let Some(hrel) = hyperlink_rel.as_ref().and_then(|id| rels.get(id)) {
-                shape.hyperlink = Some(hrel.target.clone());
-            }
-            if !diagram_rel_ids.is_empty() {
-                let mut related_targets = Vec::new();
-                for rel_id in diagram_rel_ids {
-                    if let Some(rel) = rels.get(&rel_id) {
-                        related_targets.push(normalize_docx_target(&rel.target));
-                    }
-                }
-                shape.related_targets = related_targets;
-            }
-            let shape_id = shape.id;
-            parser.store.insert(docir_core::ir::IRNode::Shape(shape));
-            return Ok(Some(shape_id));
+    if let Some(rel_id) = rel_id
+        && let Some(rel) = rels.get(&rel_id)
+    {
+        let mut shape = Shape::new(shape_type);
+        shape.name = name;
+        shape.alt_text = alt_text;
+        shape.transform = transform;
+        shape.text = text;
+        shape.relationship_id = Some(rel_id.clone());
+        shape.media_target = Some(normalize_docx_target(&rel.target));
+        let mut span = span_from_reader(reader, "word/document.xml");
+        span.relationship_id = Some(rel_id.clone());
+        shape.span = Some(span);
+        if let Some(hrel) = hyperlink_rel.as_ref().and_then(|id| rels.get(id)) {
+            shape.hyperlink = Some(hrel.target.clone());
         }
+        if !diagram_rel_ids.is_empty() {
+            let mut related_targets = Vec::new();
+            for rel_id in diagram_rel_ids {
+                if let Some(rel) = rels.get(&rel_id) {
+                    related_targets.push(normalize_docx_target(&rel.target));
+                }
+            }
+            shape.related_targets = related_targets;
+        }
+        let shape_id = shape.id;
+        parser.store.insert(docir_core::ir::IRNode::Shape(shape));
+        return Ok(Some(shape_id));
     }
     Ok(None)
 }
@@ -156,16 +154,12 @@ fn parse_drawing_text_body(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                if local_name(e.name().as_ref()) == b"p" {
-                    let paragraph = parse_drawing_text_paragraph(reader, doc_path)?;
-                    paragraphs.push(paragraph);
-                }
+            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"p" => {
+                let paragraph = parse_drawing_text_paragraph(reader, doc_path)?;
+                paragraphs.push(paragraph);
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"txBody" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"txBody" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -208,10 +202,8 @@ fn parse_drawing_text_paragraph(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"p" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"p" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -253,10 +245,8 @@ fn parse_drawing_text_run(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"r" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"r" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {

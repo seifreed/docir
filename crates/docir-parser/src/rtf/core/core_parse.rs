@@ -44,17 +44,15 @@ pub(crate) fn parse_rtf(
                         && ctx.object_text_target.is_some()
                     {
                         append_text_byte(ctx, byte);
-                    } else if byte.is_ascii_hexdigit() {
-                        if let Some(obj) = ctx.object_stack.last_mut() {
-                            obj.data_hex_len += 1;
-                            if ctx.max_object_hex_len > 0
-                                && obj.data_hex_len > ctx.max_object_hex_len
-                            {
-                                return Err(ParseError::ResourceLimit(format!(
-                                    "RTF objdata too large: {} hex chars (max: {})",
-                                    obj.data_hex_len, ctx.max_object_hex_len
-                                )));
-                            }
+                    } else if byte.is_ascii_hexdigit()
+                        && let Some(obj) = ctx.object_stack.last_mut()
+                    {
+                        obj.data_hex_len += 1;
+                        if ctx.max_object_hex_len > 0 && obj.data_hex_len > ctx.max_object_hex_len {
+                            return Err(ParseError::ResourceLimit(format!(
+                                "RTF objdata too large: {} hex chars (max: {})",
+                                obj.data_hex_len, ctx.max_object_hex_len
+                            )));
                         }
                     }
                 }

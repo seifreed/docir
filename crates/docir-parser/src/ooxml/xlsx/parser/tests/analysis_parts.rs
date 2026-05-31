@@ -24,11 +24,13 @@ fn test_parse_chart_xml() {
         Some(IRNode::ChartData(c)) => c,
         _ => panic!("missing chart"),
     };
-    assert!(chart
-        .chart_type
-        .as_deref()
-        .unwrap_or("")
-        .contains("lineChart"));
+    assert!(
+        chart
+            .chart_type
+            .as_deref()
+            .unwrap_or("")
+            .contains("lineChart")
+    );
     assert_eq!(chart.title.as_deref(), Some("Revenue"));
     assert_eq!(chart.series.len(), 1);
     assert_eq!(chart.series_data.len(), 1);

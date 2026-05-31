@@ -1,4 +1,4 @@
-use super::{parse_block_until, DocxParser, NoteKind};
+use super::{DocxParser, NoteKind, parse_block_until};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::{attr_value, local_name, xml_error};
@@ -7,8 +7,8 @@ use docir_core::ir::{
     Footnote, IRNode,
 };
 use docir_core::types::NodeId;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 impl DocxParser {
     /// Public API entrypoint: parse_comments.
@@ -39,18 +39,18 @@ impl DocxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
-                    if local_name(e.name().as_ref()) == b"commentExt" {
-                        let comment_id = attr_value(&e, b"w:id").unwrap_or_default();
-                        let entry = CommentExtension {
-                            comment_id,
-                            para_id: attr_value(&e, b"w16cid:paraId"),
-                            parent_para_id: attr_value(&e, b"w16cid:parentParaId"),
-                            done: attr_value(&e, b"w:done")
-                                .map(|v| v == "1" || v.eq_ignore_ascii_case("true")),
-                        };
-                        set.entries.push(entry);
-                    }
+                Ok(Event::Empty(e)) | Ok(Event::Start(e))
+                    if local_name(e.name().as_ref()) == b"commentExt" =>
+                {
+                    let comment_id = attr_value(&e, b"w:id").unwrap_or_default();
+                    let entry = CommentExtension {
+                        comment_id,
+                        para_id: attr_value(&e, b"w16cid:paraId"),
+                        parent_para_id: attr_value(&e, b"w16cid:parentParaId"),
+                        done: attr_value(&e, b"w:done")
+                            .map(|v| v == "1" || v.eq_ignore_ascii_case("true")),
+                    };
+                    set.entries.push(entry);
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
@@ -75,15 +75,15 @@ impl DocxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
-                    if local_name(e.name().as_ref()) == b"commentId" {
-                        let entry = CommentIdMapEntry {
-                            comment_id: attr_value(&e, b"w:id").unwrap_or_default(),
-                            para_id: attr_value(&e, b"w16cid:paraId"),
-                            parent_para_id: attr_value(&e, b"w16cid:parentParaId"),
-                        };
-                        map.mappings.push(entry);
-                    }
+                Ok(Event::Empty(e)) | Ok(Event::Start(e))
+                    if local_name(e.name().as_ref()) == b"commentId" =>
+                {
+                    let entry = CommentIdMapEntry {
+                        comment_id: attr_value(&e, b"w:id").unwrap_or_default(),
+                        para_id: attr_value(&e, b"w16cid:paraId"),
+                        parent_para_id: attr_value(&e, b"w16cid:parentParaId"),
+                    };
+                    map.mappings.push(entry);
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {

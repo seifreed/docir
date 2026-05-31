@@ -4,8 +4,8 @@ use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
 use docir_core::ir::DigitalSignature;
 use docir_core::types::SourceSpan;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 /// Public API entrypoint: parse_signature.
 pub fn parse_signature(xml: &str, path: &str) -> Result<DigitalSignature, ParseError> {

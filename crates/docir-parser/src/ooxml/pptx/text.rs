@@ -1,8 +1,8 @@
 use crate::error::ParseError;
 use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
 use docir_core::ir::{ShapeText, ShapeTextParagraph, ShapeTextRun, TextAlignment};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 pub(super) fn parse_text_body(
     reader: &mut Reader<&[u8]>,
@@ -28,16 +28,12 @@ fn parse_text_body_with_end(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                if local_name(e.name().as_ref()) == b"p" {
-                    let paragraph = parse_text_paragraph(reader, slide_path)?;
-                    paragraphs.push(paragraph);
-                }
+            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"p" => {
+                let paragraph = parse_text_paragraph(reader, slide_path)?;
+                paragraphs.push(paragraph);
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == end_tag {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == end_tag => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -97,10 +93,8 @@ fn parse_text_paragraph(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"p" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"p" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -153,10 +147,8 @@ fn parse_text_run(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"r" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"r" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {

@@ -1,7 +1,7 @@
 //! Inspect low-level legacy XLS BIFF records.
 
 use anyhow::Result;
-use docir_app::{inspect_sheet_records_path, ParserConfig, SheetRecordInspection};
+use docir_app::{ParserConfig, SheetRecordInspection, inspect_sheet_records_path};
 use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
@@ -75,8 +75,8 @@ mod tests {
     use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
-        test_support::build_test_cfb, ParserConfig, SheetRecordAnomaly, SheetRecordCount,
-        SheetRecordEntry, SheetRecordInspection,
+        ParserConfig, SheetRecordAnomaly, SheetRecordCount, SheetRecordEntry,
+        SheetRecordInspection, test_support::build_test_cfb,
     };
     use std::fs;
 

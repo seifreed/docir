@@ -3,15 +3,15 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::{XmlScanControl, scan_xml_events};
 use crate::xml_utils::{attr_bool, attr_u32, attr_value, local_name};
-use crate::xml_utils::{scan_xml_events, XmlScanControl};
 use docir_core::ir::{
     ConnectionEntry, ConnectionPart, ExternalLinkPart, ExternalLinkSheet, QueryTablePart,
     SlicerPart, TimelinePart,
 };
 use docir_core::types::SourceSpan;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 fn for_each_local_start_or_empty<F>(
     xml: &str,
@@ -66,10 +66,10 @@ pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<Connection
                 }
             }
             Event::End(e) => {
-                if local_name(e.name().as_ref()) == b"connection" {
-                    if let Some(entry) = current.take() {
-                        part.entries.push(entry);
-                    }
+                if local_name(e.name().as_ref()) == b"connection"
+                    && let Some(entry) = current.take()
+                {
+                    part.entries.push(entry);
                 }
             }
             _ => {}

@@ -2,14 +2,14 @@ use super::helpers::parse_odf_condition_operator;
 use crate::diagnostics::push_entry;
 use crate::security_scan::OdfXmlInputs;
 use crate::security_utils::parse_dde_formula;
-use crate::xml_utils::{attr_value_by_suffix, local_name, scan_xml_events, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document, IRNode};
 use docir_core::security::{DdeField, ExternalRefType, ExternalReference, OleObject};
 use docir_core::types::SourceSpan;
 use docir_core::visitor::IrStore;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 #[derive(Default)]
 pub(crate) struct OdfFormulaScan {
@@ -24,10 +24,8 @@ fn visit_start_or_empty(xml: &str, mut on_element: impl FnMut(&BytesStart<'_>) -
     let mut buf = Vec::new();
     let _ = scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
         match event {
-            Event::Start(e) | Event::Empty(e) => {
-                if on_element(&e) {
-                    return Ok(XmlScanControl::Break);
-                }
+            Event::Start(e) | Event::Empty(e) if on_element(&e) => {
+                return Ok(XmlScanControl::Break);
             }
             _ => {}
         }
@@ -291,11 +289,11 @@ pub(crate) fn scan_odf_protection(xml: &str) -> Vec<DiagnosticEntry> {
     let mut entries = Vec::new();
     let mut protected = false;
     visit_start_or_empty(xml, |e| {
-        if let Some(value) = attr_value_by_suffix(e, &[b":protected"]) {
-            if value == "true" {
-                protected = true;
-                return true;
-            }
+        if let Some(value) = attr_value_by_suffix(e, &[b":protected"])
+            && value == "true"
+        {
+            protected = true;
+            return true;
         }
         false
     });
@@ -319,16 +317,16 @@ pub(crate) fn scan_odf_advanced_features(xml: &str) -> Vec<DiagnosticEntry> {
     visit_start_or_empty(xml, |e| {
         match local_name(e.name().as_ref()) {
             b"conditional-format" => {
-                if let Some(condition) = attr_value_by_suffix(e, &[b":condition"]) {
-                    if parse_odf_condition_operator(&condition).is_none() {
-                        conditional_advanced = true;
-                    }
+                if let Some(condition) = attr_value_by_suffix(e, &[b":condition"])
+                    && parse_odf_condition_operator(&condition).is_none()
+                {
+                    conditional_advanced = true;
                 }
             }
-            b"pivot-table" | b"data-pilot-table" => {
-                if attr_value_by_suffix(e, &[b":target-range-address"]).is_some() {
-                    pivot_advanced = true;
-                }
+            b"pivot-table" | b"data-pilot-table"
+                if attr_value_by_suffix(e, &[b":target-range-address"]).is_some() =>
+            {
+                pivot_advanced = true;
             }
             b"object" | b"object-ole" => odp_advanced = true,
             _ => {}

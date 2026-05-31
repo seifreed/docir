@@ -43,10 +43,8 @@ fn handle_start_event(start: &BytesStart<'_>, theme: &mut Theme, state: &mut The
     match local_name(start.name().as_ref()) {
         b"theme" => set_theme_name(start, &mut theme.name),
         b"clrScheme" => state.in_clr_scheme = true,
-        b"fontScheme" => {
-            if theme.name.is_none() {
-                set_theme_name(start, &mut theme.name);
-            }
+        b"fontScheme" if theme.name.is_none() => {
+            set_theme_name(start, &mut theme.name);
         }
         b"majorFont" => state.in_major_font = true,
         b"minorFont" => state.in_minor_font = true,
@@ -62,13 +60,13 @@ fn handle_start_event(start: &BytesStart<'_>, theme: &mut Theme, state: &mut The
 fn handle_empty_event(start: &BytesStart<'_>, theme: &mut Theme, state: &mut ThemeParseState) {
     if state.in_clr_scheme {
         let color_value = srgb_value(start);
-        if let Some(name) = state.current_color_name.take() {
-            if color_value.is_some() {
-                theme.colors.push(ThemeColor {
-                    name,
-                    value: color_value,
-                });
-            }
+        if let Some(name) = state.current_color_name.take()
+            && color_value.is_some()
+        {
+            theme.colors.push(ThemeColor {
+                name,
+                value: color_value,
+            });
         }
     }
 

@@ -1,9 +1,9 @@
+use super::super::HwpxParser;
 use super::super::helpers::{
     is_hwpx_footer, is_hwpx_header, is_hwpx_master, is_hwpx_section, media_type_from_path,
 };
 use super::super::section::parse_hwpx_section;
 use super::super::styles::parse_hwpx_styles;
-use super::super::HwpxParser;
 use crate::error::ParseError;
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{Document, Footer, Header, IRNode, Section};
@@ -159,12 +159,12 @@ impl HwpxParser {
         if !zip.contains("Contents/content.hpf") {
             return;
         }
-        if let Ok(xml) = zip.read_file_string("Contents/content.hpf") {
-            if let Some(style_set) = parse_hwpx_styles(&xml, "Contents/content.hpf") {
-                let style_id = style_set.id;
-                store.insert(IRNode::StyleSet(style_set));
-                doc.styles = Some(style_id);
-            }
+        if let Ok(xml) = zip.read_file_string("Contents/content.hpf")
+            && let Some(style_set) = parse_hwpx_styles(&xml, "Contents/content.hpf")
+        {
+            let style_id = style_set.id;
+            store.insert(IRNode::StyleSet(style_set));
+            doc.styles = Some(style_id);
         }
     }
 }

@@ -71,10 +71,12 @@ fn profile_severity_overrides_are_applied_on_real_fixture() {
 
     let engine = RuleEngine::with_default_rules();
     let report = engine.run_with_profile(&parsed.store, parsed.root_id, &profile);
-    assert!(report
-        .findings
-        .iter()
-        .any(|f| f.rule_id == first_rule_id && f.severity == Severity::Critical));
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.rule_id == first_rule_id && f.severity == Severity::Critical)
+    );
 }
 
 #[test]

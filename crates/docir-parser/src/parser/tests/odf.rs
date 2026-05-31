@@ -1,7 +1,7 @@
 use super::super::*;
 use super::helpers::{build_odf_zip_custom, create_docx_with_relationships};
-use docir_core::types::NodeType;
 use docir_core::IrSummary;
+use docir_core::types::NodeType;
 
 const DOCX_PARITY_BODY: &str = r#"
         <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"

@@ -1,11 +1,11 @@
 use super::super::super::presentation_helpers::{
-    parse_frame_shape_empty, parse_frame_shape_start, FrameShapeState,
+    FrameShapeState, parse_frame_shape_empty, parse_frame_shape_start,
 };
 use super::super::super::{
-    parse_frame_transform, IRNode, IrStore, NodeId, OdfReader, ParseError, Shape,
+    IRNode, IrStore, NodeId, OdfReader, ParseError, Shape, parse_frame_transform,
 };
 use crate::xml_utils::{
-    attr_value_by_suffix, is_end_event_local, scan_xml_events_until_end, XmlScanControl,
+    XmlScanControl, attr_value_by_suffix, is_end_event_local, scan_xml_events_until_end,
 };
 use quick_xml::events::{BytesStart, Event};
 

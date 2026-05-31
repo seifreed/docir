@@ -1,9 +1,9 @@
 use crate::error::ParseError;
+use crate::ooxml::docx::DocxParser;
 use crate::ooxml::docx::document::table::table_parse::{
     parse_table, parse_table_cell_properties, parse_table_grid, parse_table_properties,
     parse_table_row, parse_table_row_properties,
 };
-use crate::ooxml::docx::DocxParser;
 use crate::ooxml::relationships::Relationships;
 
 mod tests {
@@ -12,8 +12,8 @@ mod tests {
         CellVerticalAlignment, MergeType, RowHeightRule, TableAlignment, TableCellProperties,
         TableProperties, TableRowProperties, TableWidthType,
     };
-    use quick_xml::events::Event;
     use quick_xml::Reader;
+    use quick_xml::events::Event;
 
     fn reader_from(xml: &str) -> Reader<&[u8]> {
         let mut reader = Reader::from_str(xml);

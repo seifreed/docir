@@ -1,11 +1,11 @@
 use super::{
+    Document, IRNode, ParseError, Relationships, SheetKind, SourceSpan, XlsxParser,
     parse_calc_chain, parse_query_table_part, parse_shared_strings_table, parse_sheet_metadata,
-    parse_slicer_part, parse_styles, parse_timeline_part, push_warning, rel_type, Document, IRNode,
-    ParseError, Relationships, SheetKind, SourceSpan, XlsxParser,
+    parse_slicer_part, parse_styles, parse_timeline_part, push_warning, rel_type,
 };
 use crate::ooxml::part_utils::parse_xml_part_with_span;
 use crate::ooxml::part_utils::{insert_shared_part, read_xml_part_and_rels};
-use crate::ooxml::xlsx::workbook::{auto_open_target_from_defined_name, PivotCacheRef, SheetInfo};
+use crate::ooxml::xlsx::workbook::{PivotCacheRef, SheetInfo, auto_open_target_from_defined_name};
 use crate::zip_handler::PackageReader;
 
 impl XlsxParser {

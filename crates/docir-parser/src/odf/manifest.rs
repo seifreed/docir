@@ -1,11 +1,11 @@
 //! ODF manifest parsing helpers.
 
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value_by_suffix, local_name, scan_xml_events, XmlScanControl};
-use base64::engine::general_purpose::STANDARD;
+use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events};
 use base64::Engine;
-use quick_xml::events::Event;
+use base64::engine::general_purpose::STANDARD;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 #[derive(Debug, Clone)]
 pub struct OdfManifestEntry {
@@ -93,10 +93,10 @@ fn handle_manifest_end_event(
     entries: &mut Vec<OdfManifestEntry>,
     current_entry: &mut Option<OdfManifestEntry>,
 ) {
-    if local_name(name) == b"file-entry" {
-        if let Some(entry) = current_entry.take() {
-            entries.push(entry);
-        }
+    if local_name(name) == b"file-entry"
+        && let Some(entry) = current_entry.take()
+    {
+        entries.push(entry);
     }
 }
 
@@ -146,10 +146,10 @@ pub fn is_manifest_entry_encrypted(entry: &OdfManifestEntry) -> bool {
     if entry.encryption.is_some() {
         return true;
     }
-    if let Some(media) = entry.media_type.as_deref() {
-        if media.contains("encrypted") {
-            return true;
-        }
+    if let Some(media) = entry.media_type.as_deref()
+        && media.contains("encrypted")
+    {
+        return true;
     }
     entry.path.to_ascii_lowercase().contains("encrypted")
 }

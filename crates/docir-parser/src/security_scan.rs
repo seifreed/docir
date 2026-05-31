@@ -1,10 +1,10 @@
 //! Shared security scanning interface across formats.
 
+use crate::ParserConfig;
 use crate::error::ParseError;
 use crate::odf::security::scan_odf_security;
 use crate::parser::OoxmlSecurityScanner;
 use crate::zip_handler::PackageReader;
-use crate::ParserConfig;
 use docir_core::ir::{Diagnostics, Document};
 use docir_core::visitor::IrStore;
 

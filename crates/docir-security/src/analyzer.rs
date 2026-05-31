@@ -60,10 +60,10 @@ impl SecurityAnalyzer {
         let mut level = ThreatLevel::None;
 
         // Check security info
-        if let Some(info) = security_info {
-            if info.threat_level > level {
-                level = info.threat_level;
-            }
+        if let Some(info) = security_info
+            && info.threat_level > level
+        {
+            level = info.threat_level;
         }
 
         // Check findings
@@ -159,19 +159,15 @@ impl IrVisitor for SecurityAnalyzer {
             ExternalRefType::AttachedTemplate => {
                 (ThreatIndicatorType::ExternalTemplate, ThreatLevel::High)
             }
-            ExternalRefType::Hyperlink => {
-                if ext_ref.is_remote() {
-                    let is_file = ext_ref.target.to_lowercase().starts_with("file://")
-                        || ext_ref.target.starts_with("\\\\");
-                    let severity = if is_file {
-                        ThreatLevel::Medium
-                    } else {
-                        ThreatLevel::Low
-                    };
-                    (ThreatIndicatorType::SuspiciousLink, severity)
+            ExternalRefType::Hyperlink if ext_ref.is_remote() => {
+                let is_file = ext_ref.target.to_lowercase().starts_with("file://")
+                    || ext_ref.target.starts_with("\\\\");
+                let severity = if is_file {
+                    ThreatLevel::Medium
                 } else {
-                    return Ok(VisitControl::Continue);
-                }
+                    ThreatLevel::Low
+                };
+                (ThreatIndicatorType::SuspiciousLink, severity)
             }
             ExternalRefType::Image if ext_ref.is_remote() => {
                 (ThreatIndicatorType::RemoteResource, ThreatLevel::Medium)
@@ -389,30 +385,42 @@ mod tests {
         let mut analyzer = SecurityAnalyzer::new();
         let result = analyzer.analyze(&store, root_id);
 
-        assert!(result
-            .findings
-            .iter()
-            .any(|f| f.indicator_type == ThreatIndicatorType::AutoExecMacro));
-        assert!(result
-            .findings
-            .iter()
-            .any(|f| f.indicator_type == ThreatIndicatorType::SuspiciousApiCall));
-        assert!(result
-            .findings
-            .iter()
-            .any(|f| f.indicator_type == ThreatIndicatorType::ExternalTemplate));
-        assert!(result
-            .findings
-            .iter()
-            .any(|f| f.indicator_type == ThreatIndicatorType::SuspiciousLink));
-        assert!(result
-            .findings
-            .iter()
-            .any(|f| f.indicator_type == ThreatIndicatorType::RemoteResource));
-        assert!(result
-            .findings
-            .iter()
-            .any(|f| f.indicator_type == ThreatIndicatorType::ActiveXControl));
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|f| f.indicator_type == ThreatIndicatorType::AutoExecMacro)
+        );
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|f| f.indicator_type == ThreatIndicatorType::SuspiciousApiCall)
+        );
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|f| f.indicator_type == ThreatIndicatorType::ExternalTemplate)
+        );
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|f| f.indicator_type == ThreatIndicatorType::SuspiciousLink)
+        );
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|f| f.indicator_type == ThreatIndicatorType::RemoteResource)
+        );
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|f| f.indicator_type == ThreatIndicatorType::ActiveXControl)
+        );
     }
 
     #[test]

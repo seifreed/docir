@@ -1,12 +1,12 @@
 use super::super::super::helpers::ValidationDef;
-use super::super::super::{scan_xml_events_with_reader, OdfReader};
+use super::super::super::{OdfReader, scan_xml_events_with_reader};
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value_by_suffix, local_name, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name};
 use docir_core::ir::{IRNode, PivotCache, PivotCacheRecords, PivotTable};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 type PivotParseResult = Option<(
@@ -28,16 +28,12 @@ pub(super) fn parse_ods_pivot_table_full(
     let mut buf = Vec::new();
     scan_xml_events_with_reader(reader, &mut buf, "content.xml", |reader, event| {
         match event {
-            Event::Start(e) => {
-                if local_name(e.name().as_ref()) == b"data-pilot-field" {
-                    field_count = field_count.saturating_add(1);
-                    super::skip_element(reader, e.name().as_ref())?;
-                }
+            Event::Start(e) if local_name(e.name().as_ref()) == b"data-pilot-field" => {
+                field_count = field_count.saturating_add(1);
+                super::skip_element(reader, e.name().as_ref())?;
             }
-            Event::Empty(e) => {
-                if local_name(e.name().as_ref()) == b"data-pilot-field" {
-                    field_count = field_count.saturating_add(1);
-                }
+            Event::Empty(e) if local_name(e.name().as_ref()) == b"data-pilot-field" => {
+                field_count = field_count.saturating_add(1);
             }
             Event::End(e) if local_name(e.name().as_ref()) == b"data-pilot-table" => {
                 return Ok(XmlScanControl::Break);
@@ -167,18 +163,18 @@ pub(super) fn parse_ods_pivots_from_xml(
                 }
                 _ => {}
             },
-            Event::Empty(e) => {
-                if local_name(e.name().as_ref()) == b"data-pilot-table" && in_spreadsheet {
-                    let cache_id = next_cache_id;
-                    let parsed = parse_ods_pivot_table_empty(&e, cache_id);
-                    record_pivot_parse(
-                        store,
-                        &mut pivot_links,
-                        &mut pivot_caches,
-                        &mut next_cache_id,
-                        parsed,
-                    );
-                }
+            Event::Empty(e)
+                if local_name(e.name().as_ref()) == b"data-pilot-table" && in_spreadsheet =>
+            {
+                let cache_id = next_cache_id;
+                let parsed = parse_ods_pivot_table_empty(&e, cache_id);
+                record_pivot_parse(
+                    store,
+                    &mut pivot_links,
+                    &mut pivot_caches,
+                    &mut next_cache_id,
+                    parsed,
+                );
             }
             Event::End(e) if local_name(e.name().as_ref()) == b"spreadsheet" => {
                 in_spreadsheet = false;
@@ -212,10 +208,11 @@ pub(super) fn collect_validation_definitions(
                 _ => {}
             },
             Event::Empty(e) => {
-                if local_name(e.name().as_ref()) == b"content-validation" && in_spreadsheet {
-                    if let Some((name, def)) = super::parse_validation_definition(&e) {
-                        validations.insert(name, def);
-                    }
+                if local_name(e.name().as_ref()) == b"content-validation"
+                    && in_spreadsheet
+                    && let Some((name, def)) = super::parse_validation_definition(&e)
+                {
+                    validations.insert(name, def);
                 }
             }
             Event::End(e) if local_name(e.name().as_ref()) == b"spreadsheet" => {

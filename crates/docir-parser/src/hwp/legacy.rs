@@ -59,7 +59,7 @@ fn for_each_record<F: FnMut(HwpRecord)>(data: &[u8], mut f: F) -> Result<(), Par
 
         let tag_id = (header & 0x3FF) as u16;
         let _level = ((header >> 10) & 0x3FF) as u16;
-        let mut size = ((header >> 20) & 0xFFF) as u32;
+        let mut size = (header >> 20) & 0xFFF;
         if size == 0xFFF {
             if offset + 4 > data.len() {
                 return Err(ParseError::InvalidStructure(
@@ -519,9 +519,10 @@ mod tests {
 
         let err = maybe_decompress_stream(b"not-compressed", true, "bad")
             .expect_err("invalid compressed");
-        assert!(err
-            .to_string()
-            .contains("Failed to decompress HWP stream bad"));
+        assert!(
+            err.to_string()
+                .contains("Failed to decompress HWP stream bad")
+        );
     }
 
     #[test]
@@ -549,11 +550,13 @@ mod tests {
             _ => panic!("expected macro module"),
         };
         assert_eq!(module.name, "Module1");
-        assert!(module
-            .source_code
-            .as_deref()
-            .unwrap_or_default()
-            .contains("function"));
+        assert!(
+            module
+                .source_code
+                .as_deref()
+                .unwrap_or_default()
+                .contains("function")
+        );
 
         let utf16 = utf16le("AB");
         let mut len_prefixed = Vec::new();

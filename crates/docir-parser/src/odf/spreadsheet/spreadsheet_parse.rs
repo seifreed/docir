@@ -1,31 +1,31 @@
 //! ODF spreadsheet parsing helpers.
 
-use super::super::helpers::{parse_validation_definition, ValidationDef};
+use super::super::helpers::{ValidationDef, parse_validation_definition};
 #[path = "spreadsheet_frame.rs"]
 mod spreadsheet_frame;
 #[path = "spreadsheet_pivot.rs"]
 mod spreadsheet_pivot;
 use super::super::spreadsheet_chunks::{
-    extract_spreadsheet_table_chunks, table_name_from_chunk, OdfTableChunk,
+    OdfTableChunk, extract_spreadsheet_table_chunks, table_name_from_chunk,
 };
 use super::super::{
-    parse_ods_table, parse_ods_table_fast, scan_xml_events, scan_xml_events_with_reader,
-    OdfAtomicLimits, OdfContentResult, OdfLimitCounter, OdfReader,
+    OdfAtomicLimits, OdfContentResult, OdfLimitCounter, OdfReader, parse_ods_table,
+    parse_ods_table_fast, scan_xml_events, scan_xml_events_with_reader,
 };
 use crate::error::ParseError;
 use crate::parser::ParserConfig;
 use crate::xml_utils::{
-    attr_value_by_suffix, is_end_event_local, local_name, scan_xml_events_until_end, XmlScanControl,
+    XmlScanControl, attr_value_by_suffix, is_end_event_local, local_name, scan_xml_events_until_end,
 };
 use docir_core::ir::{IRNode, Worksheet};
 use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 pub(crate) use spreadsheet_frame::parse_draw_frame_spreadsheet;
 use spreadsheet_pivot::{
-    collect_validation_definitions, parse_ods_pivot_table_empty, parse_ods_pivot_table_full,
-    parse_ods_pivots_from_xml, record_pivot_parse, PivotLinks,
+    PivotLinks, collect_validation_definitions, parse_ods_pivot_table_empty,
+    parse_ods_pivot_table_full, parse_ods_pivots_from_xml, record_pivot_parse,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -331,12 +331,11 @@ fn apply_pivot_links(
     pivot_links: Vec<(Option<String>, NodeId)>,
 ) {
     for (sheet_name, pivot_id) in pivot_links {
-        if let Some(name) = sheet_name {
-            if let Some(sheet_id) = sheet_index.get(&name).copied() {
-                if let Some(IRNode::Worksheet(sheet)) = store.get_mut(sheet_id) {
-                    sheet.pivot_tables.push(pivot_id);
-                }
-            }
+        if let Some(name) = sheet_name
+            && let Some(sheet_id) = sheet_index.get(&name).copied()
+            && let Some(IRNode::Worksheet(sheet)) = store.get_mut(sheet_id)
+        {
+            sheet.pivot_tables.push(pivot_id);
         }
     }
 }
@@ -434,17 +433,17 @@ fn parse_ods_table_from_chunk(
     let mut buf = Vec::new();
     let mut parsed = None;
     scan_xml_events_with_reader(&mut reader, &mut buf, "content.xml", |reader, event| {
-        if let Event::Start(e) = event {
-            if local_name(e.name().as_ref()) == b"table" {
-                let mut local_store = IrStore::new();
-                let worksheet =
-                    parse_ods_table(reader, &e, sheet_id, &mut local_store, validations, limits)?;
-                parsed = Some(OdfSheetParseResult {
-                    worksheet,
-                    nodes: local_store.into_nodes(),
-                });
-                return Ok(XmlScanControl::Break);
-            }
+        if let Event::Start(e) = event
+            && local_name(e.name().as_ref()) == b"table"
+        {
+            let mut local_store = IrStore::new();
+            let worksheet =
+                parse_ods_table(reader, &e, sheet_id, &mut local_store, validations, limits)?;
+            parsed = Some(OdfSheetParseResult {
+                worksheet,
+                nodes: local_store.into_nodes(),
+            });
+            return Ok(XmlScanControl::Break);
         }
         Ok(XmlScanControl::Continue)
     })?;

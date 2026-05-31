@@ -10,10 +10,10 @@ use crate::{
 use docir_core::visitor::IrStore;
 use docir_parser::ole::Cfb;
 use docir_parser::parser::ParsedDocument as ParserParsedDocument;
-use docir_parser::{scan_security_bytes as scan_parser_bytes, DocumentParser, ParseError};
+use docir_parser::{DocumentParser, ParseError, scan_security_bytes as scan_parser_bytes};
 use docir_rules::RuleEngine;
-use docir_security::populate_security_indicators;
 use docir_security::SecurityAnalyzer;
+use docir_security::populate_security_indicators;
 use docir_serialization::json::to_json;
 use std::io::{Read, Seek};
 use std::path::Path;

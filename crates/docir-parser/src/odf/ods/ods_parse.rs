@@ -1,21 +1,21 @@
 use super::super::helpers::{
-    parse_ods_conditional_formatting, parse_ods_conditional_formatting_empty, parse_ods_row,
-    OdsCellData, ValidationDef,
+    OdsCellData, ValidationDef, parse_ods_conditional_formatting,
+    parse_ods_conditional_formatting_empty, parse_ods_row,
 };
 use super::ods_postprocess::emit_full_row_cells;
 use super::{
-    attach_shapes_as_drawing, emit_sampled_row_cells, flush_validation_ranges,
+    RowBuildState, attach_shapes_as_drawing, emit_sampled_row_cells, flush_validation_ranges,
     infer_cell_value_type_and_attr, parse_cell_formula, parse_cell_value_empty,
     parse_cell_value_with_text, push_conditional_format, read_ods_cell_text, resolve_style_id,
-    row_repeat_from, RowBuildState,
+    row_repeat_from,
 };
 use crate::odf::{
-    evaluate_ods_formulas, parse_ods_row_sample, spreadsheet, CellValue, IrStore, NodeId,
-    OdfLimitCounter, OdfReader, ParseError, Worksheet,
+    CellValue, IrStore, NodeId, OdfLimitCounter, OdfReader, ParseError, Worksheet,
+    evaluate_ods_formulas, parse_ods_row_sample, spreadsheet,
 };
 use crate::xml_utils::{
-    attr_value_by_suffix, dispatch_start_or_empty, is_end_event_local, local_name,
-    scan_xml_events_with_reader, XmlScanControl,
+    XmlScanControl, attr_value_by_suffix, dispatch_start_or_empty, is_end_event_local, local_name,
+    scan_xml_events_with_reader,
 };
 use quick_xml::events::BytesStart;
 use std::collections::HashMap;

@@ -1,7 +1,7 @@
 use super::{
-    attr_value, classify_relationship, parse_shape_properties, parse_text_body, parse_transform,
-    read_event, PackageReader, ParseError, PptxParser, Reader, Relationships, Shape, ShapeType,
-    SourceSpan, TargetMode,
+    PackageReader, ParseError, PptxParser, Reader, Relationships, Shape, ShapeType, SourceSpan,
+    TargetMode, attr_value, classify_relationship, parse_shape_properties, parse_text_body,
+    parse_transform, read_event,
 };
 use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 use docir_core::ir::IRNode;
@@ -110,10 +110,8 @@ impl PptxParser {
                     b"spPr" => {}
                     _ => {}
                 },
-                Ok(Event::End(e)) => {
-                    if local_name(e.name().as_ref()) == b"sp" {
-                        break;
-                    }
+                Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"sp" => {
+                    break;
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
@@ -160,10 +158,8 @@ impl PptxParser {
                     b"grpSpPr" => {}
                     _ => {}
                 },
-                Ok(Event::End(e)) => {
-                    if local_name(e.name().as_ref()) == b"grpSp" {
-                        break;
-                    }
+                Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"grpSp" => {
+                    break;
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
@@ -223,15 +219,11 @@ fn parse_group_properties(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                if local_name(e.name().as_ref()) == b"xfrm" {
-                    parse_transform(reader, &mut shape.transform, slide_path)?;
-                }
+            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"xfrm" => {
+                parse_transform(reader, &mut shape.transform, slide_path)?;
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"grpSpPr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"grpSpPr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {

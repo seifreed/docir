@@ -2,12 +2,12 @@ use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::{
-    parse_cell_reference, CalcChain, CalcChainEntry, CellError, CellFormula, ColumnDefinition,
-    ConditionalFormat, ConditionalRule, FormulaType, MergedCellRange,
+    CalcChain, CalcChainEntry, CellError, CellFormula, ColumnDefinition, ConditionalFormat,
+    ConditionalRule, FormulaType, MergedCellRange, parse_cell_reference,
 };
 use docir_core::types::{NodeId, SourceSpan};
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, ParseError> {
@@ -20,36 +20,33 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"c" {
-                    let mut cell_ref = None;
-                    let mut sheet_id = None;
-                    let mut index = None;
-                    let mut level = None;
-                    let mut new_value = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"r" => cell_ref = Some(lossy_attr_value(&attr).to_string()),
-                            b"i" => index = lossy_attr_value(&attr).parse::<u32>().ok(),
-                            b"l" => level = lossy_attr_value(&attr).parse::<u32>().ok(),
-                            b"s" => {
-                                let value = lossy_attr_value(&attr);
-                                new_value =
-                                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                            }
-                            b"si" => sheet_id = lossy_attr_value(&attr).parse::<u32>().ok(),
-                            _ => {}
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"c" => {
+                let mut cell_ref = None;
+                let mut sheet_id = None;
+                let mut index = None;
+                let mut level = None;
+                let mut new_value = None;
+                for attr in e.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"r" => cell_ref = Some(lossy_attr_value(&attr).to_string()),
+                        b"i" => index = lossy_attr_value(&attr).parse::<u32>().ok(),
+                        b"l" => level = lossy_attr_value(&attr).parse::<u32>().ok(),
+                        b"s" => {
+                            let value = lossy_attr_value(&attr);
+                            new_value = Some(value == "1" || value.eq_ignore_ascii_case("true"));
                         }
+                        b"si" => sheet_id = lossy_attr_value(&attr).parse::<u32>().ok(),
+                        _ => {}
                     }
-                    if let Some(cell_ref) = cell_ref {
-                        chain.entries.push(CalcChainEntry {
-                            cell_ref,
-                            sheet_id,
-                            index,
-                            level,
-                            new_value,
-                        });
-                    }
+                }
+                if let Some(cell_ref) = cell_ref {
+                    chain.entries.push(CalcChainEntry {
+                        cell_ref,
+                        sheet_id,
+                        index,
+                        level,
+                        new_value,
+                    });
                 }
             }
             Ok(Event::Eof) => break,
@@ -127,18 +124,16 @@ pub(super) fn parse_conditional_formatting(
                 }
                 _ => {}
             },
-            Ok(Event::Text(e)) => {
-                if in_formula {
-                    formula_text.push_str(&e.unescape().unwrap_or_default());
-                }
+            Ok(Event::Text(e)) if in_formula => {
+                formula_text.push_str(&e.unescape().unwrap_or_default());
             }
             Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
                 b"formula" => {
                     in_formula = false;
-                    if let Some(rule) = current_rule.as_mut() {
-                        if !formula_text.is_empty() {
-                            rule.formulae.push(formula_text.clone());
-                        }
+                    if let Some(rule) = current_rule.as_mut()
+                        && !formula_text.is_empty()
+                    {
+                        rule.formulae.push(formula_text.clone());
                     }
                 }
                 b"cfRule" => {
@@ -270,16 +265,12 @@ pub(super) fn parse_inline_string(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                if local_name(e.name().as_ref()) == b"t" {
-                    in_t = true;
-                }
+            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"t" => {
+                in_t = true;
             }
-            Ok(Event::Text(e)) => {
-                if in_t {
-                    let t = e.unescape().map_err(|err| xml_error(sheet_path, err))?;
-                    text.push_str(&t);
-                }
+            Ok(Event::Text(e)) if in_t => {
+                let t = e.unescape().map_err(|err| xml_error(sheet_path, err))?;
+                text.push_str(&t);
             }
             Ok(Event::End(e)) => {
                 if local_name(e.name().as_ref()) == b"t" {

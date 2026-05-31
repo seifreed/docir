@@ -4,14 +4,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use crate::error::ParseError;
-use crate::ole_header::{read_u16, read_u32, END_OF_CHAIN, FREE_SECT};
+use crate::ole_header::{END_OF_CHAIN, FREE_SECT, read_u16, read_u32};
 
 use super::stream::{read_stream_from_fat, read_u64, utf16le_to_string};
-use super::types::{entry_type_from_object_type, normalize_tree_index};
 use super::types::{
     CfbDirectorySlot, CfbDirectoryState, CfbEntryMetadata, CfbEntryType, DirEntry, MAX_DIR_ENTRIES,
     MAX_LINKED_DEPTH, MAX_RECURSION_DEPTH,
 };
+use super::types::{entry_type_from_object_type, normalize_tree_index};
 
 pub(crate) fn read_directory_entries_and_root_stream(
     data: &[u8],
@@ -208,10 +208,10 @@ fn collect_linked_indices(entries: &[DirEntry]) -> HashSet<u32> {
         return out;
     }
     out.insert(0);
-    if let Some(root) = entries.first() {
-        if root.child != FREE_SECT {
-            walk_linked_indices(root.child, entries, &mut out, 0);
-        }
+    if let Some(root) = entries.first()
+        && root.child != FREE_SECT
+    {
+        walk_linked_indices(root.child, entries, &mut out, 0);
     }
     out
 }
@@ -247,10 +247,10 @@ fn derive_entry_path(idx: u32, entries: &[DirEntry]) -> Option<String> {
         });
     }
     let mut out = None;
-    if let Some(root) = entries.first() {
-        if root.child != FREE_SECT {
-            walk_find_path(root.child, "", idx, entries, &mut out, 0);
-        }
+    if let Some(root) = entries.first()
+        && root.child != FREE_SECT
+    {
+        walk_find_path(root.child, "", idx, entries, &mut out, 0);
     }
     out
 }

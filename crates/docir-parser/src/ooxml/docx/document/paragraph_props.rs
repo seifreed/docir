@@ -1,11 +1,11 @@
-use super::super::{apply_section_refs, bool_from_val, parse_border, parse_numbering, SectionRef};
+use super::super::{SectionRef, apply_section_refs, bool_from_val, parse_border, parse_numbering};
 use crate::error::ParseError;
 use crate::xml_utils::{attr_value, local_name, xml_error};
 use docir_core::ir::Paragraph;
 use docir_core::ir::{LineSpacingRule, TextAlignment};
 use docir_core::types::NodeId;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::collections::HashMap;
 
 pub(crate) fn alignment_from_val(val: &str) -> TextAlignment {
@@ -105,10 +105,8 @@ pub(crate) fn parse_paragraph_properties(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"pPr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pPr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -154,10 +152,8 @@ pub(crate) fn parse_paragraph_borders(
                     _ => {}
                 }
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"pBdr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pBdr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -167,9 +163,5 @@ pub(crate) fn parse_paragraph_borders(
         }
         buf.clear();
     }
-    if has_any {
-        Ok(Some(borders))
-    } else {
-        Ok(None)
-    }
+    if has_any { Ok(Some(borders)) } else { Ok(None) }
 }

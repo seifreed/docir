@@ -5,8 +5,8 @@ use docir_core::security::SecurityInfo;
 use docir_core::types::{DocumentFormat, NodeId};
 use docir_core::visitor::IrStore;
 use docir_diff::{DiffError, DiffResult};
-use docir_parser::parser::ParsedDocument as ParserParsedDocument;
 use docir_parser::ParseError as ParserParseError;
+use docir_parser::parser::ParsedDocument as ParserParsedDocument;
 pub use docir_rules::RuleProfile;
 pub use docir_rules::RuleReport;
 use docir_serialization::SerializationError;
@@ -43,8 +43,8 @@ mod vba;
 /// Primary facade adapter for parser implementations.
 pub use adapters::AppParser;
 pub use artifacts::{
-    extract_artifacts_from_bytes, ArtifactExtractionBundle, ArtifactExtractionOptions,
-    ExtractedPayload,
+    ArtifactExtractionBundle, ArtifactExtractionOptions, ExtractedPayload,
+    extract_artifacts_from_bytes,
 };
 pub use bucket_count::BucketCount;
 /// Parser-related CLI configuration bundle.
@@ -58,39 +58,38 @@ pub use export::{
     PhaseCapabilities,
 };
 pub use extract_flash::{
-    extract_flash_bytes, extract_flash_path, FlashExtractionReport, FlashObject,
+    FlashExtractionReport, FlashObject, extract_flash_bytes, extract_flash_path,
 };
 pub use extract_links::{LinkArtifact, LinkExtractionReport};
 pub use inspect_directory::{
-    inspect_directory_bytes, inspect_directory_path, DirectoryAnomalySeverity, DirectoryEntry,
-    DirectoryInspection,
+    DirectoryAnomalySeverity, DirectoryEntry, DirectoryInspection, inspect_directory_bytes,
+    inspect_directory_path,
 };
 pub use inspect_sectors::{
-    inspect_sectors_bytes, inspect_sectors_path, ChainHealthCount, ChainStep, RoleCount,
-    SectorAnomaly, SectorInspection, SectorOverviewEntry, SectorOwnerRef, SharedChainOverlap,
-    SharedSectorClaim, StartSectorReuse, StreamSectorMap, StructuralIncoherenceCount,
-    TruncatedChainCount,
+    ChainHealthCount, ChainStep, RoleCount, SectorAnomaly, SectorInspection, SectorOverviewEntry,
+    SectorOwnerRef, SharedChainOverlap, SharedSectorClaim, StartSectorReuse, StreamSectorMap,
+    StructuralIncoherenceCount, TruncatedChainCount, inspect_sectors_bytes, inspect_sectors_path,
 };
 pub use inspect_sheet_records::{
-    inspect_sheet_records_bytes, inspect_sheet_records_path, SheetRecordAnomaly, SheetRecordCount,
-    SheetRecordEntry, SheetRecordInspection,
+    SheetRecordAnomaly, SheetRecordCount, SheetRecordEntry, SheetRecordInspection,
+    inspect_sheet_records_bytes, inspect_sheet_records_path,
 };
 pub use inspect_slide_records::{
-    inspect_slide_records_bytes, inspect_slide_records_path, SlideRecordAnomaly, SlideRecordCount,
-    SlideRecordEntry, SlideRecordInspection,
+    SlideRecordAnomaly, SlideRecordCount, SlideRecordEntry, SlideRecordInspection,
+    inspect_slide_records_bytes, inspect_slide_records_path,
 };
 pub use inventory::{ArtifactInventory, ContainerKind, InventoryArtifact, InventoryArtifactKind};
-pub use list_times::{list_times_bytes, list_times_path, TimeEntry, TimeListing};
+pub use list_times::{TimeEntry, TimeListing, list_times_bytes, list_times_path};
 pub use metadata::{
-    inspect_metadata_bytes, inspect_metadata_path, MetadataInspection, MetadataProperty,
-    MetadataSection,
+    MetadataInspection, MetadataProperty, MetadataSection, inspect_metadata_bytes,
+    inspect_metadata_path,
 };
-pub use probe::{probe_format_bytes, probe_format_path, FormatProbe};
+pub use probe::{FormatProbe, probe_format_bytes, probe_format_path};
 pub use report_indicators::{DocumentIndicator, IndicatorReport};
 /// Structured summary models for CLI and report outputs.
 pub use summary::{
-    summarize_document, DocumentSummary, MetadataSummary, NodeCount, ParseMetricsSummary,
-    SecuritySummary, TextStatsSummary, ThreatIndicatorSummary,
+    DocumentSummary, MetadataSummary, NodeCount, ParseMetricsSummary, SecuritySummary,
+    TextStatsSummary, ThreatIndicatorSummary, summarize_document,
 };
 pub use vba::{VbaModuleReport, VbaProjectReport, VbaRecognitionReport, VbaRecognitionStatus};
 

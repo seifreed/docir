@@ -5,8 +5,8 @@
 //! on nodes.
 
 use crate::error::CoreError;
-use crate::ir::node_list::for_each_ir_node;
 use crate::ir::DigitalSignature as IrDigitalSignature;
+use crate::ir::node_list::for_each_ir_node;
 use crate::ir::*;
 use crate::security::*;
 

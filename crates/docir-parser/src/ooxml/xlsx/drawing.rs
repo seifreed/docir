@@ -7,8 +7,8 @@ use crate::zip_handler::PackageReader;
 use docir_core::ir::{IRNode, Shape, ShapeType, WorksheetDrawing};
 use docir_core::security::{ExternalRefType, ExternalReference};
 use docir_core::types::{NodeId, SourceSpan};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 fn drawing_relationship_target(
     drawing_path: &str,
@@ -84,27 +84,25 @@ impl XlsxParser {
                 Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
                     b"pic" => {
                         if let Some(mut shape) = current_shape.take() {
-                            if let Some(rel_id) = current_embed.take() {
-                                if let Some(rel) = relationships.get(&rel_id) {
-                                    shape.relationship_id = Some(rel_id.clone());
-                                    shape.media_target = Some(drawing_relationship_target(
-                                        drawing_path,
-                                        rel.target_mode,
-                                        &rel.target,
-                                    ));
-                                    if rel.target_mode == TargetMode::External {
-                                        let ext_ref = ExternalReference::new(
-                                            ExternalRefType::Image,
-                                            &rel.target,
-                                        );
-                                        let ext_ref = ExternalReference {
-                                            relationship_id: Some(rel_id),
-                                            ..ext_ref
-                                        };
-                                        let ext_id = ext_ref.id;
-                                        self.store.insert(IRNode::ExternalReference(ext_ref));
-                                        self.security_info.external_refs.push(ext_id);
-                                    }
+                            if let Some(rel_id) = current_embed.take()
+                                && let Some(rel) = relationships.get(&rel_id)
+                            {
+                                shape.relationship_id = Some(rel_id.clone());
+                                shape.media_target = Some(drawing_relationship_target(
+                                    drawing_path,
+                                    rel.target_mode,
+                                    &rel.target,
+                                ));
+                                if rel.target_mode == TargetMode::External {
+                                    let ext_ref =
+                                        ExternalReference::new(ExternalRefType::Image, &rel.target);
+                                    let ext_ref = ExternalReference {
+                                        relationship_id: Some(rel_id),
+                                        ..ext_ref
+                                    };
+                                    let ext_id = ext_ref.id;
+                                    self.store.insert(IRNode::ExternalReference(ext_ref));
+                                    self.security_info.external_refs.push(ext_id);
                                 }
                             }
                             let id = shape.id;
@@ -114,24 +112,24 @@ impl XlsxParser {
                     }
                     b"graphicFrame" => {
                         if let Some(mut shape) = current_shape.take() {
-                            if let Some(rel_id) = current_chart.take() {
-                                if let Some(rel) = relationships.get(&rel_id) {
-                                    shape.relationship_id = Some(rel_id.clone());
-                                    let chart_path = drawing_relationship_target(
-                                        drawing_path,
-                                        rel.target_mode,
-                                        &rel.target,
-                                    );
-                                    shape.media_target = Some(chart_path.clone());
-                                    if rel.target_mode != TargetMode::External
-                                        && zip.contains(&chart_path)
+                            if let Some(rel_id) = current_chart.take()
+                                && let Some(rel) = relationships.get(&rel_id)
+                            {
+                                shape.relationship_id = Some(rel_id.clone());
+                                let chart_path = drawing_relationship_target(
+                                    drawing_path,
+                                    rel.target_mode,
+                                    &rel.target,
+                                );
+                                shape.media_target = Some(chart_path.clone());
+                                if rel.target_mode != TargetMode::External
+                                    && zip.contains(&chart_path)
+                                {
+                                    let chart_xml = zip.read_file_string(&chart_path)?;
+                                    if let Some(chart_id) =
+                                        self.parse_chart(&chart_xml, &chart_path)
                                     {
-                                        let chart_xml = zip.read_file_string(&chart_path)?;
-                                        if let Some(chart_id) =
-                                            self.parse_chart(&chart_xml, &chart_path)
-                                        {
-                                            self.chart_nodes.push(chart_id);
-                                        }
+                                        self.chart_nodes.push(chart_id);
                                     }
                                 }
                             }

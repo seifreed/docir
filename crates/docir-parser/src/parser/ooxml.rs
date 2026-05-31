@@ -1,8 +1,8 @@
 use super::{
-    read_all_with_limit, rel_type, run_parser_pipeline, security, ContentTypes, Cursor,
-    DocumentFormat, FormatParser, IRNode, IrStore, NodeId, NormalizeStage, PackageReader,
-    ParseError, ParseMetrics, ParseStage, ParsedDocument, ParserConfig, PostprocessStage, Read,
-    Relationships, SecureZipReader, Seek, SeekFrom,
+    ContentTypes, Cursor, DocumentFormat, FormatParser, IRNode, IrStore, NodeId, NormalizeStage,
+    PackageReader, ParseError, ParseMetrics, ParseStage, ParsedDocument, ParserConfig,
+    PostprocessStage, Read, Relationships, SecureZipReader, Seek, SeekFrom, read_all_with_limit,
+    rel_type, run_parser_pipeline, security,
 };
 #[path = "ooxml_docx_parts.rs"]
 mod ooxml_docx_parts;
@@ -178,7 +178,7 @@ impl OoxmlParser {
             _ => {
                 return Err(ParseError::UnsupportedFormat(
                     "Non-OOXML format requested".to_string(),
-                ))
+                ));
             }
         }?;
         if let Some(m) = metrics.as_mut() {
@@ -222,7 +222,7 @@ impl OoxmlParser {
             _ => {
                 return Err(ParseError::UnsupportedFormat(
                     "Non-OOXML format requested".to_string(),
-                ))
+                ));
             }
         }
         Ok(())
@@ -240,10 +240,10 @@ impl OoxmlParser {
         if let Some(IRNode::Document(doc)) = store.get_mut(root_id) {
             doc.metadata = metadata_id;
         }
-        if metadata_id.is_some() {
-            if let Some(metadata) = self.build_metadata(zip) {
-                store.insert(IRNode::Metadata(metadata));
-            }
+        if metadata_id.is_some()
+            && let Some(metadata) = self.build_metadata(zip)
+        {
+            store.insert(IRNode::Metadata(metadata));
         }
 
         let start = std::time::Instant::now();

@@ -33,14 +33,13 @@ fn test_content_type_inventory_diagnostics() {
     assert!(!doc.diagnostics.is_empty());
     let mut found = false;
     for diag_id in &doc.diagnostics {
-        if let Some(IRNode::Diagnostics(diag)) = parsed.store.get(*diag_id) {
-            if diag
+        if let Some(IRNode::Diagnostics(diag)) = parsed.store.get(*diag_id)
+            && diag
                 .entries
                 .iter()
                 .any(|e| e.code == "CONTENT_TYPE_INVENTORY" && e.message.contains("word/extra.xml"))
-            {
-                found = true;
-            }
+        {
+            found = true;
         }
     }
     assert!(found);
@@ -75,14 +74,13 @@ fn test_content_type_unknown_diagnostics() {
     let parsed = parser.parse_file(&path).expect("parse docx");
     let mut found = false;
     for node in parsed.store.values() {
-        if let IRNode::Diagnostics(diag) = node {
-            if diag
+        if let IRNode::Diagnostics(diag) = node
+            && diag
                 .entries
                 .iter()
                 .any(|e| e.code == "CONTENT_TYPE_UNKNOWN" && e.message.contains("word/unknown.bin"))
-            {
-                found = true;
-            }
+        {
+            found = true;
         }
     }
     assert!(found);

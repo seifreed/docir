@@ -1,5 +1,5 @@
 use super::{
-    attr_any, push_node_to_hwpx_context, revision_type_from_local, HwpxSectionState, SourceSpan,
+    HwpxSectionState, SourceSpan, attr_any, push_node_to_hwpx_context, revision_type_from_local,
 };
 use docir_core::ir::{IRNode, Revision};
 use docir_core::visitor::IrStore;

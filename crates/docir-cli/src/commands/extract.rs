@@ -1,6 +1,6 @@
 //! Extract nodes from the IR by ID or type.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use docir_app::ParserConfig;
 use docir_core::ir::IRNode;
 use serde::Serialize;

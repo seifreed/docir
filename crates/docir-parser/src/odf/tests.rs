@@ -2,8 +2,8 @@ use super::tests_prelude::*;
 use crate::parser::DocumentParser;
 use docir_core::security::ThreatIndicatorType;
 use std::io::{Cursor, Write};
-use zip::write::FileOptions;
 use zip::ZipWriter;
+use zip::write::FileOptions;
 
 mod security_indicators;
 mod threat_indicators;
@@ -431,20 +431,24 @@ fn test_parse_odt_text_content_accepts_alternate_namespace_prefixes() {
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert!(paragraph_texts
-        .iter()
-        .any(|text| text == "First  line\ttab\nnext"));
+    assert!(
+        paragraph_texts
+            .iter()
+            .any(|text| text == "First  line\ttab\nnext")
+    );
     assert!(parsed.store.values().any(|node| {
         matches!(node, IRNode::Paragraph(paragraph) if paragraph.properties.outline_level == Some(2))
     }));
-    assert!(parsed.store.values().any(|node| match node {
-        IRNode::Paragraph(paragraph) => paragraph
-            .properties
-            .numbering
-            .as_ref()
-            .map(|numbering| numbering.level == 0)
-            .unwrap_or(false),
-        _ => false,
+    assert!(parsed.store.values().any(|node| {
+        match node {
+            IRNode::Paragraph(paragraph) => paragraph
+                .properties
+                .numbering
+                .as_ref()
+                .map(|numbering| numbering.level == 0)
+                .unwrap_or(false),
+            _ => false,
+        }
     }));
     assert_eq!(counts.table, 1);
     assert_eq!(counts.comment, 1);
@@ -498,28 +502,28 @@ fn test_odf_formula_dde_and_links() {
     let doc = parsed.document().unwrap();
 
     assert!(!doc.security.dde_fields.is_empty());
-    assert!(doc
-        .security
-        .threat_indicators
-        .iter()
-        .any(|i| i.indicator_type == ThreatIndicatorType::DdeCommand));
+    assert!(
+        doc.security
+            .threat_indicators
+            .iter()
+            .any(|i| i.indicator_type == ThreatIndicatorType::DdeCommand)
+    );
 
     let mut has_formula_link = false;
     let mut has_unsupported = false;
     for node in parsed.store.values() {
-        if let IRNode::ExternalReference(ext) = node {
-            if ext.target.contains("example.com") {
-                has_formula_link = true;
-            }
+        if let IRNode::ExternalReference(ext) = node
+            && ext.target.contains("example.com")
+        {
+            has_formula_link = true;
         }
-        if let IRNode::Diagnostics(diag) = node {
-            if diag
+        if let IRNode::Diagnostics(diag) = node
+            && diag
                 .entries
                 .iter()
                 .any(|e| e.code == "ODF_FORMULA_UNSUPPORTED_FUNCTION")
-            {
-                has_unsupported = true;
-            }
+        {
+            has_unsupported = true;
         }
     }
     assert!(has_formula_link);
@@ -556,10 +560,10 @@ fn test_odf_encryption_metadata_diagnostics() {
 
     let mut has_meta = false;
     for node in parsed.store.values() {
-        if let IRNode::Diagnostics(diag) = node {
-            if diag.entries.iter().any(|e| e.code == "ODF_ENCRYPTION_META") {
-                has_meta = true;
-            }
+        if let IRNode::Diagnostics(diag) = node
+            && diag.entries.iter().any(|e| e.code == "ODF_ENCRYPTION_META")
+        {
+            has_meta = true;
         }
     }
     assert!(has_meta);
@@ -612,10 +616,10 @@ fn test_odf_manifest_inventory_and_parts() {
             IRNode::MediaAsset(asset) => asset_paths.push(asset.path.clone()),
             IRNode::Diagnostics(diag) => {
                 for entry in &diag.entries {
-                    if entry.code == "ODF_PART" {
-                        if let Some(path) = entry.path.as_ref() {
-                            odf_parts.push(path.clone());
-                        }
+                    if entry.code == "ODF_PART"
+                        && let Some(path) = entry.path.as_ref()
+                    {
+                        odf_parts.push(path.clone());
                     }
                 }
             }
@@ -849,15 +853,15 @@ fn test_parse_odp_master_pages_and_transitions() {
     let mut slide_with_transition = 0;
     let mut master_page_diag = false;
     for node in parsed.store.values() {
-        if let IRNode::Slide(slide) = node {
-            if slide.transition.is_some() {
-                slide_with_transition += 1;
-            }
+        if let IRNode::Slide(slide) = node
+            && slide.transition.is_some()
+        {
+            slide_with_transition += 1;
         }
-        if let IRNode::Diagnostics(diag) = node {
-            if diag.entries.iter().any(|e| e.code == "ODF_MASTER_PAGE") {
-                master_page_diag = true;
-            }
+        if let IRNode::Diagnostics(diag) = node
+            && diag.entries.iter().any(|e| e.code == "ODF_MASTER_PAGE")
+        {
+            master_page_diag = true;
         }
     }
 

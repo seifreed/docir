@@ -244,7 +244,7 @@ fn formula_boundary_after(byte: Option<&u8>, at_edge: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        analyze_vba_source, contains_dangerous_xlm, is_dangerous_xlm_function, AUTO_EXEC_PROCEDURES,
+        AUTO_EXEC_PROCEDURES, analyze_vba_source, contains_dangerous_xlm, is_dangerous_xlm_function,
     };
     use docir_core::security::SuspiciousCallCategory;
 
@@ -272,20 +272,24 @@ mod tests {
         let analysis = analyze_vba_source(source);
         assert!(analysis.procedures.iter().any(|p| p == "AutoOpen"));
         assert!(analysis.procedures.iter().any(|p| p == "BuildValue"));
-        assert!(analysis
-            .auto_exec_procedures
-            .iter()
-            .any(|p| p == "AutoOpen"));
+        assert!(
+            analysis
+                .auto_exec_procedures
+                .iter()
+                .any(|p| p == "AutoOpen")
+        );
         assert!(analysis.suspicious_calls.iter().any(|c| {
             c.name == "Shell" && c.category == SuspiciousCallCategory::ShellExecution
         }));
         assert!(analysis.suspicious_calls.iter().any(|c| {
             c.name == "CreateObject" && c.category == SuspiciousCallCategory::ProcessManipulation
         }));
-        assert!(analysis
-            .suspicious_calls
-            .iter()
-            .any(|c| { c.name == "Chr" && c.category == SuspiciousCallCategory::Obfuscation }));
+        assert!(
+            analysis
+                .suspicious_calls
+                .iter()
+                .any(|c| { c.name == "Chr" && c.category == SuspiciousCallCategory::Obfuscation })
+        );
         assert!(analysis.suspicious_calls.iter().all(|c| c.line.is_some()));
     }
 
@@ -310,10 +314,12 @@ mod tests {
         "#;
         let analysis = analyze_vba_source(source);
         assert!(analysis.procedures.iter().any(|p| p == "AutoOpen"));
-        assert!(analysis
-            .auto_exec_procedures
-            .iter()
-            .any(|p| p == "AutoOpen"));
+        assert!(
+            analysis
+                .auto_exec_procedures
+                .iter()
+                .any(|p| p == "AutoOpen")
+        );
     }
 
     #[test]

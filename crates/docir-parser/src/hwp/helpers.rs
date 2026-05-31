@@ -27,10 +27,10 @@ pub(super) fn is_hwpx_master(path: &str) -> bool {
 pub(super) fn attr_any(e: &BytesStart, names: &[&[u8]]) -> Option<String> {
     for name in names {
         for attr in e.attributes().flatten() {
-            if attr.key.as_ref() == *name {
-                if let Ok(value) = attr.unescape_value() {
-                    return Some(value.to_string());
-                }
+            if attr.key.as_ref() == *name
+                && let Ok(value) = attr.unescape_value()
+            {
+                return Some(value.to_string());
             }
         }
     }
@@ -98,23 +98,23 @@ pub(super) fn parse_hwpx_paragraph_props(e: &BytesStart) -> StyleParagraphProper
     }
     let mut indent = docir_core::ir::Indentation::default();
     let mut has_indent = false;
-    if let Some(value) = attr_any(e, &[b"indentLeft", b"indent-left", b"left"]) {
-        if let Ok(left) = value.parse::<i32>() {
-            indent.left = Some(left);
-            has_indent = true;
-        }
+    if let Some(value) = attr_any(e, &[b"indentLeft", b"indent-left", b"left"])
+        && let Ok(left) = value.parse::<i32>()
+    {
+        indent.left = Some(left);
+        has_indent = true;
     }
-    if let Some(value) = attr_any(e, &[b"indentRight", b"indent-right", b"right"]) {
-        if let Ok(right) = value.parse::<i32>() {
-            indent.right = Some(right);
-            has_indent = true;
-        }
+    if let Some(value) = attr_any(e, &[b"indentRight", b"indent-right", b"right"])
+        && let Ok(right) = value.parse::<i32>()
+    {
+        indent.right = Some(right);
+        has_indent = true;
     }
-    if let Some(value) = attr_any(e, &[b"firstIndent", b"first-indent", b"first"]) {
-        if let Ok(first) = value.parse::<i32>() {
-            indent.first_line = Some(first);
-            has_indent = true;
-        }
+    if let Some(value) = attr_any(e, &[b"firstIndent", b"first-indent", b"first"])
+        && let Ok(first) = value.parse::<i32>()
+    {
+        indent.first_line = Some(first);
+        has_indent = true;
     }
     if has_indent {
         props.indentation = Some(indent);
@@ -125,14 +125,14 @@ pub(super) fn parse_hwpx_paragraph_props(e: &BytesStart) -> StyleParagraphProper
 pub(super) fn parse_hwpx_table_props(e: &BytesStart) -> Option<TableProperties> {
     let mut props = TableProperties::default();
     let mut has_value = false;
-    if let Some(width) = attr_any(e, &[b"width", b"w", b"tableWidth"]) {
-        if let Ok(value) = width.parse::<u32>() {
-            props.width = Some(TableWidth {
-                value,
-                width_type: TableWidthType::Dxa,
-            });
-            has_value = true;
-        }
+    if let Some(width) = attr_any(e, &[b"width", b"w", b"tableWidth"])
+        && let Ok(value) = width.parse::<u32>()
+    {
+        props.width = Some(TableWidth {
+            value,
+            width_type: TableWidthType::Dxa,
+        });
+        has_value = true;
     }
     if let Some(align) = attr_any(e, &[b"align", b"alignment", b"tableAlign"]) {
         let align = align.to_ascii_lowercase();
@@ -146,11 +146,7 @@ pub(super) fn parse_hwpx_table_props(e: &BytesStart) -> Option<TableProperties> 
             has_value = true;
         }
     }
-    if has_value {
-        Some(props)
-    } else {
-        None
-    }
+    if has_value { Some(props) } else { None }
 }
 
 pub(super) fn media_type_from_path(path: &str) -> MediaType {

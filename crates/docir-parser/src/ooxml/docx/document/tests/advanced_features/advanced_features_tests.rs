@@ -1,6 +1,6 @@
 use super::*;
 use crate::ooxml::relationships::TargetMode;
-use crate::ooxml::relationships::{rel_type, Relationship};
+use crate::ooxml::relationships::{Relationship, rel_type};
 
 #[test]
 fn test_parse_field_returns_xml_error_for_malformed_input() {

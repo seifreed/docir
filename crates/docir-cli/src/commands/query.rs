@@ -71,7 +71,7 @@ pub(crate) fn run_with_filters(
 
 #[cfg(test)]
 mod tests {
-    use super::{run_with_filters, QueryFilters};
+    use super::{QueryFilters, run_with_filters};
     use crate::cli::PrettyOutputOpts;
     use crate::test_support;
     use docir_app::ParserConfig;

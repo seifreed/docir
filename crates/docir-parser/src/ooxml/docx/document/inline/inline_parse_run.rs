@@ -1,17 +1,17 @@
 use super::super::super::{drawing::parse_drawing, support::parse_vml_pict, table::parse_table};
 use crate::error::ParseError;
+use crate::ooxml::docx::DocxParser;
 use crate::ooxml::docx::document::span_from_reader;
 use crate::ooxml::docx::document::{
-    insert_note_reference, parse_paragraph_simple, CommentRangeEnd, CommentRangeStart,
-    CommentReference, Run, RunProperties,
+    CommentRangeEnd, CommentRangeStart, CommentReference, Run, RunProperties,
+    insert_note_reference, parse_paragraph_simple,
 };
-use crate::ooxml::docx::DocxParser;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{attr_value, local_name, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, attr_value, local_name};
 use docir_core::ir::{Revision, RevisionType};
 use docir_core::types::{NodeId, SourceSpan};
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 pub(crate) struct RunParse {
     pub(crate) run_id: NodeId,

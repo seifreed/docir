@@ -188,12 +188,16 @@ mod tests {
         );
         assert_eq!(shapes[2].name.as_deref(), Some("SmartArt 1"));
         assert_eq!(shapes[2].shape_type, ShapeType::Custom);
-        assert!(shapes[2]
-            .related_targets
-            .contains(&"word/diagrams/data1.xml".to_string()));
-        assert!(shapes[2]
-            .related_targets
-            .contains(&"word/diagrams/layout1.xml".to_string()));
+        assert!(
+            shapes[2]
+                .related_targets
+                .contains(&"word/diagrams/data1.xml".to_string())
+        );
+        assert!(
+            shapes[2]
+                .related_targets
+                .contains(&"word/diagrams/layout1.xml".to_string())
+        );
     }
 
     #[test]
@@ -216,9 +220,11 @@ mod tests {
         let graph =
             build_relationship_graph("word/document.xml", "word/_rels/document.xml.rels", &rels);
         assert_eq!(graph.relationships.len(), 2);
-        assert!(graph
-            .relationships
-            .iter()
-            .any(|r| matches!(r.target_mode, RelationshipTargetMode::External)));
+        assert!(
+            graph
+                .relationships
+                .iter()
+                .any(|r| matches!(r.target_mode, RelationshipTargetMode::External))
+        );
     }
 }

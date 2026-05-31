@@ -1,5 +1,5 @@
-use super::inline::{parse_revision_inline, parse_run, parse_sdt, RunParse, SdtMode};
-use super::{parse_field, parse_hyperlink, span_from_reader, DocxParser, ParagraphParse};
+use super::inline::{RunParse, SdtMode, parse_revision_inline, parse_run, parse_sdt};
+use super::{DocxParser, ParagraphParse, parse_field, parse_hyperlink, span_from_reader};
 #[path = "paragraph_props.rs"]
 mod paragraph_props;
 use super::SectionRef;
@@ -10,8 +10,8 @@ use docir_core::ir::RevisionType;
 use docir_core::ir::{CommentRangeEnd, CommentRangeStart, CommentReference, Field, Paragraph};
 use docir_core::types::NodeId;
 pub(super) use paragraph_props::parse_paragraph_properties;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 pub(super) fn parse_paragraph(
@@ -34,10 +34,8 @@ pub(super) fn parse_paragraph(
                 &e,
             )?,
             Ok(Event::Empty(e)) => handle_paragraph_empty_event(parser, reader, &mut state, &e),
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"p" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"p" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -403,8 +401,8 @@ fn handle_field_char(
 mod tests {
     use super::paragraph_props::{alignment_from_val, parse_paragraph_borders};
     use super::{
-        handle_field_char, parse_paragraph_properties, update_field_from_run, DocxParser,
-        FieldState, Paragraph, RunParse,
+        DocxParser, FieldState, Paragraph, RunParse, handle_field_char, parse_paragraph_properties,
+        update_field_from_run,
     };
     use crate::xml_utils::reader_from_str;
     use docir_core::ir::BorderStyle;

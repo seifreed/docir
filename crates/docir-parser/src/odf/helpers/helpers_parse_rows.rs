@@ -1,10 +1,10 @@
 use crate::error::ParseError;
 use crate::odf::{
-    ods::{parse_ods_cell, parse_ods_cell_empty},
     OdfReader,
+    ods::{parse_ods_cell, parse_ods_cell_empty},
 };
 use crate::xml_utils::{
-    attr_value_by_suffix, is_end_event_local, local_name, scan_xml_events_until_end, XmlScanControl,
+    XmlScanControl, attr_value_by_suffix, is_end_event_local, local_name, scan_xml_events_until_end,
 };
 use docir_core::ir::{CellFormula, CellValue, MergedCellRange};
 use docir_core::visitor::IrStore;

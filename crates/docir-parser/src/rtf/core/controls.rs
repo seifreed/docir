@@ -23,10 +23,10 @@ fn set_stylesheet_entry(ctx: &mut RtfParseContext, style_id: String, style_type:
 
 fn apply_pending_numbering_to_current_paragraph(ctx: &mut RtfParseContext) {
     let numbering = pending_numbering(ctx);
-    if let Some(para) = ctx.current_paragraph.as_mut() {
-        if let Some(numbering) = numbering {
-            para.properties.numbering = Some(numbering);
-        }
+    if let Some(para) = ctx.current_paragraph.as_mut()
+        && let Some(numbering) = numbering
+    {
+        para.properties.numbering = Some(numbering);
     }
 }
 
@@ -59,10 +59,10 @@ fn set_last_object_dimension(
     param: Option<i32>,
     mut apply: impl FnMut(&mut ObjectContext, u32),
 ) {
-    if let Some(value) = param {
-        if let Some(obj) = ctx.object_stack.last_mut() {
-            apply(obj, value.max(0) as u32);
-        }
+    if let Some(value) = param
+        && let Some(obj) = ctx.object_stack.last_mut()
+    {
+        apply(obj, value.max(0) as u32);
     }
 }
 
@@ -113,17 +113,17 @@ pub(super) fn handle_group_controls(
             }
         }
         "ds" => {
-            if let Some(id) = param {
-                if ctx.current_group_kind() == GroupKind::Stylesheet {
-                    set_stylesheet_entry(ctx, format!("ds{}", id.max(0)), StyleType::Other);
-                }
+            if let Some(id) = param
+                && ctx.current_group_kind() == GroupKind::Stylesheet
+            {
+                set_stylesheet_entry(ctx, format!("ds{}", id.max(0)), StyleType::Other);
             }
         }
         "ts" => {
-            if let Some(id) = param {
-                if ctx.current_group_kind() == GroupKind::Stylesheet {
-                    set_stylesheet_entry(ctx, format!("ts{}", id.max(0)), StyleType::Table);
-                }
+            if let Some(id) = param
+                && ctx.current_group_kind() == GroupKind::Stylesheet
+            {
+                set_stylesheet_entry(ctx, format!("ts{}", id.max(0)), StyleType::Table);
             }
         }
         "info" => {
@@ -156,15 +156,15 @@ pub(super) fn handle_group_controls(
             }
         }
         "listid" => {
-            if let Some(id) = param {
-                if matches!(
+            if let Some(id) = param
+                && matches!(
                     ctx.current_group_kind(),
                     GroupKind::List | GroupKind::ListLevel | GroupKind::ListOverride
-                ) {
-                    ctx.current_list_id = Some(id);
-                    if ctx.current_group_kind() == GroupKind::ListOverride {
-                        ctx.current_list_override_list_id = Some(id);
-                    }
+                )
+            {
+                ctx.current_list_id = Some(id);
+                if ctx.current_group_kind() == GroupKind::ListOverride {
+                    ctx.current_list_override_list_id = Some(id);
                 }
             }
         }

@@ -1,7 +1,7 @@
 use docir_core::ir::IRNode;
 use docir_core::security::ExternalRefType;
 use docir_core::visitor::IrStore;
-use docir_parser::{scan_security_bytes, ParseError, ParserConfig};
+use docir_parser::{ParseError, ParserConfig, scan_security_bytes};
 use std::io::{Cursor, Write};
 
 fn build_zip(entries: &[(&str, &[u8])]) -> Result<Vec<u8>, ParseError> {

@@ -4,8 +4,8 @@ use super::{
 };
 use docir_core::ir::{Style, StyleSet, StyleType};
 use docir_core::types::SourceSpan;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 pub(super) fn parse_hwpx_styles(xml: &str, source: &str) -> Option<StyleSet> {
     let mut reader = Reader::from_str(xml);

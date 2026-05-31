@@ -1,7 +1,7 @@
 //! Inspect classic OLE metadata property sets.
 
 use anyhow::Result;
-use docir_app::{inspect_metadata_path, MetadataInspection, ParserConfig};
+use docir_app::{MetadataInspection, ParserConfig, inspect_metadata_path};
 use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
@@ -52,7 +52,7 @@ mod tests {
     use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::test_support::{
-        build_test_cfb, build_test_property_set_stream, TestPropertyValue,
+        TestPropertyValue, build_test_cfb, build_test_property_set_stream,
     };
     use docir_app::{MetadataInspection, MetadataProperty, MetadataSection, ParserConfig};
     use std::fs;

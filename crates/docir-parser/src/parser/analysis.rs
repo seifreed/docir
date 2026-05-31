@@ -10,8 +10,8 @@ pub(super) fn parse_activex_xml(
     xml: &str,
     _path: &str,
 ) -> Option<docir_core::security::ActiveXControl> {
-    use quick_xml::events::Event;
     use quick_xml::Reader;
+    use quick_xml::events::Event;
 
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -67,8 +67,8 @@ pub(super) fn parse_smartart_part(
     xml: &str,
     path: &str,
 ) -> Result<docir_core::ir::SmartArtPart, ParseError> {
-    use quick_xml::events::Event;
     use quick_xml::Reader;
+    use quick_xml::events::Event;
 
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -138,8 +138,8 @@ pub(super) fn parse_chart_data(
     chart_path: &str,
     store: &mut IrStore,
 ) -> Result<NodeId, ParseError> {
-    use quick_xml::events::Event;
     use quick_xml::Reader;
+    use quick_xml::events::Event;
 
     let mut chart = docir_core::ir::ChartData::new();
     chart.span = Some(SourceSpan::new(chart_path));
@@ -208,10 +208,8 @@ pub(super) fn parse_chart_data(
                         // skip
                     } else if let Some(series) = current_series.as_mut() {
                         match section {
-                            Some(b"tx") => {
-                                if series.name.is_none() {
-                                    series.name = Some(trimmed.to_string());
-                                }
+                            Some(b"tx") if series.name.is_none() => {
+                                series.name = Some(trimmed.to_string());
                             }
                             Some(b"cat") => {
                                 series.categories.push(trimmed.to_string());
@@ -261,10 +259,12 @@ mod tests {
         assert_eq!(control.name.as_deref(), Some("CommandButton1"));
         assert_eq!(control.clsid.as_deref(), Some("{ABC}"));
         assert_eq!(control.prog_id.as_deref(), Some("Forms.CommandButton.1"));
-        assert!(control
-            .properties
-            .iter()
-            .any(|(k, v)| k == "custom" && v == "x"));
+        assert!(
+            control
+                .properties
+                .iter()
+                .any(|(k, v)| k == "custom" && v == "x")
+        );
     }
 
     #[test]

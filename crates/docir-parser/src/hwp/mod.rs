@@ -142,10 +142,10 @@ fn parse_hwpx_shape(
             b"binDataId",
         ],
     );
-    if let Some(target) = shape.media_target.as_deref() {
-        if let Some(id) = media_lookup.get(target) {
-            shape.media_asset = Some(*id);
-        }
+    if let Some(target) = shape.media_target.as_deref()
+        && let Some(id) = media_lookup.get(target)
+    {
+        shape.media_asset = Some(*id);
     }
     if let Some(x) = attr_any(e, &[b"x", b"posX", b"left"]).and_then(|v| v.parse::<i64>().ok()) {
         shape.transform.x = x;
@@ -213,18 +213,19 @@ fn finalize_table_hwpx(
 #[cfg(test)]
 mod tests {
     use super::{
-        attr_any, build_hwp_diagnostics, is_hwpx_footer, is_hwpx_header, is_hwpx_master,
-        is_hwpx_mimetype, is_hwpx_section, media_type_from_path, parse_hwpx_paragraph_props,
-        parse_hwpx_table_props, run_properties_from_attrs, style_run_props_from_run, HwpxParser,
+        HwpxParser, attr_any, build_hwp_diagnostics, is_hwpx_footer, is_hwpx_header,
+        is_hwpx_master, is_hwpx_mimetype, is_hwpx_section, media_type_from_path,
+        parse_hwpx_paragraph_props, parse_hwpx_table_props, run_properties_from_attrs,
+        style_run_props_from_run,
     };
     use crate::parser::DocumentParser;
     use docir_core::ir::{DiagnosticSeverity, IRNode, ShapeType, TableAlignment, TableWidthType};
     use docir_core::types::DocumentFormat;
-    use quick_xml::events::{BytesStart, Event};
     use quick_xml::Reader;
+    use quick_xml::events::{BytesStart, Event};
     use std::io::Write;
-    use zip::write::FileOptions;
     use zip::CompressionMethod;
+    use zip::write::FileOptions;
 
     fn build_hwpx_zip(section_xml: &str) -> Vec<u8> {
         build_hwpx_zip_with_parts(section_xml, None, Vec::new())
@@ -380,10 +381,12 @@ mod tests {
         ];
         let diagnostics = build_hwp_diagnostics(DocumentFormat::Hwp, &paths);
         assert!(!diagnostics.entries.is_empty());
-        assert!(diagnostics
-            .entries
-            .iter()
-            .any(|e| e.code == "HWP_PART" && matches!(e.severity, DiagnosticSeverity::Info)));
+        assert!(
+            diagnostics
+                .entries
+                .iter()
+                .any(|e| e.code == "HWP_PART" && matches!(e.severity, DiagnosticSeverity::Info))
+        );
         assert!(diagnostics.entries.iter().any(|e| {
             e.code == "COVERAGE_MISSING" && matches!(e.severity, DiagnosticSeverity::Warning)
         }));
@@ -446,10 +449,10 @@ mod tests {
             if let IRNode::Revision(_) = node {
                 has_revision = true;
             }
-            if let IRNode::Shape(shape) = node {
-                if shape.shape_type == ShapeType::Picture {
-                    has_image = true;
-                }
+            if let IRNode::Shape(shape) = node
+                && shape.shape_type == ShapeType::Picture
+            {
+                has_image = true;
             }
         }
         assert!(has_revision);
@@ -478,12 +481,12 @@ mod tests {
 
         let mut has_style = false;
         for node in parsed.store.values() {
-            if let IRNode::StyleSet(set) = node {
-                if let Some(style) = set.styles.iter().find(|s| s.style_id == "s1") {
-                    assert!(style.run_props.is_some());
-                    assert!(style.paragraph_props.is_some());
-                    has_style = true;
-                }
+            if let IRNode::StyleSet(set) = node
+                && let Some(style) = set.styles.iter().find(|s| s.style_id == "s1")
+            {
+                assert!(style.run_props.is_some());
+                assert!(style.paragraph_props.is_some());
+                has_style = true;
             }
         }
         assert!(has_style);
@@ -515,18 +518,20 @@ mod tests {
         assert!(doc.security.macro_project.is_some());
         assert!(!doc.security.external_refs.is_empty());
         assert!(!doc.security.ole_objects.is_empty());
-        assert!(doc
-            .security
-            .threat_indicators
-            .iter()
-            .any(|i| i.indicator_type == docir_core::security::ThreatIndicatorType::AutoExecMacro));
+        assert!(
+            doc.security
+                .threat_indicators
+                .iter()
+                .any(|i| i.indicator_type
+                    == docir_core::security::ThreatIndicatorType::AutoExecMacro)
+        );
 
         let mut has_protected = false;
         for node in parsed.store.values() {
-            if let IRNode::Diagnostics(diag) = node {
-                if diag.entries.iter().any(|e| e.code == "HWPX_PROTECTED") {
-                    has_protected = true;
-                }
+            if let IRNode::Diagnostics(diag) = node
+                && diag.entries.iter().any(|e| e.code == "HWPX_PROTECTED")
+            {
+                has_protected = true;
             }
         }
         assert!(has_protected);

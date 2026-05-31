@@ -4,11 +4,11 @@ use self::worksheet_parse_events::{
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::xlsx::workbook::SheetInfo;
 use crate::ooxml::xlsx::{
-    parse_conditional_formatting, Cell, ColumnDefinition, ConditionalFormat, IRNode,
-    MergedCellRange, ParseError, SheetKind, Worksheet, XlsxParser,
+    Cell, ColumnDefinition, ConditionalFormat, IRNode, MergedCellRange, ParseError, SheetKind,
+    Worksheet, XlsxParser, parse_conditional_formatting,
 };
 use crate::xml_utils::{
-    is_end_event_local, local_name, reader_from_str, scan_xml_events_until_end, XmlScanControl,
+    XmlScanControl, is_end_event_local, local_name, reader_from_str, scan_xml_events_until_end,
 };
 use crate::zip_handler::PackageReader;
 use docir_core::ir::DataValidation;
@@ -92,10 +92,10 @@ impl XlsxParser {
         worksheet.comments =
             self.load_worksheet_comments(zip, sheet_path, relationships, &sheet.name)?;
 
-        if kind == SheetKind::ChartSheet {
-            if let Some(drawing) = self.parse_chartsheet(zip, xml, sheet_path, relationships)? {
-                worksheet.drawings.push(drawing);
-            }
+        if kind == SheetKind::ChartSheet
+            && let Some(drawing) = self.parse_chartsheet(zip, xml, sheet_path, relationships)?
+        {
+            worksheet.drawings.push(drawing);
         }
 
         self.current_sheet_kind = None;

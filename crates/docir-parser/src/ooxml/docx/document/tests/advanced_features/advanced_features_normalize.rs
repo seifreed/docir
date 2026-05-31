@@ -77,24 +77,30 @@ fn test_parse_table_applies_auto_width_and_row_defaults() {
         table.properties.alignment,
         Some(docir_core::ir::TableAlignment::Left)
     ));
-    assert!(table
-        .properties
-        .borders
-        .as_ref()
-        .and_then(|b| b.left.as_ref())
-        .is_some());
-    assert!(table
-        .properties
-        .borders
-        .as_ref()
-        .and_then(|b| b.right.as_ref())
-        .is_some());
-    assert!(table
-        .properties
-        .borders
-        .as_ref()
-        .and_then(|b| b.bottom.as_ref())
-        .is_some());
+    assert!(
+        table
+            .properties
+            .borders
+            .as_ref()
+            .and_then(|b| b.left.as_ref())
+            .is_some()
+    );
+    assert!(
+        table
+            .properties
+            .borders
+            .as_ref()
+            .and_then(|b| b.right.as_ref())
+            .is_some()
+    );
+    assert!(
+        table
+            .properties
+            .borders
+            .as_ref()
+            .and_then(|b| b.bottom.as_ref())
+            .is_some()
+    );
 
     let row = match store.get(table.rows[0]) {
         Some(docir_core::ir::IRNode::TableRow(r)) => r,
@@ -155,18 +161,20 @@ fn test_parse_table_cell_applies_width_auto_continue_merge_and_top_align() {
         cell.properties.vertical_align,
         Some(docir_core::ir::CellVerticalAlignment::Top)
     ));
-    assert!(cell
-        .properties
-        .borders
-        .as_ref()
-        .and_then(|b| b.top.as_ref())
-        .is_some());
-    assert!(cell
-        .properties
-        .borders
-        .as_ref()
-        .and_then(|b| b.right.as_ref())
-        .is_some());
+    assert!(
+        cell.properties
+            .borders
+            .as_ref()
+            .and_then(|b| b.top.as_ref())
+            .is_some()
+    );
+    assert!(
+        cell.properties
+            .borders
+            .as_ref()
+            .and_then(|b| b.right.as_ref())
+            .is_some()
+    );
 }
 #[test]
 fn test_parse_table_properties_ignore_unknown_border_children_and_keep_margin_shell() {

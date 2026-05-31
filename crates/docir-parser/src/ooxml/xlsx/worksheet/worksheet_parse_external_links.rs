@@ -1,8 +1,8 @@
 use crate::ooxml::part_utils::read_relationships;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::xlsx::{
-    connection_targets, parse_connections_part, parse_external_link_part, rel_type,
-    ExternalRefType, ExternalReference, IRNode, ParseError, XlsxParser,
+    ExternalRefType, ExternalReference, IRNode, ParseError, XlsxParser, connection_targets,
+    parse_connections_part, parse_external_link_part, rel_type,
 };
 use crate::zip_handler::PackageReader;
 use docir_core::types::SourceSpan;
@@ -31,13 +31,13 @@ fn parse_external_link_parts(
         }
 
         let rels = read_relationships(zip, &external_path)?;
-        if let Ok(xml) = zip.read_file_string(&external_path) {
-            if let Ok(mut part) = parse_external_link_part(&xml, &external_path, Some(&rels)) {
-                part.span = Some(SourceSpan::new(&external_path));
-                let part_id = part.id;
-                parser.store.insert(IRNode::ExternalLinkPart(part));
-                push_shared_part(parser, part_id);
-            }
+        if let Ok(xml) = zip.read_file_string(&external_path)
+            && let Ok(mut part) = parse_external_link_part(&xml, &external_path, Some(&rels))
+        {
+            part.span = Some(SourceSpan::new(&external_path));
+            let part_id = part.id;
+            parser.store.insert(IRNode::ExternalLinkPart(part));
+            push_shared_part(parser, part_id);
         }
 
         for ext in rels.by_id.values() {

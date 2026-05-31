@@ -33,16 +33,16 @@ impl Rule for HiddenWorksheetRule {
 
     fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
         visit_nodes(ctx, |node| {
-            if let IRNode::Worksheet(sheet) = node {
-                if sheet.state != docir_core::ir::SheetState::Visible {
-                    add_finding(
-                        findings,
-                        self,
-                        format!("Hidden worksheet: {}", sheet.name),
-                        Some(node),
-                        ctx,
-                    );
-                }
+            if let IRNode::Worksheet(sheet) = node
+                && sheet.state != docir_core::ir::SheetState::Visible
+            {
+                add_finding(
+                    findings,
+                    self,
+                    format!("Hidden worksheet: {}", sheet.name),
+                    Some(node),
+                    ctx,
+                );
             }
         });
     }
@@ -74,16 +74,16 @@ impl Rule for HiddenSlideRule {
 
     fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
         visit_nodes(ctx, |node| {
-            if let IRNode::Slide(slide) = node {
-                if slide.hidden {
-                    add_finding(
-                        findings,
-                        self,
-                        format!("Hidden slide: {}", slide.number),
-                        Some(node),
-                        ctx,
-                    );
-                }
+            if let IRNode::Slide(slide) = node
+                && slide.hidden
+            {
+                add_finding(
+                    findings,
+                    self,
+                    format!("Hidden slide: {}", slide.number),
+                    Some(node),
+                    ctx,
+                );
             }
         });
     }

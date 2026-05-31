@@ -1,6 +1,6 @@
 use crate::io_support::with_file_bytes;
 use crate::ports::CfbStreamReaderPort;
-use crate::{adapters, AppResult, ParserConfig};
+use crate::{AppResult, ParserConfig, adapters};
 use docir_parser::ParseError as ParserParseError;
 use serde::Serialize;
 use std::path::Path;
@@ -357,8 +357,8 @@ fn read_le_bytes<const N: usize>(
 
 #[cfg(test)]
 mod tests {
-    use super::{inspect_metadata_bytes, DOC_SUMMARY_INFO_STREAM, SUMMARY_INFO_STREAM};
-    use crate::test_support::{build_test_cfb, build_test_property_set_stream, TestPropertyValue};
+    use super::{DOC_SUMMARY_INFO_STREAM, SUMMARY_INFO_STREAM, inspect_metadata_bytes};
+    use crate::test_support::{TestPropertyValue, build_test_cfb, build_test_property_set_stream};
 
     #[test]
     fn inspect_metadata_reads_summary_and_doc_summary_streams() {
@@ -387,10 +387,12 @@ mod tests {
         assert!(summary.properties.iter().any(|prop| prop.name == "title"
             && prop.value == "Specimen"
             && prop.display_value.is_none()));
-        assert!(summary
-            .properties
-            .iter()
-            .any(|prop| prop.name == "page-count" && prop.value == "7"));
+        assert!(
+            summary
+                .properties
+                .iter()
+                .any(|prop| prop.name == "page-count" && prop.value == "7")
+        );
         assert!(summary.properties.iter().any(|prop| {
             prop.name == "created"
                 && prop.value == "100"
@@ -405,14 +407,18 @@ mod tests {
             .iter()
             .find(|section| section.name == "document-summary-information")
             .expect("doc summary section");
-        assert!(doc_summary
-            .properties
-            .iter()
-            .any(|prop| prop.name == "company" && prop.value == "ACME"));
-        assert!(doc_summary
-            .properties
-            .iter()
-            .any(|prop| prop.name == "links-dirty" && prop.value == "true"));
+        assert!(
+            doc_summary
+                .properties
+                .iter()
+                .any(|prop| prop.name == "company" && prop.value == "ACME")
+        );
+        assert!(
+            doc_summary
+                .properties
+                .iter()
+                .any(|prop| prop.name == "links-dirty" && prop.value == "true")
+        );
     }
 
     #[test]

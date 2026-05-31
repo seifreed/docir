@@ -280,7 +280,7 @@ mod tests {
                             procedures: Vec::new(),
                             suspicious_calls: Vec::new(),
                             extraction_errors: vec![
-                                "Failed to decompress VBA/ThisDocument".to_string()
+                                "Failed to decompress VBA/ThisDocument".to_string(),
                             ],
                         },
                     ],

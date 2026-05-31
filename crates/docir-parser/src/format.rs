@@ -1,5 +1,5 @@
-use crate::parser::ParsedDocument;
 use crate::ParseError;
+use crate::parser::ParsedDocument;
 use std::io::{Read, Seek};
 
 pub trait FormatParser {

@@ -1,9 +1,9 @@
 use super::{
-    attr_any, close_hwpx_note, close_hwpx_revision, finalize_cell_hwpx, finalize_note_paragraph,
-    finalize_paragraph_hwpx, finalize_row_hwpx, finalize_table_hwpx, local_name,
-    push_hwpx_comment_reference, push_hwpx_revision, push_hwpx_shape, push_node_to_hwpx_context,
-    run_properties_from_attrs, HwpxSectionState, IRNode, IrStore, NodeId, NumberingInfo, Paragraph,
-    ParseError, Run, SourceSpan, Table, TableCell, TableRow,
+    HwpxSectionState, IRNode, IrStore, NodeId, NumberingInfo, Paragraph, ParseError, Run,
+    SourceSpan, Table, TableCell, TableRow, attr_any, close_hwpx_note, close_hwpx_revision,
+    finalize_cell_hwpx, finalize_note_paragraph, finalize_paragraph_hwpx, finalize_row_hwpx,
+    finalize_table_hwpx, local_name, push_hwpx_comment_reference, push_hwpx_revision,
+    push_hwpx_shape, push_node_to_hwpx_context, run_properties_from_attrs,
 };
 use quick_xml::events::{BytesEnd, BytesStart, BytesText};
 use std::collections::HashMap;

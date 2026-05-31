@@ -47,7 +47,7 @@ pub trait SecurityScannerPort {
 
 pub(crate) trait CfbStreamReaderPort {
     fn read_streams(&self, data: &[u8], stream_names: &[&str])
-        -> AppResult<Vec<(String, Vec<u8>)>>;
+    -> AppResult<Vec<(String, Vec<u8>)>>;
 }
 
 /// Security analysis port for application workflows.

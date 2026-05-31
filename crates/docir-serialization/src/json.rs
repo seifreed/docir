@@ -1,10 +1,10 @@
 //! JSON serialization for IR.
 
 use crate::{IrSerializer, SerializationError};
-use docir_core::ir::{IRNode, IrNode};
-use docir_core::visitor::IrStore;
 use docir_core::CoreError;
 use docir_core::NodeId;
+use docir_core::ir::{IRNode, IrNode};
+use docir_core::visitor::IrStore;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;

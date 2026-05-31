@@ -56,10 +56,10 @@ pub(super) fn build_entry_anomaly_tags(context: EntryAnomalyContext<'_>) -> Vec<
         ("dangling-right-sibling", context.right_sibling),
         ("dangling-child", context.child),
     ] {
-        if let Some(pointer) = pointer {
-            if pointer >= context.slot_count {
-                tags.push(label.to_string());
-            }
+        if let Some(pointer) = pointer
+            && pointer >= context.slot_count
+        {
+            tags.push(label.to_string());
         }
     }
     if context.left_sibling == Some(context.entry_index) {

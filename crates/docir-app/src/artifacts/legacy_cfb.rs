@@ -6,7 +6,7 @@ use crate::artifacts::classify::classify_payload;
 use crate::artifacts::helpers::{
     assign_sha256, file_name_from_path, preferred_output_name, sanitize_name,
 };
-use crate::artifacts::ole::{parse_ole10_native, EmbeddedPayload};
+use crate::artifacts::ole::{EmbeddedPayload, parse_ole10_native};
 
 pub(super) fn extract_legacy_cfb_artifacts(
     input_bytes: &[u8],

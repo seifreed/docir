@@ -96,10 +96,10 @@ fn assert_signature_and_encryption_diagnostics(parsed: &ParsedDocument) {
         if let IRNode::DigitalSignature(_) = node {
             sig_count += 1;
         }
-        if let IRNode::Diagnostics(diag) = node {
-            if diag.entries.iter().any(|e| e.code == "ODF_ENCRYPTION") {
-                encryption_diag = true;
-            }
+        if let IRNode::Diagnostics(diag) = node
+            && diag.entries.iter().any(|e| e.code == "ODF_ENCRYPTION")
+        {
+            encryption_diag = true;
         }
     }
     assert_eq!(sig_count, 1);

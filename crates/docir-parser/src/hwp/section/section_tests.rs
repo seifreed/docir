@@ -1,7 +1,7 @@
 mod tests {
     use crate::error::ParseError;
     use crate::hwp::section::{
-        note_kind_from_local, parse_hwpx_section, revision_type_from_local, HwpxNoteKind,
+        HwpxNoteKind, note_kind_from_local, parse_hwpx_section, revision_type_from_local,
     };
     use docir_core::ir::{IRNode, RevisionType};
     use docir_core::visitor::IrStore;
@@ -92,12 +92,16 @@ mod tests {
         assert_eq!(comments.len(), 1);
         assert_eq!(footnotes.len(), 1);
         assert_eq!(endnotes.len(), 1);
-        assert!(store
-            .values()
-            .any(|n| matches!(n, IRNode::Revision(rev) if rev.revision_id.is_none())));
-        assert!(store
-            .values()
-            .any(|n| matches!(n, IRNode::CommentReference(_))));
+        assert!(
+            store
+                .values()
+                .any(|n| matches!(n, IRNode::Revision(rev) if rev.revision_id.is_none()))
+        );
+        assert!(
+            store
+                .values()
+                .any(|n| matches!(n, IRNode::CommentReference(_)))
+        );
         assert!(store.values().any(|n| matches!(n, IRNode::Shape(_))));
         assert!(store.values().any(|n| matches!(n, IRNode::Table(_))));
     }
@@ -174,9 +178,11 @@ mod tests {
         assert_eq!(comments.len(), 1);
         assert_eq!(footnotes.len(), 1);
         assert_eq!(endnotes.len(), 1);
-        assert!(!store
-            .values()
-            .any(|n| matches!(n, IRNode::CommentReference(_))));
+        assert!(
+            !store
+                .values()
+                .any(|n| matches!(n, IRNode::CommentReference(_)))
+        );
 
         let Some(IRNode::Comment(comment)) = store.get(comments[0]) else {
             panic!("expected comment");
@@ -198,14 +204,14 @@ mod tests {
         let mut seen_level0 = false;
         let mut seen_level1 = false;
         for node in store.values() {
-            if let IRNode::Paragraph(paragraph) = node {
-                if let Some(numbering) = &paragraph.properties.numbering {
-                    if numbering.level == 0 {
-                        seen_level0 = true;
-                    }
-                    if numbering.level == 1 {
-                        seen_level1 = true;
-                    }
+            if let IRNode::Paragraph(paragraph) = node
+                && let Some(numbering) = &paragraph.properties.numbering
+            {
+                if numbering.level == 0 {
+                    seen_level0 = true;
+                }
+                if numbering.level == 1 {
+                    seen_level1 = true;
                 }
             }
         }

@@ -4,8 +4,8 @@ use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::{VmlDrawing, VmlShape};
 use docir_core::types::SourceSpan;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 /// Public API entrypoint: parse_vml_drawing.
 pub fn parse_vml_drawing(
@@ -48,10 +48,10 @@ pub fn parse_vml_drawing(
             Ok(Event::End(e)) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
-                if local == b"shape" {
-                    if let Some(shape) = current.take() {
-                        shapes.push(shape);
-                    }
+                if local == b"shape"
+                    && let Some(shape) = current.take()
+                {
+                    shapes.push(shape);
                 }
             }
             Ok(Event::Eof) => break,
@@ -160,10 +160,10 @@ fn read_textbox_text(reader: &mut Reader<&[u8]>) -> Result<String, ParseError> {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
-                if local == b"t" {
-                    if let Ok(Event::Text(t)) = reader.read_event_into(&mut buf) {
-                        text.push_str(&t.unescape().unwrap_or_default());
-                    }
+                if local == b"t"
+                    && let Ok(Event::Text(t)) = reader.read_event_into(&mut buf)
+                {
+                    text.push_str(&t.unescape().unwrap_or_default());
                 }
             }
             Ok(Event::End(e)) => {

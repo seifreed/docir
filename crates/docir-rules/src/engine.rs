@@ -1,6 +1,6 @@
 //! Rule engine core types and execution.
 
-use crate::profile::{apply_profile, profile_rule_enabled, RuleProfile, RuleThresholds};
+use crate::profile::{RuleProfile, RuleThresholds, apply_profile, profile_rule_enabled};
 use crate::rules::default_rules;
 use docir_core::ir::{Document, DocumentMetadata, IRNode};
 use docir_core::types::{NodeId, NodeType};
@@ -144,10 +144,10 @@ pub(crate) fn build_context<'a>(
     let mut metadata = None;
     if let Some(IRNode::Document(doc)) = store.get(root) {
         document = Some(doc);
-        if let Some(meta_id) = doc.metadata {
-            if let Some(IRNode::Metadata(meta)) = store.get(meta_id) {
-                metadata = Some(meta);
-            }
+        if let Some(meta_id) = doc.metadata
+            && let Some(IRNode::Metadata(meta)) = store.get(meta_id)
+        {
+            metadata = Some(meta);
         }
     }
     RuleContext {
@@ -164,8 +164,8 @@ mod tests {
     use super::*;
     use crate::RuleProfile;
     use docir_core::ir::{Document, DocumentMetadata, IRNode};
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     struct CountingRule {
         id: &'static str,

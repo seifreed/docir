@@ -1,8 +1,8 @@
 pub(super) use super::{
-    annotate_incoming_references, build_anomaly_counts, build_anomaly_severity_counts,
-    build_dead_reference_counts, build_entry_anomaly_tags, build_pointer_counts,
-    build_reference_counts, build_tree_density_counts, inspect_directory_bytes, DirectoryEntry,
-    EntryAnomalyContext,
+    DirectoryEntry, EntryAnomalyContext, annotate_incoming_references, build_anomaly_counts,
+    build_anomaly_severity_counts, build_dead_reference_counts, build_entry_anomaly_tags,
+    build_pointer_counts, build_reference_counts, build_tree_density_counts,
+    inspect_directory_bytes,
 };
 pub(super) use crate::test_support::{build_test_cfb, build_test_cfb_with_times};
 
@@ -19,39 +19,51 @@ fn inspect_directory_reads_cfb_entries() {
     .expect("inspection");
 
     assert_eq!(inspection.entry_count, 8);
-    assert!(inspection
-        .role_counts
-        .iter()
-        .any(|entry| entry.bucket == "state:normal" && entry.count >= 1));
-    assert!(inspection
-        .role_counts
-        .iter()
-        .any(|entry| entry.bucket == "classification:word-main-stream" && entry.count == 1));
-    assert!(inspection
-        .entries
-        .iter()
-        .any(|entry| entry.path == "WordDocument"
-            && entry.classification == "word-main-stream"
-            && entry.name_len_raw > 0
-            && entry.color_flag_raw == 0
-            && entry.object_type_raw == 2));
-    assert!(inspection
-        .entries
-        .iter()
-        .any(|entry| entry.path == "Root Entry"
-            && entry.child.is_some()
-            && entry.child_raw == 1
-            && entry.entry_index == 0
-            && entry.object_type_raw == 5));
-    assert!(inspection
-        .entries
-        .iter()
-        .any(|entry| entry.path == "VBA" && entry.classification == "vba-storage"));
-    assert!(inspection
-        .entries
-        .iter()
-        .any(|entry| entry.path == "ObjectPool/1/Ole10Native"
-            && entry.classification == "ole-native-payload"));
+    assert!(
+        inspection
+            .role_counts
+            .iter()
+            .any(|entry| entry.bucket == "state:normal" && entry.count >= 1)
+    );
+    assert!(
+        inspection
+            .role_counts
+            .iter()
+            .any(|entry| entry.bucket == "classification:word-main-stream" && entry.count == 1)
+    );
+    assert!(
+        inspection
+            .entries
+            .iter()
+            .any(|entry| entry.path == "WordDocument"
+                && entry.classification == "word-main-stream"
+                && entry.name_len_raw > 0
+                && entry.color_flag_raw == 0
+                && entry.object_type_raw == 2)
+    );
+    assert!(
+        inspection
+            .entries
+            .iter()
+            .any(|entry| entry.path == "Root Entry"
+                && entry.child.is_some()
+                && entry.child_raw == 1
+                && entry.entry_index == 0
+                && entry.object_type_raw == 5)
+    );
+    assert!(
+        inspection
+            .entries
+            .iter()
+            .any(|entry| entry.path == "VBA" && entry.classification == "vba-storage")
+    );
+    assert!(
+        inspection
+            .entries
+            .iter()
+            .any(|entry| entry.path == "ObjectPool/1/Ole10Native"
+                && entry.classification == "ole-native-payload")
+    );
 }
 
 #[test]
@@ -139,18 +151,26 @@ fn build_anomaly_counts_detects_structural_anomalies() {
         },
     ]);
 
-    assert!(anomalies
-        .iter()
-        .any(|entry| entry.bucket == "free-slot" && entry.count == 1));
-    assert!(anomalies
-        .iter()
-        .any(|entry| entry.bucket == "orphaned-entry" && entry.count == 1));
-    assert!(anomalies
-        .iter()
-        .any(|entry| entry.bucket == "unknown-entry-type" && entry.count == 1));
-    assert!(anomalies
-        .iter()
-        .any(|entry| entry.bucket == "zero-name-length" && entry.count == 1));
+    assert!(
+        anomalies
+            .iter()
+            .any(|entry| entry.bucket == "free-slot" && entry.count == 1)
+    );
+    assert!(
+        anomalies
+            .iter()
+            .any(|entry| entry.bucket == "orphaned-entry" && entry.count == 1)
+    );
+    assert!(
+        anomalies
+            .iter()
+            .any(|entry| entry.bucket == "unknown-entry-type" && entry.count == 1)
+    );
+    assert!(
+        anomalies
+            .iter()
+            .any(|entry| entry.bucket == "zero-name-length" && entry.count == 1)
+    );
 }
 
 #[test]

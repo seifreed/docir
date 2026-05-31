@@ -3,8 +3,8 @@ use crate::error::ParseError;
 use crate::xml_utils::{attr_value, local_name, xml_error};
 use docir_core::ir::{NumberingLevel, NumberingSet, Paragraph, RunProperties, TextAlignment};
 use docir_core::types::NodeId;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 use super::paragraph::parse_paragraph_properties;
 

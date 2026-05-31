@@ -236,14 +236,13 @@ fn test_docx_accepts_alternate_namespace_prefixes() {
 
     for node in parsed.store.values() {
         match node {
-            IRNode::Paragraph(p) => {
+            IRNode::Paragraph(p)
                 if matches!(
                     p.properties.alignment,
                     Some(docir_core::ir::TextAlignment::Center)
-                ) && p.properties.spacing.as_ref().and_then(|s| s.before) == Some(120)
-                {
-                    saw_centered_paragraph = true;
-                }
+                ) && p.properties.spacing.as_ref().and_then(|s| s.before) == Some(120) =>
+            {
+                saw_centered_paragraph = true;
             }
             IRNode::Run(r) => {
                 if r.text == "Alt text" {
@@ -255,17 +254,14 @@ fn test_docx_accepts_alternate_namespace_prefixes() {
                     saw_bold_green_run = true;
                 }
             }
-            IRNode::Table(t) => {
+            IRNode::Table(t)
                 if t.rows.len() == 1
-                    && t.properties.width.as_ref().map(|width| width.value) == Some(5000)
-                {
-                    saw_table = true;
-                }
+                    && t.properties.width.as_ref().map(|width| width.value) == Some(5000) =>
+            {
+                saw_table = true;
             }
-            IRNode::TableCell(cell) => {
-                if cell.properties.grid_span == Some(2) {
-                    saw_spanned_cell = true;
-                }
+            IRNode::TableCell(cell) if cell.properties.grid_span == Some(2) => {
+                saw_spanned_cell = true;
             }
             _ => {}
         }
@@ -439,10 +435,10 @@ fn test_docx_chart_shape_linkage() {
     let parsed = parser.parse_file(&path).expect("parse docx");
     let mut shape_chart_ids = Vec::new();
     for node in parsed.store.values() {
-        if let IRNode::Shape(shape) = node {
-            if let Some(chart_id) = shape.chart_id {
-                shape_chart_ids.push(chart_id);
-            }
+        if let IRNode::Shape(shape) = node
+            && let Some(chart_id) = shape.chart_id
+        {
+            shape_chart_ids.push(chart_id);
         }
     }
     assert_eq!(shape_chart_ids.len(), 1);

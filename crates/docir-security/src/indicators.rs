@@ -84,12 +84,13 @@ fn percent_decode_lower(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(byte_val) = u8::from_str_radix(&input[i + 1..i + 3], 16) {
-                result.push(byte_val.to_ascii_lowercase() as char);
-                i += 3;
-                continue;
-            }
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(byte_val) = u8::from_str_radix(&input[i + 1..i + 3], 16)
+        {
+            result.push(byte_val.to_ascii_lowercase() as char);
+            i += 3;
+            continue;
         }
         result.push(bytes[i] as char);
         i += 1;
@@ -147,10 +148,10 @@ fn is_ip_address(host: &str) -> bool {
     }
     // Hex IP addresses (0xC0A80101 style)
     let hex_prefix = host.strip_prefix("0x").or_else(|| host.strip_prefix("0X"));
-    if let Some(hex_part) = hex_prefix {
-        if u32::from_str_radix(hex_part, 16).is_ok() {
-            return true;
-        }
+    if let Some(hex_part) = hex_prefix
+        && u32::from_str_radix(hex_part, 16).is_ok()
+    {
+        return true;
     }
     false
 }
@@ -181,9 +182,11 @@ End Sub
 "#;
         let calls = scan_vba_source(source);
         assert!(calls.iter().any(|c| c.name.contains("CreateObject")));
-        assert!(calls
-            .iter()
-            .any(|c| c.name.contains("WScript.Shell") || c.name.contains("Wscript")));
+        assert!(
+            calls
+                .iter()
+                .any(|c| c.name.contains("WScript.Shell") || c.name.contains("Wscript"))
+        );
     }
 
     #[test]

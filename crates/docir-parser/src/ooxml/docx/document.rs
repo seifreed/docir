@@ -4,7 +4,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{
-    attr_value, local_name, reader_from_str, scan_xml_events_with_reader, XmlScanControl,
+    XmlScanControl, attr_value, local_name, reader_from_str, scan_xml_events_with_reader,
 };
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
@@ -13,8 +13,8 @@ use docir_core::ir::{
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 mod body;
@@ -31,13 +31,13 @@ mod support;
 mod table;
 use body::{parse_block_until, parse_body_sections};
 use glossary::parse_doc_part;
-use inline::{parse_field, parse_hyperlink, parse_numbering, parse_run_properties};
 #[cfg(test)]
-use inline::{parse_run, parse_sdt, SdtMode};
+use inline::{SdtMode, parse_run, parse_sdt};
+use inline::{parse_field, parse_hyperlink, parse_numbering, parse_run_properties};
 #[cfg(test)]
 use paragraph::parse_paragraph;
 use paragraph::parse_paragraph_simple;
-use sections::{apply_section_refs, SectionRef};
+use sections::{SectionRef, apply_section_refs};
 
 #[derive(Debug, Clone, Copy)]
 pub enum NoteKind {
@@ -101,14 +101,14 @@ impl DocxParser {
             &mut buf,
             "word/document.xml",
             |reader, event| {
-                if let Event::Start(e) = event {
-                    if local_name(e.name().as_ref()) == b"body" {
-                        let sections = parse_body_sections(self, reader, rels, header_footer_map)?;
-                        for section in sections {
-                            let section_id = section.id;
-                            self.store.insert(docir_core::ir::IRNode::Section(section));
-                            doc.content.push(section_id);
-                        }
+                if let Event::Start(e) = event
+                    && local_name(e.name().as_ref()) == b"body"
+                {
+                    let sections = parse_body_sections(self, reader, rels, header_footer_map)?;
+                    for section in sections {
+                        let section_id = section.id;
+                        self.store.insert(docir_core::ir::IRNode::Section(section));
+                        doc.content.push(section_id);
                     }
                 }
                 Ok(XmlScanControl::Continue)
@@ -137,14 +137,14 @@ impl DocxParser {
             &mut buf,
             "word/glossary/document.xml",
             |reader, event| {
-                if let Event::Start(e) = event {
-                    if local_name(e.name().as_ref()) == b"docPart" {
-                        let entry = parse_doc_part(self, reader, rels)?;
-                        let entry_id = entry.id;
-                        self.store
-                            .insert(docir_core::ir::IRNode::GlossaryEntry(entry));
-                        glossary.entries.push(entry_id);
-                    }
+                if let Event::Start(e) = event
+                    && local_name(e.name().as_ref()) == b"docPart"
+                {
+                    let entry = parse_doc_part(self, reader, rels)?;
+                    let entry_id = entry.id;
+                    self.store
+                        .insert(docir_core::ir::IRNode::GlossaryEntry(entry));
+                    glossary.entries.push(entry_id);
                 }
                 Ok(XmlScanControl::Continue)
             },
@@ -319,11 +319,11 @@ fn line_col(data: &[u8], pos: usize) -> Option<(u32, u32)> {
 
 pub(super) fn span_from_reader(reader: &Reader<&[u8]>, file_path: &str) -> SourceSpan {
     let mut span = SourceSpan::new(file_path);
-    if let Ok(pos) = usize::try_from(reader.buffer_position()) {
-        if let Some((line, col)) = line_col(reader.get_ref(), pos) {
-            span.line = Some(line);
-            span.column = Some(col);
-        }
+    if let Ok(pos) = usize::try_from(reader.buffer_position())
+        && let Some((line, col)) = line_col(reader.get_ref(), pos)
+    {
+        span.line = Some(line);
+        span.column = Some(col);
     }
     span
 }

@@ -222,11 +222,11 @@ mod tests {
         PrettyOutputOpts,
     };
     use docir_app::{
-        test_support::{
-            build_test_cfb, build_test_cfb_with_times, build_test_property_set_stream,
-            TestPropertyValue,
-        },
         ParserConfig,
+        test_support::{
+            TestPropertyValue, build_test_cfb, build_test_cfb_with_times,
+            build_test_property_set_stream,
+        },
     };
     use std::fs;
 

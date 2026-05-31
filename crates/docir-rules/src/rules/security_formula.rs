@@ -33,18 +33,17 @@ impl Rule for SuspiciousFormulaRule {
 
     fn run(&self, ctx: &RuleContext, findings: &mut Vec<Finding>) {
         visit_nodes(ctx, |node| {
-            if let IRNode::Cell(cell) = node {
-                if let Some(formula) = &cell.formula {
-                    if is_suspicious_formula(&formula.text) {
-                        add_finding(
-                            findings,
-                            self,
-                            format!("Suspicious formula in {}: {}", cell.reference, formula.text),
-                            Some(node),
-                            ctx,
-                        );
-                    }
-                }
+            if let IRNode::Cell(cell) = node
+                && let Some(formula) = &cell.formula
+                && is_suspicious_formula(&formula.text)
+            {
+                add_finding(
+                    findings,
+                    self,
+                    format!("Suspicious formula in {}: {}", cell.reference, formula.text),
+                    Some(node),
+                    ctx,
+                );
             }
         });
     }

@@ -2,8 +2,8 @@
 
 use anyhow::{Context, Result};
 use docir_app::{
-    extract_artifacts_from_bytes, ArtifactExtractionOptions, ExportDocumentRef, ParserConfig,
-    Phase0ArtifactManifestExport,
+    ArtifactExtractionOptions, ExportDocumentRef, ParserConfig, Phase0ArtifactManifestExport,
+    extract_artifacts_from_bytes,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -62,12 +62,11 @@ pub fn run(
         {
             continue;
         }
-        if let Some(parent) = output_path.parent() {
-            if let Ok(canonical_target) = parent.canonicalize() {
-                if !canonical_target.starts_with(&canonical_out) {
-                    continue;
-                }
-            }
+        if let Some(parent) = output_path.parent()
+            && let Ok(canonical_target) = parent.canonicalize()
+            && !canonical_target.starts_with(&canonical_out)
+        {
+            continue;
         }
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)
@@ -101,9 +100,9 @@ pub fn run(
 
 #[cfg(test)]
 mod tests {
-    use super::{run, ExtractArtifactsOptions};
+    use super::{ExtractArtifactsOptions, run};
     use crate::test_support;
-    use docir_app::{test_support::build_test_cfb, ParserConfig};
+    use docir_app::{ParserConfig, test_support::build_test_cfb};
     use std::fs;
 
     #[test]

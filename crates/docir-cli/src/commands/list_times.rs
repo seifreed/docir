@@ -1,7 +1,7 @@
 //! List CFB storage and stream FILETIMEs.
 
 use anyhow::Result;
-use docir_app::{list_times_path, ParserConfig, TimeListing};
+use docir_app::{ParserConfig, TimeListing, list_times_path};
 use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
@@ -44,7 +44,7 @@ mod tests {
     use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
-        test_support::build_test_cfb_with_times, ParserConfig, TimeEntry, TimeListing,
+        ParserConfig, TimeEntry, TimeListing, test_support::build_test_cfb_with_times,
     };
     use std::fs;
 

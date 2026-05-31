@@ -2,8 +2,8 @@ use crate::error::ParseError;
 use crate::xml_utils::{lossy_attr_value, xml_error};
 use docir_core::ir::{PptxComment, PptxCommentAuthor};
 use docir_core::types::{NodeId, SourceSpan};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::collections::HashMap;
 
 pub(crate) fn parse_comment_authors(
@@ -17,28 +17,28 @@ pub(crate) fn parse_comment_authors(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if e.name().as_ref().ends_with(b"cmAuthor") {
-                    let mut author_id = None;
-                    let mut name = None;
-                    let mut initials = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"id" => author_id = lossy_attr_value(&attr).parse::<u32>().ok(),
-                            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
-                            b"initials" => initials = Some(lossy_attr_value(&attr).to_string()),
-                            _ => {}
-                        }
+            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                if e.name().as_ref().ends_with(b"cmAuthor") =>
+            {
+                let mut author_id = None;
+                let mut name = None;
+                let mut initials = None;
+                for attr in e.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"id" => author_id = lossy_attr_value(&attr).parse::<u32>().ok(),
+                        b"name" => name = Some(lossy_attr_value(&attr).to_string()),
+                        b"initials" => initials = Some(lossy_attr_value(&attr).to_string()),
+                        _ => {}
                     }
-                    if let Some(author_id) = author_id {
-                        authors.push(PptxCommentAuthor {
-                            id: NodeId::new(),
-                            author_id,
-                            name,
-                            initials,
-                            span: Some(SourceSpan::new(path)),
-                        });
-                    }
+                }
+                if let Some(author_id) = author_id {
+                    authors.push(PptxCommentAuthor {
+                        id: NodeId::new(),
+                        author_id,
+                        name,
+                        initials,
+                        span: Some(SourceSpan::new(path)),
+                    });
                 }
             }
             Ok(Event::Eof) => break,
@@ -94,10 +94,8 @@ pub(crate) fn parse_comments(
                     in_text = true;
                 }
             }
-            Ok(Event::Text(e)) => {
-                if in_text {
-                    text_buf.push_str(&e.unescape().unwrap_or_default());
-                }
+            Ok(Event::Text(e)) if in_text => {
+                text_buf.push_str(&e.unescape().unwrap_or_default());
             }
             Ok(Event::End(e)) => {
                 if e.name().as_ref().ends_with(b"t") {
@@ -111,16 +109,16 @@ pub(crate) fn parse_comments(
                         }
                         text_buf.clear();
                     }
-                } else if e.name().as_ref().ends_with(b"cm") {
-                    if let Some(mut cur) = current.take() {
-                        if let Some(author_id) = cur.author_id {
-                            if let Some((name, initials)) = authors.get(&author_id) {
-                                cur.author_name = name.clone();
-                                cur.author_initials = initials.clone();
-                            }
-                        }
-                        comments.push(cur);
+                } else if e.name().as_ref().ends_with(b"cm")
+                    && let Some(mut cur) = current.take()
+                {
+                    if let Some(author_id) = cur.author_id
+                        && let Some((name, initials)) = authors.get(&author_id)
+                    {
+                        cur.author_name = name.clone();
+                        cur.author_initials = initials.clone();
                     }
+                    comments.push(cur);
                 }
             }
             Ok(Event::Eof) => break,

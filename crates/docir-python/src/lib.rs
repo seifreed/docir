@@ -8,8 +8,8 @@ use docir_app::{
 use docir_core::ir::IrNode as IrNodeTrait;
 use docir_core::query::Query;
 use docir_core::types::{
-    parse_document_format as parse_core_document_format, parse_node_type as parse_core_node_type,
-    DocumentFormat, NodeType,
+    DocumentFormat, NodeType, parse_document_format as parse_core_document_format,
+    parse_node_type as parse_core_node_type,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -183,10 +183,12 @@ mod tests {
         let text = parse_json(docx, Some(false)).expect("parse_json should succeed");
         let parsed: Value = serde_json::from_str(&text).expect("valid JSON output");
         assert!(parsed.is_object());
-        assert!(parsed
-            .as_object()
-            .map(|map| !map.is_empty())
-            .unwrap_or(false));
+        assert!(
+            parsed
+                .as_object()
+                .map(|map| !map.is_empty())
+                .unwrap_or(false)
+        );
     }
 
     #[test]

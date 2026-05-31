@@ -87,11 +87,7 @@ pub(crate) fn normalize_tree_index(value: u32) -> Option<u32> {
 }
 
 pub(crate) fn normalize_filetime(value: u64) -> Option<u64> {
-    if value == 0 {
-        None
-    } else {
-        Some(value)
-    }
+    if value == 0 { None } else { Some(value) }
 }
 
 pub(crate) const MAX_STREAM_SIZE: usize = 256 * 1024 * 1024;

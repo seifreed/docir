@@ -7,7 +7,7 @@ use super::super::field_utils::{
     parse_hyperlink_instruction as parse_hyperlink_instruction_impl,
 };
 use super::super::state::{GroupKind, StyleEntryContext};
-use super::{cell_width_from_row, ensure_paragraph, ensure_section, IrStore, RtfParseContext};
+use super::{IrStore, RtfParseContext, cell_width_from_row, ensure_paragraph, ensure_section};
 use crate::rtf::objects::{finalize_object, finalize_picture};
 use docir_core::ir::{FieldInstruction, IRNode};
 use docir_core::types::SourceSpan;
@@ -18,10 +18,10 @@ pub(crate) fn finalize_paragraph(ctx: &mut RtfParseContext, store: &mut IrStore)
         store.insert(IRNode::Paragraph(para));
         if let Some(cell) = ctx.current_cell.as_mut() {
             cell.content.push(para_id);
-        } else if let Some(section_id) = ctx.current_section {
-            if let Some(IRNode::Section(section)) = store.get_mut(section_id) {
-                section.content.push(para_id);
-            }
+        } else if let Some(section_id) = ctx.current_section
+            && let Some(IRNode::Section(section)) = store.get_mut(section_id)
+        {
+            section.content.push(para_id);
         }
     }
     ctx.pending_list_override = None;
@@ -29,13 +29,13 @@ pub(crate) fn finalize_paragraph(ctx: &mut RtfParseContext, store: &mut IrStore)
 }
 
 pub(crate) fn finalize_section(ctx: &mut RtfParseContext, store: &mut IrStore) {
-    if let Some(section_id) = ctx.current_section.take() {
-        if store.get(section_id).is_none() {
-            let mut section = docir_core::ir::Section::new();
-            section.id = section_id;
-            section.span = Some(SourceSpan::new("rtf"));
-            store.insert(IRNode::Section(section));
-        }
+    if let Some(section_id) = ctx.current_section.take()
+        && store.get(section_id).is_none()
+    {
+        let mut section = docir_core::ir::Section::new();
+        section.id = section_id;
+        section.span = Some(SourceSpan::new("rtf"));
+        store.insert(IRNode::Section(section));
     }
 }
 
@@ -75,10 +75,10 @@ pub(crate) fn finalize_table_if_open(ctx: &mut RtfParseContext, store: &mut IrSt
         let table_id = table.id;
         store.insert(IRNode::Table(table));
         ensure_section(ctx, store);
-        if let Some(section_id) = ctx.current_section {
-            if let Some(IRNode::Section(section)) = store.get_mut(section_id) {
-                section.content.push(table_id);
-            }
+        if let Some(section_id) = ctx.current_section
+            && let Some(IRNode::Section(section)) = store.get_mut(section_id)
+        {
+            section.content.push(table_id);
         }
     }
 }

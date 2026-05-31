@@ -1,5 +1,5 @@
 use super::{
-    build_pointer_counts, build_reference_counts, build_tree_density_counts, DirectoryEntry,
+    DirectoryEntry, build_pointer_counts, build_reference_counts, build_tree_density_counts,
 };
 
 #[test]
@@ -106,21 +106,31 @@ fn build_reference_counts_groups_incoming_buckets() {
             modified_filetime: None,
         },
     ]);
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "incoming:0" && entry.count == 1));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "incoming:1" && entry.count == 1));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "incoming:many" && entry.count == 1));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "live-incoming:1" && entry.count == 1));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "live-incoming:many" && entry.count == 1));
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "incoming:0" && entry.count == 1)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "incoming:1" && entry.count == 1)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "incoming:many" && entry.count == 1)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "live-incoming:1" && entry.count == 1)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "live-incoming:many" && entry.count == 1)
+    );
 }
 
 #[test]
@@ -192,21 +202,31 @@ fn build_pointer_counts_groups_present_and_dangling_pointers() {
         },
     ]);
 
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "left:present" && entry.count == 1));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "right:present" && entry.count == 1));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "child:present" && entry.count == 2));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "right:dangling" && entry.count == 1));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "child:dangling" && entry.count == 1));
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "left:present" && entry.count == 1)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "right:present" && entry.count == 1)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "child:present" && entry.count == 2)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "right:dangling" && entry.count == 1)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "child:dangling" && entry.count == 1)
+    );
 }
 
 #[test]
@@ -278,16 +298,24 @@ fn build_tree_density_counts_groups_pointer_usage_by_state_and_entry_type() {
         },
     ]);
 
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "right:state:normal" && entry.count == 1));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "child:entry-type:storage" && entry.count == 1));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "left:state:orphaned" && entry.count == 1));
-    assert!(counts
-        .iter()
-        .any(|entry| entry.bucket == "left:entry-type:stream" && entry.count == 1));
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "right:state:normal" && entry.count == 1)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "child:entry-type:storage" && entry.count == 1)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "left:state:orphaned" && entry.count == 1)
+    );
+    assert!(
+        counts
+            .iter()
+            .any(|entry| entry.bucket == "left:entry-type:stream" && entry.count == 1)
+    );
 }

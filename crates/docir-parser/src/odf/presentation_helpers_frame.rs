@@ -1,6 +1,6 @@
 use super::{
-    parse_odf_chart, ChartData, IRNode, IrStore, NodeId, OdfReader, ParseError, ShapeType,
-    SourceSpan,
+    ChartData, IRNode, IrStore, NodeId, OdfReader, ParseError, ShapeType, SourceSpan,
+    parse_odf_chart,
 };
 use crate::xml_utils::{attr_value_by_suffix, local_name};
 use quick_xml::events::BytesStart;

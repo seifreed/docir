@@ -1,8 +1,8 @@
 use super::{
-    extract_c_sld_name, parse_notes_slide, parse_presentation_info, parse_slide_list,
+    Diagnostics, Document, DocumentFormat, IRNode, NodeId, ParseError, PptxParser, Relationships,
+    SourceSpan, extract_c_sld_name, parse_notes_slide, parse_presentation_info, parse_slide_list,
     parse_slide_master_meta, push_warning, read_xml_part_and_rels, read_xml_part_and_rels_optional,
-    rel_type, Diagnostics, Document, DocumentFormat, IRNode, NodeId, ParseError, PptxParser,
-    Relationships, SourceSpan,
+    rel_type,
 };
 use crate::diagnostics::attach_diagnostics_if_any;
 use crate::zip_handler::PackageReader;

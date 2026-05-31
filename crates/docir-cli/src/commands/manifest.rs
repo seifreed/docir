@@ -31,7 +31,7 @@ mod tests {
     use super::run;
     use crate::cli::PrettyOutputOpts;
     use crate::test_support;
-    use docir_app::{test_support::build_test_cfb, ParserConfig};
+    use docir_app::{ParserConfig, test_support::build_test_cfb};
     use std::fs;
 
     #[test]

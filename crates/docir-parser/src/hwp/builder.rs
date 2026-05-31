@@ -2,7 +2,7 @@
 mod builder_hwp;
 #[path = "builder_hwpx.rs"]
 mod builder_hwpx;
-use super::{scan_hwpx_security, HwpxParser};
+use super::{HwpxParser, scan_hwpx_security};
 use crate::diagnostics::push_warning;
 use crate::error::ParseError;
 use crate::input::enforce_input_size;
@@ -10,7 +10,7 @@ use crate::input::read_all_with_limit;
 use crate::ole::Cfb;
 use crate::parse_utils::{finalize_and_normalize, init_store_and_document};
 use crate::parser::{
-    run_parser_pipeline, NormalizeStage, ParseStage, ParsedDocument, PostprocessStage,
+    NormalizeStage, ParseStage, ParsedDocument, PostprocessStage, run_parser_pipeline,
 };
 use crate::zip_handler::SecureZipReader;
 pub(crate) use builder_hwp::HwpHeaderContext;
@@ -25,10 +25,10 @@ use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
 use std::io::{Read, Seek};
 
+use super::HwpParser;
 use super::attach_diagnostics_if_any;
 use super::helpers::build_hwp_diagnostics;
 use super::io::dump_hwp_streams;
-use super::HwpParser;
 
 impl HwpParser {
     /// Public API entrypoint: parse_reader.
@@ -65,19 +65,19 @@ impl ParseStage for HwpParser {
             &mut diagnostics,
         )?;
 
-        if let Some(expected) = docinfo_section_count {
-            if expected as usize != sections.len() {
-                push_warning(
-                    &mut diagnostics,
-                    "HWP_SECTION_MISMATCH",
-                    format!(
-                        "section count mismatch: docinfo={} parsed={}",
-                        expected,
-                        sections.len()
-                    ),
-                    Some("DocInfo"),
-                );
-            }
+        if let Some(expected) = docinfo_section_count
+            && expected as usize != sections.len()
+        {
+            push_warning(
+                &mut diagnostics,
+                "HWP_SECTION_MISMATCH",
+                format!(
+                    "section count mismatch: docinfo={} parsed={}",
+                    expected,
+                    sections.len()
+                ),
+                Some("DocInfo"),
+            );
         }
 
         self.parse_default_script(&cfb, &mut store);

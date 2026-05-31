@@ -1,8 +1,8 @@
 use crate::VbaRecognitionReport;
 use docir_core::security::ThreatLevel;
 
-use super::helpers::boolean_or_count_indicator;
 use super::DocumentIndicator;
+use super::helpers::boolean_or_count_indicator;
 
 pub(super) fn collect_macro_indicators(vba: &VbaRecognitionReport) -> Vec<DocumentIndicator> {
     let mut indicators = Vec::with_capacity(3);

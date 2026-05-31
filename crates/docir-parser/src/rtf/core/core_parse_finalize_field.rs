@@ -1,6 +1,6 @@
 use super::{
-    ensure_paragraph, parse_field_instruction, parse_hyperlink_instruction_impl, IRNode, IrStore,
-    RtfParseContext, SourceSpan,
+    IRNode, IrStore, RtfParseContext, SourceSpan, ensure_paragraph, parse_field_instruction,
+    parse_hyperlink_instruction_impl,
 };
 use docir_core::ir::{Field, Hyperlink};
 use docir_core::security::{ExternalRefType, ExternalReference};
@@ -16,21 +16,21 @@ pub(super) fn finalize_field(ctx: &mut RtfParseContext, store: &mut IrStore) {
     } else {
         Some(instr.to_string())
     };
-    if let Some(instr_text) = instruction.clone() {
-        if let Some((target, _args, _switches)) = parse_hyperlink_instruction(&instr_text) {
-            let mut link = Hyperlink::new(target, true);
-            link.runs = field.runs.clone();
-            let link_id = link.id;
-            store.insert(IRNode::Hyperlink(link));
-            ensure_paragraph(ctx, store);
-            if let Some(para) = ctx.current_paragraph.as_mut() {
-                para.runs.push(link_id);
-            }
-            if let Some(ext_id) = create_external_ref(&instr_text, store) {
-                ctx.external_refs.push(ext_id);
-            }
-            return;
+    if let Some(instr_text) = instruction.clone()
+        && let Some((target, _args, _switches)) = parse_hyperlink_instruction(&instr_text)
+    {
+        let mut link = Hyperlink::new(target, true);
+        link.runs = field.runs.clone();
+        let link_id = link.id;
+        store.insert(IRNode::Hyperlink(link));
+        ensure_paragraph(ctx, store);
+        if let Some(para) = ctx.current_paragraph.as_mut() {
+            para.runs.push(link_id);
         }
+        if let Some(ext_id) = create_external_ref(&instr_text, store) {
+            ctx.external_refs.push(ext_id);
+        }
+        return;
     }
 
     let mut node = Field::new(instruction.take());

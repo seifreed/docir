@@ -1,6 +1,6 @@
-use super::helpers::{parse_ods_covered_cell, parse_ods_covered_cell_empty, OdsRow};
+use super::helpers::{OdsRow, parse_ods_covered_cell, parse_ods_covered_cell_empty};
 use super::ods::{parse_ods_cell, parse_ods_cell_empty};
-use super::{spreadsheet, OdfReader};
+use super::{OdfReader, spreadsheet};
 use crate::error::ParseError;
 use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 use docir_core::visitor::IrStore;
@@ -76,10 +76,8 @@ pub(super) fn parse_ods_row_sample(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"table-row" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"table-row" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => return Err(xml_error("content.xml", e)),

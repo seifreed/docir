@@ -88,16 +88,20 @@ mod tests {
         let mut slide = Slide::new(3);
         slide.name = Some("Agenda".to_string());
         slide.hidden = true;
-        assert!(summarize(&IRNode::Slide(slide), &store)
-            .unwrap()
-            .contains("number=3"));
+        assert!(
+            summarize(&IRNode::Slide(slide), &store)
+                .unwrap()
+                .contains("number=3")
+        );
 
         let mut shape = Shape::new(ShapeType::TextBox);
         shape.name = Some("Title".to_string());
         shape.hyperlink = Some("https://example.test".to_string());
-        assert!(summarize(&IRNode::Shape(shape), &store)
-            .unwrap()
-            .contains("name=Title"));
+        assert!(
+            summarize(&IRNode::Shape(shape), &store)
+                .unwrap()
+                .contains("name=Title")
+        );
     }
 
     #[test]
@@ -234,12 +238,14 @@ mod tests {
             "slide_size=9144000x6858000 notes_size=6858000x9144000 show_type=window"
         );
 
-        assert!(summarize(
-            &IRNode::Document(docir_core::ir::Document::new(
-                docir_core::types::DocumentFormat::WordProcessing
-            )),
-            &store
-        )
-        .is_none());
+        assert!(
+            summarize(
+                &IRNode::Document(docir_core::ir::Document::new(
+                    docir_core::types::DocumentFormat::WordProcessing
+                )),
+                &store
+            )
+            .is_none()
+        );
     }
 }

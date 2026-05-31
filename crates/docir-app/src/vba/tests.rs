@@ -1,9 +1,9 @@
 use super::*;
 use crate::test_support::build_test_cfb;
 use crate::{DocirApp, ParserConfig};
+use docir_core::DocumentFormat;
 use docir_core::ir::{Document, IRNode};
 use docir_core::visitor::IrStore;
-use docir_core::DocumentFormat;
 
 #[test]
 fn report_marks_absent_when_no_projects_exist() {
@@ -55,22 +55,21 @@ DPB="AAAA"
     assert_eq!(report.projects[0].storage_root.as_deref(), Some("VBA"));
     assert!(report.projects[0].is_protected);
     assert!(report.projects[0].has_auto_exec);
-    assert!(report.projects[0]
-        .auto_exec_procedures
-        .iter()
-        .any(|name| name.eq_ignore_ascii_case("AutoOpen")));
+    assert!(
+        report.projects[0]
+            .auto_exec_procedures
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case("AutoOpen"))
+    );
     assert_eq!(report.projects[0].modules.len(), 2);
-    assert!(report.projects[0]
-        .modules
-        .iter()
-        .any(
-            |module| module.stream_path.as_deref() == Some("VBA/Module1")
-                && module
-                    .source_text
-                    .as_deref()
-                    .unwrap_or_default()
-                    .contains("AutoOpen")
-        ));
+    assert!(report.projects[0].modules.iter().any(|module| {
+        module.stream_path.as_deref() == Some("VBA/Module1")
+            && module
+                .source_text
+                .as_deref()
+                .unwrap_or_default()
+                .contains("AutoOpen")
+    }));
 }
 
 #[test]
@@ -106,23 +105,22 @@ Document=ThisWorkbook/&H00000000
     );
     assert_eq!(report.projects[0].storage_root.as_deref(), Some("VBA"));
     assert!(report.projects[0].has_auto_exec);
-    assert!(report.projects[0]
-        .auto_exec_procedures
-        .iter()
-        .any(|name| name.eq_ignore_ascii_case("Auto_Open")
-            || name.eq_ignore_ascii_case("Workbook_Open")));
+    assert!(
+        report.projects[0]
+            .auto_exec_procedures
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case("Auto_Open")
+                || name.eq_ignore_ascii_case("Workbook_Open"))
+    );
     assert_eq!(report.projects[0].modules.len(), 2);
-    assert!(report.projects[0]
-        .modules
-        .iter()
-        .any(
-            |module| module.stream_path.as_deref() == Some("VBA/ThisWorkbook")
-                && module
-                    .source_text
-                    .as_deref()
-                    .unwrap_or_default()
-                    .contains("Workbook_Open")
-        ));
+    assert!(report.projects[0].modules.iter().any(|module| {
+        module.stream_path.as_deref() == Some("VBA/ThisWorkbook")
+            && module
+                .source_text
+                .as_deref()
+                .unwrap_or_default()
+                .contains("Workbook_Open")
+    }));
 }
 
 #[test]
@@ -159,23 +157,22 @@ Document=ThisPresentation/&H00000000
     );
     assert_eq!(report.projects[0].storage_root.as_deref(), Some("VBA"));
     assert!(report.projects[0].has_auto_exec);
-    assert!(report.projects[0]
-        .auto_exec_procedures
-        .iter()
-        .any(|name| name.eq_ignore_ascii_case("Auto_Open")
-            || name.eq_ignore_ascii_case("Presentation_Open")));
+    assert!(
+        report.projects[0]
+            .auto_exec_procedures
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case("Auto_Open")
+                || name.eq_ignore_ascii_case("Presentation_Open"))
+    );
     assert_eq!(report.projects[0].modules.len(), 2);
-    assert!(report.projects[0]
-        .modules
-        .iter()
-        .any(
-            |module| module.stream_path.as_deref() == Some("VBA/ThisPresentation")
-                && module
-                    .source_text
-                    .as_deref()
-                    .unwrap_or_default()
-                    .contains("Presentation_Open")
-        ));
+    assert!(report.projects[0].modules.iter().any(|module| {
+        module.stream_path.as_deref() == Some("VBA/ThisPresentation")
+            && module
+                .source_text
+                .as_deref()
+                .unwrap_or_default()
+                .contains("Presentation_Open")
+    }));
 }
 
 #[test]
@@ -246,10 +243,12 @@ Module=MissingMod/MissingMod
         .find(|module| module.name == "MissingMod")
         .expect("missing module");
     assert_eq!(missing.status, VbaRecognitionStatus::Partial);
-    assert!(missing
-        .extraction_errors
-        .iter()
-        .any(|msg| msg.contains("Missing stream VBA/MissingMod")));
+    assert!(
+        missing
+            .extraction_errors
+            .iter()
+            .any(|msg| msg.contains("Missing stream VBA/MissingMod"))
+    );
 }
 
 #[test]
@@ -339,14 +338,18 @@ Document=ThisDocument/&H00000000
     assert_eq!(report.projects[0].status, VbaRecognitionStatus::Recognized);
     assert!(report.projects[0].has_auto_exec);
     assert_eq!(report.projects[0].modules.len(), 3);
-    assert!(report.projects[0]
-        .modules
-        .iter()
-        .all(|module| module.status == VbaRecognitionStatus::Recognized));
-    assert!(report.projects[0]
-        .modules
-        .iter()
-        .all(|module| module.source_text.is_none()));
+    assert!(
+        report.projects[0]
+            .modules
+            .iter()
+            .all(|module| module.status == VbaRecognitionStatus::Recognized)
+    );
+    assert!(
+        report.projects[0]
+            .modules
+            .iter()
+            .all(|module| module.source_text.is_none())
+    );
 }
 
 #[test]
@@ -387,10 +390,12 @@ Module=MissingMod/MissingMod
         .find(|module| module.name == "MissingMod")
         .expect("missing module");
     assert_eq!(missing.status, VbaRecognitionStatus::Partial);
-    assert!(missing
-        .extraction_errors
-        .iter()
-        .any(|msg| msg.contains("Missing stream VBA/MissingMod")));
+    assert!(
+        missing
+            .extraction_errors
+            .iter()
+            .any(|msg| msg.contains("Missing stream VBA/MissingMod"))
+    );
 }
 
 #[test]
@@ -420,10 +425,12 @@ Module=Broken/Broken
     assert_eq!(broken.name, "Broken");
     assert_eq!(broken.status, VbaRecognitionStatus::Error);
     assert!(broken.source_text.is_none());
-    assert!(broken
-        .extraction_errors
-        .iter()
-        .any(|msg| msg.contains("Failed to decompress VBA/Broken")));
+    assert!(
+        broken
+            .extraction_errors
+            .iter()
+            .any(|msg| msg.contains("Failed to decompress VBA/Broken"))
+    );
 }
 
 #[test]
@@ -530,10 +537,12 @@ DPB="AAAA"
         .expect("helper class");
     assert_eq!(helper.kind, "class");
     assert_eq!(helper.status, VbaRecognitionStatus::Partial);
-    assert!(helper
-        .extraction_errors
-        .iter()
-        .any(|msg| msg.contains("Missing stream VBA/Helper")));
+    assert!(
+        helper
+            .extraction_errors
+            .iter()
+            .any(|msg| msg.contains("Missing stream VBA/Helper"))
+    );
 
     let document = report.projects[0]
         .modules
@@ -587,8 +596,10 @@ DPB="AAAA"
         .expect("document module");
     assert_eq!(document.kind, "document");
     assert_eq!(document.status, VbaRecognitionStatus::Error);
-    assert!(document
-        .extraction_errors
-        .iter()
-        .any(|msg| msg.contains("Failed to decompress VBA/ThisDocument")));
+    assert!(
+        document
+            .extraction_errors
+            .iter()
+            .any(|msg| msg.contains("Failed to decompress VBA/ThisDocument"))
+    );
 }

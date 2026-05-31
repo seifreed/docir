@@ -1,7 +1,7 @@
 //! Probe the real format/container of an input file.
 
 use anyhow::Result;
-use docir_app::{probe_format_path, FormatProbe, ParserConfig};
+use docir_app::{FormatProbe, ParserConfig, probe_format_path};
 use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
@@ -44,7 +44,7 @@ mod tests {
     use super::run;
     use crate::cli::JsonOutputOpts;
     use crate::test_support;
-    use docir_app::{test_support::build_test_cfb, FormatProbe, ParserConfig};
+    use docir_app::{FormatProbe, ParserConfig, test_support::build_test_cfb};
     use std::fs;
 
     #[test]

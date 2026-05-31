@@ -1,5 +1,5 @@
 use super::{Event, Reader};
-use crate::xml_utils::{attr_value_by_suffix, local_name, scan_xml_events, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events};
 
 #[derive(Clone)]
 pub(super) struct OdfTableChunk {
@@ -15,11 +15,11 @@ pub(super) fn extract_spreadsheet_table_chunks(xml: &[u8]) -> Vec<OdfTableChunk>
     let mut chunks = Vec::new();
     let mut pos = start;
     while let Some(idx) = find_subslice(xml, b"<table:table", pos, end) {
-        if let Some(next) = xml.get(idx + b"<table:table".len()) {
-            if *next == b'-' {
-                pos = idx + 1;
-                continue;
-            }
+        if let Some(next) = xml.get(idx + b"<table:table".len())
+            && *next == b'-'
+        {
+            pos = idx + 1;
+            continue;
         }
         let Some(tag_end) = find_tag_end(xml, idx + 1, end) else {
             break;

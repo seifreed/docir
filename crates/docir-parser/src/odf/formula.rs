@@ -65,10 +65,10 @@ impl<'a> FormulaEvalContext<'a> {
     }
 
     fn resolve_ref(&mut self, reference: &CellRef) -> Option<f64> {
-        if let Some(sheet) = reference.sheet.as_deref() {
-            if !sheet.eq_ignore_ascii_case(self.sheet_name) {
-                return None;
-            }
+        if let Some(sheet) = reference.sheet.as_deref()
+            && !sheet.eq_ignore_ascii_case(self.sheet_name)
+        {
+            return None;
         }
         let key = (reference.row, reference.col);
         if let Some(value) = self.cache.get(&key) {
@@ -78,11 +78,11 @@ impl<'a> FormulaEvalContext<'a> {
             self.cache.insert(key, None);
             return None;
         }
-        if let Some(value) = self.values.get(&key) {
-            if let Some(number) = cell_value_to_number(value) {
-                self.cache.insert(key, Some(number));
-                return Some(number);
-            }
+        if let Some(value) = self.values.get(&key)
+            && let Some(number) = cell_value_to_number(value)
+        {
+            self.cache.insert(key, Some(number));
+            return Some(number);
         }
         let formula_text = self.formulas.get(&key)?.clone();
         self.stack.push(key);
@@ -96,15 +96,15 @@ impl<'a> FormulaEvalContext<'a> {
     }
 
     fn resolve_range(&mut self, range: &CellRange) -> Option<Vec<f64>> {
-        if let Some(sheet) = range.start.sheet.as_deref() {
-            if !sheet.eq_ignore_ascii_case(self.sheet_name) {
-                return None;
-            }
+        if let Some(sheet) = range.start.sheet.as_deref()
+            && !sheet.eq_ignore_ascii_case(self.sheet_name)
+        {
+            return None;
         }
-        if let Some(sheet) = range.end.sheet.as_deref() {
-            if !sheet.eq_ignore_ascii_case(self.sheet_name) {
-                return None;
-            }
+        if let Some(sheet) = range.end.sheet.as_deref()
+            && !sheet.eq_ignore_ascii_case(self.sheet_name)
+        {
+            return None;
         }
         let row_start = range.start.row.min(range.end.row);
         let row_end = range.start.row.max(range.end.row);
@@ -279,13 +279,12 @@ pub(super) fn evaluate_ods_formulas(
 ) {
     let mut ctx = FormulaEvalContext::new(sheet_name, cell_values.clone(), formula_map);
     for (cell_id, row, col, formula) in formula_cells {
-        if let Some(IRNode::Cell(cell)) = store.get_mut(*cell_id) {
-            if matches!(cell.value, CellValue::Empty) {
-                if let Some(value) = ctx.eval_formula(formula) {
-                    cell.value = CellValue::Number(value);
-                    cell_values.insert((*row, *col), CellValue::Number(value));
-                }
-            }
+        if let Some(IRNode::Cell(cell)) = store.get_mut(*cell_id)
+            && matches!(cell.value, CellValue::Empty)
+            && let Some(value) = ctx.eval_formula(formula)
+        {
+            cell.value = CellValue::Number(value);
+            cell_values.insert((*row, *col), CellValue::Number(value));
         }
     }
 }

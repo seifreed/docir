@@ -1,8 +1,8 @@
 use crate::error::ParseError;
 use crate::xml_utils::{attr_value, local_name};
 use docir_core::ir::SheetComment;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 pub(super) enum CommentFlavor {
     Legacy,
@@ -45,10 +45,8 @@ pub(super) fn parse_sheet_comments_impl(
                         attr_value(&e, b"authorId").or_else(|| attr_value(&e, b"personId"));
                     current_text.clear();
                 }
-                b"text" | b"t" => {
-                    if in_comment {
-                        in_text = true;
-                    }
+                b"text" | b"t" if in_comment => {
+                    in_text = true;
                 }
                 _ => {}
             },

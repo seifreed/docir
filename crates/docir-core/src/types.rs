@@ -496,7 +496,7 @@ impl fmt::Display for NodeType {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_node_type, NodeType};
+    use super::{NodeType, parse_node_type};
 
     #[test]
     fn parse_node_type_accepts_representative_aliases() {

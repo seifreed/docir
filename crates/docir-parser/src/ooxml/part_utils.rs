@@ -37,12 +37,11 @@ pub(crate) fn read_relationships_optional(
     part_path: &str,
 ) -> Relationships {
     let rels_path = get_rels_path(part_path);
-    if zip.contains(&rels_path) {
-        if let Ok(rels_xml) = zip.read_file_string(&rels_path) {
-            if let Ok(rels) = Relationships::parse(&rels_xml) {
-                return rels;
-            }
-        }
+    if zip.contains(&rels_path)
+        && let Ok(rels_xml) = zip.read_file_string(&rels_path)
+        && let Ok(rels) = Relationships::parse(&rels_xml)
+    {
+        return rels;
     }
     Relationships::default()
 }

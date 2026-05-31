@@ -12,10 +12,10 @@ pub(super) fn build_xlm_indicators(
     let mut sheet_locations = HashMap::new();
 
     for node in store.values() {
-        if let IRNode::Worksheet(sheet) = node {
-            if let Some(span) = sheet.span.as_ref() {
-                sheet_locations.insert(sheet.name.to_ascii_uppercase(), span.file_path.clone());
-            }
+        if let IRNode::Worksheet(sheet) = node
+            && let Some(span) = sheet.span.as_ref()
+        {
+            sheet_locations.insert(sheet.name.to_ascii_uppercase(), span.file_path.clone());
         }
     }
 
@@ -71,13 +71,13 @@ pub(super) fn apply_xlm_defined_name_targets(
     let mut location: Option<String> = None;
 
     for node in store.values() {
-        if let IRNode::DefinedName(name) = node {
-            if let Some(target) = auto_open_target_from_defined_name(name) {
-                if location.is_none() {
-                    location = name.span.as_ref().map(|s| s.file_path.clone());
-                }
-                targets.push(target);
+        if let IRNode::DefinedName(name) = node
+            && let Some(target) = auto_open_target_from_defined_name(name)
+        {
+            if location.is_none() {
+                location = name.span.as_ref().map(|s| s.file_path.clone());
             }
+            targets.push(target);
         }
     }
 

@@ -1,7 +1,7 @@
 //! Inspect CFB sector allocation and stream chains.
 
 use anyhow::Result;
-use docir_app::{inspect_sectors_path, ParserConfig, SectorInspection};
+use docir_app::{ParserConfig, SectorInspection, inspect_sectors_path};
 use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
@@ -211,10 +211,10 @@ mod tests {
     use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
-        test_support::build_test_cfb, ChainHealthCount, ChainStep, ParserConfig, RoleCount,
-        SectorAnomaly, SectorInspection, SectorOverviewEntry, SharedChainOverlap,
-        SharedSectorClaim, StartSectorReuse, StreamSectorMap, StructuralIncoherenceCount,
-        TruncatedChainCount,
+        ChainHealthCount, ChainStep, ParserConfig, RoleCount, SectorAnomaly, SectorInspection,
+        SectorOverviewEntry, SharedChainOverlap, SharedSectorClaim, StartSectorReuse,
+        StreamSectorMap, StructuralIncoherenceCount, TruncatedChainCount,
+        test_support::build_test_cfb,
     };
     use std::fs;
 

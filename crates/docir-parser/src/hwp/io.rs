@@ -6,8 +6,8 @@ use sha1::{Digest as Sha1Digest, Sha1};
 use sha2::Sha256;
 
 use aes::Aes128;
-use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
 use cbc::Decryptor;
+use cbc::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
 
 pub(super) fn prepare_hwp_stream_data(
     data: &[u8],
@@ -259,10 +259,12 @@ mod tests {
             &mut diagnostics,
         );
         assert!(result.is_none());
-        assert!(diagnostics
-            .entries
-            .iter()
-            .any(|e| e.code == "HWP_DECRYPT_FAIL"));
+        assert!(
+            diagnostics
+                .entries
+                .iter()
+                .any(|e| e.code == "HWP_DECRYPT_FAIL")
+        );
     }
 
     #[test]
@@ -281,14 +283,18 @@ mod tests {
         .expect("force-parse should keep raw bytes after decrypt failure");
 
         assert_eq!(result, payload);
-        assert!(diagnostics
-            .entries
-            .iter()
-            .any(|e| e.code == "HWP_DECRYPT_FAIL"));
-        assert!(diagnostics
-            .entries
-            .iter()
-            .any(|e| e.code == "HWP_FORCE_PARSE_STREAM"));
+        assert!(
+            diagnostics
+                .entries
+                .iter()
+                .any(|e| e.code == "HWP_DECRYPT_FAIL")
+        );
+        assert!(
+            diagnostics
+                .entries
+                .iter()
+                .any(|e| e.code == "HWP_FORCE_PARSE_STREAM")
+        );
     }
 
     #[test]
@@ -358,9 +364,11 @@ mod tests {
 
         dump_hwp_streams(&cfb, &stream_names, &header_ctx, &mut diagnostics);
 
-        assert!(diagnostics
-            .entries
-            .iter()
-            .any(|e| e.code == "HWP_STREAM_DUMP" && e.message.contains("decompress=fail:")));
+        assert!(
+            diagnostics
+                .entries
+                .iter()
+                .any(|e| e.code == "HWP_STREAM_DUMP" && e.message.contains("decompress=fail:"))
+        );
     }
 }

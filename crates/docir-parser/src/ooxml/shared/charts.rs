@@ -2,8 +2,8 @@ use crate::xml_utils::local_name;
 use docir_core::ir::{ChartData, ChartSeries, IRNode};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 #[derive(Clone, Copy)]
 enum SeriesSection {

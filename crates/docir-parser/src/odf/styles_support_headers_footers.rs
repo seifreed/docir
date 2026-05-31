@@ -1,11 +1,11 @@
 use super::super::helpers::parse_table;
 use super::super::{
-    parse_paragraph, text, Footer, Header, IRNode, IrStore, NodeId, NumberingInfo, OdfLimitCounter,
-    OdfLimits, OdfReader, ParseError, ParserConfig, SourceSpan,
+    Footer, Header, IRNode, IrStore, NodeId, NumberingInfo, OdfLimitCounter, OdfLimits, OdfReader,
+    ParseError, ParserConfig, SourceSpan, parse_paragraph, text,
 };
 use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 pub(crate) fn parse_odf_headers_footers(

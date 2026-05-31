@@ -1,6 +1,6 @@
 use super::{
-    attr_u32_from_bytes, attr_value, BorderDef, BorderSide, CellAlignment, CellFormat,
-    CellProtection, FillDef, FontDef, NumberFormat, TableStyleDef, TableStyleInfo,
+    BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, FillDef, FontDef,
+    NumberFormat, TableStyleDef, TableStyleInfo, attr_u32_from_bytes, attr_value,
 };
 use quick_xml::events::BytesStart;
 

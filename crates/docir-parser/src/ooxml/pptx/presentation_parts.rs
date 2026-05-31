@@ -1,7 +1,7 @@
 use super::{
-    parse_comment_authors, parse_presentation_properties, parse_presentation_tags,
-    parse_smartart_part, parse_table_styles, parse_view_properties, parse_xml_part_with_span,
-    Document, IRNode, ParseError, PptxParser, SourceSpan,
+    Document, IRNode, ParseError, PptxParser, SourceSpan, parse_comment_authors,
+    parse_presentation_properties, parse_presentation_tags, parse_smartart_part,
+    parse_table_styles, parse_view_properties, parse_xml_part_with_span,
 };
 use crate::ooxml::part_utils::insert_shared_part;
 use crate::zip_handler::PackageReader;
@@ -176,29 +176,41 @@ mod tests {
             parser.store.get(*id),
             Some(IRNode::PresentationProperties(_))
         )));
-        assert!(document
-            .shared_parts
-            .iter()
-            .any(|id| matches!(parser.store.get(*id), Some(IRNode::ViewProperties(_)))));
-        assert!(document
-            .shared_parts
-            .iter()
-            .any(|id| matches!(parser.store.get(*id), Some(IRNode::TableStyleSet(_)))));
-        assert!(document
-            .shared_parts
-            .iter()
-            .any(|id| matches!(parser.store.get(*id), Some(IRNode::PptxCommentAuthor(_)))));
-        assert!(document
-            .shared_parts
-            .iter()
-            .any(|id| matches!(parser.store.get(*id), Some(IRNode::PresentationTag(_)))));
-        assert!(document
-            .shared_parts
-            .iter()
-            .any(|id| matches!(parser.store.get(*id), Some(IRNode::PeoplePart(_)))));
-        assert!(document
-            .shared_parts
-            .iter()
-            .any(|id| matches!(parser.store.get(*id), Some(IRNode::SmartArtPart(_)))));
+        assert!(
+            document
+                .shared_parts
+                .iter()
+                .any(|id| matches!(parser.store.get(*id), Some(IRNode::ViewProperties(_))))
+        );
+        assert!(
+            document
+                .shared_parts
+                .iter()
+                .any(|id| matches!(parser.store.get(*id), Some(IRNode::TableStyleSet(_))))
+        );
+        assert!(
+            document
+                .shared_parts
+                .iter()
+                .any(|id| matches!(parser.store.get(*id), Some(IRNode::PptxCommentAuthor(_))))
+        );
+        assert!(
+            document
+                .shared_parts
+                .iter()
+                .any(|id| matches!(parser.store.get(*id), Some(IRNode::PresentationTag(_))))
+        );
+        assert!(
+            document
+                .shared_parts
+                .iter()
+                .any(|id| matches!(parser.store.get(*id), Some(IRNode::PeoplePart(_))))
+        );
+        assert!(
+            document
+                .shared_parts
+                .iter()
+                .any(|id| matches!(parser.store.get(*id), Some(IRNode::SmartArtPart(_))))
+        );
     }
 }

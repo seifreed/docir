@@ -91,10 +91,12 @@ fn test_parse_field_instruction_includetext() {
         parsed.kind,
         docir_core::ir::FieldKind::IncludeText
     ));
-    assert!(parsed
-        .args
-        .iter()
-        .any(|a| a.contains("C:") && a.contains("docs") && a.contains("file.docx")));
+    assert!(
+        parsed
+            .args
+            .iter()
+            .any(|a| a.contains("C:") && a.contains("docs") && a.contains("file.docx"))
+    );
     assert!(parsed.switches.iter().any(|s| s == "\\m"));
 }
 

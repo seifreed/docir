@@ -299,7 +299,7 @@ pub mod content_type {
 
 #[cfg(test)]
 mod tests {
-    use super::{content_type, ContentTypes};
+    use super::{ContentTypes, content_type};
     use docir_core::DocumentFormat;
 
     #[test]

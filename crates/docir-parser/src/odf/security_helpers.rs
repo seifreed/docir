@@ -2,8 +2,8 @@ use crate::xml_utils::{attr_value, attr_value_by_suffix, local_name};
 use docir_core::ir::IRNode;
 use docir_core::security::{MacroModule, MacroModuleType, MacroProject};
 use docir_core::visitor::IrStore;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 use super::manifest::OdfManifestEntry;
 
@@ -17,10 +17,10 @@ pub(crate) fn build_odf_macro_project(
 ) -> Option<MacroProject> {
     let mut module_paths = Vec::new();
     for entry in manifest_entries {
-        if let Some(media) = entry.media_type.as_deref() {
-            if media.contains("script") || media.contains("basic") {
-                module_paths.push(entry.path.clone());
-            }
+        if let Some(media) = entry.media_type.as_deref()
+            && (media.contains("script") || media.contains("basic"))
+        {
+            module_paths.push(entry.path.clone());
         }
     }
     for name in file_names {
@@ -67,10 +67,10 @@ pub(crate) fn scan_script_links(xml: &str) -> Vec<String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"script" {
-                    if let Some(href) = attr_value_by_suffix(&e, &[b":href"]) {
-                        links.push(href);
-                    }
+                if local_name(e.name().as_ref()) == b"script"
+                    && let Some(href) = attr_value_by_suffix(&e, &[b":href"])
+                {
+                    links.push(href);
                 }
             }
             Ok(Event::Eof) => break,
@@ -99,10 +99,10 @@ pub(crate) fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSign
                     }
                 }
                 b"DigestMethod" => {
-                    if let Some(sig) = current.as_mut() {
-                        if let Some(alg) = attr_value(&e, b"Algorithm") {
-                            sig.digest_methods.push(alg);
-                        }
+                    if let Some(sig) = current.as_mut()
+                        && let Some(alg) = attr_value(&e, b"Algorithm")
+                    {
+                        sig.digest_methods.push(alg);
                     }
                 }
                 _ => {}
@@ -114,10 +114,10 @@ pub(crate) fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSign
                     }
                 }
                 b"DigestMethod" => {
-                    if let Some(sig) = current.as_mut() {
-                        if let Some(alg) = attr_value(&e, b"Algorithm") {
-                            sig.digest_methods.push(alg);
-                        }
+                    if let Some(sig) = current.as_mut()
+                        && let Some(alg) = attr_value(&e, b"Algorithm")
+                    {
+                        sig.digest_methods.push(alg);
                     }
                 }
                 _ => {}
@@ -134,10 +134,10 @@ pub(crate) fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSign
                 }
             }
             Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"Signature" {
-                    if let Some(sig) = current.take() {
-                        sigs.push(sig);
-                    }
+                if local_name(e.name().as_ref()) == b"Signature"
+                    && let Some(sig) = current.take()
+                {
+                    sigs.push(sig);
                 }
             }
             Ok(Event::Eof) => break,

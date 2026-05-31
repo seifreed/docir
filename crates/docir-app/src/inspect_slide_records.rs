@@ -1,8 +1,8 @@
 use crate::io_support::with_file_bytes;
 use crate::{AppResult, ParserConfig};
-use docir_parser::ole::Cfb;
-use docir_parser::ppt_records::{read_ppt_records, PptRecordScan};
 use docir_parser::ParseError as ParserParseError;
+use docir_parser::ole::Cfb;
+use docir_parser::ppt_records::{PptRecordScan, read_ppt_records};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -186,10 +186,12 @@ mod tests {
         assert_eq!(inspection.record_count, 3);
         assert_eq!(inspection.container_record_count, 2);
         assert_eq!(inspection.max_depth, 2);
-        assert!(inspection
-            .depth_counts
-            .iter()
-            .any(|entry| entry.bucket == "depth:2"));
+        assert!(
+            inspection
+                .depth_counts
+                .iter()
+                .any(|entry| entry.bucket == "depth:2")
+        );
     }
 
     #[test]
@@ -205,14 +207,18 @@ mod tests {
         ]);
         let inspection = inspect_slide_records_bytes(&bytes).expect("inspect");
         assert_eq!(inspection.max_depth, 2);
-        assert!(inspection
-            .record_type_counts
-            .iter()
-            .any(|entry| entry.bucket == "0x03FF:Environment"));
-        assert!(inspection
-            .record_type_counts
-            .iter()
-            .any(|entry| entry.bucket == "0x03FA:TextCharsAtom"));
+        assert!(
+            inspection
+                .record_type_counts
+                .iter()
+                .any(|entry| entry.bucket == "0x03FF:Environment")
+        );
+        assert!(
+            inspection
+                .record_type_counts
+                .iter()
+                .any(|entry| entry.bucket == "0x03FA:TextCharsAtom")
+        );
     }
 
     #[test]

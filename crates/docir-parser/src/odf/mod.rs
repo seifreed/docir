@@ -17,8 +17,8 @@ use docir_core::ir::{
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use std::io::{Read, Seek};
 
 mod builder;
@@ -50,8 +50,8 @@ use formula::evaluate_ods_formulas;
 use io::{collect_manifest_index, collect_shared_parts};
 use limits::{OdfAtomicLimits, OdfLimitCounter, OdfLimits};
 use manifest::{
-    encrypted_manifest_entries, format_odf_encryption_metadata, is_manifest_entry_encrypted,
-    parse_manifest, OdfEncryptionData, OdfManifestEntry,
+    OdfEncryptionData, OdfManifestEntry, encrypted_manifest_entries,
+    format_odf_encryption_metadata, is_manifest_entry_encrypted, parse_manifest,
 };
 use ods::{parse_ods_table, parse_ods_table_fast};
 use paragraph::parse_paragraph;

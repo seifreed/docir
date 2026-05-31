@@ -61,12 +61,16 @@ fn parse_rtf_emits_style_runs_in_nested_groups() -> Result<(), ParseError> {
         .collect();
 
     assert!(run_styles.len() >= 2);
-    assert!(run_styles
-        .iter()
-        .any(|(_, bold, _)| bold == &Some(true) && bold.is_some()));
-    assert!(run_styles
-        .iter()
-        .any(|(_, _, italic)| italic == &Some(true) && italic.is_some()));
+    assert!(
+        run_styles
+            .iter()
+            .any(|(_, bold, _)| bold == &Some(true) && bold.is_some())
+    );
+    assert!(
+        run_styles
+            .iter()
+            .any(|(_, _, italic)| italic == &Some(true) && italic.is_some())
+    );
 
     Ok(())
 }

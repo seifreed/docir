@@ -98,11 +98,7 @@ fn local_key_with_index(
         candidate = format!("{base}#{counter}");
     }
     used.insert(candidate.clone());
-    if candidate == base {
-        base
-    } else {
-        candidate
-    }
+    if candidate == base { base } else { candidate }
 }
 
 fn intrinsic_key(node: &IRNode, _store: &IrStore) -> Option<String> {

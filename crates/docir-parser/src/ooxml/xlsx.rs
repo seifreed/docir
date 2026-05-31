@@ -2,11 +2,11 @@
 
 use crate::diagnostics::push_warning;
 use crate::error::ParseError;
-use crate::ooxml::relationships::{rel_type, Relationship, Relationships};
+use crate::ooxml::relationships::{Relationship, Relationships, rel_type};
 use docir_core::ir::{
-    parse_cell_reference, Cell, ColumnDefinition, ConditionalFormat, Document, IRNode,
-    MergedCellRange, PivotCache, Shape, ShapeType, SheetComment, SheetKind, SheetState, Worksheet,
-    WorksheetDrawing,
+    Cell, ColumnDefinition, ConditionalFormat, Document, IRNode, MergedCellRange, PivotCache,
+    Shape, ShapeType, SheetComment, SheetKind, SheetState, Worksheet, WorksheetDrawing,
+    parse_cell_reference,
 };
 use docir_core::security::{ExternalRefType, ExternalReference};
 use docir_core::types::{NodeId, SourceSpan};

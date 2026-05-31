@@ -290,9 +290,10 @@ mod tests {
         )
         .expect("diff should succeed");
 
-        assert!(diff
-            .modified
-            .iter()
-            .any(|m| m.change_kind == ChangeKind::Content));
+        assert!(
+            diff.modified
+                .iter()
+                .any(|m| m.change_kind == ChangeKind::Content)
+        );
     }
 }

@@ -2,8 +2,8 @@ use crate::error::ParseError;
 use crate::xml_utils::{attr_each, local_name, read_event};
 use docir_core::ir::{WebExtension, WebExtensionProperty, WebExtensionTaskpane};
 use docir_core::types::SourceSpan;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 type AttrList = Vec<(Vec<u8>, String)>;
 
@@ -75,10 +75,10 @@ pub fn parse_web_extension_taskpanes(
                 let local = local_name(&name);
                 if local == b"taskpane" {
                     current = Some(new_taskpane(path, &e));
-                } else if local == b"webextensionref" {
-                    if let Some(pane) = current.as_mut() {
-                        apply_webextension_ref_attrs(pane, &collect_local_attrs(&e));
-                    }
+                } else if local == b"webextensionref"
+                    && let Some(pane) = current.as_mut()
+                {
+                    apply_webextension_ref_attrs(pane, &collect_local_attrs(&e));
                 }
             }
             Event::Empty(e) => {
@@ -86,19 +86,19 @@ pub fn parse_web_extension_taskpanes(
                 let local = local_name(&name);
                 if local == b"taskpane" {
                     panes.push(new_taskpane(path, &e));
-                } else if local == b"webextensionref" {
-                    if let Some(pane) = current.as_mut() {
-                        apply_webextension_ref_attrs(pane, &collect_local_attrs(&e));
-                    }
+                } else if local == b"webextensionref"
+                    && let Some(pane) = current.as_mut()
+                {
+                    apply_webextension_ref_attrs(pane, &collect_local_attrs(&e));
                 }
             }
             Event::End(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
-                if local == b"taskpane" {
-                    if let Some(pane) = current.take() {
-                        panes.push(pane);
-                    }
+                if local == b"taskpane"
+                    && let Some(pane) = current.take()
+                {
+                    panes.push(pane);
                 }
             }
             Event::Eof => break,

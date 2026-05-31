@@ -4,12 +4,12 @@ mod helpers_parse_events_changes;
 #[path = "helpers_parse_events_tables.rs"]
 mod helpers_parse_events_tables;
 use crate::odf::{
-    limits::OdfLimitCounter, presentation_helpers::classify_media_shape,
-    utils::parse_frame_transform, OdfReader,
+    OdfReader, limits::OdfLimitCounter, presentation_helpers::classify_media_shape,
+    utils::parse_frame_transform,
 };
 use crate::xml_utils::{
-    attr_value_by_suffix, local_name, scan_xml_events_until_end, scan_xml_events_with_reader,
-    xml_error, XmlScanControl,
+    XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events_until_end,
+    scan_xml_events_with_reader, xml_error,
 };
 use docir_core::ir::*;
 use docir_core::types::*;
@@ -38,14 +38,12 @@ pub(crate) fn parse_notes(reader: &mut OdfReader<'_>) -> Result<Option<String>, 
     let mut text = String::new();
     scan_xml_events_with_reader(reader, &mut buf, ODF_CONTENT_XML, |reader, event| {
         match event {
-            Event::Start(e) => {
-                if local_name(e.name().as_ref()) == b"p" {
-                    let para = parse_text_element(reader, e.name().as_ref())?;
-                    if !text.is_empty() {
-                        text.push('\n');
-                    }
-                    text.push_str(&para);
+            Event::Start(e) if local_name(e.name().as_ref()) == b"p" => {
+                let para = parse_text_element(reader, e.name().as_ref())?;
+                if !text.is_empty() {
+                    text.push('\n');
                 }
+                text.push_str(&para);
             }
             Event::End(e) if local_name(e.name().as_ref()) == b"notes" => {
                 return Ok(XmlScanControl::Break);
@@ -108,10 +106,10 @@ pub(crate) fn parse_ods_conditional_formatting(
                 }
                 depth = depth.saturating_add(1);
             }
-            Ok(Event::Empty(e)) => {
-                if depth == 1 && local_name(e.name().as_ref()) == b"conditional-format" {
-                    cf.rules.push(build_ods_conditional_rule(&e));
-                }
+            Ok(Event::Empty(e))
+                if depth == 1 && local_name(e.name().as_ref()) == b"conditional-format" =>
+            {
+                cf.rules.push(build_ods_conditional_rule(&e));
             }
             Ok(Event::End(e)) => {
                 if local_name(e.name().as_ref()) == b"conditional-formatting" && depth == 1 {

@@ -5,14 +5,14 @@ use crate::format::FormatParser;
 use crate::input::read_all_with_limit;
 use crate::parse_utils::finalize_and_normalize;
 use crate::parser::{
-    run_parser_pipeline, NormalizeStage, ParseStage, ParsedDocument, ParserConfig, PostprocessStage,
+    NormalizeStage, ParseStage, ParsedDocument, ParserConfig, PostprocessStage, run_parser_pipeline,
 };
 use docir_core::ir::IRNode;
 use docir_core::types::DocumentFormat;
 use docir_core::visitor::IrStore;
 use std::io::{Read, Seek};
 
-use super::{is_rtf_bytes, parse_rtf, RtfCursor, RtfParseContext};
+use super::{RtfCursor, RtfParseContext, is_rtf_bytes, parse_rtf};
 
 /// Parser for RTF documents.
 pub struct RtfParser {

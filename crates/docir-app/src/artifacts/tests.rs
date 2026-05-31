@@ -1,6 +1,6 @@
 use super::*;
 use crate::artifacts::ole::parse_ole10_native;
-use crate::{test_support::build_test_cfb, DocirApp, ParserConfig};
+use crate::{DocirApp, ParserConfig, test_support::build_test_cfb};
 use docir_core::ExtractedArtifactKind;
 use std::io::{Cursor, Write};
 use zip::write::SimpleFileOptions;
@@ -94,15 +94,19 @@ fn extract_artifacts_finds_ooxml_embedding_and_payload() {
         },
     );
 
-    assert!(bundle
-        .manifest
-        .artifacts
-        .iter()
-        .any(|artifact| artifact.kind == ExtractedArtifactKind::OleObject));
-    assert!(bundle
-        .payloads
-        .iter()
-        .any(|payload| payload.relative_path.starts_with("raw/")));
+    assert!(
+        bundle
+            .manifest
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.kind == ExtractedArtifactKind::OleObject)
+    );
+    assert!(
+        bundle
+            .payloads
+            .iter()
+            .any(|payload| payload.relative_path.starts_with("raw/"))
+    );
 }
 
 #[test]
@@ -129,22 +133,28 @@ fn extract_artifacts_finds_legacy_cfb_payload() {
         &ArtifactExtractionOptions::default(),
     );
 
-    assert!(bundle
-        .manifest
-        .artifacts
-        .iter()
-        .any(|artifact| artifact.kind == ExtractedArtifactKind::OleObject));
-    assert!(bundle
-        .manifest
-        .artifacts
-        .iter()
-        .any(|artifact| artifact.kind == ExtractedArtifactKind::OleObject
-            && artifact.start_sector.is_some()));
-    assert!(bundle
-        .manifest
-        .artifacts
-        .iter()
-        .any(|artifact| artifact.kind == ExtractedArtifactKind::OleNativePayload));
+    assert!(
+        bundle
+            .manifest
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.kind == ExtractedArtifactKind::OleObject)
+    );
+    assert!(
+        bundle
+            .manifest
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.kind == ExtractedArtifactKind::OleObject
+                && artifact.start_sector.is_some())
+    );
+    assert!(
+        bundle
+            .manifest
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.kind == ExtractedArtifactKind::OleNativePayload)
+    );
 }
 
 #[test]

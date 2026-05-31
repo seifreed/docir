@@ -1,7 +1,7 @@
 use super::{
-    enforce_input_size, formats, is_hwpx_mimetype, is_ole_container, is_rtf_bytes,
-    read_all_with_limit, run_parser_pipeline, NormalizeStage, OoxmlParser, ParseError, ParseStage,
-    ParsedDocument, ParserConfig, PostprocessStage, Read, SecureZipReader, Seek, SeekFrom,
+    NormalizeStage, OoxmlParser, ParseError, ParseStage, ParsedDocument, ParserConfig,
+    PostprocessStage, Read, SecureZipReader, Seek, SeekFrom, enforce_input_size, formats,
+    is_hwpx_mimetype, is_ole_container, is_rtf_bytes, read_all_with_limit, run_parser_pipeline,
 };
 use crate::legacy_office::probe_legacy_office_format;
 use crate::parse_utils::is_zip_container;

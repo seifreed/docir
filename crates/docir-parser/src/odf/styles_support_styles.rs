@@ -1,7 +1,7 @@
-use super::super::{parse_text_alignment, Style, StyleSet, StyleType};
+use super::super::{Style, StyleSet, StyleType, parse_text_alignment};
 use crate::xml_utils::{attr_value_by_suffix, local_name};
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 pub(crate) fn parse_styles(xml: &str) -> Option<StyleSet> {
     let mut reader = Reader::from_str(xml);
@@ -74,10 +74,10 @@ pub(crate) fn parse_master_pages(xml: &str) -> Vec<String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"master-page" {
-                    if let Some(name) = attr_value_by_suffix(&e, &[b":name"]) {
-                        out.push(name);
-                    }
+                if local_name(e.name().as_ref()) == b"master-page"
+                    && let Some(name) = attr_value_by_suffix(&e, &[b":name"])
+                {
+                    out.push(name);
                 }
             }
             Ok(Event::Eof) => break,
@@ -97,10 +97,10 @@ pub(crate) fn parse_page_layouts(xml: &str) -> Vec<String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"page-layout" {
-                    if let Some(name) = attr_value_by_suffix(&e, &[b":name"]) {
-                        out.push(name);
-                    }
+                if local_name(e.name().as_ref()) == b"page-layout"
+                    && let Some(name) = attr_value_by_suffix(&e, &[b":name"])
+                {
+                    out.push(name);
                 }
             }
             Ok(Event::Eof) => break,
@@ -137,13 +137,13 @@ fn build_style_from_start(start: &BytesStart<'_>, is_default: bool) -> Option<St
         paragraph_props: None,
         table_props: None,
     };
-    if let Some(family) = attr_value_by_suffix(start, &[b":family"]) {
-        if family == "paragraph" || family == "text" {
-            style.is_default = is_default
-                || attr_value_by_suffix(start, &[b":default"])
-                    .map(|v| v == "true")
-                    .unwrap_or(false);
-        }
+    if let Some(family) = attr_value_by_suffix(start, &[b":family"])
+        && (family == "paragraph" || family == "text")
+    {
+        style.is_default = is_default
+            || attr_value_by_suffix(start, &[b":default"])
+                .map(|v| v == "true")
+                .unwrap_or(false);
     }
     Some(style)
 }
@@ -187,10 +187,8 @@ fn parse_style_properties(reader: &mut Reader<&[u8]>, style: &mut Style, end_nam
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == end_name {
-                    break;
-                }
+            Ok(Event::End(e)) if e.name().as_ref() == end_name => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(_) => break,

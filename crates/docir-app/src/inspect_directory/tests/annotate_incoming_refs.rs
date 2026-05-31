@@ -1,6 +1,6 @@
 use super::{
-    annotate_incoming_references, build_anomaly_severity_counts, build_dead_reference_counts,
-    DirectoryEntry,
+    DirectoryEntry, annotate_incoming_references, build_anomaly_severity_counts,
+    build_dead_reference_counts,
 };
 
 #[test]
@@ -109,14 +109,16 @@ fn annotate_incoming_references_marks_unreferenced_and_multi_referenced_entries(
     let a = entries.iter().find(|entry| entry.entry_index == 1).unwrap();
     let b = entries.iter().find(|entry| entry.entry_index == 2).unwrap();
     assert_eq!(a.incoming_reference_count, 3);
-    assert!(a
-        .anomaly_tags
-        .iter()
-        .any(|tag| tag == "multi-referenced-entry"));
-    assert!(b
-        .anomaly_tags
-        .iter()
-        .any(|tag| tag == "unreferenced-live-entry"));
+    assert!(
+        a.anomaly_tags
+            .iter()
+            .any(|tag| tag == "multi-referenced-entry")
+    );
+    assert!(
+        b.anomaly_tags
+            .iter()
+            .any(|tag| tag == "unreferenced-live-entry")
+    );
 }
 
 #[test]
@@ -226,14 +228,16 @@ fn annotate_incoming_references_marks_unreachable_and_incoming_source_quality() 
     assert_eq!(live.incoming_reference_count, 1);
     assert_eq!(live.incoming_normal_reference_count, 0);
     assert_eq!(live.incoming_anomalous_reference_count, 1);
-    assert!(live
-        .anomaly_tags
-        .iter()
-        .any(|tag| tag == "unreachable-live-entry"));
-    assert!(live
-        .anomaly_tags
-        .iter()
-        .any(|tag| tag == "incoming-from-anomalous-entry"));
+    assert!(
+        live.anomaly_tags
+            .iter()
+            .any(|tag| tag == "unreachable-live-entry")
+    );
+    assert!(
+        live.anomaly_tags
+            .iter()
+            .any(|tag| tag == "incoming-from-anomalous-entry")
+    );
 }
 
 #[test]
@@ -448,16 +452,22 @@ fn annotate_incoming_references_marks_mixed_cycles_and_dead_sources() {
     let live = entries.iter().find(|entry| entry.entry_index == 1).unwrap();
     assert!(live.short_cycles.iter().any(|tag| tag == "mixed-2-cycle"));
     let dead_counts = build_dead_reference_counts(&entries);
-    assert!(dead_counts
-        .iter()
-        .any(|entry| entry.bucket == "dead-reference:state:orphaned" && entry.count == 1));
-    assert!(dead_counts
-        .iter()
-        .any(|entry| entry.bucket == "dead-reference:source-type:stream" && entry.count == 1));
+    assert!(
+        dead_counts
+            .iter()
+            .any(|entry| entry.bucket == "dead-reference:state:orphaned" && entry.count == 1)
+    );
+    assert!(
+        dead_counts
+            .iter()
+            .any(|entry| entry.bucket == "dead-reference:source-type:stream" && entry.count == 1)
+    );
     let severity_counts = build_anomaly_severity_counts(&entries);
-    assert!(severity_counts
-        .iter()
-        .any(|entry| entry.bucket == "high" && entry.count >= 1));
+    assert!(
+        severity_counts
+            .iter()
+            .any(|entry| entry.bucket == "high" && entry.count >= 1)
+    );
 }
 
 #[test]

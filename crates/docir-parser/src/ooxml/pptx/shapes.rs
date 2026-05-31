@@ -1,6 +1,6 @@
 #[cfg(test)]
 use super::ShapeType;
-use super::{map_shape_type, parse_transform, ParseError, Reader, Shape};
+use super::{ParseError, Reader, Shape, map_shape_type, parse_transform};
 use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
 use quick_xml::events::{BytesStart, Event};
 
@@ -21,15 +21,11 @@ pub(super) fn parse_shape_properties(
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"prstGeom" {
-                    apply_preset_geometry(&e, shape);
-                }
+            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"prstGeom" => {
+                apply_preset_geometry(&e, shape);
             }
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"spPr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"spPr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {

@@ -1,6 +1,6 @@
 use super::{
-    hex, parse_chart_data, parse_smartart_part, ContentTypes, DocumentFormat, IRNode, IrStore,
-    MediaAsset, NodeId, OoxmlParser, PackageReader, ParseError, Relationships, SourceSpan,
+    ContentTypes, DocumentFormat, IRNode, IrStore, MediaAsset, NodeId, OoxmlParser, PackageReader,
+    ParseError, Relationships, SourceSpan, hex, parse_chart_data, parse_smartart_part,
 };
 use crate::ooxml::shared as ooxml_shared;
 

@@ -1,11 +1,11 @@
 //! Grep-like semantic search (text contains).
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
 use crate::cli::PrettyOutputOpts;
-use crate::commands::query::{run_with_filters, QueryFilters};
+use crate::commands::query::{QueryFilters, run_with_filters};
 
 /// Public API entrypoint: run.
 pub fn run(

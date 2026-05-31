@@ -1,4 +1,4 @@
-use docir_parser::ole::{is_ole_container, Cfb};
+use docir_parser::ole::{Cfb, is_ole_container};
 
 use super::helpers::empty_to_none;
 

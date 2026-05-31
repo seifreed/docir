@@ -1,4 +1,4 @@
-use super::{build_media_asset, OdfManifestEntry};
+use super::{OdfManifestEntry, build_media_asset};
 use crate::diagnostics::push_info;
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{Document, ExtensionPart, ExtensionPartKind, IRNode};
@@ -49,12 +49,12 @@ pub(super) fn collect_shared_parts<R: Read + Seek>(
         store.insert(IRNode::ExtensionPart(part));
         doc.add_shared_part(part_id);
 
-        if let Some(media) = media_type.as_deref() {
-            if let Some(asset) = build_media_asset(path, media, size_bytes) {
-                let asset_id = asset.id;
-                store.insert(IRNode::MediaAsset(asset));
-                doc.add_shared_part(asset_id);
-            }
+        if let Some(media) = media_type.as_deref()
+            && let Some(asset) = build_media_asset(path, media, size_bytes)
+        {
+            let asset_id = asset.id;
+            store.insert(IRNode::MediaAsset(asset));
+            doc.add_shared_part(asset_id);
         }
     }
     file_names

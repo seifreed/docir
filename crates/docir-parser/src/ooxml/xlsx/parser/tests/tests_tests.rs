@@ -1,8 +1,8 @@
 use crate::ooxml::xlsx::{
     parse_column, parse_conditional_formatting, parse_merge_cell, parse_threaded_comments,
 };
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 #[test]
 fn test_parse_column_and_merge_helpers() {
     let mut columns = std::collections::HashMap::new();

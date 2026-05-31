@@ -1,7 +1,7 @@
 use super::{
+    IRNode, NodeId, ParseError, Relationships, SheetComment, SourceSpan, XlsxParser,
     parse_pivot_table_definition, parse_sheet_comments, parse_table_definition,
-    parse_threaded_comments, rel_type, IRNode, NodeId, ParseError, Relationships, SheetComment,
-    SourceSpan, XlsxParser,
+    parse_threaded_comments, rel_type,
 };
 use crate::ooxml::part_utils::read_xml_part_and_rels;
 use crate::zip_handler::PackageReader;

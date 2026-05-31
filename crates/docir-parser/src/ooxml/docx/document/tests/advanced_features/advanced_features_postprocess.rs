@@ -1,5 +1,5 @@
 use super::*;
-use crate::ooxml::relationships::{rel_type, Relationship, TargetMode};
+use crate::ooxml::relationships::{Relationship, TargetMode, rel_type};
 use docir_core::ir::RevisionType;
 #[test]
 fn test_parse_sdt_block_collects_paragraph_table_and_nested_sdt() {

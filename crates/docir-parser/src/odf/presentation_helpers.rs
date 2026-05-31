@@ -5,20 +5,20 @@ use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 #[path = "presentation_helpers_utils.rs"]
 mod presentation_helpers_utils;
 use super::{
-    parse_frame_transform, read_event, ChartData, IRNode, IrStore, MediaAsset, MediaType, NodeId,
-    OdfReader, ParseError, Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeType, Slide,
-    SlideAnimation, SlideTransition, SourceSpan,
+    ChartData, IRNode, IrStore, MediaAsset, MediaType, NodeId, OdfReader, ParseError, Shape,
+    ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeType, Slide, SlideAnimation, SlideTransition,
+    SourceSpan, parse_frame_transform, read_event,
 };
 #[path = "presentation_helpers_frame.rs"]
 mod presentation_helpers_frame;
 pub(crate) use presentation_helpers_frame::classify_media_shape;
 pub(crate) use presentation_helpers_frame::{
-    parse_frame_shape_empty, parse_frame_shape_start, FrameShapeState,
+    FrameShapeState, parse_frame_shape_empty, parse_frame_shape_start,
 };
 use presentation_helpers_utils::{classify_media_type, parse_duration_ms};
-use quick_xml::events::{BytesStart, Event};
 #[cfg(test)]
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 pub(super) fn parse_draw_page(
     reader: &mut OdfReader<'_>,
@@ -43,10 +43,8 @@ pub(super) fn parse_draw_page(
         match read_event(reader, &mut buf, "content.xml")? {
             Event::Start(e) => handle_draw_page_start_event(reader, &e, store, &mut state)?,
             Event::Empty(e) => handle_draw_page_empty_event(reader, &e, store, &mut state)?,
-            Event::End(e) => {
-                if local_name(e.name().as_ref()) == b"page" {
-                    break;
-                }
+            Event::End(e) if local_name(e.name().as_ref()) == b"page" => {
+                break;
             }
             Event::Eof => break,
             _ => {}
@@ -137,10 +135,8 @@ pub(super) fn parse_draw_frame_presentation(
         match read_event(reader, &mut buf, "content.xml")? {
             Event::Start(e) => handle_draw_frame_start_event(reader, &e, store, &mut state)?,
             Event::Empty(e) => parse_frame_shape_empty(&e, store, &mut state.frame),
-            Event::End(e) => {
-                if local_name(e.name().as_ref()) == b"frame" {
-                    break;
-                }
+            Event::End(e) if local_name(e.name().as_ref()) == b"frame" => {
+                break;
             }
             Event::Eof => break,
             _ => {}
@@ -214,26 +210,22 @@ fn parse_shape_text(
     let mut paragraphs = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                if local_name(e.name().as_ref()) == b"p" {
-                    let text = parse_text_element(reader, e.name().as_ref())?;
-                    let run = ShapeTextRun {
-                        text,
-                        bold: None,
-                        italic: None,
-                        font_size: None,
-                        font_family: None,
-                    };
-                    paragraphs.push(ShapeTextParagraph {
-                        runs: vec![run],
-                        alignment: None,
-                    });
-                }
+            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"p" => {
+                let text = parse_text_element(reader, e.name().as_ref())?;
+                let run = ShapeTextRun {
+                    text,
+                    bold: None,
+                    italic: None,
+                    font_size: None,
+                    font_family: None,
+                };
+                paragraphs.push(ShapeTextParagraph {
+                    runs: vec![run],
+                    alignment: None,
+                });
             }
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == end_tag {
-                    break;
-                }
+            Ok(Event::End(e)) if e.name().as_ref() == end_tag => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => return Err(xml_error("content.xml", e)),

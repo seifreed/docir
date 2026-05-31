@@ -47,13 +47,13 @@ impl OdfLimits {
     ) -> Result<(), ParseError> {
         let next = counter.get().saturating_add(add);
         counter.set(next);
-        if let Some(max) = limit {
-            if next > max {
-                return Err(ParseError::ResourceLimit(format!(
-                    "ODF max {} exceeded: {} (max: {})",
-                    label, next, max
-                )));
-            }
+        if let Some(max) = limit
+            && next > max
+        {
+            return Err(ParseError::ResourceLimit(format!(
+                "ODF max {} exceeded: {} (max: {})",
+                label, next, max
+            )));
         }
         Ok(())
     }

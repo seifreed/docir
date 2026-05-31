@@ -1,15 +1,15 @@
 use super::get_cell;
 use super::{
-    build_empty_zip, build_zip_with_entries, ParseError, Relationships, SheetKind, SheetState,
+    ParseError, Relationships, SheetKind, SheetState, build_empty_zip, build_zip_with_entries,
 };
 use crate::ooxml::xlsx::relationships::classify_relationship;
 use crate::ooxml::xlsx::workbook::{
-    auto_open_target_from_defined_name, parse_workbook_info, SheetInfo,
+    SheetInfo, auto_open_target_from_defined_name, parse_workbook_info,
 };
 use crate::ooxml::xlsx::{ShapeType, XlsxParser};
-use docir_core::ir::IRNode;
 use docir_core::CellError;
 use docir_core::CellValue;
+use docir_core::ir::IRNode;
 struct WorksheetDrawingFixture {
     sheet_xml: &'static str,
     drawing_xml: &'static str,

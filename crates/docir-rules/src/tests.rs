@@ -159,10 +159,12 @@ fn test_rule_profile_overrides() {
     let report = engine.run_with_profile(&parsed.store, parsed.root_id, &profile);
     assert!(!report.findings.iter().any(|f| f.rule_id == "SEC-002"));
     assert!(report.findings.iter().any(|f| f.rule_id == "SEC-010"));
-    assert!(report
-        .findings
-        .iter()
-        .any(|f| f.rule_id == "SEC-010" && f.severity == Severity::Critical));
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.rule_id == "SEC-010" && f.severity == Severity::Critical)
+    );
 }
 
 #[test]

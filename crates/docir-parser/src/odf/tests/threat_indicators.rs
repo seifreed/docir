@@ -49,14 +49,16 @@ fn test_odf_security_threat_indicators() {
     assert!(doc.security.macro_project.is_some());
     assert!(!doc.security.external_refs.is_empty());
     assert!(!doc.security.ole_objects.is_empty());
-    assert!(doc
-        .security
-        .threat_indicators
-        .iter()
-        .any(|i| i.indicator_type == ThreatIndicatorType::RemoteResource));
-    assert!(doc
-        .security
-        .threat_indicators
-        .iter()
-        .any(|i| i.indicator_type == ThreatIndicatorType::OleObject));
+    assert!(
+        doc.security
+            .threat_indicators
+            .iter()
+            .any(|i| i.indicator_type == ThreatIndicatorType::RemoteResource)
+    );
+    assert!(
+        doc.security
+            .threat_indicators
+            .iter()
+            .any(|i| i.indicator_type == ThreatIndicatorType::OleObject)
+    );
 }

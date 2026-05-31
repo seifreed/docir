@@ -2,8 +2,8 @@ use crate::error::ParseError;
 use crate::ooxml::docx::field::parse_field_instruction;
 use crate::xml_utils::XmlScanControl;
 use crate::xml_utils::{scan_xml_events_until_end, scan_xml_events_until_end_dispatch};
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 const DOC_XML_PATH: &str = "word/document.xml";
 

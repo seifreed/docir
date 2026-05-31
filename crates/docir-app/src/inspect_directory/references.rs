@@ -44,16 +44,15 @@ pub(super) fn collect_incoming_refs(
             ("right", entry.right_sibling),
             ("child", entry.child),
         ] {
-            if let Some(target) = pointer {
-                if let Some((_, source_state, source_entry_type, _, _, _)) =
+            if let Some(target) = pointer
+                && let Some((_, source_state, source_entry_type, _, _, _)) =
                     path_by_index.get(&entry.entry_index)
-                {
-                    incoming.entry(target).or_default().push((
-                        format!("{label}:{}#{}", entry.path, entry.entry_index),
-                        source_state == "normal",
-                        source_entry_type.clone(),
-                    ));
-                }
+            {
+                incoming.entry(target).or_default().push((
+                    format!("{label}:{}#{}", entry.path, entry.entry_index),
+                    source_state == "normal",
+                    source_entry_type.clone(),
+                ));
             }
         }
     }

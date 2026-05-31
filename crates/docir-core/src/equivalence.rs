@@ -20,10 +20,10 @@ impl IrSummary {
             let node_type = node.node_type();
             *summary.node_counts.entry(node_type).or_insert(0) += 1;
 
-            if let IRNode::Run(run) = node {
-                if !run.text.is_empty() {
-                    summary.run_texts.insert(run.text.clone());
-                }
+            if let IRNode::Run(run) = node
+                && !run.text.is_empty()
+            {
+                summary.run_texts.insert(run.text.clone());
             }
         }
         summary

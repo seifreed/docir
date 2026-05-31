@@ -1,6 +1,6 @@
 use super::{
-    scan_xml_events_until_end, Event, IRNode, NodeId, OdfLimitCounter, OdfReader, ParseError,
-    Table, TableCell, TableCellProperties, TableRow, XmlScanControl, ODF_CONTENT_XML,
+    Event, IRNode, NodeId, ODF_CONTENT_XML, OdfLimitCounter, OdfReader, ParseError, Table,
+    TableCell, TableCellProperties, TableRow, XmlScanControl, scan_xml_events_until_end,
 };
 use crate::odf::paragraph::parse_paragraph;
 use crate::xml_utils::{attr_value_by_suffix, is_end_event_local, local_name};
@@ -101,19 +101,19 @@ pub(super) fn parse_table_cell(
         ODF_CONTENT_XML,
         |event| is_end_event_local(event, b"table-cell"),
         |reader, event| {
-            if let Event::Start(e) = event {
-                if local_name(e.name().as_ref()) == b"p" {
-                    let paragraph_id = parse_paragraph(
-                        reader,
-                        e.name().as_ref(),
-                        None,
-                        None,
-                        store,
-                        &mut Vec::new(),
-                        limits,
-                    )?;
-                    cell.content.push(paragraph_id);
-                }
+            if let Event::Start(e) = event
+                && local_name(e.name().as_ref()) == b"p"
+            {
+                let paragraph_id = parse_paragraph(
+                    reader,
+                    e.name().as_ref(),
+                    None,
+                    None,
+                    store,
+                    &mut Vec::new(),
+                    limits,
+                )?;
+                cell.content.push(paragraph_id);
             }
             Ok(XmlScanControl::Continue)
         },

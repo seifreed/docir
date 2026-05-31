@@ -2,8 +2,8 @@ use crate::ParsedDocument;
 use docir_core::ir::IRNode;
 use docir_core::security::{ThreatIndicatorType, ThreatLevel};
 
-use super::helpers::boolean_or_count_indicator;
 use super::DocumentIndicator;
+use super::helpers::boolean_or_count_indicator;
 
 pub(super) struct EmbeddingIndicators {
     pub ole_evidence: Vec<String>,

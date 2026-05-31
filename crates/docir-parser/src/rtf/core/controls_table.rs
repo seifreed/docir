@@ -91,12 +91,12 @@ pub(super) fn handle_table_cell_property_controls(
             }
         }
         "clcbpat" => {
-            if let Some(index) = param {
-                if let Some(color) = color_from_index(ctx, index.max(0) as usize) {
-                    ctx.pending_cell_props
-                        .get_or_insert_with(TableCellProperties::default)
-                        .shading = Some(color);
-                }
+            if let Some(index) = param
+                && let Some(color) = color_from_index(ctx, index.max(0) as usize)
+            {
+                ctx.pending_cell_props
+                    .get_or_insert_with(TableCellProperties::default)
+                    .shading = Some(color);
             }
         }
         "clvertalt" => set_pending_cell_vertical_align(ctx, CellVerticalAlignment::Top),
@@ -132,11 +132,11 @@ pub(super) fn handle_table_border_controls(
             }
         }
         "brdrcf" => {
-            if let Some(index) = param {
-                if let Some(color) = color_from_index(ctx, index.max(0) as usize) {
-                    ctx.pending_border.color = Some(color);
-                    apply_border(ctx);
-                }
+            if let Some(index) = param
+                && let Some(color) = color_from_index(ctx, index.max(0) as usize)
+            {
+                ctx.pending_border.color = Some(color);
+                apply_border(ctx);
             }
         }
         "brdrt" => {

@@ -21,12 +21,11 @@ pub struct PartSpec {
 
 impl PartSpec {
     pub fn matches(&self, path: &str, content_type_value: Option<&str>) -> bool {
-        if let Some(ct) = self.content_type {
-            if let Some(actual) = content_type_value {
-                if actual != ct {
-                    return false;
-                }
-            }
+        if let Some(ct) = self.content_type
+            && let Some(actual) = content_type_value
+            && actual != ct
+        {
+            return false;
         }
         matches_pattern(path, self.pattern)
     }
@@ -95,9 +94,10 @@ mod tests {
     fn test_registry_includes_signature_and_customxml_props() {
         let docx = registry_for(DocumentFormat::WordProcessing);
         assert!(docx.iter().any(|p| p.pattern == "_xmlsignatures/*.xml"));
-        assert!(docx
-            .iter()
-            .any(|p| p.pattern == "_xmlsignatures/origin.sigs"));
+        assert!(
+            docx.iter()
+                .any(|p| p.pattern == "_xmlsignatures/origin.sigs")
+        );
         assert!(docx.iter().any(|p| p.pattern == "customXml/itemProps*.xml"));
     }
 }

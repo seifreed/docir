@@ -121,8 +121,8 @@ mod tests {
     use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
-        test_support::build_test_cfb, ArtifactInventory, ContainerKind, InventoryArtifact,
-        InventoryArtifactKind, ParserConfig,
+        ArtifactInventory, ContainerKind, InventoryArtifact, InventoryArtifactKind, ParserConfig,
+        test_support::build_test_cfb,
     };
     use std::fs;
 

@@ -1,10 +1,10 @@
 use super::IndicatorReport;
+use crate::ParsedDocument;
 use crate::inspect_directory_bytes;
 use crate::test_support::{
-    build_test_cfb, patch_test_cfb_directory_entry, patch_test_cfb_header_u32,
-    TestCfbDirectoryPatch,
+    TestCfbDirectoryPatch, build_test_cfb, patch_test_cfb_directory_entry,
+    patch_test_cfb_header_u32,
 };
-use crate::ParsedDocument;
 use docir_core::ir::{Document, IRNode};
 use docir_core::security::{
     ActiveXControl, DdeField, DdeFieldType, ExternalRefType, ExternalReference, MacroModule,
@@ -126,10 +126,12 @@ fn report_indicators_marks_absent_when_no_security_content_exists() {
 
     let report = IndicatorReport::from_parsed(&parsed);
     assert_eq!(report.overall_risk, ThreatLevel::None);
-    assert!(report
-        .indicators
-        .iter()
-        .all(|indicator| indicator.key == "format-container" || indicator.value == "absent"));
+    assert!(
+        report
+            .indicators
+            .iter()
+            .all(|indicator| indicator.key == "format-container" || indicator.value == "absent")
+    );
 }
 
 #[test]
@@ -159,14 +161,16 @@ fn report_indicators_includes_cfb_structural_anomalies_when_source_bytes_provide
     assert!(report.indicators.iter().any(|indicator| {
         indicator.key == "cfb-structural-score" && indicator.value == "medium"
     }));
-    assert!(report
-        .indicators
-        .iter()
-        .any(|indicator| { indicator.key == "cfb-directory-score" && indicator.value == "none" }));
-    assert!(report
-        .indicators
-        .iter()
-        .any(|indicator| { indicator.key == "cfb-sector-score" && indicator.value == "medium" }));
+    assert!(
+        report.indicators.iter().any(|indicator| {
+            indicator.key == "cfb-directory-score" && indicator.value == "none"
+        })
+    );
+    assert!(
+        report.indicators.iter().any(|indicator| {
+            indicator.key == "cfb-sector-score" && indicator.value == "medium"
+        })
+    );
 }
 
 #[test]
@@ -238,14 +242,17 @@ fn report_indicators_surface_specific_structural_classes() {
     assert!(report.indicators.iter().any(|indicator| {
         indicator.key == "cfb-main-stream-corruption" && indicator.value != "absent"
     }));
-    assert!(report
-        .indicators
-        .iter()
-        .any(|indicator| { indicator.key == "cfb-directory-score" && indicator.value != "none" }));
-    assert!(report
-        .indicators
-        .iter()
-        .any(|indicator| { indicator.key == "cfb-sector-score" && indicator.value != "none" }));
+    assert!(
+        report.indicators.iter().any(|indicator| {
+            indicator.key == "cfb-directory-score" && indicator.value != "none"
+        })
+    );
+    assert!(
+        report
+            .indicators
+            .iter()
+            .any(|indicator| { indicator.key == "cfb-sector-score" && indicator.value != "none" })
+    );
     assert!(report.indicators.iter().any(|indicator| {
         indicator.key == "cfb-dominant-anomaly-class"
             && matches!(indicator.value.as_str(), "shared-sector" | "invalid-start")
@@ -362,11 +369,15 @@ fn structural_indicator_taxonomy_prefixes_remain_stable() {
     assert!(evidence.iter().any(|value| value.starts_with("directory:")));
     assert!(evidence.iter().any(|value| value.starts_with("sector:")));
     assert!(evidence.iter().any(|value| value.starts_with("health:")));
-    assert!(evidence
-        .iter()
-        .any(|value| value.starts_with("objectpool:")));
+    assert!(
+        evidence
+            .iter()
+            .any(|value| value.starts_with("objectpool:"))
+    );
     assert!(evidence.iter().any(|value| value.starts_with("vba:")));
-    assert!(evidence
-        .iter()
-        .any(|value| value.starts_with("main-stream:")));
+    assert!(
+        evidence
+            .iter()
+            .any(|value| value.starts_with("main-stream:"))
+    );
 }

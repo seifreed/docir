@@ -1,7 +1,7 @@
 use super::super::super::{
-    attr_value, bool_from_val, span_from_reader, DocxParser, Field, ParagraphProperties,
+    DocxParser, Field, ParagraphProperties, attr_value, bool_from_val, span_from_reader,
 };
-use super::{parse_field_instruction, parse_run, DOC_XML_PATH};
+use super::{DOC_XML_PATH, parse_field_instruction, parse_run};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::relationships::TargetMode;
@@ -9,8 +9,8 @@ use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 use docir_core::ir::RunProperties;
 use docir_core::ir::{Hyperlink, NumberingInfo, UnderlineStyle, VerticalTextAlignment};
 use docir_core::types::NodeId;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 pub(crate) fn parse_numbering(
     reader: &mut Reader<&[u8]>,
@@ -31,10 +31,8 @@ pub(crate) fn parse_numbering(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"numPr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"numPr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -121,10 +119,8 @@ pub(crate) fn parse_run_properties(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"rPr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"rPr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -148,13 +144,13 @@ pub(crate) fn parse_hyperlink(
     if let Some(tooltip) = attr_value(start, b"w:tooltip") {
         link.tooltip = Some(tooltip);
     }
-    if let Some(rel_id) = attr_value_by_suffix(start, &[b":id"]) {
-        if let Some(rel) = rels.get(&rel_id) {
-            link.target = rel.target.clone();
-            link.is_external = rel.target_mode == TargetMode::External;
-            link.relationship_id = Some(rel_id.clone());
-            rel_id_opt = Some(rel_id);
-        }
+    if let Some(rel_id) = attr_value_by_suffix(start, &[b":id"])
+        && let Some(rel) = rels.get(&rel_id)
+    {
+        link.target = rel.target.clone();
+        link.is_external = rel.target_mode == TargetMode::External;
+        link.relationship_id = Some(rel_id.clone());
+        rel_id_opt = Some(rel_id);
     }
     if let Some(anchor) = attr_value(start, b"w:anchor") {
         if link.target.is_empty() {

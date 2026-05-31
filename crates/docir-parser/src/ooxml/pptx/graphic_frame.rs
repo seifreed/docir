@@ -2,8 +2,8 @@ use super::graphic_frame_support::{
     apply_graphic_data_shape_type, apply_non_visual_shape_props, capture_chart_rel, capture_ole_rel,
 };
 use super::{
-    parse_transform, BytesStart, ExternalRefType, ExternalReference, IRNode, NodeId, ParseError,
-    PptxParser, Reader, Relationships, Shape, ShapeType, TargetMode,
+    BytesStart, ExternalRefType, ExternalReference, IRNode, NodeId, ParseError, PptxParser, Reader,
+    Relationships, Shape, ShapeType, TargetMode, parse_transform,
 };
 use crate::xml_utils::local_name;
 use crate::zip_handler::PackageReader;
@@ -133,38 +133,38 @@ impl PptxParser {
             return Ok(());
         }
 
-        if let Some(rel_id) = state.chart_rel.as_ref() {
-            if let Some(rel) = relationships.get(rel_id) {
-                if shape.shape_type == ShapeType::Custom && rel.rel_type.contains("chart") {
-                    shape.shape_type = ShapeType::Chart;
-                }
-                shape.relationship_id = Some(rel_id.clone());
-                let resolved = if rel.target_mode == TargetMode::External {
-                    rel.target.clone()
-                } else {
-                    Relationships::resolve_target(slide_path, &rel.target)
+        if let Some(rel_id) = state.chart_rel.as_ref()
+            && let Some(rel) = relationships.get(rel_id)
+        {
+            if shape.shape_type == ShapeType::Custom && rel.rel_type.contains("chart") {
+                shape.shape_type = ShapeType::Chart;
+            }
+            shape.relationship_id = Some(rel_id.clone());
+            let resolved = if rel.target_mode == TargetMode::External {
+                rel.target.clone()
+            } else {
+                Relationships::resolve_target(slide_path, &rel.target)
+            };
+            shape.media_target = Some(resolved);
+            if rel.target_mode == TargetMode::External {
+                let ext_ref = ExternalReference::new(ExternalRefType::Other, &rel.target);
+                let ext_ref = ExternalReference {
+                    relationship_id: Some(rel_id.clone()),
+                    ..ext_ref
                 };
-                shape.media_target = Some(resolved);
-                if rel.target_mode == TargetMode::External {
-                    let ext_ref = ExternalReference::new(ExternalRefType::Other, &rel.target);
-                    let ext_ref = ExternalReference {
-                        relationship_id: Some(rel_id.clone()),
-                        ..ext_ref
-                    };
-                    let ext_id = ext_ref.id;
-                    self.store.insert(IRNode::ExternalReference(ext_ref));
-                    self.security_info.external_refs.push(ext_id);
-                } else {
-                    let chart_path = Relationships::resolve_target(slide_path, &rel.target);
-                    if zip.contains(&chart_path) {
-                        let chart_xml = zip.read_file_string(&chart_path)?;
-                        if let Some(chart_id) = crate::ooxml::shared::parse_chart_data(
-                            &chart_xml,
-                            &chart_path,
-                            &mut self.store,
-                        ) {
-                            self.chart_nodes.push(chart_id);
-                        }
+                let ext_id = ext_ref.id;
+                self.store.insert(IRNode::ExternalReference(ext_ref));
+                self.security_info.external_refs.push(ext_id);
+            } else {
+                let chart_path = Relationships::resolve_target(slide_path, &rel.target);
+                if zip.contains(&chart_path) {
+                    let chart_xml = zip.read_file_string(&chart_path)?;
+                    if let Some(chart_id) = crate::ooxml::shared::parse_chart_data(
+                        &chart_xml,
+                        &chart_path,
+                        &mut self.store,
+                    ) {
+                        self.chart_nodes.push(chart_id);
                     }
                 }
             }

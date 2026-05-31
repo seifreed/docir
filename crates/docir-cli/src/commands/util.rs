@@ -1,12 +1,12 @@
 //! Shared CLI helpers.
 
 use crate::cli::JsonOutputOpts;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use docir_app::{AppResult, ParserConfig};
 use docir_app::{DocirApp, ParsedDocument};
 use docir_core::types::{
-    parse_document_format as parse_core_document_format, parse_node_type as parse_core_node_type,
-    DocumentFormat, NodeId, NodeType,
+    DocumentFormat, NodeId, NodeType, parse_document_format as parse_core_document_format,
+    parse_node_type as parse_core_node_type,
 };
 use serde::Serialize;
 use std::fs;

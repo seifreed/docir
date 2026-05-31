@@ -24,7 +24,7 @@ pub use hash::sha256_hex;
 pub use indicators::*;
 /// Re-exports VBA and XLM signature helpers.
 pub use vba::{
+    AUTO_EXEC_PROCEDURES, DANGEROUS_XLM_FUNCTIONS, SUSPICIOUS_VBA_CALLS, VbaAnalysis,
     analyze_vba_source, contains_dangerous_xlm, is_auto_exec_procedure, is_dangerous_xlm_function,
-    scan_vba_source, VbaAnalysis, AUTO_EXEC_PROCEDURES, DANGEROUS_XLM_FUNCTIONS,
-    SUSPICIOUS_VBA_CALLS,
+    scan_vba_source,
 };

@@ -1,13 +1,13 @@
-use super::{build_empty_zip, Relationships, SheetKind, SheetState};
+use super::{Relationships, SheetKind, SheetState, build_empty_zip};
 use crate::ooxml::xlsx::workbook::SheetInfo;
 use crate::ooxml::xlsx::{
-    parse_calc_chain, parse_pivot_cache_records, parse_pivot_table_definition,
-    parse_sheet_comments, parse_styles, parse_table_definition, XlsxParser,
+    XlsxParser, parse_calc_chain, parse_pivot_cache_records, parse_pivot_table_definition,
+    parse_sheet_comments, parse_styles, parse_table_definition,
 };
+use docir_core::SpreadsheetStyles;
 use docir_core::ir::{Cell, IRNode};
 use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
-use docir_core::SpreadsheetStyles;
 #[test]
 fn test_parse_dialogsheet_kind() {
     let dialog_xml = r#"
@@ -264,11 +264,13 @@ fn assert_style_content(styles: &SpreadsheetStyles) {
             .and_then(|a| a.text_rotation),
         Some(45)
     );
-    assert!(styles.cell_xfs[0]
-        .alignment
-        .as_ref()
-        .map(|a| a.shrink_to_fit)
-        .unwrap_or(false));
+    assert!(
+        styles.cell_xfs[0]
+            .alignment
+            .as_ref()
+            .map(|a| a.shrink_to_fit)
+            .unwrap_or(false)
+    );
     assert_eq!(
         styles.cell_xfs[0]
             .protection

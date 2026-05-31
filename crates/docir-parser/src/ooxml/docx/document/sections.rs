@@ -4,8 +4,8 @@ use docir_core::ir::{
     LineNumberRestart, PageMargins, PageOrientation, SectionProperties, SectionType,
 };
 use docir_core::types::NodeId;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -42,10 +42,8 @@ pub(super) fn apply_section_refs(
                 b"textDirection" => apply_section_text_direction(&e, &mut properties),
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"sectPr" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"sectPr" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {

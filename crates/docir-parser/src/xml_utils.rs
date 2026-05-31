@@ -1,6 +1,6 @@
 use crate::error::ParseError;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::io::BufRead;

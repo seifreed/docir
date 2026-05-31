@@ -8,11 +8,11 @@ pub(crate) use styles_support_styles::{
 };
 
 #[cfg(test)]
+use crate::IrStore;
+#[cfg(test)]
 use crate::error::ParseError;
 #[cfg(test)]
 use crate::parser::ParserConfig;
-#[cfg(test)]
-use crate::IrStore;
 #[cfg(test)]
 use docir_core::ir::{IRNode, Style, StyleSet, StyleType};
 

@@ -1,9 +1,9 @@
 use crate::error::ParseError;
-use crate::xml_utils::{local_name, scan_xml_events, xml_error, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, xml_error};
 use docir_core::ir::{SharedStringItem, SharedStringTable};
 use docir_core::types::SourceSpan;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 pub(crate) fn parse_shared_strings_table(
     xml: &str,
@@ -41,25 +41,21 @@ pub(crate) fn parse_shared_strings_table(
                 }
                 _ => {}
             },
-            Event::Text(e) => {
-                if in_si && in_t {
-                    let text = e
-                        .unescape()
-                        .map_err(|err| xml_error("xl/sharedStrings.xml", err))?;
-                    current.push_str(&text);
-                    if in_run {
-                        current_run.push_str(&text);
-                    }
+            Event::Text(e) if in_si && in_t => {
+                let text = e
+                    .unescape()
+                    .map_err(|err| xml_error("xl/sharedStrings.xml", err))?;
+                current.push_str(&text);
+                if in_run {
+                    current_run.push_str(&text);
                 }
             }
             Event::End(e) => match local_name(e.name().as_ref()) {
                 b"t" => in_t = false,
-                b"r" => {
-                    if in_run {
-                        runs.push(current_run.clone());
-                        in_run = false;
-                        current_run.clear();
-                    }
+                b"r" if in_run => {
+                    runs.push(current_run.clone());
+                    in_run = false;
+                    current_run.clear();
                 }
                 b"si" => {
                     in_si = false;

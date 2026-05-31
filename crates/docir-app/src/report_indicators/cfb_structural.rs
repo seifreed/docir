@@ -2,8 +2,8 @@ use crate::severity::severity_to_threat_level;
 use crate::{inspect_directory_bytes, inspect_sectors_bytes};
 use docir_core::security::ThreatLevel;
 
-use super::helpers::boolean_or_count_indicator;
 use super::DocumentIndicator;
+use super::helpers::boolean_or_count_indicator;
 
 fn score_indicator(
     key: &str,

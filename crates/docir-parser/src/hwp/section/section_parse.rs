@@ -16,8 +16,8 @@ use docir_core::ir::{
 };
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 use section_parse_notes::{
     close_hwpx_note, finalize_note_paragraph, flush_hwpx_notes, push_hwpx_comment_reference,
     push_node_to_hwpx_context, start_hwpx_note,

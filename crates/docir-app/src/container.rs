@@ -4,7 +4,7 @@ use docir_parser::zip_handler::{SecureZipReader, ZipConfig};
 use serde::Serialize;
 use std::io::Cursor;
 
-use crate::inventory::{classify_container_kind, ContainerKind};
+use crate::inventory::{ContainerKind, classify_container_kind};
 
 /// Serializable dump of low-level container entries for analyst-facing inspection.
 #[derive(Debug, Clone, Serialize)]
@@ -215,7 +215,7 @@ fn classify_rtf_blob(blob: &[u8]) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{test_support::build_test_cfb, ParseMetrics, ParsedDocument};
+    use crate::{ParseMetrics, ParsedDocument, test_support::build_test_cfb};
     use docir_core::ir::{Document, IRNode};
     use docir_core::types::{DocumentFormat, SourceSpan};
     use docir_core::visitor::IrStore;
@@ -245,10 +245,11 @@ mod tests {
         let dump =
             ContainerDump::from_parsed_bytes(&parsed, &bytes, &ZipConfig::default()).expect("zip");
         assert_eq!(dump.container_kind, ContainerKind::ZipOoxml);
-        assert!(dump
-            .entries
-            .iter()
-            .any(|entry| entry.path == "word/document.xml"));
+        assert!(
+            dump.entries
+                .iter()
+                .any(|entry| entry.path == "word/document.xml")
+        );
     }
 
     #[test]
@@ -275,10 +276,11 @@ mod tests {
         let dump =
             ContainerDump::from_parsed_bytes(&parsed, &bytes, &ZipConfig::default()).expect("rtf");
         assert_eq!(dump.container_kind, ContainerKind::Rtf);
-        assert!(dump
-            .entries
-            .iter()
-            .any(|entry| entry.path == "rtf:/objdata/1"));
+        assert!(
+            dump.entries
+                .iter()
+                .any(|entry| entry.path == "rtf:/objdata/1")
+        );
     }
 
     fn build_test_cfb_fixture(entries: &[(&str, &[u8])]) -> Vec<u8> {

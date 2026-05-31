@@ -4,13 +4,13 @@ use super::SheetState;
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
-    dispatch_start_or_empty, local_name, reader_from_str, scan_xml_events_with_reader, xml_error,
-    XmlScanControl,
+    XmlScanControl, dispatch_start_or_empty, local_name, reader_from_str,
+    scan_xml_events_with_reader, xml_error,
 };
 use docir_core::ir::{DefinedName, WorkbookProperties};
 use docir_core::types::{NodeId, SourceSpan};
-use quick_xml::events::BytesStart;
 use quick_xml::Reader;
+use quick_xml::events::BytesStart;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SheetInfo {

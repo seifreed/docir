@@ -8,8 +8,8 @@ use std::collections::HashMap;
 
 use crate::error::ParseError;
 use crate::ole_header::{
-    parse_header, read_difat_chain, read_fat_table, read_mini_fat_table, END_OF_CHAIN, FAT_SECT,
-    FREE_SECT, SIGNATURE,
+    END_OF_CHAIN, FAT_SECT, FREE_SECT, SIGNATURE, parse_header, read_difat_chain, read_fat_table,
+    read_mini_fat_table,
 };
 use crate::zip_handler::PackageReader;
 
@@ -30,7 +30,7 @@ use directory::{
     collect_directory_slots, collect_entry_metadata, read_directory_entries_and_root_stream,
 };
 use stream::{collect_chain_with_terminal, read_stream_from_mini};
-use types::{collect_stream_entries, DirEntry};
+use types::{DirEntry, collect_stream_entries};
 
 /// Parsed CFB file with streams.
 pub struct Cfb {

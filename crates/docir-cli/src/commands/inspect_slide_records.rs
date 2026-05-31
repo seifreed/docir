@@ -1,7 +1,7 @@
 //! Inspect low-level legacy PPT binary records.
 
 use anyhow::Result;
-use docir_app::{inspect_slide_records_path, ParserConfig, SlideRecordInspection};
+use docir_app::{ParserConfig, SlideRecordInspection, inspect_slide_records_path};
 use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
@@ -83,8 +83,8 @@ mod tests {
     use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
-        test_support::build_test_cfb, ParserConfig, SlideRecordAnomaly, SlideRecordCount,
-        SlideRecordEntry, SlideRecordInspection,
+        ParserConfig, SlideRecordAnomaly, SlideRecordCount, SlideRecordEntry,
+        SlideRecordInspection, test_support::build_test_cfb,
     };
     use std::fs;
 

@@ -1,7 +1,7 @@
 use super::{
-    coverage, normalize_store, push_info, push_warning, utils, ContentTypes, Diagnostics,
-    DocumentFormat, HashMap, IRNode, IrStore, NodeId, OoxmlParser, ParseError, ParseMetrics,
-    SourceSpan,
+    ContentTypes, Diagnostics, DocumentFormat, HashMap, IRNode, IrStore, NodeId, OoxmlParser,
+    ParseError, ParseMetrics, SourceSpan, coverage, normalize_store, push_info, push_warning,
+    utils,
 };
 use crate::diagnostics::attach_diagnostics_if_any_to_store;
 use crate::zip_handler::PackageReader;
@@ -237,10 +237,10 @@ impl OoxmlParser {
                 continue;
             };
             for anim in &mut slide.animations {
-                if let Some(target) = anim.target.as_ref() {
-                    if let Some(id) = utils::resolve_media_asset(&media_by_path, target) {
-                        anim.media_asset = Some(id);
-                    }
+                if let Some(target) = anim.target.as_ref()
+                    && let Some(id) = utils::resolve_media_asset(&media_by_path, target)
+                {
+                    anim.media_asset = Some(id);
                 }
             }
         }

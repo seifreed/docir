@@ -1,11 +1,11 @@
-use super::{parse_block_until, DocxParser};
+use super::{DocxParser, parse_block_until};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::{attr_value, local_name, read_event};
 use docir_core::ir::GlossaryEntry;
 use docir_core::types::SourceSpan;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 pub(super) fn parse_doc_part(
     parser: &mut DocxParser,
@@ -31,10 +31,8 @@ pub(super) fn parse_doc_part(
                 }
                 _ => {}
             },
-            Event::End(e) => {
-                if local_name(e.name().as_ref()) == b"docPart" {
-                    break;
-                }
+            Event::End(e) if local_name(e.name().as_ref()) == b"docPart" => {
+                break;
             }
             Event::Eof => break,
             _ => {}
@@ -68,10 +66,8 @@ fn parse_doc_part_pr(
                 }
                 _ => {}
             },
-            Event::End(e) => {
-                if local_name(e.name().as_ref()) == b"docPartPr" {
-                    break;
-                }
+            Event::End(e) if local_name(e.name().as_ref()) == b"docPartPr" => {
+                break;
             }
             Event::Eof => break,
             _ => {}

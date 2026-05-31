@@ -1,6 +1,6 @@
 use super::{
-    text, BookmarkEnd, BookmarkStart, Field, FieldInstruction, FieldKind, IRNode, IrStore, NodeId,
-    NumberingInfo, OdfLimitCounter, OdfReader, ParseError,
+    BookmarkEnd, BookmarkStart, Field, FieldInstruction, FieldKind, IRNode, IrStore, NodeId,
+    NumberingInfo, OdfLimitCounter, OdfReader, ParseError, text,
 };
 use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 use quick_xml::events::{BytesStart, Event};
@@ -27,10 +27,8 @@ pub(crate) fn parse_paragraph(
                 let chunk = e.unescape().unwrap_or_default();
                 text.push_str(&chunk);
             }
-            Ok(Event::End(e)) => {
-                if e.name().as_ref() == end_name {
-                    break;
-                }
+            Ok(Event::End(e)) if e.name().as_ref() == end_name => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => return Err(xml_error("content.xml", e)),

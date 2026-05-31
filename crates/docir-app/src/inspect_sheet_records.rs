@@ -1,8 +1,8 @@
 use crate::io_support::with_file_bytes;
 use crate::{AppResult, ParserConfig};
-use docir_parser::ole::Cfb;
-use docir_parser::xls_records::{read_xls_records, XlsRecordScan, XlsSubstreamKind};
 use docir_parser::ParseError as ParserParseError;
+use docir_parser::ole::Cfb;
+use docir_parser::xls_records::{XlsRecordScan, XlsSubstreamKind, read_xls_records};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -185,14 +185,18 @@ mod tests {
         assert_eq!(inspection.workbook_stream, "Workbook");
         assert_eq!(inspection.record_count, 6);
         assert_eq!(inspection.substream_count, 2);
-        assert!(inspection
-            .substream_counts
-            .iter()
-            .any(|entry| entry.bucket == "0:workbook-globals"));
-        assert!(inspection
-            .substream_counts
-            .iter()
-            .any(|entry| entry.bucket == "1:worksheet"));
+        assert!(
+            inspection
+                .substream_counts
+                .iter()
+                .any(|entry| entry.bucket == "0:workbook-globals")
+        );
+        assert!(
+            inspection
+                .substream_counts
+                .iter()
+                .any(|entry| entry.bucket == "1:worksheet")
+        );
     }
 
     #[test]
@@ -219,10 +223,12 @@ mod tests {
         let bytes = build_test_cfb(&[("Book", &workbook)]);
         let inspection = inspect_sheet_records_bytes(&bytes).expect("inspect");
         assert_eq!(inspection.workbook_stream, "Book");
-        assert!(inspection
-            .substream_counts
-            .iter()
-            .any(|entry| entry.bucket == "0:chart"));
+        assert!(
+            inspection
+                .substream_counts
+                .iter()
+                .any(|entry| entry.bucket == "0:chart")
+        );
     }
 
     #[test]
@@ -244,14 +250,18 @@ mod tests {
         let bytes = build_test_cfb(&[("Workbook", &workbook)]);
         let inspection = inspect_sheet_records_bytes(&bytes).expect("inspect");
         assert_eq!(inspection.substream_count, 2);
-        assert!(inspection
-            .record_type_counts
-            .iter()
-            .any(|entry| entry.bucket == "0x0042:CODEPAGE"));
-        assert!(inspection
-            .record_type_counts
-            .iter()
-            .any(|entry| entry.bucket == "0x023E:WINDOW2"));
+        assert!(
+            inspection
+                .record_type_counts
+                .iter()
+                .any(|entry| entry.bucket == "0x0042:CODEPAGE")
+        );
+        assert!(
+            inspection
+                .record_type_counts
+                .iter()
+                .any(|entry| entry.bucket == "0x023E:WINDOW2")
+        );
     }
 
     #[test]

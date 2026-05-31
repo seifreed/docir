@@ -1,11 +1,11 @@
 use super::spreadsheet_chunks;
 use super::{
-    attach_diagnostics_if_any, build_odf_macro_project, collect_manifest_index,
-    collect_shared_parts, encrypted_manifest_entries, format_odf_encryption_metadata,
-    handle_content_xml, load_meta, parse_odf_signatures, parse_ods_named_ranges, push_entry,
-    scan_odf_filters, DefaultSecurityScanner, DiagnosticSeverity, Diagnostics, Document,
-    DocumentFormat, ExtensionPart, ExtensionPartKind, IRNode, IrStore, OdfManifestEntry, OdfParser,
-    ParseError, ParsedDocument, ParserConfig, SecureZipReader, SourceSpan,
+    DefaultSecurityScanner, DiagnosticSeverity, Diagnostics, Document, DocumentFormat,
+    ExtensionPart, ExtensionPartKind, IRNode, IrStore, OdfManifestEntry, OdfParser, ParseError,
+    ParsedDocument, ParserConfig, SecureZipReader, SourceSpan, attach_diagnostics_if_any,
+    build_odf_macro_project, collect_manifest_index, collect_shared_parts,
+    encrypted_manifest_entries, format_odf_encryption_metadata, handle_content_xml, load_meta,
+    parse_odf_signatures, parse_ods_named_ranges, push_entry, scan_odf_filters,
 };
 use super::{
     merge_styles, parse_master_pages, parse_odf_headers_footers, parse_page_layouts, parse_styles,
@@ -13,7 +13,7 @@ use super::{
 use crate::diagnostics::{push_info, push_warning};
 use crate::input::enforce_input_size;
 use crate::parse_utils::{finalize_document, init_document_state};
-use crate::parser::{run_parser_pipeline, NormalizeStage, ParseStage, PostprocessStage};
+use crate::parser::{NormalizeStage, ParseStage, PostprocessStage, run_parser_pipeline};
 use crate::security_scan::SecurityScanner;
 use std::io::{Read, Seek};
 
@@ -405,37 +405,37 @@ impl OdfParser {
             }
         }
 
-        if !inputs.fast_mode {
-            if let Some(xml) = inputs.content_xml {
-                if let Some(mut styles) = parse_styles(xml) {
-                    if let Some(doc_styles_id) = doc.styles {
-                        if let Some(IRNode::StyleSet(existing)) = store.get_mut(doc_styles_id) {
-                            merge_styles(existing, &mut styles);
-                        }
-                    } else {
-                        let style_id = styles.id;
-                        store.insert(IRNode::StyleSet(styles));
-                        doc.styles = Some(style_id);
+        if !inputs.fast_mode
+            && let Some(xml) = inputs.content_xml
+        {
+            if let Some(mut styles) = parse_styles(xml) {
+                if let Some(doc_styles_id) = doc.styles {
+                    if let Some(IRNode::StyleSet(existing)) = store.get_mut(doc_styles_id) {
+                        merge_styles(existing, &mut styles);
                     }
+                } else {
+                    let style_id = styles.id;
+                    store.insert(IRNode::StyleSet(styles));
+                    doc.styles = Some(style_id);
                 }
-                let masters = parse_master_pages(xml);
-                for name in masters {
-                    push_info(
-                        diagnostics,
-                        "ODF_MASTER_PAGE",
-                        format!("ODF master page detected: {}", name),
-                        Some("content.xml"),
-                    );
-                }
-                let layouts = parse_page_layouts(xml);
-                for name in layouts {
-                    push_info(
-                        diagnostics,
-                        "ODF_PAGE_LAYOUT",
-                        format!("ODF page layout detected: {}", name),
-                        Some("content.xml"),
-                    );
-                }
+            }
+            let masters = parse_master_pages(xml);
+            for name in masters {
+                push_info(
+                    diagnostics,
+                    "ODF_MASTER_PAGE",
+                    format!("ODF master page detected: {}", name),
+                    Some("content.xml"),
+                );
+            }
+            let layouts = parse_page_layouts(xml);
+            for name in layouts {
+                push_info(
+                    diagnostics,
+                    "ODF_PAGE_LAYOUT",
+                    format!("ODF page layout detected: {}", name),
+                    Some("content.xml"),
+                );
             }
         }
 

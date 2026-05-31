@@ -1,9 +1,9 @@
 use super::graphic_frame::GraphicFrameState;
 use super::{
-    extract_c_sld_name, parse_comments, parse_shape_properties, parse_slide_layout_meta, PptxParser,
+    PptxParser, extract_c_sld_name, parse_comments, parse_shape_properties, parse_slide_layout_meta,
 };
 use crate::error::ParseError;
-use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
+use crate::ooxml::relationships::{Relationships, TargetMode, rel_type};
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
@@ -12,8 +12,8 @@ use crate::zip_handler::PackageReader;
 use docir_core::ir::{IRNode, Shape, ShapeType, Slide, SlideAnimation, SlideTransition};
 use docir_core::security::ExternalRefType;
 use docir_core::types::{NodeId, SourceSpan};
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 impl PptxParser {
     pub(super) fn parse_slide(
@@ -126,10 +126,10 @@ impl PptxParser {
         notes_text: Option<&str>,
         notes_slide_id: Option<NodeId>,
     ) {
-        if let Some(notes) = notes_text {
-            if !notes.trim().is_empty() {
-                slide.notes = Some(notes.to_string());
-            }
+        if let Some(notes) = notes_text
+            && !notes.trim().is_empty()
+        {
+            slide.notes = Some(notes.to_string());
         }
         slide.notes_slide = notes_slide_id;
     }
@@ -224,10 +224,8 @@ impl PptxParser {
                         &mut link_rel,
                     );
                 }
-                Ok(Event::End(e)) => {
-                    if local_name(e.name().as_ref()) == b"pic" {
-                        break;
-                    }
+                Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pic" => {
+                    break;
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
@@ -239,46 +237,42 @@ impl PptxParser {
         }
 
         let primary_rel = embed_rel.clone().or(link_rel.clone());
-        if let Some(rel_id) = primary_rel {
-            if let Some(rel) = relationships.get(&rel_id) {
-                shape.relationship_id = Some(rel_id.clone());
-                let resolved = if rel.target_mode == TargetMode::External {
-                    rel.target.clone()
+        if let Some(rel_id) = primary_rel
+            && let Some(rel) = relationships.get(&rel_id)
+        {
+            shape.relationship_id = Some(rel_id.clone());
+            let resolved = if rel.target_mode == TargetMode::External {
+                rel.target.clone()
+            } else {
+                Relationships::resolve_target(slide_path, &rel.target)
+            };
+            shape.media_target = Some(resolved);
+            if rel.rel_type.contains("audio") {
+                shape.shape_type = ShapeType::Audio;
+            } else if rel.rel_type.contains("video") {
+                shape.shape_type = ShapeType::Video;
+            }
+            if rel.target_mode == TargetMode::External {
+                let ref_type = if rel.rel_type.contains("audio") || rel.rel_type.contains("video") {
+                    ExternalRefType::Other
                 } else {
-                    Relationships::resolve_target(slide_path, &rel.target)
+                    ExternalRefType::Image
                 };
-                shape.media_target = Some(resolved);
-                if rel.rel_type.contains("audio") {
-                    shape.shape_type = ShapeType::Audio;
-                } else if rel.rel_type.contains("video") {
-                    shape.shape_type = ShapeType::Video;
-                }
-                if rel.target_mode == TargetMode::External {
-                    let ref_type =
-                        if rel.rel_type.contains("audio") || rel.rel_type.contains("video") {
-                            ExternalRefType::Other
-                        } else {
-                            ExternalRefType::Image
-                        };
-                    self.add_external_reference(rel, ref_type, slide_path);
-                }
+                self.add_external_reference(rel, ref_type, slide_path);
             }
         }
 
-        if let (Some(link_id), Some(embed_id)) = (link_rel.clone(), embed_rel.clone()) {
-            if link_id != embed_id {
-                if let Some(rel) = relationships.get(&link_id) {
-                    if rel.target_mode == TargetMode::External {
-                        let ref_type =
-                            if rel.rel_type.contains("audio") || rel.rel_type.contains("video") {
-                                ExternalRefType::Other
-                            } else {
-                                ExternalRefType::Image
-                            };
-                        self.add_external_reference(rel, ref_type, slide_path);
-                    }
-                }
-            }
+        if let (Some(link_id), Some(embed_id)) = (link_rel.clone(), embed_rel.clone())
+            && link_id != embed_id
+            && let Some(rel) = relationships.get(&link_id)
+            && rel.target_mode == TargetMode::External
+        {
+            let ref_type = if rel.rel_type.contains("audio") || rel.rel_type.contains("video") {
+                ExternalRefType::Other
+            } else {
+                ExternalRefType::Image
+            };
+            self.add_external_reference(rel, ref_type, slide_path);
         }
 
         Ok(shape)
@@ -362,10 +356,8 @@ impl PptxParser {
                         &mut state,
                     )?;
                 }
-                Ok(Event::End(e)) => {
-                    if local_name(e.name().as_ref()) == b"graphicFrame" {
-                        break;
-                    }
+                Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"graphicFrame" => {
+                    break;
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
@@ -417,16 +409,12 @@ impl PptxParser {
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => {
-                    if transition.transition_type.is_none() {
-                        transition.transition_type =
-                            Some(String::from_utf8_lossy(e.name().as_ref()).to_string());
-                    }
+                Ok(Event::Start(e)) if transition.transition_type.is_none() => {
+                    transition.transition_type =
+                        Some(String::from_utf8_lossy(e.name().as_ref()).to_string());
                 }
-                Ok(Event::End(e)) => {
-                    if local_name(e.name().as_ref()) == b"transition" {
-                        break;
-                    }
+                Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"transition" => {
+                    break;
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
@@ -482,10 +470,8 @@ impl PptxParser {
                         animations.push(anim);
                     }
                 }
-                Ok(Event::End(e)) => {
-                    if local_name(e.name().as_ref()) == b"timing" {
-                        break;
-                    }
+                Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"timing" => {
+                    break;
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {

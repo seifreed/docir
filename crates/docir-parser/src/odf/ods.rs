@@ -39,8 +39,8 @@ use docir_core::ir::Cell;
 #[cfg(test)]
 use docir_core::visitor::IrStore;
 #[cfg(test)]
+use quick_xml::Reader;
+#[cfg(test)]
 use quick_xml::events::BytesStart;
 #[cfg(test)]
 use quick_xml::events::Event;
-#[cfg(test)]
-use quick_xml::Reader;

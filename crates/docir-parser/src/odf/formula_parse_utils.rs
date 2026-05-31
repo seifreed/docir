@@ -138,14 +138,15 @@ fn parse_sheeted_cell(input: &str) -> Option<CellRef> {
     let trimmed = input.trim().trim_start_matches('.');
     let mut sheet: Option<String> = None;
     let mut cell_part = trimmed;
-    if let Some((sheet_part, cell)) = trimmed.rsplit_once('.') {
-        if !sheet_part.is_empty() && !cell.is_empty() {
-            let sheet_name = sheet_part.trim_matches('\'').replace('$', "");
-            if !sheet_name.is_empty() {
-                sheet = Some(sheet_name);
-            }
-            cell_part = cell;
+    if let Some((sheet_part, cell)) = trimmed.rsplit_once('.')
+        && !sheet_part.is_empty()
+        && !cell.is_empty()
+    {
+        let sheet_name = sheet_part.trim_matches('\'').replace('$', "");
+        if !sheet_name.is_empty() {
+            sheet = Some(sheet_name);
         }
+        cell_part = cell;
     }
     let cell = parse_cell_ref(cell_part)?;
     Some(CellRef {

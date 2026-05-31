@@ -424,11 +424,13 @@ mod tests {
         assert_eq!(props.width.as_ref().map(|w| w.value), Some(5000));
         assert_eq!(props.style_id.as_deref(), Some("TableStyle1"));
         assert!(matches!(props.alignment, Some(TableAlignment::Center)));
-        assert!(props
-            .borders
-            .as_ref()
-            .and_then(|b| b.inside_h.as_ref())
-            .is_some());
+        assert!(
+            props
+                .borders
+                .as_ref()
+                .and_then(|b| b.inside_h.as_ref())
+                .is_some()
+        );
         assert_eq!(props.cell_margins.as_ref().and_then(|m| m.left), Some(30));
     }
 

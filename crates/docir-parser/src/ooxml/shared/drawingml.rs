@@ -5,8 +5,8 @@ use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::{DrawingPart, Shape, ShapeType};
 use docir_core::types::SourceSpan;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 /// Public API entrypoint: parse_drawingml_part.
 pub fn parse_drawingml_part(
@@ -35,16 +35,15 @@ pub fn parse_drawingml_part(
                     b"blip" => {
                         if let Some(rel_id) =
                             attr_value_by_local_keys(&e, &[b"embed", b"link", b"id"])
-                        {
-                            if let Some(shape) = build_target_shape(
+                            && let Some(shape) = build_target_shape(
                                 rels,
                                 path,
                                 current_name.clone(),
                                 rel_id,
                                 ShapeType::Picture,
-                            ) {
-                                shapes.push(shape);
-                            }
+                            )
+                        {
+                            shapes.push(shape);
                         }
                     }
                     b"relIds" => {
@@ -59,16 +58,16 @@ pub fn parse_drawingml_part(
                         }
                     }
                     b"chart" => {
-                        if let Some(rel_id) = attr_value_by_local_keys(&e, &[b"id", b"rid"]) {
-                            if let Some(shape) = build_target_shape(
+                        if let Some(rel_id) = attr_value_by_local_keys(&e, &[b"id", b"rid"])
+                            && let Some(shape) = build_target_shape(
                                 rels,
                                 path,
                                 current_name.clone(),
                                 rel_id,
                                 ShapeType::Chart,
-                            ) {
-                                shapes.push(shape);
-                            }
+                            )
+                        {
+                            shapes.push(shape);
                         }
                     }
                     _ => {}

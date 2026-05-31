@@ -197,26 +197,31 @@ fn test_parse_workbook_loads_optional_parts_bundle() {
     assert!(doc.shared_strings.is_some());
     assert!(doc.spreadsheet_styles.is_some());
     assert!(doc.sheet_metadata.is_some());
-    assert!(doc
-        .shared_parts
-        .iter()
-        .any(|id| matches!(store.get(*id), Some(IRNode::CalcChain(_)))));
-    assert!(doc
-        .shared_parts
-        .iter()
-        .any(|id| matches!(store.get(*id), Some(IRNode::PeoplePart(_)))));
-    assert!(doc
-        .shared_parts
-        .iter()
-        .any(|id| matches!(store.get(*id), Some(IRNode::SlicerPart(_)))));
-    assert!(doc
-        .shared_parts
-        .iter()
-        .any(|id| matches!(store.get(*id), Some(IRNode::TimelinePart(_)))));
-    assert!(doc
-        .shared_parts
-        .iter()
-        .any(|id| matches!(store.get(*id), Some(IRNode::QueryTablePart(_)))));
+    assert!(
+        doc.shared_parts
+            .iter()
+            .any(|id| matches!(store.get(*id), Some(IRNode::CalcChain(_))))
+    );
+    assert!(
+        doc.shared_parts
+            .iter()
+            .any(|id| matches!(store.get(*id), Some(IRNode::PeoplePart(_))))
+    );
+    assert!(
+        doc.shared_parts
+            .iter()
+            .any(|id| matches!(store.get(*id), Some(IRNode::SlicerPart(_))))
+    );
+    assert!(
+        doc.shared_parts
+            .iter()
+            .any(|id| matches!(store.get(*id), Some(IRNode::TimelinePart(_))))
+    );
+    assert!(
+        doc.shared_parts
+            .iter()
+            .any(|id| matches!(store.get(*id), Some(IRNode::QueryTablePart(_))))
+    );
     assert!(!doc.defined_names.is_empty());
 }
 

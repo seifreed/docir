@@ -19,36 +19,34 @@ fn parse_people_part_impl(xml: &str, path: &str) -> Result<PeoplePart, ParseErro
     let mut buf = Vec::new();
     loop {
         match read_event(&mut reader, &mut buf, path)? {
-            Event::Start(e) | Event::Empty(e) => {
-                if e.name().as_ref().ends_with(b"person") {
-                    let mut entry = PersonEntry {
-                        person_id: None,
-                        user_id: None,
-                        display_name: None,
-                        initials: None,
+            Event::Start(e) | Event::Empty(e) if e.name().as_ref().ends_with(b"person") => {
+                let mut entry = PersonEntry {
+                    person_id: None,
+                    user_id: None,
+                    display_name: None,
+                    initials: None,
+                };
+                for attr in e.attributes().flatten() {
+                    let key = attr.key.as_ref();
+                    let key = match key.iter().rposition(|b| *b == b':') {
+                        Some(pos) => &key[pos + 1..],
+                        None => key,
                     };
-                    for attr in e.attributes().flatten() {
-                        let key = attr.key.as_ref();
-                        let key = match key.iter().rposition(|b| *b == b':') {
-                            Some(pos) => &key[pos + 1..],
-                            None => key,
-                        };
-                        let val = lossy_attr_value(&attr).to_string();
-                        match key {
-                            b"id" => entry.person_id = Some(val),
-                            b"userId" | b"userID" => entry.user_id = Some(val),
-                            b"displayName" | b"displayname" => entry.display_name = Some(val),
-                            b"initials" => entry.initials = Some(val),
-                            _ => {}
-                        }
+                    let val = lossy_attr_value(&attr).to_string();
+                    match key {
+                        b"id" => entry.person_id = Some(val),
+                        b"userId" | b"userID" => entry.user_id = Some(val),
+                        b"displayName" | b"displayname" => entry.display_name = Some(val),
+                        b"initials" => entry.initials = Some(val),
+                        _ => {}
                     }
-                    if entry.person_id.is_some()
-                        || entry.user_id.is_some()
-                        || entry.display_name.is_some()
-                        || entry.initials.is_some()
-                    {
-                        people.people.push(entry);
-                    }
+                }
+                if entry.person_id.is_some()
+                    || entry.user_id.is_some()
+                    || entry.display_name.is_some()
+                    || entry.initials.is_some()
+                {
+                    people.people.push(entry);
                 }
             }
             Event::Eof => break,

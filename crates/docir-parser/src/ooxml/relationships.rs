@@ -3,8 +3,8 @@
 use crate::error::ParseError;
 use crate::xml_utils::local_name;
 use crate::xml_utils::{read_event, reader_from_str};
-use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event;
+use quick_xml::events::attributes::Attribute;
 use std::collections::HashMap;
 
 /// A single relationship entry.
@@ -49,45 +49,45 @@ impl Relationships {
 
         loop {
             match read_event(&mut reader, &mut buf, ".rels")? {
-                Event::Empty(e) | Event::Start(e) => {
-                    if local_name(e.name().as_ref()) == b"Relationship" {
-                        let mut id = None;
-                        let mut rel_type = None;
-                        let mut target = None;
-                        let mut target_mode = TargetMode::Internal;
+                Event::Empty(e) | Event::Start(e)
+                    if local_name(e.name().as_ref()) == b"Relationship" =>
+                {
+                    let mut id = None;
+                    let mut rel_type = None;
+                    let mut target = None;
+                    let mut target_mode = TargetMode::Internal;
 
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"Id" => {
-                                    id = Some(unescaped_attr_value(&attr));
-                                }
-                                b"Type" => {
-                                    rel_type = Some(unescaped_attr_value(&attr));
-                                }
-                                b"Target" => {
-                                    target = Some(unescaped_attr_value(&attr));
-                                }
-                                b"TargetMode" => {
-                                    let mode = unescaped_attr_value(&attr);
-                                    if mode.eq_ignore_ascii_case("External") {
-                                        target_mode = TargetMode::External;
-                                    }
-                                }
-                                _ => {}
+                    for attr in e.attributes().flatten() {
+                        match attr.key.as_ref() {
+                            b"Id" => {
+                                id = Some(unescaped_attr_value(&attr));
                             }
+                            b"Type" => {
+                                rel_type = Some(unescaped_attr_value(&attr));
+                            }
+                            b"Target" => {
+                                target = Some(unescaped_attr_value(&attr));
+                            }
+                            b"TargetMode" => {
+                                let mode = unescaped_attr_value(&attr);
+                                if mode.eq_ignore_ascii_case("External") {
+                                    target_mode = TargetMode::External;
+                                }
+                            }
+                            _ => {}
                         }
+                    }
 
-                        if let (Some(id), Some(rel_type), Some(target)) = (id, rel_type, target) {
-                            let rel = Relationship {
-                                id: id.clone(),
-                                rel_type: rel_type.clone(),
-                                target,
-                                target_mode,
-                            };
+                    if let (Some(id), Some(rel_type), Some(target)) = (id, rel_type, target) {
+                        let rel = Relationship {
+                            id: id.clone(),
+                            rel_type: rel_type.clone(),
+                            target,
+                            target_mode,
+                        };
 
-                            rels.by_type.entry(rel_type).or_default().push(id.clone());
-                            rels.by_id.insert(id, rel);
-                        }
+                        rels.by_type.entry(rel_type).or_default().push(id.clone());
+                        rels.by_id.insert(id, rel);
                     }
                 }
                 Event::Eof => break,
@@ -194,7 +194,7 @@ fn looks_like_external_target(target: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{rel_type, Relationships};
+    use super::{Relationships, rel_type};
 
     #[test]
     fn parse_accepts_prefixed_relationship_elements() {

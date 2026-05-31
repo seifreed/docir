@@ -6,10 +6,10 @@ pub mod json;
 
 pub use json::JsonSerializer;
 
-use docir_core::ir::IRNode;
-use docir_core::visitor::IrStore;
 use docir_core::CoreError;
 use docir_core::NodeId;
+use docir_core::ir::IRNode;
+use docir_core::visitor::IrStore;
 use thiserror::Error;
 
 /// Serialization errors.

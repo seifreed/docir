@@ -278,10 +278,12 @@ mod tests {
         assert_eq!(summary.security.threat_level, ThreatLevel::High);
         assert_eq!(summary.security.external_refs, 1);
         assert_eq!(summary.threat_indicators.len(), 1);
-        assert!(summary
-            .node_counts
-            .iter()
-            .any(|count| count.node_type == "Document"));
+        assert!(
+            summary
+                .node_counts
+                .iter()
+                .any(|count| count.node_type == "Document")
+        );
         assert!(summary.metrics.is_some());
     }
 

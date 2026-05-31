@@ -3,8 +3,8 @@ use crate::error::ParseError;
 use crate::xml_utils::{attr_value, local_name, xml_error};
 use docir_core::ir::{Paragraph, RunProperties, Style, StyleSet, StyleType};
 use docir_core::types::NodeId;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 use super::paragraph::parse_paragraph_properties;
 use super::table::parse_table_properties;
@@ -27,19 +27,17 @@ impl DocxParser {
                 }
                 Ok(Event::Empty(e)) => handle_style_empty(&e, &mut current),
                 Ok(Event::Text(e)) => {
-                    if in_name {
-                        if let Some(style) = current.as_mut() {
-                            style.name = Some(e.unescape().unwrap_or_default().to_string());
-                        }
+                    if in_name && let Some(style) = current.as_mut() {
+                        style.name = Some(e.unescape().unwrap_or_default().to_string());
                     }
                 }
                 Ok(Event::End(e)) => {
                     if local_name(e.name().as_ref()) == b"name" {
                         in_name = false;
-                    } else if local_name(e.name().as_ref()) == b"style" {
-                        if let Some(style) = current.take() {
-                            styles.styles.push(style);
-                        }
+                    } else if local_name(e.name().as_ref()) == b"style"
+                        && let Some(style) = current.take()
+                    {
+                        styles.styles.push(style);
                     }
                 }
                 Ok(Event::Eof) => break,

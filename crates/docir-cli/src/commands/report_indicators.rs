@@ -82,9 +82,8 @@ mod tests {
     use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
-        inspect_directory_bytes,
-        test_support::{build_test_cfb, patch_test_cfb_directory_entry, TestCfbDirectoryPatch},
-        DocumentIndicator, IndicatorReport, ParserConfig,
+        DocumentIndicator, IndicatorReport, ParserConfig, inspect_directory_bytes,
+        test_support::{TestCfbDirectoryPatch, build_test_cfb, patch_test_cfb_directory_entry},
     };
     use docir_core::security::ThreatLevel;
     use serde_json::Value;

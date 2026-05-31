@@ -52,30 +52,29 @@ fn parse_values_xlsb_known_cells() {
         if name == "Dropdown" {
             for cell_id in &sheet.cells {
                 if let Some(IRNode::Cell(cell)) = parsed.store.get(*cell_id) {
-                    if cell.reference == "A1" {
-                        if let docir_core::ir::CellValue::String(value) = &cell.value {
-                            assert_eq!(value, "Deutsch");
-                            seen_string = true;
-                        }
+                    if cell.reference == "A1"
+                        && let docir_core::ir::CellValue::String(value) = &cell.value
+                    {
+                        assert_eq!(value, "Deutsch");
+                        seen_string = true;
                     }
-                    if cell.reference == "A77" {
-                        if let docir_core::ir::CellValue::Number(value) = cell.value {
-                            assert!((value - 1.0).abs() < f64::EPSILON);
-                            seen_number = true;
-                        }
+                    if cell.reference == "A77"
+                        && let docir_core::ir::CellValue::Number(value) = cell.value
+                    {
+                        assert!((value - 1.0).abs() < f64::EPSILON);
+                        seen_number = true;
                     }
                 }
             }
         }
         if name == "Verpackung_ReSet_Plastic" {
             for cell_id in &sheet.cells {
-                if let Some(IRNode::Cell(cell)) = parsed.store.get(*cell_id) {
-                    if cell.reference == "L11" {
-                        if let docir_core::ir::CellValue::DateTime(value) = cell.value {
-                            assert!((value - 45627.0).abs() < 0.0001);
-                            seen_datetime = true;
-                        }
-                    }
+                if let Some(IRNode::Cell(cell)) = parsed.store.get(*cell_id)
+                    && cell.reference == "L11"
+                    && let docir_core::ir::CellValue::DateTime(value) = cell.value
+                {
+                    assert!((value - 45627.0).abs() < 0.0001);
+                    seen_datetime = true;
                 }
             }
         }

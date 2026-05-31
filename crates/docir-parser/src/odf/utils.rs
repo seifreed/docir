@@ -1,8 +1,8 @@
-use crate::xml_utils::{attr_value_by_suffix, local_name, scan_xml_events, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events};
 use docir_core::ir::{DefinedName, ShapeTransform};
 use docir_core::types::{NodeId, SourceSpan};
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 pub(super) fn strip_odf_formula_prefix(formula: &str) -> &str {
     if let Some(stripped) = formula.strip_prefix("of:=") {

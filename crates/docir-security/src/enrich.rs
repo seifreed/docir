@@ -300,21 +300,20 @@ fn build_hwp_indicators(
         &mut indicators,
     );
 
-    if hwpx_autoexec {
-        if let Some(macro_id) = security.macro_project {
-            if matches!(
-                store.get(macro_id),
-                Some(IRNode::MacroProject(project)) if project.has_auto_exec
-            ) {
-                indicators.push(make_indicator(
-                    ThreatIndicatorType::AutoExecMacro,
-                    ThreatLevel::Critical,
-                    "Auto-exec script detected".to_string(),
-                    None,
-                    Some(macro_id),
-                ));
-            }
-        }
+    if hwpx_autoexec
+        && let Some(macro_id) = security.macro_project
+        && matches!(
+            store.get(macro_id),
+            Some(IRNode::MacroProject(project)) if project.has_auto_exec
+        )
+    {
+        indicators.push(make_indicator(
+            ThreatIndicatorType::AutoExecMacro,
+            ThreatLevel::Critical,
+            "Auto-exec script detected".to_string(),
+            None,
+            Some(macro_id),
+        ));
     }
 
     indicators
@@ -373,9 +372,11 @@ mod tests {
             panic!("missing document");
         };
         let indicators = &doc.security.threat_indicators;
-        assert!(indicators
-            .iter()
-            .any(|i| i.indicator_type == ThreatIndicatorType::RemoteResource));
+        assert!(
+            indicators
+                .iter()
+                .any(|i| i.indicator_type == ThreatIndicatorType::RemoteResource)
+        );
         assert!(indicators.iter().any(|i| {
             i.indicator_type == ThreatIndicatorType::DdeCommand
                 && i.description.contains("DDE formula")
@@ -480,10 +481,11 @@ mod tests {
         }
 
         let hwpx = run_for_format(DocumentFormat::Hwpx);
-        assert!(hwpx
-            .threat_indicators
-            .iter()
-            .any(|i| i.indicator_type == ThreatIndicatorType::AutoExecMacro));
+        assert!(
+            hwpx.threat_indicators
+                .iter()
+                .any(|i| i.indicator_type == ThreatIndicatorType::AutoExecMacro)
+        );
         assert!(hwpx.threat_indicators.iter().any(|i| {
             i.indicator_type == ThreatIndicatorType::RemoteResource
                 && i.description.contains("https://evil.test/data")
@@ -494,14 +496,16 @@ mod tests {
         }));
 
         let hwp = run_for_format(DocumentFormat::Hwp);
-        assert!(hwp
-            .threat_indicators
-            .iter()
-            .any(|i| i.indicator_type == ThreatIndicatorType::AutoExecMacro));
-        assert!(hwp
-            .threat_indicators
-            .iter()
-            .any(|i| i.indicator_type == ThreatIndicatorType::OleObject));
+        assert!(
+            hwp.threat_indicators
+                .iter()
+                .any(|i| i.indicator_type == ThreatIndicatorType::AutoExecMacro)
+        );
+        assert!(
+            hwp.threat_indicators
+                .iter()
+                .any(|i| i.indicator_type == ThreatIndicatorType::OleObject)
+        );
     }
 
     #[test]
@@ -529,11 +533,12 @@ mod tests {
         let Some(IRNode::Document(doc)) = store.get(root_id) else {
             panic!("missing document");
         };
-        assert!(doc
-            .security
-            .threat_indicators
-            .iter()
-            .any(|i| i.description == "existing indicator"));
+        assert!(
+            doc.security
+                .threat_indicators
+                .iter()
+                .any(|i| i.description == "existing indicator")
+        );
         assert!(doc.security.threat_indicators.iter().any(|i| {
             i.indicator_type == ThreatIndicatorType::OleObject
                 && i.location.as_deref() == Some("rtf")

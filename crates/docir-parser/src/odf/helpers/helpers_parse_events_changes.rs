@@ -1,6 +1,6 @@
 use super::{
-    scan_xml_events_until_end, Endnote, Event, Footnote, IRNode, NodeId, OdfLimitCounter,
-    OdfReader, ParseError, Revision, RevisionType, ODF_CONTENT_XML,
+    Endnote, Event, Footnote, IRNode, NodeId, ODF_CONTENT_XML, OdfLimitCounter, OdfReader,
+    ParseError, Revision, RevisionType, scan_xml_events_until_end,
 };
 use crate::odf::paragraph::parse_paragraph;
 use crate::xml_utils::local_name;
@@ -88,19 +88,19 @@ pub(super) fn parse_note(
         ODF_CONTENT_XML,
         |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"note"),
         |reader, event| {
-            if let Event::Start(e) = event {
-                if local_name(e.name().as_ref()) == b"p" {
-                    let paragraph_id = parse_paragraph(
-                        reader,
-                        e.name().as_ref(),
-                        None,
-                        None,
-                        store,
-                        &mut Vec::new(),
-                        limits,
-                    )?;
-                    content.push(paragraph_id);
-                }
+            if let Event::Start(e) = event
+                && local_name(e.name().as_ref()) == b"p"
+            {
+                let paragraph_id = parse_paragraph(
+                    reader,
+                    e.name().as_ref(),
+                    None,
+                    None,
+                    store,
+                    &mut Vec::new(),
+                    limits,
+                )?;
+                content.push(paragraph_id);
             }
             Ok(super::XmlScanControl::Continue)
         },
@@ -172,13 +172,13 @@ pub(super) fn parse_tracked_changes(
                     _ => {}
                 },
                 Event::Text(e) => {
-                    if let Some(rev) = current_revision.as_mut() {
-                        if let Some(field) = &current_field {
-                            let value = e.unescape().unwrap_or_default().to_string();
-                            match field {
-                                ChangeInfoField::Author => rev.author = Some(value),
-                                ChangeInfoField::Date => rev.date = Some(value),
-                            }
+                    if let Some(rev) = current_revision.as_mut()
+                        && let Some(field) = &current_field
+                    {
+                        let value = e.unescape().unwrap_or_default().to_string();
+                        match field {
+                            ChangeInfoField::Author => rev.author = Some(value),
+                            ChangeInfoField::Date => rev.date = Some(value),
                         }
                     }
                 }

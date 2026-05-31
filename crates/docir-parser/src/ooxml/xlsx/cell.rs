@@ -1,11 +1,11 @@
 use super::XlsxParser;
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, scan_xml_events_with_reader, xml_error, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events_with_reader, xml_error};
 use docir_core::ir::{Cell, CellFormula, CellValue};
 use docir_core::types::SourceSpan;
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 impl XlsxParser {
     pub(super) fn parse_cell(
@@ -66,15 +66,11 @@ impl XlsxParser {
                     }
                     _ => {}
                 },
-                Event::Empty(e) => {
-                    if local_name(e.name().as_ref()) == b"f" {
-                        formula = Some(super::parse_formula_empty(&e));
-                    }
+                Event::Empty(e) if local_name(e.name().as_ref()) == b"f" => {
+                    formula = Some(super::parse_formula_empty(&e));
                 }
-                Event::End(e) => {
-                    if local_name(e.name().as_ref()) == b"c" {
-                        return Ok(XmlScanControl::Break);
-                    }
+                Event::End(e) if local_name(e.name().as_ref()) == b"c" => {
+                    return Ok(XmlScanControl::Break);
                 }
                 _ => {}
             }

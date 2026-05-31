@@ -160,12 +160,14 @@ mod tests {
     #[test]
     fn parse_dde_formula_requires_function_boundary_when_prefix_is_optional() {
         let location = SourceSpan::new("content.xml");
-        assert!(parse_dde_formula(
-            r#"NOTDDE("soffice";"file:///tmp/test.ods";"A1")"#,
-            location.clone(),
-            false,
-        )
-        .is_none());
+        assert!(
+            parse_dde_formula(
+                r#"NOTDDE("soffice";"file:///tmp/test.ods";"A1")"#,
+                location.clone(),
+                false,
+            )
+            .is_none()
+        );
 
         let dde = parse_dde_formula(
             r#"IF(A1;DDE("soffice";"file:///tmp/test.ods";"A1");0)"#,

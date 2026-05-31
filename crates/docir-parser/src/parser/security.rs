@@ -1,8 +1,8 @@
 use super::vba_scanner::VbaScanner;
-use super::{hex, ParseError, ParserConfig};
+use super::{ParseError, ParserConfig, hex};
 use crate::ole::Cfb;
 use crate::ooxml::part_utils::get_rels_path;
-use crate::ooxml::relationships::{rel_type, Relationships, TargetMode};
+use crate::ooxml::relationships::{Relationships, TargetMode, rel_type};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::IRNode;
 use docir_core::security::{ExternalRefType, ExternalReference, OleObject};
@@ -310,7 +310,7 @@ mod tests {
         data[0x40..0x44].copy_from_slice(&(0u32).to_le_bytes()); // num mini FAT sectors
         data[0x44..0x48].copy_from_slice(&END.to_le_bytes()); // first DIFAT sector
         data[0x48..0x4C].copy_from_slice(&(0u32).to_le_bytes()); // num DIFAT sectors
-                                                                 // DIFAT entries in header: first FAT sector is sector 0.
+        // DIFAT entries in header: first FAT sector is sector 0.
         data[0x4C..0x50].copy_from_slice(&(0u32).to_le_bytes());
         for idx in 1..109 {
             let off = 0x4C + idx * 4;
@@ -410,9 +410,10 @@ mod tests {
         assert_eq!(by_id.get("rTpl"), Some(&ExternalRefType::AttachedTemplate));
         assert_eq!(by_id.get("rOther"), Some(&ExternalRefType::Other));
         assert!(refs.iter().all(|r| r.span.is_some()));
-        assert!(refs
-            .iter()
-            .all(|r| r.relationship_type.as_deref().is_some()));
+        assert!(
+            refs.iter()
+                .all(|r| r.relationship_type.as_deref().is_some())
+        );
     }
 
     #[test]
@@ -560,13 +561,15 @@ mod tests {
             })
             .collect();
         assert_eq!(refs.len(), 2);
-        assert!(refs.iter().any(|ext| ext
-            .span
-            .as_ref()
-            .is_some_and(|s| s.file_path == "word/_rels/document.xml.rels")));
-        assert!(refs.iter().any(|ext| ext
-            .span
-            .as_ref()
-            .is_some_and(|s| s.file_path == "word/_rels/footnotes.xml.rels")));
+        assert!(refs.iter().any(|ext| {
+            ext.span
+                .as_ref()
+                .is_some_and(|s| s.file_path == "word/_rels/document.xml.rels")
+        }));
+        assert!(refs.iter().any(|ext| {
+            ext.span
+                .as_ref()
+                .is_some_and(|s| s.file_path == "word/_rels/footnotes.xml.rels")
+        }));
     }
 }

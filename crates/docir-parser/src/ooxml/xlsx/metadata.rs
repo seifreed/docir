@@ -3,7 +3,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
-use crate::xml_utils::{local_name, scan_xml_events, XmlScanControl};
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events};
 use docir_core::ir::{SheetMetadata, SheetMetadataType};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;

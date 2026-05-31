@@ -1,12 +1,12 @@
 //! ODF presentation parsing helpers.
 
 use super::{
-    parse_draw_page, parse_odp_transition, IRNode, IrStore, OdfContentResult, OdfLimitCounter,
-    ParseError, Slide,
+    IRNode, IrStore, OdfContentResult, OdfLimitCounter, ParseError, Slide, parse_draw_page,
+    parse_odp_transition,
 };
 use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 pub(super) fn parse_content_presentation(
     xml: &[u8],
@@ -45,10 +45,8 @@ pub(super) fn parse_content_presentation(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"presentation" {
-                    in_presentation = false;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"presentation" => {
+                in_presentation = false;
             }
             Ok(Event::Eof) => break,
             Err(e) => return Err(xml_error("content.xml", e)),

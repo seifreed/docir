@@ -97,10 +97,12 @@ fn test_parse_settings_entries_and_error_path() {
     };
     assert_eq!(settings.entries.len(), 3);
     assert_eq!(settings.entries[1].name, "w:zoom");
-    assert!(settings.entries[1]
-        .attributes
-        .iter()
-        .any(|a| a.name == "w:percent" && a.value == "120"));
+    assert!(
+        settings.entries[1]
+            .attributes
+            .iter()
+            .any(|a| a.name == "w:percent" && a.value == "120")
+    );
 
     let web = match store.get(web_settings_id) {
         Some(docir_core::ir::IRNode::WebSettings(s)) => s,

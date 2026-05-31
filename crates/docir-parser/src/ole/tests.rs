@@ -179,15 +179,21 @@ fn collect_directory_slots_marks_normal_orphaned_and_free_entries() {
     let entries = directory::parse_dir_entries(&dir).expect("dir entries");
     let slots = collect_directory_slots(&entries);
 
-    assert!(slots
-        .iter()
-        .any(|slot| slot.path == "WordDocument" && slot.state == CfbDirectoryState::Normal));
-    assert!(slots
-        .iter()
-        .any(|slot| slot.path == "Ghost" && slot.state == CfbDirectoryState::Orphaned));
-    assert!(slots
-        .iter()
-        .any(|slot| slot.entry_index == 3 && slot.state == CfbDirectoryState::Free));
+    assert!(
+        slots
+            .iter()
+            .any(|slot| slot.path == "WordDocument" && slot.state == CfbDirectoryState::Normal)
+    );
+    assert!(
+        slots
+            .iter()
+            .any(|slot| slot.path == "Ghost" && slot.state == CfbDirectoryState::Orphaned)
+    );
+    assert!(
+        slots
+            .iter()
+            .any(|slot| slot.entry_index == 3 && slot.state == CfbDirectoryState::Free)
+    );
     assert!(slots.iter().any(|slot| slot.path == "WordDocument"
         && slot.name_len_raw as usize == linked_name.len()
         && slot.color_flag_raw == 0

@@ -4,9 +4,9 @@ use anyhow::{Context, Result};
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
+use crate::OutputFormat;
 use crate::cli::PrettyOutputOpts;
 use crate::commands::util::run_text_document_command;
-use crate::OutputFormat;
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -36,9 +36,9 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::OutputFormat;
     use crate::cli::PrettyOutputOpts;
     use crate::test_support;
-    use crate::OutputFormat;
     use docir_app::ParserConfig;
     use std::fs;
 

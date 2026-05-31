@@ -72,10 +72,8 @@ pub(super) fn parse_transform(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) => {
-                if local_name(e.name().as_ref()) == b"xfrm" {
-                    break;
-                }
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"xfrm" => {
+                break;
             }
             Ok(Event::Eof) => break,
             Err(e) => {

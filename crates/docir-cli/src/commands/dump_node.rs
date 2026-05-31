@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 use docir_app::ParserConfig;
 use std::path::PathBuf;
 
-use crate::commands::util::{parse_document, parse_node_id, write_json_output};
 use crate::OutputFormat;
+use crate::commands::util::{parse_document, parse_node_id, write_json_output};
 
 /// Public API entrypoint: run.
 pub fn run(
@@ -39,9 +39,9 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::OutputFormat;
     use crate::commands::util::parse_document;
     use crate::test_support;
-    use crate::OutputFormat;
     use docir_app::ParserConfig;
 
     #[test]

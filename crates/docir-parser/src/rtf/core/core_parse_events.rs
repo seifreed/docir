@@ -468,20 +468,20 @@ pub(crate) fn run_properties_from_state(ctx: &RtfParseContext) -> RunProperties 
         vertical_align: ctx.current_props.vertical,
         ..RunProperties::default()
     };
-    if let Some(idx) = ctx.current_props.font_index {
-        if let Some(name) = ctx.font_table.fonts.get(&idx) {
-            props.font_family = Some(name.clone());
-        }
+    if let Some(idx) = ctx.current_props.font_index
+        && let Some(name) = ctx.font_table.fonts.get(&idx)
+    {
+        props.font_family = Some(name.clone());
     }
-    if let Some(idx) = ctx.current_props.color_index {
-        if let Some(color) = ctx.color_table.colors.get(idx).and_then(|c| c.clone()) {
-            props.color = Some(color);
-        }
+    if let Some(idx) = ctx.current_props.color_index
+        && let Some(color) = ctx.color_table.colors.get(idx).and_then(|c| c.clone())
+    {
+        props.color = Some(color);
     }
-    if let Some(idx) = ctx.current_props.highlight_index {
-        if let Some(color) = ctx.color_table.colors.get(idx).and_then(|c| c.clone()) {
-            props.highlight = Some(color);
-        }
+    if let Some(idx) = ctx.current_props.highlight_index
+        && let Some(color) = ctx.color_table.colors.get(idx).and_then(|c| c.clone())
+    {
+        props.highlight = Some(color);
     }
     props
 }

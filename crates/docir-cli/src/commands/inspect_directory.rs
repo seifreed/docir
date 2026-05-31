@@ -1,7 +1,7 @@
 //! Inspect normal CFB directory entries.
 
 use anyhow::Result;
-use docir_app::{inspect_directory_path, DirectoryInspection, ParserConfig};
+use docir_app::{DirectoryInspection, ParserConfig, inspect_directory_path};
 use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
@@ -244,8 +244,8 @@ mod tests {
     use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
-        test_support::{build_test_cfb, build_test_cfb_with_times},
         BucketCount, DirectoryAnomalySeverity, DirectoryEntry, DirectoryInspection, ParserConfig,
+        test_support::{build_test_cfb, build_test_cfb_with_times},
     };
     use std::fs;
 

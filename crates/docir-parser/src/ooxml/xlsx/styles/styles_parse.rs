@@ -1,10 +1,10 @@
 //! XLSX styles parsing.
 
 use crate::error::ParseError;
+use crate::xml_utils::{XmlScanControl, scan_xml_events};
 use crate::xml_utils::{
     attr_f64, attr_u32_from_bytes, attr_value, local_name, reader_from_str_with_options,
 };
-use crate::xml_utils::{scan_xml_events, XmlScanControl};
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,
     NumberFormat, SpreadsheetStyles, TableStyleDef, TableStyleInfo,
@@ -161,12 +161,11 @@ fn handle_num_fmt_start(
             eprintln!("handle_num_fmt_start push num_fmt id={}", fmt.id);
             styles.number_formats.push(fmt);
         }
-    } else if state.in_dxfs {
-        if let Some(fmt) = parse_number_format(e) {
-            if let Some(dxf) = state.current_dxf.as_mut() {
-                dxf.num_fmt = Some(fmt);
-            }
-        }
+    } else if state.in_dxfs
+        && let Some(fmt) = parse_number_format(e)
+        && let Some(dxf) = state.current_dxf.as_mut()
+    {
+        dxf.num_fmt = Some(fmt);
     }
     true
 }
@@ -261,16 +260,16 @@ fn apply_color_attr(e: &BytesStart<'_>, state: &mut StylesParseState) {
             side.color = Some(color.clone());
             return;
         }
-        if let Some(fill) = state.current_fill.as_mut() {
-            if fill.fg_color.is_none() {
-                fill.fg_color = Some(color.clone());
-                return;
-            }
+        if let Some(fill) = state.current_fill.as_mut()
+            && fill.fg_color.is_none()
+        {
+            fill.fg_color = Some(color.clone());
+            return;
         }
-        if let Some(fill) = state.current_dxf_fill.as_mut() {
-            if fill.fg_color.is_none() {
-                fill.fg_color = Some(color);
-            }
+        if let Some(fill) = state.current_dxf_fill.as_mut()
+            && fill.fg_color.is_none()
+        {
+            fill.fg_color = Some(color);
         }
     }
 }
@@ -390,10 +389,10 @@ fn handle_table_style_start(
             true
         }
         b"tableStyle" if state.in_table_styles => {
-            if let Some(info) = styles.table_styles.as_mut() {
-                if let Some(style) = parse_table_style_def(e) {
-                    info.styles.push(style);
-                }
+            if let Some(info) = styles.table_styles.as_mut()
+                && let Some(style) = parse_table_style_def(e)
+            {
+                info.styles.push(style);
             }
             true
         }
@@ -418,28 +417,28 @@ fn handle_styles_end(
         b"font" => {
             if let Some(font) = state.current_font.take() {
                 styles.fonts.push(font);
-            } else if let Some(font) = state.current_dxf_font.take() {
-                if let Some(dxf) = state.current_dxf.as_mut() {
-                    dxf.font = Some(font);
-                }
+            } else if let Some(font) = state.current_dxf_font.take()
+                && let Some(dxf) = state.current_dxf.as_mut()
+            {
+                dxf.font = Some(font);
             }
         }
         b"fill" => {
             if let Some(fill) = state.current_fill.take() {
                 styles.fills.push(fill);
-            } else if let Some(fill) = state.current_dxf_fill.take() {
-                if let Some(dxf) = state.current_dxf.as_mut() {
-                    dxf.fill = Some(fill);
-                }
+            } else if let Some(fill) = state.current_dxf_fill.take()
+                && let Some(dxf) = state.current_dxf.as_mut()
+            {
+                dxf.fill = Some(fill);
             }
         }
         b"border" => {
             if let Some(border) = state.current_border.take() {
                 styles.borders.push(border);
-            } else if let Some(border) = state.current_dxf_border.take() {
-                if let Some(dxf) = state.current_dxf.as_mut() {
-                    dxf.border = Some(border);
-                }
+            } else if let Some(border) = state.current_dxf_border.take()
+                && let Some(dxf) = state.current_dxf.as_mut()
+            {
+                dxf.border = Some(border);
             }
         }
         b"left" | b"right" | b"top" | b"bottom" => {
