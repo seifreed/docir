@@ -374,7 +374,14 @@ fn parse_notes_slide(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Text(e)) => {
-                let value = e.unescape().unwrap_or_default();
+                let value = crate::xml_utils::decoded_text_or_default(&e);
+                if !text.is_empty() {
+                    text.push(' ');
+                }
+                text.push_str(&value);
+            }
+            Ok(Event::GeneralRef(e)) => {
+                let value = crate::xml_utils::decoded_general_ref_or_default(&e);
                 if !text.is_empty() {
                     text.push(' ');
                 }

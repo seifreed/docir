@@ -230,7 +230,11 @@ pub(crate) fn parse_text_element(
             match event {
                 Event::Start(e) | Event::Empty(e) => append_text_control(&mut text, e),
                 Event::Text(e) => {
-                    let chunk = e.unescape().unwrap_or_default();
+                    let chunk = crate::xml_utils::decoded_text_or_default(e);
+                    text.push_str(&chunk);
+                }
+                Event::GeneralRef(e) => {
+                    let chunk = crate::xml_utils::decoded_general_ref_or_default(e);
                     text.push_str(&chunk);
                 }
                 _ => {}

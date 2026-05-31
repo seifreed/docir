@@ -10,6 +10,7 @@ allow = [
     "CC0-1.0",
     "Unicode-3.0",
     "GPL-3.0-only",
+    "bzip2-1.0.6",
 ]
 
 [[licenses.clarify]]

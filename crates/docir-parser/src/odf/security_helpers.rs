@@ -124,10 +124,15 @@ pub(crate) fn parse_odf_signatures(xml: &str) -> Vec<docir_core::ir::DigitalSign
             },
             Ok(Event::Text(e)) => {
                 if let Some(sig) = current.as_mut() {
-                    let text = match e.unescape() {
-                        Ok(t) => t.to_string(),
-                        Err(_) => String::new(),
-                    };
+                    let text = crate::xml_utils::decoded_text_or_default(&e);
+                    if sig.signer.is_none() && text.contains("CN=") {
+                        sig.signer = Some(text);
+                    }
+                }
+            }
+            Ok(Event::GeneralRef(e)) => {
+                if let Some(sig) = current.as_mut() {
+                    let text = crate::xml_utils::decoded_general_ref_or_default(&e);
                     if sig.signer.is_none() && text.contains("CN=") {
                         sig.signer = Some(text);
                     }

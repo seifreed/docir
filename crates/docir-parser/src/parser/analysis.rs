@@ -199,7 +199,31 @@ pub(super) fn parse_chart_data(
                 }
             }
             Ok(Event::Text(e)) => {
-                let text = e.unescape().unwrap_or_default().to_string();
+                let text = crate::xml_utils::decoded_text_or_default(&e);
+                if in_title && chart.title.is_none() {
+                    chart.title = Some(text);
+                } else if in_series {
+                    let trimmed = text.trim();
+                    if trimmed.is_empty() {
+                        // skip
+                    } else if let Some(series) = current_series.as_mut() {
+                        match section {
+                            Some(b"tx") if series.name.is_none() => {
+                                series.name = Some(trimmed.to_string());
+                            }
+                            Some(b"cat") => {
+                                series.categories.push(trimmed.to_string());
+                            }
+                            Some(b"val") => {
+                                series.values.push(trimmed.to_string());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Ok(Event::GeneralRef(e)) => {
+                let text = crate::xml_utils::decoded_general_ref_or_default(&e);
                 if in_title && chart.title.is_none() {
                     chart.title = Some(text);
                 } else if in_series {

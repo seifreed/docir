@@ -196,23 +196,44 @@ pub(super) fn handle_hwpx_text(
     state: &mut HwpxSectionState,
 ) {
     if state.in_text {
-        let text = e.unescape().unwrap_or_default().to_string();
-        if !text.is_empty() {
-            let props = state.run_props.clone().unwrap_or_default();
-            let mut run = Run::with_properties(text, props);
-            run.span = Some(SourceSpan::new(source));
-            let run_id = run.id;
-            store.insert(IRNode::Run(run));
-            if let Some(revision) = state.revision_stack.last_mut() {
-                revision.content.push(run_id);
-            } else {
-                push_node_to_hwpx_context(
-                    run_id,
-                    &mut state.current_para,
-                    state.note_stack.as_mut_slice(),
-                    source,
-                );
-            }
+        let text = crate::xml_utils::decoded_text_or_default(e);
+        handle_hwpx_text_value(text, source, store, state);
+    }
+}
+
+pub(super) fn handle_hwpx_general_ref(
+    e: &quick_xml::events::BytesRef<'_>,
+    source: &str,
+    store: &mut IrStore,
+    state: &mut HwpxSectionState,
+) {
+    if state.in_text {
+        let text = crate::xml_utils::decoded_general_ref_or_default(e);
+        handle_hwpx_text_value(text, source, store, state);
+    }
+}
+
+fn handle_hwpx_text_value(
+    text: String,
+    source: &str,
+    store: &mut IrStore,
+    state: &mut HwpxSectionState,
+) {
+    if !text.is_empty() {
+        let props = state.run_props.clone().unwrap_or_default();
+        let mut run = Run::with_properties(text, props);
+        run.span = Some(SourceSpan::new(source));
+        let run_id = run.id;
+        store.insert(IRNode::Run(run));
+        if let Some(revision) = state.revision_stack.last_mut() {
+            revision.content.push(run_id);
+        } else {
+            push_node_to_hwpx_context(
+                run_id,
+                &mut state.current_para,
+                state.note_stack.as_mut_slice(),
+                source,
+            );
         }
     }
 }

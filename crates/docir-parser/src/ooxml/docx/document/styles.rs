@@ -28,7 +28,12 @@ impl DocxParser {
                 Ok(Event::Empty(e)) => handle_style_empty(&e, &mut current),
                 Ok(Event::Text(e)) => {
                     if in_name && let Some(style) = current.as_mut() {
-                        style.name = Some(e.unescape().unwrap_or_default().to_string());
+                        style.name = Some(crate::xml_utils::decoded_text_or_default(&e));
+                    }
+                }
+                Ok(Event::GeneralRef(e)) => {
+                    if in_name && let Some(style) = current.as_mut() {
+                        style.name = Some(crate::xml_utils::decoded_general_ref_or_default(&e));
                     }
                 }
                 Ok(Event::End(e)) => {

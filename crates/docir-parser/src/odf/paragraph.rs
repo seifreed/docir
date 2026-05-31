@@ -24,7 +24,11 @@ pub(crate) fn parse_paragraph(
                 handle_inline_event(&e, &mut text, store, inline_nodes)
             }
             Ok(Event::Text(e)) => {
-                let chunk = e.unescape().unwrap_or_default();
+                let chunk = crate::xml_utils::decoded_text_or_default(&e);
+                text.push_str(&chunk);
+            }
+            Ok(Event::GeneralRef(e)) => {
+                let chunk = crate::xml_utils::decoded_general_ref_or_default(&e);
                 text.push_str(&chunk);
             }
             Ok(Event::End(e)) if e.name().as_ref() == end_name => {

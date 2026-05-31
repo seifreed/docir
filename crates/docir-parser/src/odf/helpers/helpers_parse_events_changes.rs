@@ -49,7 +49,16 @@ pub(super) fn parse_annotation(
                 },
                 Event::Text(e) => {
                     if let Some(field) = current {
-                        let value = e.unescape().unwrap_or_default().to_string();
+                        let value = crate::xml_utils::decoded_text_or_default(e);
+                        match field {
+                            AnnotationField::Creator => comment.author = Some(value),
+                            AnnotationField::Date => comment.date = Some(value),
+                        }
+                    }
+                }
+                Event::GeneralRef(e) => {
+                    if let Some(field) = current {
+                        let value = crate::xml_utils::decoded_general_ref_or_default(e);
                         match field {
                             AnnotationField::Creator => comment.author = Some(value),
                             AnnotationField::Date => comment.date = Some(value),
@@ -175,7 +184,18 @@ pub(super) fn parse_tracked_changes(
                     if let Some(rev) = current_revision.as_mut()
                         && let Some(field) = &current_field
                     {
-                        let value = e.unescape().unwrap_or_default().to_string();
+                        let value = crate::xml_utils::decoded_text_or_default(e);
+                        match field {
+                            ChangeInfoField::Author => rev.author = Some(value),
+                            ChangeInfoField::Date => rev.date = Some(value),
+                        }
+                    }
+                }
+                Event::GeneralRef(e) => {
+                    if let Some(rev) = current_revision.as_mut()
+                        && let Some(field) = &current_field
+                    {
+                        let value = crate::xml_utils::decoded_general_ref_or_default(e);
                         match field {
                             ChangeInfoField::Author => rev.author = Some(value),
                             ChangeInfoField::Date => rev.date = Some(value),

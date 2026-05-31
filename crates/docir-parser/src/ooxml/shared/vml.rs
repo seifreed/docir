@@ -155,15 +155,24 @@ fn read_textbox_text(reader: &mut Reader<&[u8]>) -> Result<String, ParseError> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Text(t)) => {
-                text.push_str(&t.unescape().unwrap_or_default());
+                text.push_str(&crate::xml_utils::decoded_text_or_default(&t));
+            }
+            Ok(Event::GeneralRef(t)) => {
+                text.push_str(&crate::xml_utils::decoded_general_ref_or_default(&t));
             }
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
-                if local == b"t"
-                    && let Ok(Event::Text(t)) = reader.read_event_into(&mut buf)
-                {
-                    text.push_str(&t.unescape().unwrap_or_default());
+                if local == b"t" {
+                    match reader.read_event_into(&mut buf) {
+                        Ok(Event::Text(t)) => {
+                            text.push_str(&crate::xml_utils::decoded_text_or_default(&t));
+                        }
+                        Ok(Event::GeneralRef(t)) => {
+                            text.push_str(&crate::xml_utils::decoded_general_ref_or_default(&t));
+                        }
+                        _ => {}
+                    }
                 }
             }
             Ok(Event::End(e)) => {

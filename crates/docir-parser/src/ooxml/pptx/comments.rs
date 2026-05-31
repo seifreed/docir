@@ -95,7 +95,10 @@ pub(crate) fn parse_comments(
                 }
             }
             Ok(Event::Text(e)) if in_text => {
-                text_buf.push_str(&e.unescape().unwrap_or_default());
+                text_buf.push_str(&crate::xml_utils::decoded_text_or_default(&e));
+            }
+            Ok(Event::GeneralRef(e)) if in_text => {
+                text_buf.push_str(&crate::xml_utils::decoded_general_ref_or_default(&e));
             }
             Ok(Event::End(e)) => {
                 if e.name().as_ref().ends_with(b"t") {

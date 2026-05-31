@@ -1,5 +1,7 @@
 use crate::error::ParseError;
 use quick_xml::Reader;
+use quick_xml::encoding::Decoder;
+use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{BytesStart, Event};
 use std::borrow::Cow;
 use std::fmt::Display;
@@ -11,6 +13,34 @@ pub(crate) fn lossy_attr_value<'a>(
     attr: &'a quick_xml::events::attributes::Attribute<'a>,
 ) -> Cow<'a, str> {
     String::from_utf8_lossy(&attr.value)
+}
+
+pub(crate) fn decoded_attr_value(attr: &Attribute<'_>, decoder: Decoder) -> String {
+    attr.decode_and_unescape_value(decoder)
+        .map(|value| value.into_owned())
+        .unwrap_or_else(|_| String::from_utf8_lossy(attr.value.as_ref()).into_owned())
+}
+
+pub(crate) fn decoded_text(e: &quick_xml::events::BytesText<'_>) -> Result<String, String> {
+    let decoded = e.decode().map_err(|err| err.to_string())?;
+    quick_xml::escape::unescape(&decoded)
+        .map(|value| value.into_owned())
+        .map_err(|err| err.to_string())
+}
+
+pub(crate) fn decoded_text_or_default(e: &quick_xml::events::BytesText<'_>) -> String {
+    decoded_text(e).unwrap_or_default()
+}
+
+pub(crate) fn decoded_general_ref(e: &quick_xml::events::BytesRef<'_>) -> Result<String, String> {
+    let decoded = e.decode().map_err(|err| err.to_string())?;
+    quick_xml::escape::unescape(&format!("&{decoded};"))
+        .map(|value| value.into_owned())
+        .map_err(|err| err.to_string())
+}
+
+pub(crate) fn decoded_general_ref_or_default(e: &quick_xml::events::BytesRef<'_>) -> String {
+    decoded_general_ref(e).unwrap_or_default()
 }
 
 pub(crate) fn attr_value(e: &BytesStart<'_>, name: &[u8]) -> Option<String> {
@@ -107,10 +137,7 @@ pub(crate) fn attr_value_by_suffix(e: &BytesStart<'_>, suffixes: &[&[u8]]) -> Op
         let key = attr.key.as_ref();
         for suffix in suffixes {
             if key.ends_with(suffix) {
-                if let Ok(value) = attr.unescape_value() {
-                    return Some(value.to_string());
-                }
-                return Some(lossy_attr_value(&attr).to_string());
+                return Some(decoded_attr_value(&attr, e.decoder()));
             }
         }
     }
@@ -192,7 +219,7 @@ where
         match &event {
             Event::Start(e) => push_open = Some(e.name().as_ref().to_vec()),
             Event::End(e) => check_close = Some(e.name().as_ref().to_vec()),
-            Event::Empty(_) | Event::Text(_) | Event::Comment(_) => {}
+            Event::Empty(_) | Event::Text(_) | Event::GeneralRef(_) | Event::Comment(_) => {}
             _ => {}
         }
 

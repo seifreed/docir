@@ -56,7 +56,28 @@ impl OoxmlParser {
                     current_element = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 }
                 Ok(Event::Text(e)) => {
-                    let text = e.unescape().unwrap_or_default().to_string();
+                    let text = crate::xml_utils::decoded_text_or_default(&e);
+                    match current_element.as_str() {
+                        "dc:title" | "title" => metadata.title = Some(text),
+                        "dc:subject" | "subject" => metadata.subject = Some(text),
+                        "dc:creator" | "creator" => metadata.creator = Some(text),
+                        "cp:keywords" | "keywords" => metadata.keywords = Some(text),
+                        "dc:description" | "description" => metadata.description = Some(text),
+                        "cp:lastModifiedBy" | "lastModifiedBy" => {
+                            metadata.last_modified_by = Some(text)
+                        }
+                        "cp:revision" | "revision" => metadata.revision = Some(text),
+                        "dcterms:created" | "created" => metadata.created = Some(text),
+                        "dcterms:modified" | "modified" => metadata.modified = Some(text),
+                        "cp:category" | "category" => metadata.category = Some(text),
+                        "cp:contentStatus" | "contentStatus" => {
+                            metadata.content_status = Some(text)
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(Event::GeneralRef(e)) => {
+                    let text = crate::xml_utils::decoded_general_ref_or_default(&e);
                     match current_element.as_str() {
                         "dc:title" | "title" => metadata.title = Some(text),
                         "dc:subject" | "subject" => metadata.subject = Some(text),
@@ -101,7 +122,17 @@ impl OoxmlParser {
                     current_element = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 }
                 Ok(Event::Text(e)) => {
-                    let text = e.unescape().unwrap_or_default().to_string();
+                    let text = crate::xml_utils::decoded_text_or_default(&e);
+                    match current_element.as_str() {
+                        "Application" => metadata.application = Some(text),
+                        "AppVersion" => metadata.app_version = Some(text),
+                        "Company" => metadata.company = Some(text),
+                        "Manager" => metadata.manager = Some(text),
+                        _ => {}
+                    }
+                }
+                Ok(Event::GeneralRef(e)) => {
+                    let text = crate::xml_utils::decoded_general_ref_or_default(&e);
                     match current_element.as_str() {
                         "Application" => metadata.application = Some(text),
                         "AppVersion" => metadata.app_version = Some(text),
@@ -162,7 +193,27 @@ impl OoxmlParser {
                     if let Some(tag) = &current_value_tag
                         && let Some(prop) = current_prop.as_mut()
                     {
-                        let text = e.unescape().unwrap_or_default().to_string();
+                        let text = crate::xml_utils::decoded_text_or_default(&e);
+                        prop.value = match tag.as_str() {
+                            "vt:lpwstr" | "vt:lpstr" | "vt:bstr" => PropertyValue::String(text),
+                            "vt:i2" | "vt:i4" | "vt:int" | "vt:integer" => {
+                                PropertyValue::Integer(text.parse::<i64>().unwrap_or(0))
+                            }
+                            "vt:r4" | "vt:r8" | "vt:float" => {
+                                PropertyValue::Float(text.parse::<f64>().unwrap_or(0.0))
+                            }
+                            "vt:bool" => PropertyValue::Boolean(text == "true" || text == "1"),
+                            "vt:filetime" => PropertyValue::DateTime(text),
+                            "vt:blob" => PropertyValue::Blob(text),
+                            _ => PropertyValue::String(text),
+                        };
+                    }
+                }
+                Ok(Event::GeneralRef(e)) => {
+                    if let Some(tag) = &current_value_tag
+                        && let Some(prop) = current_prop.as_mut()
+                    {
+                        let text = crate::xml_utils::decoded_general_ref_or_default(&e);
                         prop.value = match tag.as_str() {
                             "vt:lpwstr" | "vt:lpstr" | "vt:bstr" => PropertyValue::String(text),
                             "vt:i2" | "vt:i4" | "vt:int" | "vt:integer" => {

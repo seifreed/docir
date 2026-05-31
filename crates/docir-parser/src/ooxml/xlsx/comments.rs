@@ -51,7 +51,15 @@ pub(super) fn parse_sheet_comments_impl(
                 _ => {}
             },
             Event::Text(e) => {
-                let text = e.unescape().unwrap_or_default().to_string();
+                let text = crate::xml_utils::decoded_text_or_default(&e);
+                if in_author {
+                    authors.push(text);
+                } else if in_text {
+                    current_text.push_str(&text);
+                }
+            }
+            Event::GeneralRef(e) => {
+                let text = crate::xml_utils::decoded_general_ref_or_default(&e);
                 if in_author {
                     authors.push(text);
                 } else if in_text {

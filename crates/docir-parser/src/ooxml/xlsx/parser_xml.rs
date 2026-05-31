@@ -125,7 +125,10 @@ pub(super) fn parse_conditional_formatting(
                 _ => {}
             },
             Ok(Event::Text(e)) if in_formula => {
-                formula_text.push_str(&e.unescape().unwrap_or_default());
+                formula_text.push_str(&crate::xml_utils::decoded_text_or_default(&e));
+            }
+            Ok(Event::GeneralRef(e)) if in_formula => {
+                formula_text.push_str(&crate::xml_utils::decoded_general_ref_or_default(&e));
             }
             Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
                 b"formula" => {
@@ -269,7 +272,13 @@ pub(super) fn parse_inline_string(
                 in_t = true;
             }
             Ok(Event::Text(e)) if in_t => {
-                let t = e.unescape().map_err(|err| xml_error(sheet_path, err))?;
+                let t =
+                    crate::xml_utils::decoded_text(&e).map_err(|err| xml_error(sheet_path, err))?;
+                text.push_str(&t);
+            }
+            Ok(Event::GeneralRef(e)) if in_t => {
+                let t = crate::xml_utils::decoded_general_ref(&e)
+                    .map_err(|err| xml_error(sheet_path, err))?;
                 text.push_str(&t);
             }
             Ok(Event::End(e)) => {

@@ -189,10 +189,8 @@ fn scan_hwpx_external_refs(xml: &str, source: &str) -> Vec<ExternalReference> {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 for attr in e.attributes().flatten() {
                     let key = attr.key.as_ref();
-                    if (key.ends_with(b"href") || key.ends_with(b"src") || key.ends_with(b"link"))
-                        && let Ok(value) = attr.unescape_value()
-                    {
-                        let target = value.to_string();
+                    if key.ends_with(b"href") || key.ends_with(b"src") || key.ends_with(b"link") {
+                        let target = crate::xml_utils::decoded_attr_value(&attr, e.decoder());
                         if target.is_empty() {
                             continue;
                         }

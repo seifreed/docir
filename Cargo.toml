@@ -24,13 +24,13 @@ description = "Document Intermediate Representation for Microsoft Office formats
 # Core
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Parsing
-zip = "2.2"
-quick-xml = "0.37"
+zip = "7.2"
+quick-xml = "0.39"
 encoding_rs = "0.8"
-calamine = "0.24"
+calamine = "0.35"
 
 # Security
 sha2 = "0.10"

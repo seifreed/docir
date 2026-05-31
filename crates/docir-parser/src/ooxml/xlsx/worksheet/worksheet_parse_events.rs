@@ -166,7 +166,11 @@ pub(crate) fn parse_data_validation(
                     formulas.track_start_with_context(e, &mut validation);
                 }
                 Event::Text(e) => {
-                    let text = e.unescape().unwrap_or_default().to_string();
+                    let text = crate::xml_utils::decoded_text_or_default(e);
+                    formulas.append_text(&text);
+                }
+                Event::GeneralRef(e) => {
+                    let text = crate::xml_utils::decoded_general_ref_or_default(e);
                     formulas.append_text(&text);
                 }
                 Event::End(e) => {

@@ -334,7 +334,21 @@ fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
             }
             Event::Text(e) => {
                 if let Some(field) = current {
-                    let value = e.unescape().unwrap_or_default().to_string();
+                    let value = crate::xml_utils::decoded_text_or_default(&e);
+                    match field {
+                        MetaField::Title => meta.title = Some(value),
+                        MetaField::Subject => meta.subject = Some(value),
+                        MetaField::Creator => meta.creator = Some(value),
+                        MetaField::Keywords => meta.keywords = Some(value),
+                        MetaField::Description => meta.description = Some(value),
+                        MetaField::Created => meta.created = Some(value),
+                        MetaField::Modified => meta.modified = Some(value),
+                    }
+                }
+            }
+            Event::GeneralRef(e) => {
+                if let Some(field) = current {
+                    let value = crate::xml_utils::decoded_general_ref_or_default(&e);
                     match field {
                         MetaField::Title => meta.title = Some(value),
                         MetaField::Subject => meta.subject = Some(value),

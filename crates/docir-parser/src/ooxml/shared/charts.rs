@@ -40,7 +40,18 @@ pub fn parse_chart_data(xml: &str, chart_path: &str, store: &mut IrStore) -> Opt
                 );
             }
             Ok(Event::Text(e)) => {
-                let text = e.unescape().unwrap_or_default().to_string();
+                let text = crate::xml_utils::decoded_text_or_default(&e);
+                handle_text_event(
+                    &text,
+                    &mut chart,
+                    in_series,
+                    in_title,
+                    section,
+                    current_series.as_mut(),
+                );
+            }
+            Ok(Event::GeneralRef(e)) => {
+                let text = crate::xml_utils::decoded_general_ref_or_default(&e);
                 handle_text_event(
                     &text,
                     &mut chart,

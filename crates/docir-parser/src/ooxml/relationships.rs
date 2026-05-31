@@ -60,16 +60,16 @@ impl Relationships {
                     for attr in e.attributes().flatten() {
                         match attr.key.as_ref() {
                             b"Id" => {
-                                id = Some(unescaped_attr_value(&attr));
+                                id = Some(unescaped_attr_value(&attr, e.decoder()));
                             }
                             b"Type" => {
-                                rel_type = Some(unescaped_attr_value(&attr));
+                                rel_type = Some(unescaped_attr_value(&attr, e.decoder()));
                             }
                             b"Target" => {
-                                target = Some(unescaped_attr_value(&attr));
+                                target = Some(unescaped_attr_value(&attr, e.decoder()));
                             }
                             b"TargetMode" => {
-                                let mode = unescaped_attr_value(&attr);
+                                let mode = unescaped_attr_value(&attr, e.decoder());
                                 if mode.eq_ignore_ascii_case("External") {
                                     target_mode = TargetMode::External;
                                 }
@@ -167,10 +167,8 @@ impl Relationships {
     }
 }
 
-fn unescaped_attr_value(attr: &Attribute<'_>) -> String {
-    attr.unescape_value()
-        .map(|value| value.into_owned())
-        .unwrap_or_else(|_| String::from_utf8_lossy(attr.value.as_ref()).into_owned())
+fn unescaped_attr_value(attr: &Attribute<'_>, decoder: quick_xml::encoding::Decoder) -> String {
+    crate::xml_utils::decoded_attr_value(attr, decoder)
 }
 
 fn looks_like_external_target(target: &str) -> bool {

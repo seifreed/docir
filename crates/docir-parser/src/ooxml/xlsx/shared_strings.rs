@@ -42,8 +42,15 @@ pub(crate) fn parse_shared_strings_table(
                 _ => {}
             },
             Event::Text(e) if in_si && in_t => {
-                let text = e
-                    .unescape()
+                let text = crate::xml_utils::decoded_text(&e)
+                    .map_err(|err| xml_error("xl/sharedStrings.xml", err))?;
+                current.push_str(&text);
+                if in_run {
+                    current_run.push_str(&text);
+                }
+            }
+            Event::GeneralRef(e) if in_si && in_t => {
+                let text = crate::xml_utils::decoded_general_ref(&e)
                     .map_err(|err| xml_error("xl/sharedStrings.xml", err))?;
                 current.push_str(&text);
                 if in_run {

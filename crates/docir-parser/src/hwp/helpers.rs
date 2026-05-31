@@ -27,10 +27,8 @@ pub(super) fn is_hwpx_master(path: &str) -> bool {
 pub(super) fn attr_any(e: &BytesStart, names: &[&[u8]]) -> Option<String> {
     for name in names {
         for attr in e.attributes().flatten() {
-            if attr.key.as_ref() == *name
-                && let Ok(value) = attr.unescape_value()
-            {
-                return Some(value.to_string());
+            if attr.key.as_ref() == *name {
+                return Some(crate::xml_utils::decoded_attr_value(&attr, e.decoder()));
             }
         }
     }
@@ -41,10 +39,7 @@ pub(super) fn run_properties_from_attrs(e: &BytesStart) -> RunProperties {
     let mut props = RunProperties::default();
     for attr in e.attributes().flatten() {
         let key = attr.key.as_ref();
-        let Ok(value) = attr.unescape_value() else {
-            continue;
-        };
-        let value = value.to_string();
+        let value = crate::xml_utils::decoded_attr_value(&attr, e.decoder());
         match key {
             b"bold" | b"b" => {
                 props.bold = Some(value == "1" || value.eq_ignore_ascii_case("true"));
