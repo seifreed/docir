@@ -229,6 +229,7 @@ mod tests {
         },
     };
     use std::fs;
+    use std::path::PathBuf;
 
     #[test]
     fn dispatch_routes_parse_summary_probe_inventory() {
@@ -285,18 +286,26 @@ mod tests {
         let _ = fs::remove_file(parse_out);
     }
 
-    #[test]
-    fn dispatch_routes_inspect_commands() {
-        let config = ParserConfig::default();
+    fn json_stdout_opts() -> JsonOutputOpts {
+        JsonOutputOpts {
+            json: true,
+            pretty: true,
+            output: None,
+        }
+    }
+
+    fn list_times_fixture() -> PathBuf {
         let list_times_input = test_support::temp_file("times", "doc");
-        let metadata_input = test_support::temp_file("metadata", "doc");
-        let inspect_directory_input = test_support::temp_file("inspect_directory", "doc");
-        let inspect_sectors_input = test_support::temp_file("inspect_sectors", "doc");
         fs::write(
             &list_times_input,
             build_test_cfb_with_times(&[("WordDocument", b"doc")], &[("WordDocument", 10, 20)]),
         )
         .expect("list-times fixture");
+        list_times_input
+    }
+
+    fn metadata_fixture() -> PathBuf {
+        let metadata_input = test_support::temp_file("metadata", "doc");
         fs::write(
             &metadata_input,
             build_test_cfb(&[(
@@ -305,6 +314,11 @@ mod tests {
             )]),
         )
         .expect("metadata fixture");
+        metadata_input
+    }
+
+    fn inspect_directory_fixture() -> PathBuf {
+        let inspect_directory_input = test_support::temp_file("inspect_directory", "doc");
         fs::write(
             &inspect_directory_input,
             build_test_cfb(&[
@@ -314,20 +328,30 @@ mod tests {
             ]),
         )
         .expect("inspect-directory fixture");
+        inspect_directory_input
+    }
+
+    fn inspect_sectors_fixture() -> PathBuf {
+        let inspect_sectors_input = test_support::temp_file("inspect_sectors", "doc");
         fs::write(
             &inspect_sectors_input,
             build_test_cfb(&[("WordDocument", b"doc"), ("VBA/PROJECT", b"meta")]),
         )
         .expect("inspect-sectors fixture");
+        inspect_sectors_input
+    }
 
+    #[test]
+    fn dispatch_routes_inspect_commands() {
+        let config = ParserConfig::default();
+        let list_times_input = list_times_fixture();
+        let metadata_input = metadata_fixture();
+        let inspect_directory_input = inspect_directory_fixture();
+        let inspect_sectors_input = inspect_sectors_fixture();
         dispatch(
             Commands::ListTimes {
                 input: list_times_input.clone(),
-                output_opts: JsonOutputOpts {
-                    json: true,
-                    pretty: true,
-                    output: None,
-                },
+                output_opts: json_stdout_opts(),
             },
             &config,
         )
@@ -336,11 +360,7 @@ mod tests {
         dispatch(
             Commands::InspectMetadata {
                 input: metadata_input.clone(),
-                output_opts: JsonOutputOpts {
-                    json: true,
-                    pretty: true,
-                    output: None,
-                },
+                output_opts: json_stdout_opts(),
             },
             &config,
         )
@@ -349,11 +369,7 @@ mod tests {
         dispatch(
             Commands::InspectDirectory {
                 input: inspect_directory_input.clone(),
-                output_opts: JsonOutputOpts {
-                    json: true,
-                    pretty: true,
-                    output: None,
-                },
+                output_opts: json_stdout_opts(),
             },
             &config,
         )
@@ -362,11 +378,7 @@ mod tests {
         dispatch(
             Commands::InspectSectors {
                 input: inspect_sectors_input.clone(),
-                output_opts: JsonOutputOpts {
-                    json: true,
-                    pretty: true,
-                    output: None,
-                },
+                output_opts: json_stdout_opts(),
             },
             &config,
         )
