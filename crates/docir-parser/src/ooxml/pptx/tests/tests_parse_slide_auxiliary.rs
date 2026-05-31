@@ -1,5 +1,21 @@
 use super::*;
+use crate::SecureZipReader;
 use docir_core::ir::IRNode;
+use std::io::{Cursor, Write};
+
+fn build_zip_with_byte_entries(entries: Vec<(&str, &[u8])>) -> SecureZipReader<Cursor<Vec<u8>>> {
+    let mut data = Vec::new();
+    {
+        let mut writer = zip::ZipWriter::new(Cursor::new(&mut data));
+        let options = zip::write::FileOptions::<()>::default();
+        for (path, contents) in entries {
+            writer.start_file(path, options).expect("start file");
+            writer.write_all(contents).expect("write file");
+        }
+        writer.finish().expect("finish zip");
+    }
+    SecureZipReader::new(Cursor::new(data), Default::default()).expect("zip")
+}
 
 #[test]
 fn test_parse_notes_slide_text() {
@@ -207,6 +223,63 @@ fn test_parse_notes_slide_reports_xml_error_for_malformed_input() {
     .expect_err("malformed notes should fail");
     match err {
         ParseError::Xml { file, .. } => assert_eq!(file, "ppt/notesSlides/notesSlide-bad.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_presentation_reports_unreadable_notes_slide() {
+    let presentation_xml = r#"
+        <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <p:sldIdLst>
+            <p:sldId r:id="rId1"/>
+          </p:sldIdLst>
+        </p:presentation>
+    "#;
+    let presentation_rels_xml = r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rId1"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide"
+            Target="slides/slide1.xml"/>
+        </Relationships>
+    "#;
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:cSld><p:spTree/></p:cSld>
+        </p:sld>
+    "#;
+    let slide_rels_xml = r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rIdNotes"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide"
+            Target="../notesSlides/notesSlide1.xml"/>
+        </Relationships>
+    "#;
+    let mut zip = build_zip_with_byte_entries(vec![
+        ("ppt/slides/slide1.xml", slide_xml.as_bytes()),
+        (
+            "ppt/slides/_rels/slide1.xml.rels",
+            slide_rels_xml.as_bytes(),
+        ),
+        ("ppt/notesSlides/notesSlide1.xml", b"\xFF\xFE\xFA"),
+    ]);
+    let presentation_rels = Relationships::parse(presentation_rels_xml).expect("presentation rels");
+    let mut parser = PptxParser::new();
+
+    let err = parser
+        .parse_presentation(
+            &mut zip,
+            presentation_xml,
+            &presentation_rels,
+            "ppt/presentation.xml",
+        )
+        .expect_err("unreadable notes slide must fail");
+
+    match err {
+        ParseError::Encoding(message) => {
+            assert!(message.contains("ppt/notesSlides/notesSlide1.xml"));
+        }
         other => panic!("unexpected error: {other:?}"),
     }
 }

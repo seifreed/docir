@@ -72,10 +72,7 @@ pub(crate) fn read_xml_part_and_rels_optional(
     if !zip.contains(part_path) {
         return Ok(None);
     }
-    let xml = match zip.read_file_string(part_path) {
-        Ok(xml) => xml,
-        Err(_) => return Ok(None),
-    };
+    let xml = zip.read_file_string(part_path)?;
     let rels = read_relationships(zip, part_path)?;
     Ok(Some((xml, rels)))
 }
