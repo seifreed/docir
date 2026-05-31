@@ -1,6 +1,6 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{read_event, reader_from_str};
+use crate::xml_utils::{read_event, reader_from_str, visit_attributes};
 use docir_core::ir::{PeoplePart, PersonEntry};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -26,13 +26,13 @@ fn parse_people_part_impl(xml: &str, path: &str) -> Result<PeoplePart, ParseErro
                     display_name: None,
                     initials: None,
                 };
-                for attr in e.attributes().flatten() {
+                visit_attributes(&e, path, |attr| {
                     let key = attr.key.as_ref();
                     let key = match key.iter().rposition(|b| *b == b':') {
                         Some(pos) => &key[pos + 1..],
                         None => key,
                     };
-                    let val = lossy_attr_value(&attr).to_string();
+                    let val = lossy_attr_value(attr).to_string();
                     match key {
                         b"id" => entry.person_id = Some(val),
                         b"userId" | b"userID" => entry.user_id = Some(val),
@@ -40,7 +40,7 @@ fn parse_people_part_impl(xml: &str, path: &str) -> Result<PeoplePart, ParseErro
                         b"initials" => entry.initials = Some(val),
                         _ => {}
                     }
-                }
+                })?;
                 if entry.person_id.is_some()
                     || entry.user_id.is_some()
                     || entry.display_name.is_some()

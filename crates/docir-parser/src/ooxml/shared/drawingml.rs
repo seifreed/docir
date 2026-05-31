@@ -2,7 +2,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, xml_error};
+use crate::xml_utils::{local_name, visit_attributes, xml_error};
 use docir_core::ir::{DrawingPart, Shape, ShapeType};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -30,11 +30,11 @@ pub fn parse_drawingml_part(
                 let local = local_name(&name_buf);
                 match local {
                     b"docPr" => {
-                        current_name = attr_value_by_local_keys(&e, &[b"name"]);
+                        current_name = attr_value_by_local_keys(&e, &[b"name"], path)?;
                     }
                     b"blip" => {
                         if let Some(rel_id) =
-                            attr_value_by_local_keys(&e, &[b"embed", b"link", b"id"])
+                            attr_value_by_local_keys(&e, &[b"embed", b"link", b"id"], path)?
                             && let Some(shape) = build_target_shape(
                                 rels,
                                 path,
@@ -47,7 +47,8 @@ pub fn parse_drawingml_part(
                         }
                     }
                     b"relIds" => {
-                        let rel_ids = rel_ids_from_attr_keys(&e, &[b"dm", b"lo", b"qs", b"cs"]);
+                        let rel_ids =
+                            rel_ids_from_attr_keys(&e, &[b"dm", b"lo", b"qs", b"cs"], path)?;
                         if !rel_ids.is_empty() {
                             shapes.push(build_custom_shape(
                                 rels,
@@ -58,7 +59,7 @@ pub fn parse_drawingml_part(
                         }
                     }
                     b"chart" => {
-                        if let Some(rel_id) = attr_value_by_local_keys(&e, &[b"id", b"rid"])
+                        if let Some(rel_id) = attr_value_by_local_keys(&e, &[b"id", b"rid"], path)?
                             && let Some(shape) = build_target_shape(
                                 rels,
                                 path,
@@ -96,32 +97,31 @@ fn resolve_drawingml_target(path: &str, target: &str) -> String {
 fn attr_value_by_local_keys(
     event: &quick_xml::events::BytesStart<'_>,
     keys: &[&[u8]],
-) -> Option<String> {
-    for attr in event.attributes().flatten() {
+    path: &str,
+) -> Result<Option<String>, ParseError> {
+    let mut value = None;
+    visit_attributes(event, path, |attr| {
         let key = local_name(attr.key.as_ref());
-        if keys.contains(&key) {
-            return Some(lossy_attr_value(&attr).to_string());
+        if value.is_none() && keys.contains(&key) {
+            value = Some(lossy_attr_value(attr).to_string());
         }
-    }
-    None
+    })?;
+    Ok(value)
 }
 
 fn rel_ids_from_attr_keys(
     event: &quick_xml::events::BytesStart<'_>,
     keys: &[&[u8]],
-) -> Vec<String> {
-    event
-        .attributes()
-        .flatten()
-        .filter_map(|attr| {
-            let key = local_name(attr.key.as_ref());
-            if keys.contains(&key) {
-                Some(lossy_attr_value(&attr).to_string())
-            } else {
-                None
-            }
-        })
-        .collect()
+    path: &str,
+) -> Result<Vec<String>, ParseError> {
+    let mut values = Vec::new();
+    visit_attributes(event, path, |attr| {
+        let key = local_name(attr.key.as_ref());
+        if keys.contains(&key) {
+            values.push(lossy_attr_value(attr).to_string());
+        }
+    })?;
+    Ok(values)
 }
 
 fn build_target_shape(

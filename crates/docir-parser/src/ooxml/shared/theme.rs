@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{read_event, reader_from_str};
+use crate::xml_utils::{read_event, reader_from_str, visit_attributes};
 use docir_core::ir::{Theme, ThemeColor, ThemeFontScheme};
 use docir_core::types::SourceSpan;
 use quick_xml::events::{BytesStart, Event};
@@ -26,8 +26,8 @@ pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
 
     loop {
         match read_event(&mut reader, &mut buf, path)? {
-            Event::Start(e) => handle_start_event(&e, &mut theme, &mut state),
-            Event::Empty(e) => handle_empty_event(&e, &mut theme, &mut state),
+            Event::Start(e) => handle_start_event(&e, &mut theme, &mut state, path)?,
+            Event::Empty(e) => handle_empty_event(&e, &mut theme, &mut state, path)?,
             Event::End(e) => handle_end_event(e.name().as_ref(), &mut state),
             Event::Eof => break,
             _ => {}
@@ -39,27 +39,38 @@ pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
     Ok(theme)
 }
 
-fn handle_start_event(start: &BytesStart<'_>, theme: &mut Theme, state: &mut ThemeParseState) {
+fn handle_start_event(
+    start: &BytesStart<'_>,
+    theme: &mut Theme,
+    state: &mut ThemeParseState,
+    path: &str,
+) -> Result<(), ParseError> {
     match local_name(start.name().as_ref()) {
-        b"theme" => set_theme_name(start, &mut theme.name),
+        b"theme" => set_theme_name(start, &mut theme.name, path)?,
         b"clrScheme" => state.in_clr_scheme = true,
         b"fontScheme" if theme.name.is_none() => {
-            set_theme_name(start, &mut theme.name);
+            set_theme_name(start, &mut theme.name, path)?;
         }
         b"majorFont" => state.in_major_font = true,
         b"minorFont" => state.in_minor_font = true,
-        b"latin" => set_latin_typeface(start, state),
+        b"latin" => set_latin_typeface(start, state, path)?,
         _ if state.in_clr_scheme => {
             let name = String::from_utf8_lossy(start.name().as_ref()).to_string();
             state.current_color_name = Some(name);
         }
         _ => {}
     }
+    Ok(())
 }
 
-fn handle_empty_event(start: &BytesStart<'_>, theme: &mut Theme, state: &mut ThemeParseState) {
+fn handle_empty_event(
+    start: &BytesStart<'_>,
+    theme: &mut Theme,
+    state: &mut ThemeParseState,
+    path: &str,
+) -> Result<(), ParseError> {
     if state.in_clr_scheme {
-        let color_value = srgb_value(start);
+        let color_value = srgb_value(start, path)?;
         if let Some(name) = state.current_color_name.take()
             && color_value.is_some()
         {
@@ -71,8 +82,9 @@ fn handle_empty_event(start: &BytesStart<'_>, theme: &mut Theme, state: &mut The
     }
 
     if local_name(start.name().as_ref()) == b"latin" {
-        set_latin_typeface(start, state);
+        set_latin_typeface(start, state, path)?;
     }
+    Ok(())
 }
 
 fn handle_end_event(tag: &[u8], state: &mut ThemeParseState) {
@@ -84,23 +96,30 @@ fn handle_end_event(tag: &[u8], state: &mut ThemeParseState) {
     }
 }
 
-fn set_theme_name(start: &BytesStart<'_>, slot: &mut Option<String>) {
-    for attr in start.attributes().flatten() {
+fn set_theme_name(
+    start: &BytesStart<'_>,
+    slot: &mut Option<String>,
+    path: &str,
+) -> Result<(), ParseError> {
+    visit_attributes(start, path, |attr| {
         if attr.key.as_ref() == b"name" {
-            *slot = Some(lossy_attr_value(&attr).to_string());
-            break;
+            *slot = Some(lossy_attr_value(attr).to_string());
         }
-    }
+    })?;
+    Ok(())
 }
 
-fn set_latin_typeface(start: &BytesStart<'_>, state: &mut ThemeParseState) {
+fn set_latin_typeface(
+    start: &BytesStart<'_>,
+    state: &mut ThemeParseState,
+    path: &str,
+) -> Result<(), ParseError> {
     let mut typeface = None;
-    for attr in start.attributes().flatten() {
+    visit_attributes(start, path, |attr| {
         if attr.key.as_ref() == b"typeface" {
-            typeface = Some(lossy_attr_value(&attr).to_string());
-            break;
+            typeface = Some(lossy_attr_value(attr).to_string());
         }
-    }
+    })?;
     if let Some(tf) = typeface {
         if state.in_major_font {
             state.font_scheme.major = Some(tf);
@@ -108,16 +127,18 @@ fn set_latin_typeface(start: &BytesStart<'_>, state: &mut ThemeParseState) {
             state.font_scheme.minor = Some(tf);
         }
     }
+    Ok(())
 }
 
-fn srgb_value(start: &BytesStart<'_>) -> Option<String> {
+fn srgb_value(start: &BytesStart<'_>, path: &str) -> Result<Option<String>, ParseError> {
     if local_name(start.name().as_ref()) != b"srgbClr" {
-        return None;
+        return Ok(None);
     }
-    for attr in start.attributes().flatten() {
+    let mut value = None;
+    visit_attributes(start, path, |attr| {
         if attr.key.as_ref() == b"val" {
-            return Some(lossy_attr_value(&attr).to_string());
+            value = Some(lossy_attr_value(attr).to_string());
         }
-    }
-    None
+    })?;
+    Ok(value)
 }

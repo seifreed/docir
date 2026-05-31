@@ -1,6 +1,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::visit_attributes;
 use crate::xml_utils::xml_error;
 use docir_core::ir::DigitalSignature;
 use docir_core::types::SourceSpan;
@@ -25,25 +26,25 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                 b"Signature" => {
-                    for attr in e.attributes().flatten() {
+                    visit_attributes(&e, path, |attr| {
                         if attr.key.as_ref() == b"Id" {
-                            sig.signature_id = Some(lossy_attr_value(&attr).to_string());
+                            sig.signature_id = Some(lossy_attr_value(attr).to_string());
                         }
-                    }
+                    })?;
                 }
                 b"SignatureMethod" => {
-                    for attr in e.attributes().flatten() {
+                    visit_attributes(&e, path, |attr| {
                         if attr.key.as_ref() == b"Algorithm" {
-                            sig.signature_method = Some(lossy_attr_value(&attr).to_string());
+                            sig.signature_method = Some(lossy_attr_value(attr).to_string());
                         }
-                    }
+                    })?;
                 }
                 b"DigestMethod" => {
-                    for attr in e.attributes().flatten() {
+                    visit_attributes(&e, path, |attr| {
                         if attr.key.as_ref() == b"Algorithm" {
-                            sig.digest_methods.push(lossy_attr_value(&attr).to_string());
+                            sig.digest_methods.push(lossy_attr_value(attr).to_string());
                         }
-                    }
+                    })?;
                 }
                 b"X509SubjectName" => {
                     if let Ok(text) = reader.read_text(e.name()) {
@@ -122,5 +123,18 @@ mod tests {
         let xml = "<ds:Signature><ds:SignatureMethod Algorithm=\"sha256\">";
         let parsed = parse_signature(xml, "bad.xml").expect("parser is best-effort");
         assert_eq!(parsed.signature_method.as_deref(), Some("sha256"));
+    }
+
+    #[test]
+    fn parse_signature_reports_malformed_attributes() {
+        let err = parse_signature(
+            r#"<ds:Signature Id="sig-1" Id="sig-2"></ds:Signature>"#,
+            "word/signatures/sig.xml",
+        )
+        .expect_err("malformed signature attrs should fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "word/signatures/sig.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }

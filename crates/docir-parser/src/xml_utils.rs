@@ -102,6 +102,21 @@ where
     }
 }
 
+pub(crate) fn visit_attributes<F>(
+    element: &BytesStart<'_>,
+    file: &str,
+    mut visit: F,
+) -> Result<(), ParseError>
+where
+    F: FnMut(&Attribute<'_>),
+{
+    for attr in element.attributes() {
+        let attr = attr.map_err(|err| xml_error(file, err))?;
+        visit(&attr);
+    }
+    Ok(())
+}
+
 pub(crate) fn attr_f64(e: &BytesStart<'_>, name: &[u8]) -> Option<f64> {
     attr_value(e, name).and_then(|v| v.parse::<f64>().ok())
 }

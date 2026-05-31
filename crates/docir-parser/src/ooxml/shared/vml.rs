@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, xml_error};
+use crate::xml_utils::{local_name, visit_attributes, xml_error};
 use docir_core::ir::{VmlDrawing, VmlShape};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -79,7 +79,7 @@ fn handle_vml_element_start(
         b"shape" => {
             let mut shape = VmlShape::new();
             shape.span = Some(SourceSpan::new(path));
-            apply_shape_attrs(&mut shape, e);
+            apply_shape_attrs(&mut shape, e, path)?;
             if is_empty {
                 return Ok(Some(shape));
             }
@@ -88,7 +88,7 @@ fn handle_vml_element_start(
         }
         b"imagedata" => {
             if let Some(shape) = current.as_mut() {
-                apply_imagedata_attrs(shape, e, rels);
+                apply_imagedata_attrs(shape, e, rels, path)?;
             }
             Ok(None)
         }
@@ -105,10 +105,14 @@ fn handle_vml_element_start(
     }
 }
 
-fn apply_shape_attrs(shape: &mut VmlShape, e: &quick_xml::events::BytesStart<'_>) {
-    for attr in e.attributes().flatten() {
+fn apply_shape_attrs(
+    shape: &mut VmlShape,
+    e: &quick_xml::events::BytesStart<'_>,
+    path: &str,
+) -> Result<(), ParseError> {
+    visit_attributes(e, path, |attr| {
         let key = local_name(attr.key.as_ref());
-        let val = lossy_attr_value(&attr).to_string();
+        let val = lossy_attr_value(attr).to_string();
         match key {
             b"id" | b"name" => shape.name = Some(val),
             b"type" => shape.shape_type = Some(val),
@@ -117,7 +121,8 @@ fn apply_shape_attrs(shape: &mut VmlShape, e: &quick_xml::events::BytesStart<'_>
             b"stroked" => shape.stroked = Some(parse_shape_bool_attr(&val)),
             _ => {}
         }
-    }
+    })?;
+    Ok(())
 }
 
 fn parse_shape_bool_attr(value: &str) -> bool {
@@ -128,25 +133,30 @@ fn apply_imagedata_attrs(
     shape: &mut VmlShape,
     e: &quick_xml::events::BytesStart<'_>,
     rels: &Relationships,
-) {
-    let Some(rel_id) = parse_image_rel_id(e) else {
-        return;
+    path: &str,
+) -> Result<(), ParseError> {
+    let Some(rel_id) = parse_image_rel_id(e, path)? else {
+        return Ok(());
     };
     shape.rel_id = Some(rel_id.clone());
     if let Some(rel) = rels.get(&rel_id) {
         shape.image_target = Some(rel.target.clone());
     }
+    Ok(())
 }
 
-fn parse_image_rel_id(e: &quick_xml::events::BytesStart<'_>) -> Option<String> {
-    for attr in e.attributes().flatten() {
+fn parse_image_rel_id(
+    e: &quick_xml::events::BytesStart<'_>,
+    path: &str,
+) -> Result<Option<String>, ParseError> {
+    let mut rel_id = None;
+    visit_attributes(e, path, |attr| {
         let key = local_name(attr.key.as_ref());
-        if key != b"id" && key != b"rid" && key != b"rId" {
-            continue;
+        if rel_id.is_none() && matches!(key, b"id" | b"rid" | b"rId") {
+            rel_id = Some(lossy_attr_value(attr).to_string());
         }
-        return Some(lossy_attr_value(&attr).to_string());
-    }
-    None
+    })?;
+    Ok(rel_id)
 }
 
 fn read_textbox_text(reader: &mut Reader<&[u8]>) -> Result<String, ParseError> {
@@ -269,5 +279,19 @@ mod tests {
                 .expect("parser is best-effort");
         assert_eq!(drawing.path, "word/bad.vml");
         assert!(shapes.is_empty());
+    }
+
+    #[test]
+    fn parse_vml_drawing_reports_malformed_attributes() {
+        let err = parse_vml_drawing(
+            r#"<xml><v:shape id="shape1" id="shape2"/></xml>"#,
+            "word/vmlDrawing1.vml",
+            &Relationships::default(),
+        )
+        .expect_err("malformed vml shape attrs should fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "word/vmlDrawing1.vml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }

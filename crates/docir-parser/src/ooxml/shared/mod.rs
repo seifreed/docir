@@ -27,8 +27,17 @@ pub use web_extensions::{parse_web_extension, parse_web_extension_taskpanes};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ParseError;
     use crate::ooxml::relationships::Relationships;
     use docir_core::ir::{RelationshipTargetMode, ShapeType};
+
+    fn assert_shared_xml_error<T>(result: Result<T, ParseError>, expected_file: &str) {
+        match result {
+            Err(ParseError::Xml { file, .. }) => assert_eq!(file, expected_file),
+            Err(other) => panic!("unexpected error: {other:?}"),
+            Ok(_) => panic!("expected shared OOXML XML error"),
+        }
+    }
 
     #[test]
     fn test_parse_theme_basic() {
@@ -206,6 +215,43 @@ mod tests {
         let part = parse_custom_xml_part(xml, "customXml/item1.xml", 42).expect("custom xml");
         assert_eq!(part.root_element.as_deref(), Some("root"));
         assert!(part.namespaces.iter().any(|n| n == "urn:example"));
+    }
+
+    #[test]
+    fn test_shared_ooxml_parsers_report_malformed_attributes() {
+        assert_shared_xml_error(
+            parse_theme(
+                r#"<a:theme xmlns:a="x" name="Office" name="Other"></a:theme>"#,
+                "theme/theme1.xml",
+            ),
+            "theme/theme1.xml",
+        );
+
+        assert_shared_xml_error(
+            parse_people_part(
+                r#"<ppl:people xmlns:ppl="x"><ppl:person ppl:id="p1" ppl:id="p2"/></ppl:people>"#,
+                "word/people.xml",
+            ),
+            "word/people.xml",
+        );
+
+        assert_shared_xml_error(
+            parse_custom_xml_part(
+                r#"<root attr="one" attr="two"></root>"#,
+                "customXml/item1.xml",
+                42,
+            ),
+            "customXml/item1.xml",
+        );
+
+        assert_shared_xml_error(
+            parse_drawingml_part(
+                r#"<w:drawing xmlns:w="w" xmlns:wp="wp"><wp:docPr name="Image 1" name="Image 2"/></w:drawing>"#,
+                "word/drawings/drawing1.xml",
+                &Relationships::default(),
+            ),
+            "word/drawings/drawing1.xml",
+        );
     }
 
     #[test]
