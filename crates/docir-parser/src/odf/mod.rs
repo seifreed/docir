@@ -23,6 +23,11 @@ use std::io::{Read, Seek};
 
 mod builder;
 mod container;
+mod container_content;
+mod container_encryption;
+mod container_meta;
+#[cfg(test)]
+mod container_tests;
 mod formula;
 mod helpers;
 mod io;
@@ -45,7 +50,8 @@ use self::security::scan_odf_filters;
 use self::security_helpers::{build_odf_macro_project, parse_odf_signatures};
 use crate::security_scan::DefaultSecurityScanner;
 
-use container::{handle_content_xml, load_meta};
+use container_content::handle_content_xml;
+use container_meta::load_meta;
 use formula::evaluate_ods_formulas;
 use io::{collect_manifest_index, collect_shared_parts};
 use limits::{OdfAtomicLimits, OdfLimitCounter, OdfLimits};
