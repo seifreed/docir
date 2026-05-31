@@ -20,8 +20,19 @@ jobs:
       - name: Install coverage tooling
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      - name: Install supply-chain tooling
+        uses: taiki-e/install-action@cargo-deny
+
+      - name: Install vulnerability audit tooling
+        uses: taiki-e/install-action@cargo-audit
+
       - name: Verify coverage tooling
         run: cargo llvm-cov --version
+
+      - name: Verify supply-chain tooling
+        run: |
+          cargo deny --version
+          cargo audit --version
 
       - name: Verify gate script contracts
         run: bash scripts/tests/quality_gate_exit_codes.sh

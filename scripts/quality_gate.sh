@@ -98,6 +98,18 @@ stage_crate_dependency_cycles() {
   gate_run_command bash "${SCRIPT_DIR}/quality_dependency_cycles.sh"
 }
 
+stage_check_workspace() {
+  gate_run_command cargo check --workspace --all-targets --all-features
+}
+
+stage_cargo_deny() {
+  gate_run_command cargo deny check
+}
+
+stage_cargo_audit() {
+  gate_run_command cargo audit
+}
+
 stage_api_hygiene() {
   gate_run_command bash "${SCRIPT_DIR}/quality_api_hygiene.sh"
 }
@@ -151,6 +163,15 @@ dispatch_stage() {
     crate_dependency_cycles)
       stage_crate_dependency_cycles
       ;;
+    check_workspace)
+      stage_check_workspace
+      ;;
+    cargo_deny)
+      stage_cargo_deny
+      ;;
+    cargo_audit)
+      stage_cargo_audit
+      ;;
     api_hygiene)
       stage_api_hygiene
       ;;
@@ -181,6 +202,9 @@ DEFAULT_STAGES=(
   presentation_boundary_policy
   parser_pipeline_contracts
   crate_dependency_cycles
+  check_workspace
+  cargo_deny
+  cargo_audit
   fmt_check
   clippy_strict
   test_workspace

@@ -124,6 +124,8 @@ run_case \
   "QUALITY_GATE_RESULT=PASS CLASS=pass EXIT_CODE=0" \
   "metadata --format-version 1 --no-deps --offline" \
   "check --workspace --all-targets --all-features" \
+  "deny check" \
+  "audit " \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test " \
@@ -136,6 +138,8 @@ run_case \
   "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
   "metadata --format-version 1 --no-deps --offline" \
   "check --workspace --all-targets --all-features" \
+  "deny check" \
+  "audit " \
   "fmt --all --check"
 
 run_case \
@@ -145,6 +149,8 @@ run_case \
   "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
   "metadata --format-version 1 --no-deps --offline" \
   "check --workspace --all-targets --all-features" \
+  "deny check" \
+  "audit " \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings"
 
@@ -155,6 +161,8 @@ run_case \
   "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
   "metadata --format-version 1 --no-deps --offline" \
   "check --workspace --all-targets --all-features" \
+  "deny check" \
+  "audit " \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test "
@@ -166,9 +174,30 @@ run_case \
   "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
   "metadata --format-version 1 --no-deps --offline" \
   "check --workspace --all-targets --all-features" \
+  "deny check" \
+  "audit " \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test " \
   "llvm-cov --workspace --all-features --summary-only --fail-under-lines ${coverage_threshold}"
+
+run_case \
+  "baseline-fail-deny" \
+  "deny" \
+  1 \
+  "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
+  "metadata --format-version 1 --no-deps --offline" \
+  "check --workspace --all-targets --all-features" \
+  "deny check"
+
+run_case \
+  "baseline-fail-audit" \
+  "audit" \
+  1 \
+  "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
+  "metadata --format-version 1 --no-deps --offline" \
+  "check --workspace --all-targets --all-features" \
+  "deny check" \
+  "audit "
 
 echo "quality_gate_baseline_commands: OK"

@@ -120,6 +120,8 @@ run_case \
   "QUALITY_GATE_RESULT=PASS CLASS=pass EXIT_CODE=0" \
   "metadata --format-version 1 --no-deps --offline" \
   "check --workspace --all-targets --all-features" \
+  "deny check" \
+  "audit " \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test " \
@@ -154,6 +156,8 @@ fi
 
 if ! rg -q '^metadata --format-version 1 --no-deps --offline$' "${log_file}" \
   || ! rg -q '^check --workspace --all-targets --all-features$' "${log_file}" \
+  || ! rg -q '^deny check$' "${log_file}" \
+  || ! rg -q '^audit $' "${log_file}" \
   || ! rg -q "^llvm-cov --workspace --all-features --summary-only --fail-under-lines ${coverage_threshold}\$" "${log_file}"; then
   echo "coverage-threshold-fail: missing expected llvm-cov command invocation"
   cat "${log_file}"
