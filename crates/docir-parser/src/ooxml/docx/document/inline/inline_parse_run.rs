@@ -6,7 +6,7 @@ use crate::ooxml::docx::document::{
     Run, RunProperties, insert_note_reference, parse_paragraph_simple,
 };
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{XmlScanControl, attr_value, local_name};
+use crate::xml_utils::{XmlScanControl, attr_value, local_name, xml_error};
 use docir_core::ir::{Revision, RevisionType};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
@@ -109,7 +109,9 @@ fn handle_run_start_event(
             state.field_char = attr_value(start, b"w:fldCharType");
         }
         b"t" | b"instrText" | b"delText" => {
-            let content = reader.read_text(start.name()).unwrap_or_default();
+            let content = reader
+                .read_text(start.name())
+                .map_err(|err| xml_error(super::DOC_XML_PATH, err))?;
             if local_name(start.name().as_ref()) == b"instrText" {
                 state.has_instr = true;
             }
