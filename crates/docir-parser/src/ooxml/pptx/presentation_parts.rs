@@ -12,7 +12,20 @@ impl PptxParser {
         document: &mut Document,
         zip: &mut impl PackageReader,
     ) -> Result<(), ParseError> {
-        // Presentation properties
+        self.load_core_presentation_parts(document, zip)?;
+        self.load_comment_authors(document, zip)?;
+        self.load_presentation_tags(document, zip)?;
+        self.load_people_part(document, zip)?;
+        self.load_smartart_parts(document, zip)?;
+
+        Ok(())
+    }
+
+    fn load_core_presentation_parts(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         if let Some(props) = parse_xml_part_with_span(
             zip,
             "ppt/presProps.xml",
@@ -27,8 +40,6 @@ impl PptxParser {
                 id,
             );
         }
-
-        // View properties
         if let Some(props) = parse_xml_part_with_span(
             zip,
             "ppt/viewProps.xml",
@@ -38,8 +49,6 @@ impl PptxParser {
             let id = props.id;
             insert_shared_part(&mut self.store, document, IRNode::ViewProperties(props), id);
         }
-
-        // Table styles
         if let Some(styles) = parse_xml_part_with_span(
             zip,
             "ppt/tableStyles.xml",
@@ -49,26 +58,39 @@ impl PptxParser {
             let id = styles.id;
             insert_shared_part(&mut self.store, document, IRNode::TableStyleSet(styles), id);
         }
+        Ok(())
+    }
 
-        // Comment authors
-        if zip.contains("ppt/commentAuthors.xml") {
-            let authors_xml = zip.read_file_string("ppt/commentAuthors.xml")?;
-            let authors = parse_comment_authors(&authors_xml, "ppt/commentAuthors.xml")?;
-            self.set_comment_authors(&authors);
-            for author in authors {
-                let mut author = author;
-                author.span = Some(SourceSpan::new("ppt/commentAuthors.xml"));
-                let id = author.id;
-                insert_shared_part(
-                    &mut self.store,
-                    document,
-                    IRNode::PptxCommentAuthor(author),
-                    id,
-                );
-            }
+    fn load_comment_authors(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
+        if !zip.contains("ppt/commentAuthors.xml") {
+            return Ok(());
         }
+        let authors_xml = zip.read_file_string("ppt/commentAuthors.xml")?;
+        let authors = parse_comment_authors(&authors_xml, "ppt/commentAuthors.xml")?;
+        self.set_comment_authors(&authors);
+        for author in authors {
+            let mut author = author;
+            author.span = Some(SourceSpan::new("ppt/commentAuthors.xml"));
+            let id = author.id;
+            insert_shared_part(
+                &mut self.store,
+                document,
+                IRNode::PptxCommentAuthor(author),
+                id,
+            );
+        }
+        Ok(())
+    }
 
-        // Tags
+    fn load_presentation_tags(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         let tag_paths: Vec<String> = zip
             .file_names()
             .into_iter()
@@ -82,8 +104,14 @@ impl PptxParser {
                 insert_shared_part(&mut self.store, document, IRNode::PresentationTag(tag), id);
             }
         }
+        Ok(())
+    }
 
-        // People part (coauthoring)
+    fn load_people_part(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         if let Some(people) = parse_xml_part_with_span(
             zip,
             "ppt/people.xml",
@@ -93,8 +121,14 @@ impl PptxParser {
             let id = people.id;
             insert_shared_part(&mut self.store, document, IRNode::PeoplePart(people), id);
         }
+        Ok(())
+    }
 
-        // SmartArt parts
+    fn load_smartart_parts(
+        &mut self,
+        document: &mut Document,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
         let diagram_paths: Vec<String> = zip
             .file_names()
             .into_iter()
@@ -106,7 +140,6 @@ impl PptxParser {
             let id = part.id;
             insert_shared_part(&mut self.store, document, IRNode::SmartArtPart(part), id);
         }
-
         Ok(())
     }
 }

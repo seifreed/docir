@@ -34,6 +34,10 @@ pub(super) fn handle_paragraph_controls(
     ctx: &mut RtfParseContext,
     store: &mut IrStore,
 ) -> Result<bool, ParseError> {
+    if handle_paragraph_layout_controls(word, param, ctx) {
+        return Ok(true);
+    }
+
     match word {
         "par" => {
             flush_text(ctx, store, None)?;
@@ -61,6 +65,17 @@ pub(super) fn handle_paragraph_controls(
         "tab" => {
             append_text(ctx, "\t");
         }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn handle_paragraph_layout_controls(
+    word: &str,
+    param: Option<i32>,
+    ctx: &mut RtfParseContext,
+) -> bool {
+    match word {
         "ql" => {
             apply_paragraph_alignment(ctx, TextAlignment::Left);
         }
@@ -116,9 +131,9 @@ pub(super) fn handle_paragraph_controls(
                 };
             }
         }
-        _ => return Ok(false),
+        _ => return false,
     }
-    Ok(true)
+    true
 }
 
 fn apply_pending_indent(

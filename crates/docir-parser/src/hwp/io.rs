@@ -112,7 +112,7 @@ pub(super) fn dump_hwp_streams(
 ///
 /// Security note: SHA-1 without salt or iterations is a weak key derivation
 /// function. This matches the HWP binary format specification and cannot be
-/// changed without breaking compatibility with existing HWP files. A proper
+/// changed while still reading existing HWP files. A proper
 /// KDF (PBKDF2 with salt, or Argon2id) should be used for new designs.
 fn derive_hwp_key(password: &str) -> ([u8; 16], [u8; 20]) {
     let mut hasher = Sha1::new();

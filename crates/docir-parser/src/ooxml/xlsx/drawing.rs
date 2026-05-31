@@ -8,7 +8,7 @@ use docir_core::ir::{IRNode, Shape, ShapeType, WorksheetDrawing};
 use docir_core::security::{ExternalRefType, ExternalReference};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 
 fn drawing_relationship_target(
     drawing_path: &str,
@@ -30,113 +30,19 @@ impl XlsxParser {
         relationships: &Relationships,
         zip: &mut impl PackageReader,
     ) -> Result<NodeId, ParseError> {
-        let mut drawing = WorksheetDrawing::new();
-        drawing.span = Some(SourceSpan::new(drawing_path));
+        let mut state = XlsxDrawingState::new(drawing_path);
 
         let mut reader = Reader::from_str(xml);
         reader.config_mut().trim_text(true);
         let mut buf = Vec::new();
 
-        let mut current_shape: Option<Shape> = None;
-        let mut current_embed: Option<String> = None;
-        let mut current_chart: Option<String> = None;
-
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
-                    b"pic" => {
-                        current_shape = Some(Shape::new(ShapeType::Picture));
-                    }
-                    b"graphicFrame" => {
-                        current_shape = Some(Shape::new(ShapeType::Chart));
-                    }
-                    b"cNvPr" => {
-                        if let Some(shape) = current_shape.as_mut() {
-                            for attr in e.attributes().flatten() {
-                                match attr.key.as_ref() {
-                                    b"name" => {
-                                        shape.name = Some(lossy_attr_value(&attr).to_string());
-                                    }
-                                    b"descr" => {
-                                        shape.alt_text = Some(lossy_attr_value(&attr).to_string());
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                    b"blip" => {
-                        for attr in e.attributes().flatten() {
-                            if local_name(attr.key.as_ref()) == b"embed" {
-                                current_embed = Some(lossy_attr_value(&attr).to_string());
-                            }
-                        }
-                    }
-                    b"chart" => {
-                        for attr in e.attributes().flatten() {
-                            if local_name(attr.key.as_ref()) == b"id" {
-                                current_chart = Some(lossy_attr_value(&attr).to_string());
-                            }
-                        }
-                    }
-                    _ => {}
-                },
+                Ok(Event::Start(e)) => handle_xlsx_drawing_start(&e, &mut state),
                 Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
-                    b"pic" => {
-                        if let Some(mut shape) = current_shape.take() {
-                            if let Some(rel_id) = current_embed.take()
-                                && let Some(rel) = relationships.get(&rel_id)
-                            {
-                                shape.relationship_id = Some(rel_id.clone());
-                                shape.media_target = Some(drawing_relationship_target(
-                                    drawing_path,
-                                    rel.target_mode,
-                                    &rel.target,
-                                ));
-                                if rel.target_mode == TargetMode::External {
-                                    let ext_ref =
-                                        ExternalReference::new(ExternalRefType::Image, &rel.target);
-                                    let ext_ref = ExternalReference {
-                                        relationship_id: Some(rel_id),
-                                        ..ext_ref
-                                    };
-                                    let ext_id = ext_ref.id;
-                                    self.store.insert(IRNode::ExternalReference(ext_ref));
-                                    self.security_info.external_refs.push(ext_id);
-                                }
-                            }
-                            let id = shape.id;
-                            self.store.insert(IRNode::Shape(shape));
-                            drawing.shapes.push(id);
-                        }
-                    }
+                    b"pic" => self.finish_picture_shape(&mut state, drawing_path, relationships),
                     b"graphicFrame" => {
-                        if let Some(mut shape) = current_shape.take() {
-                            if let Some(rel_id) = current_chart.take()
-                                && let Some(rel) = relationships.get(&rel_id)
-                            {
-                                shape.relationship_id = Some(rel_id.clone());
-                                let chart_path = drawing_relationship_target(
-                                    drawing_path,
-                                    rel.target_mode,
-                                    &rel.target,
-                                );
-                                shape.media_target = Some(chart_path.clone());
-                                if rel.target_mode != TargetMode::External
-                                    && zip.contains(&chart_path)
-                                {
-                                    let chart_xml = zip.read_file_string(&chart_path)?;
-                                    if let Some(chart_id) =
-                                        self.parse_chart(&chart_xml, &chart_path)
-                                    {
-                                        self.chart_nodes.push(chart_id);
-                                    }
-                                }
-                            }
-                            let id = shape.id;
-                            self.store.insert(IRNode::Shape(shape));
-                            drawing.shapes.push(id);
-                        }
+                        self.finish_chart_shape(&mut state, drawing_path, relationships, zip)?;
                     }
                     _ => {}
                 },
@@ -149,10 +55,124 @@ impl XlsxParser {
             buf.clear();
         }
 
-        let id = drawing.id;
-        self.store.insert(IRNode::WorksheetDrawing(drawing));
+        let id = state.drawing.id;
+        self.store.insert(IRNode::WorksheetDrawing(state.drawing));
         Ok(id)
     }
+
+    fn finish_picture_shape(
+        &mut self,
+        state: &mut XlsxDrawingState,
+        drawing_path: &str,
+        relationships: &Relationships,
+    ) {
+        if let Some(mut shape) = state.current_shape.take() {
+            if let Some(rel_id) = state.current_embed.take()
+                && let Some(rel) = relationships.get(&rel_id)
+            {
+                shape.relationship_id = Some(rel_id.clone());
+                shape.media_target = Some(drawing_relationship_target(
+                    drawing_path,
+                    rel.target_mode,
+                    &rel.target,
+                ));
+                if rel.target_mode == TargetMode::External {
+                    let ext_ref = ExternalReference::new(ExternalRefType::Image, &rel.target);
+                    let ext_ref = ExternalReference {
+                        relationship_id: Some(rel_id),
+                        ..ext_ref
+                    };
+                    let ext_id = ext_ref.id;
+                    self.store.insert(IRNode::ExternalReference(ext_ref));
+                    self.security_info.external_refs.push(ext_id);
+                }
+            }
+            state.insert_shape(shape, &mut self.store);
+        }
+    }
+
+    fn finish_chart_shape(
+        &mut self,
+        state: &mut XlsxDrawingState,
+        drawing_path: &str,
+        relationships: &Relationships,
+        zip: &mut impl PackageReader,
+    ) -> Result<(), ParseError> {
+        if let Some(mut shape) = state.current_shape.take() {
+            if let Some(rel_id) = state.current_chart.take()
+                && let Some(rel) = relationships.get(&rel_id)
+            {
+                shape.relationship_id = Some(rel_id.clone());
+                let chart_path =
+                    drawing_relationship_target(drawing_path, rel.target_mode, &rel.target);
+                shape.media_target = Some(chart_path.clone());
+                if rel.target_mode != TargetMode::External && zip.contains(&chart_path) {
+                    let chart_xml = zip.read_file_string(&chart_path)?;
+                    if let Some(chart_id) = self.parse_chart(&chart_xml, &chart_path) {
+                        self.chart_nodes.push(chart_id);
+                    }
+                }
+            }
+            state.insert_shape(shape, &mut self.store);
+        }
+        Ok(())
+    }
+}
+
+struct XlsxDrawingState {
+    drawing: WorksheetDrawing,
+    current_shape: Option<Shape>,
+    current_embed: Option<String>,
+    current_chart: Option<String>,
+}
+
+impl XlsxDrawingState {
+    fn new(drawing_path: &str) -> Self {
+        let mut drawing = WorksheetDrawing::new();
+        drawing.span = Some(SourceSpan::new(drawing_path));
+        Self {
+            drawing,
+            current_shape: None,
+            current_embed: None,
+            current_chart: None,
+        }
+    }
+
+    fn insert_shape(&mut self, shape: Shape, store: &mut docir_core::visitor::IrStore) {
+        let id = shape.id;
+        store.insert(IRNode::Shape(shape));
+        self.drawing.shapes.push(id);
+    }
+}
+
+fn handle_xlsx_drawing_start(e: &BytesStart<'_>, state: &mut XlsxDrawingState) {
+    match local_name(e.name().as_ref()) {
+        b"pic" => state.current_shape = Some(Shape::new(ShapeType::Picture)),
+        b"graphicFrame" => state.current_shape = Some(Shape::new(ShapeType::Chart)),
+        b"cNvPr" => apply_shape_properties(e, state.current_shape.as_mut()),
+        b"blip" => state.current_embed = relationship_attr(e, b"embed"),
+        b"chart" => state.current_chart = relationship_attr(e, b"id"),
+        _ => {}
+    }
+}
+
+fn apply_shape_properties(e: &BytesStart<'_>, shape: Option<&mut Shape>) {
+    if let Some(shape) = shape {
+        for attr in e.attributes().flatten() {
+            match attr.key.as_ref() {
+                b"name" => shape.name = Some(lossy_attr_value(&attr).to_string()),
+                b"descr" => shape.alt_text = Some(lossy_attr_value(&attr).to_string()),
+                _ => {}
+            }
+        }
+    }
+}
+
+fn relationship_attr(e: &BytesStart<'_>, local: &[u8]) -> Option<String> {
+    e.attributes()
+        .flatten()
+        .find(|attr| local_name(attr.key.as_ref()) == local)
+        .map(|attr| lossy_attr_value(&attr).to_string())
 }
 
 #[cfg(test)]

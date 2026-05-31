@@ -18,84 +18,12 @@ pub(super) fn parse_drawing(
     rels: &Relationships,
 ) -> Result<Option<NodeId>, ParseError> {
     let mut buf = Vec::new();
-    let mut rel_id: Option<String> = None;
-    let mut chart_rel: Option<String> = None;
-    let mut diagram_rel_ids: Vec<String> = Vec::new();
-    let mut name: Option<String> = None;
-    let mut alt_text: Option<String> = None;
-    let mut shape_type = ShapeType::Picture;
-    let mut transform = ShapeTransform::default();
-    let mut next_pos_is_x = true;
-    let mut text: Option<ShapeText> = None;
-    let mut hyperlink_rel: Option<String> = None;
+    let mut state = DocxDrawingState::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                let name_bytes = e.name().as_ref().to_vec();
-                let name_slice = local_name(name_bytes.as_slice());
-                if name_slice == b"blip" {
-                    rel_id = attr_value_by_suffix(&e, &[b":embed", b":link"]);
-                } else if name_slice == b"docPr" {
-                    name = attr_value(&e, b"name");
-                    alt_text = attr_value(&e, b"descr");
-                } else if name_slice == b"graphicData" {
-                    if let Some(uri) = attr_value(&e, b"uri") {
-                        if uri.contains("chart") {
-                            shape_type = docir_core::ir::ShapeType::Chart;
-                        } else if uri.contains("diagram") {
-                            shape_type = docir_core::ir::ShapeType::Custom;
-                        }
-                    }
-                } else if name_slice == b"prstGeom" {
-                    if let Some(val) = attr_value(&e, b"prst") {
-                        shape_type = map_shape_type(&val);
-                    }
-                } else if name_slice == b"extent" || name_slice == b"ext" {
-                    if let Some(val) = attr_value(&e, b"cx").and_then(|v| v.parse().ok()) {
-                        transform.width = val;
-                    }
-                    if let Some(val) = attr_value(&e, b"cy").and_then(|v| v.parse().ok()) {
-                        transform.height = val;
-                    }
-                } else if name_slice == b"off" {
-                    if let Some(val) = attr_value(&e, b"x").and_then(|v| v.parse().ok()) {
-                        transform.x = val;
-                    }
-                    if let Some(val) = attr_value(&e, b"y").and_then(|v| v.parse().ok()) {
-                        transform.y = val;
-                    }
-                } else if name_slice == b"posOffset" {
-                    if let Ok(text) = reader.read_text(e.name())
-                        && let Ok(val) = text.parse::<i64>()
-                    {
-                        if next_pos_is_x {
-                            transform.x = val;
-                        } else {
-                            transform.y = val;
-                        }
-                        next_pos_is_x = !next_pos_is_x;
-                    }
-                } else if name_slice == b"txBody" {
-                    text = Some(parse_drawing_text_body(reader, "word/document.xml")?);
-                } else if name_slice == b"chart" {
-                    chart_rel = attr_value_by_suffix(&e, &[b":id"]);
-                } else if name_slice == b"relIds" {
-                    if let Some(val) = attr_value_by_suffix(&e, &[b":dm"]) {
-                        diagram_rel_ids.push(val);
-                    }
-                    if let Some(val) = attr_value_by_suffix(&e, &[b":lo"]) {
-                        diagram_rel_ids.push(val);
-                    }
-                    if let Some(val) = attr_value_by_suffix(&e, &[b":qs"]) {
-                        diagram_rel_ids.push(val);
-                    }
-                    if let Some(val) = attr_value_by_suffix(&e, &[b":cs"]) {
-                        diagram_rel_ids.push(val);
-                    }
-                } else if name_slice == b"hlinkClick" {
-                    hyperlink_rel = attr_value_by_suffix(&e, &[b":id"]);
-                }
+                handle_drawing_start(reader, &e, &mut state)?;
             }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"drawing" => {
                 break;
@@ -109,29 +37,156 @@ pub(super) fn parse_drawing(
         buf.clear();
     }
 
-    let rel_id = chart_rel
+    finish_drawing_shape(parser, reader, rels, state)
+}
+
+struct DocxDrawingState {
+    rel_id: Option<String>,
+    chart_rel: Option<String>,
+    diagram_rel_ids: Vec<String>,
+    name: Option<String>,
+    alt_text: Option<String>,
+    shape_type: ShapeType,
+    transform: ShapeTransform,
+    next_pos_is_x: bool,
+    text: Option<ShapeText>,
+    hyperlink_rel: Option<String>,
+}
+
+impl DocxDrawingState {
+    fn new() -> Self {
+        Self {
+            rel_id: None,
+            chart_rel: None,
+            diagram_rel_ids: Vec::new(),
+            name: None,
+            alt_text: None,
+            shape_type: ShapeType::Picture,
+            transform: ShapeTransform::default(),
+            next_pos_is_x: true,
+            text: None,
+            hyperlink_rel: None,
+        }
+    }
+}
+
+fn handle_drawing_start(
+    reader: &mut Reader<&[u8]>,
+    e: &BytesStart<'_>,
+    state: &mut DocxDrawingState,
+) -> Result<(), ParseError> {
+    match local_name(e.name().as_ref()) {
+        b"blip" => state.rel_id = attr_value_by_suffix(e, &[b":embed", b":link"]),
+        b"docPr" => {
+            state.name = attr_value(e, b"name");
+            state.alt_text = attr_value(e, b"descr");
+        }
+        b"graphicData" => apply_graphic_data_type(e, state),
+        b"prstGeom" => {
+            if let Some(val) = attr_value(e, b"prst") {
+                state.shape_type = map_shape_type(&val);
+            }
+        }
+        b"extent" | b"ext" => apply_extent(e, &mut state.transform),
+        b"off" => apply_offset(e, &mut state.transform),
+        b"posOffset" => apply_position_offset(reader, e, state),
+        b"txBody" => state.text = Some(parse_drawing_text_body(reader, "word/document.xml")?),
+        b"chart" => state.chart_rel = attr_value_by_suffix(e, &[b":id"]),
+        b"relIds" => collect_diagram_relationships(e, &mut state.diagram_rel_ids),
+        b"hlinkClick" => state.hyperlink_rel = attr_value_by_suffix(e, &[b":id"]),
+        _ => {}
+    }
+    Ok(())
+}
+
+fn apply_graphic_data_type(e: &BytesStart<'_>, state: &mut DocxDrawingState) {
+    if let Some(uri) = attr_value(e, b"uri") {
+        if uri.contains("chart") {
+            state.shape_type = ShapeType::Chart;
+        } else if uri.contains("diagram") {
+            state.shape_type = ShapeType::Custom;
+        }
+    }
+}
+
+fn apply_extent(e: &BytesStart<'_>, transform: &mut ShapeTransform) {
+    if let Some(val) = attr_value(e, b"cx").and_then(|v| v.parse().ok()) {
+        transform.width = val;
+    }
+    if let Some(val) = attr_value(e, b"cy").and_then(|v| v.parse().ok()) {
+        transform.height = val;
+    }
+}
+
+fn apply_offset(e: &BytesStart<'_>, transform: &mut ShapeTransform) {
+    if let Some(val) = attr_value(e, b"x").and_then(|v| v.parse().ok()) {
+        transform.x = val;
+    }
+    if let Some(val) = attr_value(e, b"y").and_then(|v| v.parse().ok()) {
+        transform.y = val;
+    }
+}
+
+fn apply_position_offset(
+    reader: &mut Reader<&[u8]>,
+    e: &BytesStart<'_>,
+    state: &mut DocxDrawingState,
+) {
+    if let Ok(text) = reader.read_text(e.name())
+        && let Ok(val) = text.parse::<i64>()
+    {
+        if state.next_pos_is_x {
+            state.transform.x = val;
+        } else {
+            state.transform.y = val;
+        }
+        state.next_pos_is_x = !state.next_pos_is_x;
+    }
+}
+
+fn collect_diagram_relationships(e: &BytesStart<'_>, diagram_rel_ids: &mut Vec<String>) {
+    for suffix in [
+        b":dm".as_slice(),
+        b":lo".as_slice(),
+        b":qs".as_slice(),
+        b":cs".as_slice(),
+    ] {
+        if let Some(val) = attr_value_by_suffix(e, &[suffix]) {
+            diagram_rel_ids.push(val);
+        }
+    }
+}
+
+fn finish_drawing_shape(
+    parser: &mut DocxParser,
+    reader: &Reader<&[u8]>,
+    rels: &Relationships,
+    state: DocxDrawingState,
+) -> Result<Option<NodeId>, ParseError> {
+    let rel_id = state
+        .chart_rel
         .clone()
-        .or(diagram_rel_ids.first().cloned())
-        .or(rel_id);
+        .or(state.diagram_rel_ids.first().cloned())
+        .or(state.rel_id);
     if let Some(rel_id) = rel_id
         && let Some(rel) = rels.get(&rel_id)
     {
-        let mut shape = Shape::new(shape_type);
-        shape.name = name;
-        shape.alt_text = alt_text;
-        shape.transform = transform;
-        shape.text = text;
+        let mut shape = Shape::new(state.shape_type);
+        shape.name = state.name;
+        shape.alt_text = state.alt_text;
+        shape.transform = state.transform;
+        shape.text = state.text;
         shape.relationship_id = Some(rel_id.clone());
         shape.media_target = Some(normalize_docx_target(&rel.target));
         let mut span = span_from_reader(reader, "word/document.xml");
         span.relationship_id = Some(rel_id.clone());
         shape.span = Some(span);
-        if let Some(hrel) = hyperlink_rel.as_ref().and_then(|id| rels.get(id)) {
+        if let Some(hrel) = state.hyperlink_rel.as_ref().and_then(|id| rels.get(id)) {
             shape.hyperlink = Some(hrel.target.clone());
         }
-        if !diagram_rel_ids.is_empty() {
+        if !state.diagram_rel_ids.is_empty() {
             let mut related_targets = Vec::new();
-            for rel_id in diagram_rel_ids {
+            for rel_id in state.diagram_rel_ids {
                 if let Some(rel) = rels.get(&rel_id) {
                     related_targets.push(normalize_docx_target(&rel.target));
                 }

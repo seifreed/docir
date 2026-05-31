@@ -384,7 +384,7 @@ fn handle_styles_end(
         b"borders" => state.in_borders = false,
         b"cellXfs" => state.in_cell_xfs = false,
         b"cellStyleXfs" => state.in_cell_style_xfs = false,
-        // Keep as compatibility with readers that might omit explicit </dxf> events.
+        // Keep parser state tolerant for streams that omit explicit </dxf> events.
         b"tableStyles" => state.in_table_styles = false,
         b"font" => {
             if let Some(font) = state.current_font.take() {

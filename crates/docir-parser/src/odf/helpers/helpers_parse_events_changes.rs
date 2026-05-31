@@ -6,6 +6,7 @@ use crate::odf::paragraph::parse_paragraph;
 use crate::xml_utils::local_name;
 use docir_core::ir::Comment;
 use docir_core::visitor::IrStore;
+use quick_xml::events::BytesStart;
 
 pub(super) fn parse_annotation(
     reader: &mut OdfReader<'_>,
@@ -140,11 +141,6 @@ pub(super) fn parse_tracked_changes(
     let mut current_revision: Option<Revision> = None;
     let mut current_field: Option<ChangeInfoField> = None;
 
-    enum ChangeInfoField {
-        Author,
-        Date,
-    }
-
     scan_xml_events_until_end(
         reader,
         &mut buf,
@@ -152,55 +148,21 @@ pub(super) fn parse_tracked_changes(
         |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"tracked-changes"),
         |reader, event| {
             match event {
-                Event::Start(e) => match local_name(e.name().as_ref()) {
-                    b"changed-region" => {
-                        current_revision = None;
-                    }
-                    b"insertion" => {
-                        current_revision = Some(Revision::new(RevisionType::Insert));
-                    }
-                    b"deletion" => {
-                        current_revision = Some(Revision::new(RevisionType::Delete));
-                    }
-                    b"creator" => current_field = Some(ChangeInfoField::Author),
-                    b"date" => current_field = Some(ChangeInfoField::Date),
-                    b"p" => {
-                        if let Some(rev) = current_revision.as_mut() {
-                            let paragraph_id = parse_paragraph(
-                                reader,
-                                e.name().as_ref(),
-                                None,
-                                None,
-                                store,
-                                &mut Vec::new(),
-                                limits,
-                            )?;
-                            rev.content.push(paragraph_id);
-                        }
-                    }
-                    _ => {}
-                },
+                Event::Start(e) => handle_tracked_change_start(
+                    reader,
+                    e,
+                    store,
+                    limits,
+                    &mut current_revision,
+                    &mut current_field,
+                )?,
                 Event::Text(e) => {
-                    if let Some(rev) = current_revision.as_mut()
-                        && let Some(field) = &current_field
-                    {
-                        let value = crate::xml_utils::decoded_text_or_default(e);
-                        match field {
-                            ChangeInfoField::Author => rev.author = Some(value),
-                            ChangeInfoField::Date => rev.date = Some(value),
-                        }
-                    }
+                    let value = crate::xml_utils::decoded_text_or_default(e);
+                    apply_tracked_change_field(&mut current_revision, current_field, value);
                 }
                 Event::GeneralRef(e) => {
-                    if let Some(rev) = current_revision.as_mut()
-                        && let Some(field) = &current_field
-                    {
-                        let value = crate::xml_utils::decoded_general_ref_or_default(e);
-                        match field {
-                            ChangeInfoField::Author => rev.author = Some(value),
-                            ChangeInfoField::Date => rev.date = Some(value),
-                        }
-                    }
+                    let value = crate::xml_utils::decoded_general_ref_or_default(e);
+                    apply_tracked_change_field(&mut current_revision, current_field, value);
                 }
                 Event::End(e) => match local_name(e.name().as_ref()) {
                     b"insertion" | b"deletion" => {
@@ -220,4 +182,58 @@ pub(super) fn parse_tracked_changes(
     )?;
 
     Ok(revisions)
+}
+
+#[derive(Clone, Copy)]
+enum ChangeInfoField {
+    Author,
+    Date,
+}
+
+fn handle_tracked_change_start(
+    reader: &mut OdfReader<'_>,
+    e: &BytesStart<'_>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    current_revision: &mut Option<Revision>,
+    current_field: &mut Option<ChangeInfoField>,
+) -> Result<(), ParseError> {
+    match local_name(e.name().as_ref()) {
+        b"changed-region" => *current_revision = None,
+        b"insertion" => *current_revision = Some(Revision::new(RevisionType::Insert)),
+        b"deletion" => *current_revision = Some(Revision::new(RevisionType::Delete)),
+        b"creator" => *current_field = Some(ChangeInfoField::Author),
+        b"date" => *current_field = Some(ChangeInfoField::Date),
+        b"p" => {
+            if let Some(rev) = current_revision.as_mut() {
+                let paragraph_id = parse_paragraph(
+                    reader,
+                    e.name().as_ref(),
+                    None,
+                    None,
+                    store,
+                    &mut Vec::new(),
+                    limits,
+                )?;
+                rev.content.push(paragraph_id);
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn apply_tracked_change_field(
+    current_revision: &mut Option<Revision>,
+    current_field: Option<ChangeInfoField>,
+    value: String,
+) {
+    if let Some(rev) = current_revision.as_mut()
+        && let Some(field) = current_field
+    {
+        match field {
+            ChangeInfoField::Author => rev.author = Some(value),
+            ChangeInfoField::Date => rev.date = Some(value),
+        }
+    }
 }

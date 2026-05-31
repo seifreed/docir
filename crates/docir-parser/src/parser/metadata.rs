@@ -194,19 +194,7 @@ impl OoxmlParser {
                         && let Some(prop) = current_prop.as_mut()
                     {
                         let text = crate::xml_utils::decoded_text_or_default(&e);
-                        prop.value = match tag.as_str() {
-                            "vt:lpwstr" | "vt:lpstr" | "vt:bstr" => PropertyValue::String(text),
-                            "vt:i2" | "vt:i4" | "vt:int" | "vt:integer" => {
-                                PropertyValue::Integer(text.parse::<i64>().unwrap_or(0))
-                            }
-                            "vt:r4" | "vt:r8" | "vt:float" => {
-                                PropertyValue::Float(text.parse::<f64>().unwrap_or(0.0))
-                            }
-                            "vt:bool" => PropertyValue::Boolean(text == "true" || text == "1"),
-                            "vt:filetime" => PropertyValue::DateTime(text),
-                            "vt:blob" => PropertyValue::Blob(text),
-                            _ => PropertyValue::String(text),
-                        };
+                        prop.value = custom_property_value(tag, text);
                     }
                 }
                 Ok(Event::GeneralRef(e)) => {
@@ -214,19 +202,7 @@ impl OoxmlParser {
                         && let Some(prop) = current_prop.as_mut()
                     {
                         let text = crate::xml_utils::decoded_general_ref_or_default(&e);
-                        prop.value = match tag.as_str() {
-                            "vt:lpwstr" | "vt:lpstr" | "vt:bstr" => PropertyValue::String(text),
-                            "vt:i2" | "vt:i4" | "vt:int" | "vt:integer" => {
-                                PropertyValue::Integer(text.parse::<i64>().unwrap_or(0))
-                            }
-                            "vt:r4" | "vt:r8" | "vt:float" => {
-                                PropertyValue::Float(text.parse::<f64>().unwrap_or(0.0))
-                            }
-                            "vt:bool" => PropertyValue::Boolean(text == "true" || text == "1"),
-                            "vt:filetime" => PropertyValue::DateTime(text),
-                            "vt:blob" => PropertyValue::Blob(text),
-                            _ => PropertyValue::String(text),
-                        };
+                        prop.value = custom_property_value(tag, text);
                     }
                 }
                 Ok(Event::End(e)) => {
@@ -244,6 +220,20 @@ impl OoxmlParser {
             }
             buf.clear();
         }
+    }
+}
+
+fn custom_property_value(tag: &str, text: String) -> PropertyValue {
+    match tag {
+        "vt:lpwstr" | "vt:lpstr" | "vt:bstr" => PropertyValue::String(text),
+        "vt:i2" | "vt:i4" | "vt:int" | "vt:integer" => {
+            PropertyValue::Integer(text.parse::<i64>().unwrap_or(0))
+        }
+        "vt:r4" | "vt:r8" | "vt:float" => PropertyValue::Float(text.parse::<f64>().unwrap_or(0.0)),
+        "vt:bool" => PropertyValue::Boolean(text == "true" || text == "1"),
+        "vt:filetime" => PropertyValue::DateTime(text),
+        "vt:blob" => PropertyValue::Blob(text),
+        _ => PropertyValue::String(text),
     }
 }
 

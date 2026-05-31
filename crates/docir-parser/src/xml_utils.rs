@@ -212,69 +212,82 @@ where
             Ok(event) => event,
             Err(err) => return Err(xml_error(file, err)),
         };
-        let is_eof = matches!(&event, Event::Eof);
-        let mut push_open: Option<Vec<u8>> = None;
-        let mut check_close: Option<Vec<u8>> = None;
-
-        match &event {
-            Event::Start(e) => push_open = Some(e.name().as_ref().to_vec()),
-            Event::End(e) => check_close = Some(e.name().as_ref().to_vec()),
-            Event::Empty(_) | Event::Text(_) | Event::GeneralRef(_) | Event::Comment(_) => {}
-            _ => {}
-        }
+        let (push_open, check_close, is_eof) = xml_scan_stack_actions(&event);
 
         if on_event(event)? == XmlScanControl::Break {
             break;
         }
 
         if let Some(name) = push_open {
-            if start_elements.len() >= MAX_XML_NESTING_DEPTH {
-                return Err(xml_error(
-                    file,
-                    format!("XML nesting depth exceeded maximum ({MAX_XML_NESTING_DEPTH})"),
-                ));
-            }
-            start_elements.push(name);
+            push_xml_start_element(file, &mut start_elements, name)?;
         }
         if let Some(name) = check_close {
-            match start_elements.pop() {
-                Some(start) if start != name => {
-                    return Err(xml_error(
-                        file,
-                        format!(
-                            "unexpected end tag: {}",
-                            String::from_utf8_lossy(name.as_slice())
-                        ),
-                    ));
-                }
-                Some(_) => {}
-                None => {
-                    return Err(xml_error(
-                        file,
-                        format!(
-                            "unexpected end tag: {}",
-                            String::from_utf8_lossy(name.as_slice())
-                        ),
-                    ));
-                }
-            }
+            check_xml_end_element(file, &mut start_elements, name)?;
         }
 
-        if is_eof && !start_elements.is_empty() {
-            return Err(xml_error(
-                file,
-                format!(
-                    "unexpected end tag: {}",
-                    String::from_utf8_lossy(start_elements[start_elements.len() - 1].as_slice()),
-                ),
-            ));
-        }
+        check_xml_eof_stack(file, &start_elements, is_eof)?;
         if is_eof {
             break;
         }
         buf.clear();
     }
     Ok(())
+}
+
+fn xml_scan_stack_actions(event: &Event<'_>) -> (Option<Vec<u8>>, Option<Vec<u8>>, bool) {
+    let push_open = match event {
+        Event::Start(e) => Some(e.name().as_ref().to_vec()),
+        _ => None,
+    };
+    let check_close = match event {
+        Event::End(e) => Some(e.name().as_ref().to_vec()),
+        _ => None,
+    };
+    (push_open, check_close, matches!(event, Event::Eof))
+}
+
+fn push_xml_start_element(
+    file: &str,
+    start_elements: &mut Vec<Vec<u8>>,
+    name: Vec<u8>,
+) -> Result<(), ParseError> {
+    if start_elements.len() >= MAX_XML_NESTING_DEPTH {
+        return Err(xml_error(
+            file,
+            format!("XML nesting depth exceeded maximum ({MAX_XML_NESTING_DEPTH})"),
+        ));
+    }
+    start_elements.push(name);
+    Ok(())
+}
+
+fn check_xml_end_element(
+    file: &str,
+    start_elements: &mut Vec<Vec<u8>>,
+    name: Vec<u8>,
+) -> Result<(), ParseError> {
+    match start_elements.pop() {
+        Some(start) if start == name => Ok(()),
+        Some(_) | None => Err(xml_error(file, unexpected_end_tag_message(&name))),
+    }
+}
+
+fn check_xml_eof_stack(
+    file: &str,
+    start_elements: &[Vec<u8>],
+    is_eof: bool,
+) -> Result<(), ParseError> {
+    if is_eof && !start_elements.is_empty() {
+        return Err(xml_error(
+            file,
+            unexpected_end_tag_message(&start_elements[start_elements.len() - 1]),
+        ));
+    }
+    Ok(())
+}
+
+fn unexpected_end_tag_message(name: &[u8]) -> String {
+    format!("unexpected end tag: {}", String::from_utf8_lossy(name))
 }
 
 pub(crate) fn scan_xml_events_with_reader<R, F>(

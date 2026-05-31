@@ -80,14 +80,7 @@ pub(super) fn parse_conditional_formatting(
     start: &BytesStart,
     sheet_path: &str,
 ) -> Result<ConditionalFormat, ParseError> {
-    let mut ranges: Vec<String> = Vec::new();
-    for attr in start.attributes().flatten() {
-        if attr.key.as_ref() == b"sqref" {
-            let value = lossy_attr_value(&attr).to_string();
-            ranges = value.split_whitespace().map(|s| s.to_string()).collect();
-        }
-    }
-
+    let ranges = conditional_ranges(start);
     let mut rules: Vec<ConditionalRule> = Vec::new();
     let mut current_rule: Option<ConditionalRule> = None;
     let mut in_formula = false;
@@ -96,57 +89,25 @@ pub(super) fn parse_conditional_formatting(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
-                b"cfRule" => {
-                    let mut rule_type = "unknown".to_string();
-                    let mut priority = None;
-                    let mut operator = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"type" => rule_type = lossy_attr_value(&attr).to_string(),
-                            b"priority" => priority = lossy_attr_value(&attr).parse::<u32>().ok(),
-                            b"operator" => {
-                                operator = Some(lossy_attr_value(&attr).to_string());
-                            }
-                            _ => {}
-                        }
-                    }
-                    current_rule = Some(ConditionalRule {
-                        rule_type,
-                        priority,
-                        operator,
-                        formulae: Vec::new(),
-                    });
-                }
-                b"formula" => {
-                    in_formula = true;
-                    formula_text.clear();
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) => {
+                handle_conditional_start(&e, &mut current_rule, &mut in_formula, &mut formula_text)
+            }
             Ok(Event::Text(e)) if in_formula => {
                 formula_text.push_str(&crate::xml_utils::decoded_text_or_default(&e));
             }
             Ok(Event::GeneralRef(e)) if in_formula => {
                 formula_text.push_str(&crate::xml_utils::decoded_general_ref_or_default(&e));
             }
-            Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
-                b"formula" => {
-                    in_formula = false;
-                    if let Some(rule) = current_rule.as_mut()
-                        && !formula_text.is_empty()
-                    {
-                        rule.formulae.push(formula_text.clone());
-                    }
-                }
-                b"cfRule" => {
-                    if let Some(rule) = current_rule.take() {
-                        rules.push(rule);
-                    }
-                }
-                b"conditionalFormatting" => break,
-                _ => {}
-            },
+            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"conditionalFormatting" => {
+                break;
+            }
+            Ok(Event::End(e)) => handle_conditional_end(
+                local_name(e.name().as_ref()),
+                &mut current_rule,
+                &mut rules,
+                &mut in_formula,
+                &formula_text,
+            ),
             Ok(Event::Eof) => break,
             Err(e) => return Err(xml_error(sheet_path, e)),
             _ => {}
@@ -160,6 +121,81 @@ pub(super) fn parse_conditional_formatting(
         rules,
         span: Some(SourceSpan::new(sheet_path)),
     })
+}
+
+fn conditional_ranges(start: &BytesStart) -> Vec<String> {
+    start
+        .attributes()
+        .flatten()
+        .find(|attr| attr.key.as_ref() == b"sqref")
+        .map(|attr| {
+            lossy_attr_value(&attr)
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn handle_conditional_start(
+    e: &BytesStart<'_>,
+    current_rule: &mut Option<ConditionalRule>,
+    in_formula: &mut bool,
+    formula_text: &mut String,
+) {
+    match local_name(e.name().as_ref()) {
+        b"cfRule" => *current_rule = Some(parse_conditional_rule(e)),
+        b"formula" => {
+            *in_formula = true;
+            formula_text.clear();
+        }
+        _ => {}
+    }
+}
+
+fn parse_conditional_rule(e: &BytesStart<'_>) -> ConditionalRule {
+    let mut rule_type = "unknown".to_string();
+    let mut priority = None;
+    let mut operator = None;
+    for attr in e.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"type" => rule_type = lossy_attr_value(&attr).to_string(),
+            b"priority" => priority = lossy_attr_value(&attr).parse::<u32>().ok(),
+            b"operator" => operator = Some(lossy_attr_value(&attr).to_string()),
+            _ => {}
+        }
+    }
+    ConditionalRule {
+        rule_type,
+        priority,
+        operator,
+        formulae: Vec::new(),
+    }
+}
+
+fn handle_conditional_end(
+    local: &[u8],
+    current_rule: &mut Option<ConditionalRule>,
+    rules: &mut Vec<ConditionalRule>,
+    in_formula: &mut bool,
+    formula_text: &str,
+) {
+    match local {
+        b"formula" => {
+            *in_formula = false;
+            if let Some(rule) = current_rule.as_mut()
+                && !formula_text.is_empty()
+            {
+                rule.formulae.push(formula_text.to_string());
+            }
+        }
+        b"cfRule" => {
+            if let Some(rule) = current_rule.take() {
+                rules.push(rule);
+            }
+        }
+        _ => {}
+    }
 }
 
 pub(super) fn parse_formula(

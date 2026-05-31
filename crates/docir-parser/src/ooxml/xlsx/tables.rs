@@ -29,80 +29,9 @@ pub(crate) fn parse_table_definition(
     let mut buf = Vec::new();
     scan_xml_events(&mut reader, &mut buf, table_path, |event| {
         match event {
-            Event::Start(e) => match local_name(e.name().as_ref()) {
-                b"table" => {
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"name" => table.name = Some(lossy_attr_value(&attr).to_string()),
-                            b"displayName" => {
-                                table.display_name = Some(lossy_attr_value(&attr).to_string())
-                            }
-                            b"ref" => table.ref_range = Some(lossy_attr_value(&attr).to_string()),
-                            b"headerRowCount" => {
-                                table.header_row_count = lossy_attr_value(&attr).parse::<u32>().ok()
-                            }
-                            b"totalsRowCount" => {
-                                table.totals_row_count = lossy_attr_value(&attr).parse::<u32>().ok()
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                b"tableColumn" => {
-                    let mut id = None;
-                    let mut name = None;
-                    let mut totals_row_label = None;
-                    let mut totals_row_function = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"id" => id = lossy_attr_value(&attr).parse::<u32>().ok(),
-                            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
-                            b"totalsRowLabel" => {
-                                totals_row_label = Some(lossy_attr_value(&attr).to_string())
-                            }
-                            b"totalsRowFunction" => {
-                                totals_row_function = Some(lossy_attr_value(&attr).to_string())
-                            }
-                            _ => {}
-                        }
-                    }
-                    if let Some(id) = id {
-                        table.columns.push(TableColumn {
-                            id,
-                            name,
-                            totals_row_label,
-                            totals_row_function,
-                        });
-                    }
-                }
-                _ => {}
-            },
+            Event::Start(e) => handle_table_start(&e, &mut table),
             Event::Empty(e) if local_name(e.name().as_ref()) == b"tableColumn" => {
-                let mut id = None;
-                let mut name = None;
-                let mut totals_row_label = None;
-                let mut totals_row_function = None;
-                for attr in e.attributes().flatten() {
-                    match attr.key.as_ref() {
-                        b"id" => id = lossy_attr_value(&attr).parse::<u32>().ok(),
-                        b"name" => name = Some(lossy_attr_value(&attr).to_string()),
-                        b"totalsRowLabel" => {
-                            totals_row_label = Some(lossy_attr_value(&attr).to_string())
-                        }
-                        b"totalsRowFunction" => {
-                            totals_row_function = Some(lossy_attr_value(&attr).to_string())
-                        }
-                        _ => {}
-                    }
-                }
-                if let Some(id) = id {
-                    table.columns.push(TableColumn {
-                        id,
-                        name,
-                        totals_row_label,
-                        totals_row_function,
-                    });
-                }
+                push_table_column(&e, &mut table.columns);
             }
             Event::End(e) if local_name(e.name().as_ref()) == b"table" => {
                 return Ok(XmlScanControl::Break);
@@ -113,6 +42,55 @@ pub(crate) fn parse_table_definition(
     })?;
 
     Ok(table)
+}
+
+fn handle_table_start(e: &quick_xml::events::BytesStart<'_>, table: &mut TableDefinition) {
+    match local_name(e.name().as_ref()) {
+        b"table" => apply_table_attrs(e, table),
+        b"tableColumn" => push_table_column(e, &mut table.columns),
+        _ => {}
+    }
+}
+
+fn apply_table_attrs(e: &quick_xml::events::BytesStart<'_>, table: &mut TableDefinition) {
+    for attr in e.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"name" => table.name = Some(lossy_attr_value(&attr).to_string()),
+            b"displayName" => table.display_name = Some(lossy_attr_value(&attr).to_string()),
+            b"ref" => table.ref_range = Some(lossy_attr_value(&attr).to_string()),
+            b"headerRowCount" => {
+                table.header_row_count = lossy_attr_value(&attr).parse::<u32>().ok()
+            }
+            b"totalsRowCount" => {
+                table.totals_row_count = lossy_attr_value(&attr).parse::<u32>().ok()
+            }
+            _ => {}
+        }
+    }
+}
+
+fn push_table_column(e: &quick_xml::events::BytesStart<'_>, columns: &mut Vec<TableColumn>) {
+    let mut id = None;
+    let mut name = None;
+    let mut totals_row_label = None;
+    let mut totals_row_function = None;
+    for attr in e.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"id" => id = lossy_attr_value(&attr).parse::<u32>().ok(),
+            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
+            b"totalsRowLabel" => totals_row_label = Some(lossy_attr_value(&attr).to_string()),
+            b"totalsRowFunction" => totals_row_function = Some(lossy_attr_value(&attr).to_string()),
+            _ => {}
+        }
+    }
+    if let Some(id) = id {
+        columns.push(TableColumn {
+            id,
+            name,
+            totals_row_label,
+            totals_row_function,
+        });
+    }
 }
 
 pub(crate) fn parse_pivot_table_definition(

@@ -13,7 +13,7 @@ pub struct ChartData {
     pub chart_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    /// Legacy series list (names only) for backward compatibility.
+    /// Series names extracted for concise chart summaries.
     pub series: Vec<String>,
     /// Detailed series data.
     pub series_data: Vec<ChartSeries>,

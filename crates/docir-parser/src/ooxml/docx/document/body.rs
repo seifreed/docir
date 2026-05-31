@@ -4,7 +4,7 @@ use crate::xml_utils::{local_name, read_event};
 use docir_core::ir::Section;
 use docir_core::types::NodeId;
 use quick_xml::Reader;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 use super::inline::{SdtMode, parse_revision_block, parse_sdt};
@@ -25,61 +25,15 @@ pub(crate) fn parse_body_sections(
 
     loop {
         match read_event(reader, &mut buf, "word/document.xml")? {
-            Event::Start(e) => match local_name(e.name().as_ref()) {
-                b"p" => {
-                    let para = parse_paragraph(parser, reader, rels, header_footer_map)?;
-                    current.content.push(para.id);
-                    if let Some(section_ref) = para.section_ref {
-                        current.headers = section_ref.headers;
-                        current.footers = section_ref.footers;
-                        current.properties = section_ref.properties;
-                        sections.push(current);
-                        current = Section::new();
-                    }
-                }
-                b"tbl" => {
-                    let table_id = parse_table(parser, reader, rels)?;
-                    current.content.push(table_id);
-                }
-                b"sdt" => {
-                    let sdt_id = parse_sdt(parser, reader, rels, SdtMode::Block)?;
-                    current.content.push(sdt_id);
-                }
-                b"sectPr" => {
-                    let section_ref = apply_section_refs(reader, header_footer_map)?;
-                    current.headers = section_ref.headers;
-                    current.footers = section_ref.footers;
-                    current.properties = section_ref.properties;
-                    sections.push(current);
-                    current = Section::new();
-                }
-                b"ins" => {
-                    let rev_id =
-                        parse_revision_block(parser, reader, rels, &e, RevisionType::Insert)?;
-                    current.content.push(rev_id);
-                }
-                b"del" => {
-                    let rev_id =
-                        parse_revision_block(parser, reader, rels, &e, RevisionType::Delete)?;
-                    current.content.push(rev_id);
-                }
-                b"moveFrom" => {
-                    let rev_id =
-                        parse_revision_block(parser, reader, rels, &e, RevisionType::MoveFrom)?;
-                    current.content.push(rev_id);
-                }
-                b"moveTo" => {
-                    let rev_id =
-                        parse_revision_block(parser, reader, rels, &e, RevisionType::MoveTo)?;
-                    current.content.push(rev_id);
-                }
-                b"pPrChange" | b"rPrChange" => {
-                    let rev_id =
-                        parse_revision_block(parser, reader, rels, &e, RevisionType::FormatChange)?;
-                    current.content.push(rev_id);
-                }
-                _ => {}
-            },
+            Event::Start(e) => handle_body_start_event(
+                parser,
+                reader,
+                rels,
+                header_footer_map,
+                &mut sections,
+                &mut current,
+                &e,
+            )?,
             Event::End(e) if local_name(e.name().as_ref()) == b"body" => {
                 break;
             }
@@ -89,20 +43,84 @@ pub(crate) fn parse_body_sections(
         buf.clear();
     }
 
-    if !current.content.is_empty()
-        || !current.headers.is_empty()
-        || !current.footers.is_empty()
-        || current.properties.page_width.is_some()
-        || current.properties.page_height.is_some()
-        || current.properties.orientation.is_some()
-        || current.properties.margins.is_some()
-        || current.properties.columns.is_some()
-        || sections.is_empty()
-    {
+    if section_has_content(&current) || sections.is_empty() {
         sections.push(current);
     }
 
     Ok(sections)
+}
+
+fn handle_body_start_event(
+    parser: &mut DocxParser,
+    reader: &mut Reader<&[u8]>,
+    rels: &Relationships,
+    header_footer_map: Option<&HashMap<String, NodeId>>,
+    sections: &mut Vec<Section>,
+    current: &mut Section,
+    e: &BytesStart<'_>,
+) -> Result<(), ParseError> {
+    match local_name(e.name().as_ref()) {
+        b"p" => {
+            let para = parse_paragraph(parser, reader, rels, header_footer_map)?;
+            current.content.push(para.id);
+            if let Some(section_ref) = para.section_ref {
+                current.headers = section_ref.headers;
+                current.footers = section_ref.footers;
+                current.properties = section_ref.properties;
+                flush_section(sections, current);
+            }
+        }
+        b"tbl" => current.content.push(parse_table(parser, reader, rels)?),
+        b"sdt" => current
+            .content
+            .push(parse_sdt(parser, reader, rels, SdtMode::Block)?),
+        b"sectPr" => {
+            let section_ref = apply_section_refs(reader, header_footer_map)?;
+            current.headers = section_ref.headers;
+            current.footers = section_ref.footers;
+            current.properties = section_ref.properties;
+            flush_section(sections, current);
+        }
+        b"ins" => push_revision(parser, reader, rels, current, e, RevisionType::Insert)?,
+        b"del" => push_revision(parser, reader, rels, current, e, RevisionType::Delete)?,
+        b"moveFrom" => push_revision(parser, reader, rels, current, e, RevisionType::MoveFrom)?,
+        b"moveTo" => push_revision(parser, reader, rels, current, e, RevisionType::MoveTo)?,
+        b"pPrChange" | b"rPrChange" => {
+            push_revision(parser, reader, rels, current, e, RevisionType::FormatChange)?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn push_revision(
+    parser: &mut DocxParser,
+    reader: &mut Reader<&[u8]>,
+    rels: &Relationships,
+    current: &mut Section,
+    e: &BytesStart<'_>,
+    revision_type: RevisionType,
+) -> Result<(), ParseError> {
+    let rev_id = parse_revision_block(parser, reader, rels, e, revision_type)?;
+    current.content.push(rev_id);
+    Ok(())
+}
+
+fn flush_section(sections: &mut Vec<Section>, current: &mut Section) {
+    let mut next = Section::new();
+    std::mem::swap(current, &mut next);
+    sections.push(next);
+}
+
+fn section_has_content(section: &Section) -> bool {
+    !section.content.is_empty()
+        || !section.headers.is_empty()
+        || !section.footers.is_empty()
+        || section.properties.page_width.is_some()
+        || section.properties.page_height.is_some()
+        || section.properties.orientation.is_some()
+        || section.properties.margins.is_some()
+        || section.properties.columns.is_some()
 }
 
 pub(crate) fn parse_block_until(

@@ -5,7 +5,7 @@ use docir_core::ir::Paragraph;
 use docir_core::ir::{LineSpacingRule, TextAlignment};
 use docir_core::types::NodeId;
 use quick_xml::Reader;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 pub(crate) fn alignment_from_val(val: &str) -> TextAlignment {
@@ -27,84 +27,15 @@ pub(crate) fn parse_paragraph_properties(
     let mut section_ref: Option<SectionRef> = None;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
-                b"pStyle" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
-                        para.style_id = Some(val);
-                    }
-                }
-                b"keepNext" => {
-                    para.properties.keep_next = Some(bool_from_val(&e));
-                }
-                b"keepLines" => {
-                    para.properties.keep_lines = Some(bool_from_val(&e));
-                }
-                b"pageBreakBefore" => {
-                    para.properties.page_break_before = Some(bool_from_val(&e));
-                }
-                b"widowControl" => {
-                    para.properties.widow_control = Some(bool_from_val(&e));
-                }
-                b"jc" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
-                        para.properties.alignment = Some(alignment_from_val(val.as_str()));
-                    }
-                }
-                b"ind" => {
-                    let mut indent = para.properties.indentation.clone().unwrap_or_default();
-                    if let Some(val) = attr_value(&e, b"w:left").and_then(|v| v.parse().ok()) {
-                        indent.left = Some(val);
-                    }
-                    if let Some(val) = attr_value(&e, b"w:right").and_then(|v| v.parse().ok()) {
-                        indent.right = Some(val);
-                    }
-                    if let Some(val) = attr_value(&e, b"w:firstLine").and_then(|v| v.parse().ok()) {
-                        indent.first_line = Some(val);
-                    }
-                    if let Some(val) = attr_value(&e, b"w:hanging").and_then(|v| v.parse().ok()) {
-                        indent.hanging = Some(val);
-                    }
-                    para.properties.indentation = Some(indent);
-                }
-                b"spacing" => {
-                    let mut spacing = para.properties.spacing.clone().unwrap_or_default();
-                    if let Some(val) = attr_value(&e, b"w:before").and_then(|v| v.parse().ok()) {
-                        spacing.before = Some(val);
-                    }
-                    if let Some(val) = attr_value(&e, b"w:after").and_then(|v| v.parse().ok()) {
-                        spacing.after = Some(val);
-                    }
-                    if let Some(val) = attr_value(&e, b"w:line").and_then(|v| v.parse().ok()) {
-                        spacing.line = Some(val);
-                    }
-                    if let Some(val) = attr_value(&e, b"w:lineRule") {
-                        spacing.line_rule = match val.as_str() {
-                            "auto" => Some(LineSpacingRule::Auto),
-                            "exact" => Some(LineSpacingRule::Exact),
-                            "atLeast" => Some(LineSpacingRule::AtLeast),
-                            _ => None,
-                        };
-                    }
-                    para.properties.spacing = Some(spacing);
-                }
-                b"pBdr" => {
-                    if let Some(borders) = parse_paragraph_borders(reader)? {
-                        para.properties.borders = Some(borders);
-                    }
-                }
-                b"outlineLvl" => {
-                    if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
-                        para.properties.outline_level = Some(val);
-                    }
-                }
-                b"numPr" => {
-                    parse_numbering(reader, &mut para.properties)?;
-                }
-                b"sectPr" => {
-                    section_ref = Some(apply_section_refs(reader, header_footer_map)?);
-                }
-                _ => {}
-            },
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+                handle_paragraph_property_event(
+                    reader,
+                    &e,
+                    para,
+                    header_footer_map,
+                    &mut section_ref,
+                )?;
+            }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pPr" => {
                 break;
             }
@@ -117,6 +48,88 @@ pub(crate) fn parse_paragraph_properties(
         buf.clear();
     }
     Ok(section_ref)
+}
+
+fn handle_paragraph_property_event(
+    reader: &mut Reader<&[u8]>,
+    e: &BytesStart<'_>,
+    para: &mut Paragraph,
+    header_footer_map: Option<&HashMap<String, NodeId>>,
+    section_ref: &mut Option<SectionRef>,
+) -> Result<(), ParseError> {
+    match local_name(e.name().as_ref()) {
+        b"pStyle" => {
+            if let Some(val) = attr_value(e, b"w:val") {
+                para.style_id = Some(val);
+            }
+        }
+        b"keepNext" => para.properties.keep_next = Some(bool_from_val(e)),
+        b"keepLines" => para.properties.keep_lines = Some(bool_from_val(e)),
+        b"pageBreakBefore" => para.properties.page_break_before = Some(bool_from_val(e)),
+        b"widowControl" => para.properties.widow_control = Some(bool_from_val(e)),
+        b"jc" => apply_paragraph_alignment(e, para),
+        b"ind" => apply_paragraph_indentation(e, para),
+        b"spacing" => apply_paragraph_spacing(e, para),
+        b"pBdr" => {
+            if let Some(borders) = parse_paragraph_borders(reader)? {
+                para.properties.borders = Some(borders);
+            }
+        }
+        b"outlineLvl" => {
+            if let Some(val) = attr_value(e, b"w:val").and_then(|v| v.parse().ok()) {
+                para.properties.outline_level = Some(val);
+            }
+        }
+        b"numPr" => parse_numbering(reader, &mut para.properties)?,
+        b"sectPr" => *section_ref = Some(apply_section_refs(reader, header_footer_map)?),
+        _ => {}
+    }
+    Ok(())
+}
+
+fn apply_paragraph_alignment(e: &BytesStart<'_>, para: &mut Paragraph) {
+    if let Some(val) = attr_value(e, b"w:val") {
+        para.properties.alignment = Some(alignment_from_val(val.as_str()));
+    }
+}
+
+fn apply_paragraph_indentation(e: &BytesStart<'_>, para: &mut Paragraph) {
+    let mut indent = para.properties.indentation.clone().unwrap_or_default();
+    if let Some(val) = attr_value(e, b"w:left").and_then(|v| v.parse().ok()) {
+        indent.left = Some(val);
+    }
+    if let Some(val) = attr_value(e, b"w:right").and_then(|v| v.parse().ok()) {
+        indent.right = Some(val);
+    }
+    if let Some(val) = attr_value(e, b"w:firstLine").and_then(|v| v.parse().ok()) {
+        indent.first_line = Some(val);
+    }
+    if let Some(val) = attr_value(e, b"w:hanging").and_then(|v| v.parse().ok()) {
+        indent.hanging = Some(val);
+    }
+    para.properties.indentation = Some(indent);
+}
+
+fn apply_paragraph_spacing(e: &BytesStart<'_>, para: &mut Paragraph) {
+    let mut spacing = para.properties.spacing.clone().unwrap_or_default();
+    if let Some(val) = attr_value(e, b"w:before").and_then(|v| v.parse().ok()) {
+        spacing.before = Some(val);
+    }
+    if let Some(val) = attr_value(e, b"w:after").and_then(|v| v.parse().ok()) {
+        spacing.after = Some(val);
+    }
+    if let Some(val) = attr_value(e, b"w:line").and_then(|v| v.parse().ok()) {
+        spacing.line = Some(val);
+    }
+    if let Some(val) = attr_value(e, b"w:lineRule") {
+        spacing.line_rule = match val.as_str() {
+            "auto" => Some(LineSpacingRule::Auto),
+            "exact" => Some(LineSpacingRule::Exact),
+            "atLeast" => Some(LineSpacingRule::AtLeast),
+            _ => None,
+        };
+    }
+    para.properties.spacing = Some(spacing);
 }
 
 pub(crate) fn parse_paragraph_borders(
