@@ -6,6 +6,9 @@ mod advanced_features_parse;
 pub(crate) use advanced_features_parse::parse_single_table;
 
 #[cfg(test)]
+mod advanced_features_table_parse;
+
+#[cfg(test)]
 mod advanced_features_normalize;
 
 #[cfg(test)]
