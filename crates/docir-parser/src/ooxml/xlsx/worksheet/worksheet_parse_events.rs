@@ -20,37 +20,37 @@ pub(crate) fn handle_worksheet_common_tag(
     worksheet: &mut Worksheet,
     accum: &mut WorksheetParseAccum,
     parser: &mut XlsxParser,
-) -> bool {
+) -> Result<bool, ParseError> {
     match local_name(e.name().as_ref()) {
         b"dimension" => {
             if let Some(val) = attr_value(e, b"ref") {
                 worksheet.dimension = Some(val);
             }
-            true
+            Ok(true)
         }
         b"tabColor" => {
             worksheet.tab_color = parse_color_attr(e);
-            true
+            Ok(true)
         }
         b"pageMargins" => {
             worksheet.page_margins = parse_page_margins(e);
-            true
+            Ok(true)
         }
         b"col" => {
-            parse_column(e, &mut accum.columns);
-            true
+            parse_column(e, &mut accum.columns, sheet_path)?;
+            Ok(true)
         }
         b"mergeCell" => {
-            if let Some(range) = parse_merge_cell(e) {
+            if let Some(range) = parse_merge_cell(e, sheet_path)? {
                 accum.merged_cells.push(range);
             }
-            true
+            Ok(true)
         }
         b"hyperlink" => {
             parser.handle_hyperlink(e, relationships, sheet_path);
-            true
+            Ok(true)
         }
-        _ => false,
+        _ => Ok(false),
     }
 }
 

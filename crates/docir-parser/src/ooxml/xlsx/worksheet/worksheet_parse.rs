@@ -162,7 +162,7 @@ impl XlsxParser {
         accum: &mut WorksheetParseAccum,
         start: &BytesStart<'_>,
     ) -> Result<bool, ParseError> {
-        if handle_worksheet_common_tag(start, sheet_path, relationships, worksheet, accum, self) {
+        if handle_worksheet_common_tag(start, sheet_path, relationships, worksheet, accum, self)? {
             return Ok(true);
         }
 
@@ -198,7 +198,7 @@ impl XlsxParser {
         accum: &mut WorksheetParseAccum,
         empty: &BytesStart<'_>,
     ) -> Result<(), ParseError> {
-        if handle_worksheet_common_tag(empty, sheet_path, relationships, worksheet, accum, self) {
+        if handle_worksheet_common_tag(empty, sheet_path, relationships, worksheet, accum, self)? {
             return Ok(());
         }
 

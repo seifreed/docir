@@ -104,7 +104,7 @@ impl CellContents {
         match event {
             Event::Start(e) => self.handle_start(reader, &e, sheet_path)?,
             Event::Empty(e) if local_name(e.name().as_ref()) == b"f" => {
-                self.formula = Some(super::parse_formula_empty(&e));
+                self.formula = Some(super::parse_formula_empty(&e, sheet_path)?);
             }
             Event::End(e) if local_name(e.name().as_ref()) == b"c" => {
                 return Ok(XmlScanControl::Break);

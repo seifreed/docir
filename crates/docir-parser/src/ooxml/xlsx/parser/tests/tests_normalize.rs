@@ -1,4 +1,5 @@
 use super::{Relationships, SheetKind, SheetState, build_empty_zip};
+use crate::error::ParseError;
 use crate::ooxml::xlsx::workbook::SheetInfo;
 use crate::ooxml::xlsx::{
     XlsxParser, parse_calc_chain, parse_pivot_cache_records, parse_pivot_table_definition,
@@ -305,6 +306,24 @@ fn test_parse_calc_chain() {
     assert_eq!(chain.entries[0].new_value, Some(true));
     assert_eq!(chain.entries[1].cell_ref, "B2");
     assert_eq!(chain.entries[1].index, Some(2));
+}
+
+#[test]
+fn test_parse_calc_chain_reports_malformed_attributes() {
+    let xml = r#"
+        <calcChain>
+          <c r="A1" r="B1"/>
+        </calcChain>
+    "#;
+    let err = parse_calc_chain(xml, "xl/calcChain.xml")
+        .expect_err("duplicate calc chain attrs must fail");
+    assert!(matches!(
+        err,
+        ParseError::Xml {
+            ref file,
+            ..
+        } if file == "xl/calcChain.xml"
+    ));
 }
 
 #[test]

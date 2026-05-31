@@ -301,8 +301,11 @@ pub(crate) fn parse_formula_args_text(formula: &str) -> Option<String> {
     parser_xml::parse_formula_args_text(formula)
 }
 
-pub(crate) fn parse_formula_empty(start: &BytesStart) -> CellFormula {
-    parser_xml::parse_formula_empty(start)
+pub(crate) fn parse_formula_empty(
+    start: &BytesStart,
+    sheet_path: &str,
+) -> Result<CellFormula, ParseError> {
+    parser_xml::parse_formula_empty(start, sheet_path)
 }
 
 pub(crate) fn parse_inline_string(
@@ -312,12 +315,19 @@ pub(crate) fn parse_inline_string(
     parser_xml::parse_inline_string(reader, sheet_path)
 }
 
-pub(crate) fn parse_column(element: &BytesStart, columns: &mut HashMap<u32, ColumnDefinition>) {
-    parser_xml::parse_column(element, columns);
+pub(crate) fn parse_column(
+    element: &BytesStart,
+    columns: &mut HashMap<u32, ColumnDefinition>,
+    sheet_path: &str,
+) -> Result<(), ParseError> {
+    parser_xml::parse_column(element, columns, sheet_path)
 }
 
-pub(crate) fn parse_merge_cell(element: &BytesStart) -> Option<MergedCellRange> {
-    parser_xml::parse_merge_cell(element)
+pub(crate) fn parse_merge_cell(
+    element: &BytesStart,
+    sheet_path: &str,
+) -> Result<Option<MergedCellRange>, ParseError> {
+    parser_xml::parse_merge_cell(element, sheet_path)
 }
 
 #[cfg(test)]

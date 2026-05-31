@@ -1,6 +1,6 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, xml_error};
+use crate::xml_utils::{attr_bool_like, local_name, visit_attributes, xml_error};
 use docir_core::ir::{
     CalcChain, CalcChainEntry, CellError, CellFormula, ColumnDefinition, ConditionalFormat,
     ConditionalRule, FormulaType, MergedCellRange, parse_cell_reference,
@@ -9,6 +9,14 @@ use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
+
+type FormulaAttrs = (
+    FormulaType,
+    Option<u32>,
+    Option<String>,
+    bool,
+    Option<String>,
+);
 
 pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, ParseError> {
     let mut reader = Reader::from_str(xml);
@@ -26,19 +34,16 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
                 let mut index = None;
                 let mut level = None;
                 let mut new_value = None;
-                for attr in e.attributes().flatten() {
-                    match attr.key.as_ref() {
-                        b"r" => cell_ref = Some(lossy_attr_value(&attr).to_string()),
-                        b"i" => index = lossy_attr_value(&attr).parse::<u32>().ok(),
-                        b"l" => level = lossy_attr_value(&attr).parse::<u32>().ok(),
-                        b"s" => {
-                            let value = lossy_attr_value(&attr);
-                            new_value = Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                        }
-                        b"si" => sheet_id = lossy_attr_value(&attr).parse::<u32>().ok(),
-                        _ => {}
+                visit_attributes(&e, path, |attr| match attr.key.as_ref() {
+                    b"r" => cell_ref = Some(lossy_attr_value(attr).to_string()),
+                    b"i" => index = lossy_attr_value(attr).parse::<u32>().ok(),
+                    b"l" => level = lossy_attr_value(attr).parse::<u32>().ok(),
+                    b"s" => {
+                        new_value = Some(attr_bool_like(attr.value.as_ref()));
                     }
-                }
+                    b"si" => sheet_id = lossy_attr_value(attr).parse::<u32>().ok(),
+                    _ => {}
+                })?;
                 if let Some(cell_ref) = cell_ref {
                     chain.entries.push(CalcChainEntry {
                         cell_ref,
@@ -80,7 +85,7 @@ pub(super) fn parse_conditional_formatting(
     start: &BytesStart,
     sheet_path: &str,
 ) -> Result<ConditionalFormat, ParseError> {
-    let ranges = conditional_ranges(start);
+    let ranges = conditional_ranges(start, sheet_path)?;
     let mut rules: Vec<ConditionalRule> = Vec::new();
     let mut current_rule: Option<ConditionalRule> = None;
     let mut in_formula = false;
@@ -90,7 +95,13 @@ pub(super) fn parse_conditional_formatting(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                handle_conditional_start(&e, &mut current_rule, &mut in_formula, &mut formula_text)
+                handle_conditional_start(
+                    &e,
+                    sheet_path,
+                    &mut current_rule,
+                    &mut in_formula,
+                    &mut formula_text,
+                )?;
             }
             Ok(Event::Text(e)) if in_formula => {
                 formula_text.push_str(&crate::xml_utils::decoded_text_or_default(&e));
@@ -123,54 +134,56 @@ pub(super) fn parse_conditional_formatting(
     })
 }
 
-fn conditional_ranges(start: &BytesStart) -> Vec<String> {
-    start
-        .attributes()
-        .flatten()
-        .find(|attr| attr.key.as_ref() == b"sqref")
-        .map(|attr| {
-            lossy_attr_value(&attr)
+fn conditional_ranges(start: &BytesStart, sheet_path: &str) -> Result<Vec<String>, ParseError> {
+    let mut ranges = Vec::new();
+    visit_attributes(start, sheet_path, |attr| {
+        if attr.key.as_ref() == b"sqref" {
+            ranges = lossy_attr_value(attr)
                 .split_whitespace()
                 .map(|s| s.to_string())
-                .collect()
-        })
-        .unwrap_or_default()
+                .collect();
+        }
+    })?;
+    Ok(ranges)
 }
 
 fn handle_conditional_start(
     e: &BytesStart<'_>,
+    sheet_path: &str,
     current_rule: &mut Option<ConditionalRule>,
     in_formula: &mut bool,
     formula_text: &mut String,
-) {
+) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
-        b"cfRule" => *current_rule = Some(parse_conditional_rule(e)),
+        b"cfRule" => *current_rule = Some(parse_conditional_rule(e, sheet_path)?),
         b"formula" => {
             *in_formula = true;
             formula_text.clear();
         }
         _ => {}
     }
+    Ok(())
 }
 
-fn parse_conditional_rule(e: &BytesStart<'_>) -> ConditionalRule {
+fn parse_conditional_rule(
+    e: &BytesStart<'_>,
+    sheet_path: &str,
+) -> Result<ConditionalRule, ParseError> {
     let mut rule_type = "unknown".to_string();
     let mut priority = None;
     let mut operator = None;
-    for attr in e.attributes().flatten() {
-        match attr.key.as_ref() {
-            b"type" => rule_type = lossy_attr_value(&attr).to_string(),
-            b"priority" => priority = lossy_attr_value(&attr).parse::<u32>().ok(),
-            b"operator" => operator = Some(lossy_attr_value(&attr).to_string()),
-            _ => {}
-        }
-    }
-    ConditionalRule {
+    visit_attributes(e, sheet_path, |attr| match attr.key.as_ref() {
+        b"type" => rule_type = lossy_attr_value(attr).to_string(),
+        b"priority" => priority = lossy_attr_value(attr).parse::<u32>().ok(),
+        b"operator" => operator = Some(lossy_attr_value(attr).to_string()),
+        _ => {}
+    })?;
+    Ok(ConditionalRule {
         rule_type,
         priority,
         operator,
         formulae: Vec::new(),
-    }
+    })
 }
 
 fn handle_conditional_end(
@@ -203,7 +216,8 @@ pub(super) fn parse_formula(
     start: &BytesStart,
     sheet_path: &str,
 ) -> Result<CellFormula, ParseError> {
-    let (formula_type, shared_index, shared_ref, is_array, array_ref) = parse_formula_attrs(start);
+    let (formula_type, shared_index, shared_ref, is_array, array_ref) =
+        parse_formula_attrs(start, sheet_path)?;
 
     let text = reader
         .read_text(start.name())
@@ -236,62 +250,56 @@ pub(super) fn parse_formula_args_text(formula: &str) -> Option<String> {
     }
 }
 
-pub(super) fn parse_formula_empty(start: &BytesStart) -> CellFormula {
-    let (formula_type, shared_index, shared_ref, is_array, array_ref) = parse_formula_attrs(start);
+pub(super) fn parse_formula_empty(
+    start: &BytesStart,
+    sheet_path: &str,
+) -> Result<CellFormula, ParseError> {
+    let (formula_type, shared_index, shared_ref, is_array, array_ref) =
+        parse_formula_attrs(start, sheet_path)?;
 
-    CellFormula {
+    Ok(CellFormula {
         text: String::new(),
         formula_type,
         shared_index,
         shared_ref,
         is_array,
         array_ref,
-    }
+    })
 }
 
-fn parse_formula_attrs(
-    start: &BytesStart,
-) -> (
-    FormulaType,
-    Option<u32>,
-    Option<String>,
-    bool,
-    Option<String>,
-) {
+fn parse_formula_attrs(start: &BytesStart, sheet_path: &str) -> Result<FormulaAttrs, ParseError> {
     let mut formula_type = FormulaType::Normal;
     let mut shared_index = None;
     let mut shared_ref = None;
     let mut array_ref = None;
     let mut is_array = false;
 
-    for attr in start.attributes().flatten() {
-        match attr.key.as_ref() {
-            b"t" => {
-                let value = lossy_attr_value(&attr);
-                match value.as_ref() {
-                    "shared" => formula_type = FormulaType::Shared,
-                    "array" => {
-                        formula_type = FormulaType::Array;
-                        is_array = true;
-                    }
-                    "dataTable" => formula_type = FormulaType::DataTable,
-                    _ => {}
+    visit_attributes(start, sheet_path, |attr| match attr.key.as_ref() {
+        b"t" => {
+            let value = lossy_attr_value(attr);
+            match value.as_ref() {
+                "shared" => formula_type = FormulaType::Shared,
+                "array" => {
+                    formula_type = FormulaType::Array;
+                    is_array = true;
                 }
+                "dataTable" => formula_type = FormulaType::DataTable,
+                _ => {}
             }
-            b"si" => shared_index = lossy_attr_value(&attr).parse::<u32>().ok(),
-            b"ref" => {
-                let reference = lossy_attr_value(&attr).to_string();
-                if formula_type == FormulaType::Shared {
-                    shared_ref = Some(reference);
-                } else {
-                    array_ref = Some(reference);
-                }
-            }
-            _ => {}
         }
-    }
+        b"si" => shared_index = lossy_attr_value(attr).parse::<u32>().ok(),
+        b"ref" => {
+            let reference = lossy_attr_value(attr).to_string();
+            if formula_type == FormulaType::Shared {
+                shared_ref = Some(reference);
+            } else {
+                array_ref = Some(reference);
+            }
+        }
+        _ => {}
+    })?;
 
-    (formula_type, shared_index, shared_ref, is_array, array_ref)
+    Ok((formula_type, shared_index, shared_ref, is_array, array_ref))
 }
 
 pub(super) fn parse_inline_string(
@@ -336,26 +344,28 @@ pub(super) fn parse_inline_string(
     Ok(text)
 }
 
-pub(super) fn parse_column(element: &BytesStart, columns: &mut HashMap<u32, ColumnDefinition>) {
+pub(super) fn parse_column(
+    element: &BytesStart,
+    columns: &mut HashMap<u32, ColumnDefinition>,
+    sheet_path: &str,
+) -> Result<(), ParseError> {
     let mut min = None;
     let mut max = None;
     let mut width = None;
     let mut hidden = false;
     let mut custom_width = false;
 
-    for attr in element.attributes().flatten() {
-        match attr.key.as_ref() {
-            b"min" => min = lossy_attr_value(&attr).parse::<u32>().ok(),
-            b"max" => max = lossy_attr_value(&attr).parse::<u32>().ok(),
-            b"width" => width = lossy_attr_value(&attr).parse::<f64>().ok(),
-            b"hidden" => hidden = attr.value.as_ref() == b"1",
-            b"customWidth" => custom_width = attr.value.as_ref() == b"1",
-            _ => {}
-        }
-    }
+    visit_attributes(element, sheet_path, |attr| match attr.key.as_ref() {
+        b"min" => min = lossy_attr_value(attr).parse::<u32>().ok(),
+        b"max" => max = lossy_attr_value(attr).parse::<u32>().ok(),
+        b"width" => width = lossy_attr_value(attr).parse::<f64>().ok(),
+        b"hidden" => hidden = attr_bool_like(attr.value.as_ref()),
+        b"customWidth" => custom_width = attr_bool_like(attr.value.as_ref()),
+        _ => {}
+    })?;
 
     let (Some(min), Some(max)) = (min, max) else {
-        return;
+        return Ok(());
     };
     for idx in min..=max {
         let col_index = idx.saturating_sub(1);
@@ -369,28 +379,40 @@ pub(super) fn parse_column(element: &BytesStart, columns: &mut HashMap<u32, Colu
             },
         );
     }
+    Ok(())
 }
 
-pub(super) fn parse_merge_cell(element: &BytesStart) -> Option<MergedCellRange> {
+pub(super) fn parse_merge_cell(
+    element: &BytesStart,
+    sheet_path: &str,
+) -> Result<Option<MergedCellRange>, ParseError> {
     let mut ref_attr = None;
-    for attr in element.attributes().flatten() {
+    visit_attributes(element, sheet_path, |attr| {
         if attr.key.as_ref() == b"ref" {
-            ref_attr = Some(lossy_attr_value(&attr).to_string());
+            ref_attr = Some(lossy_attr_value(attr).to_string());
         }
-    }
+    })?;
 
-    let ref_attr = ref_attr?;
+    let Some(ref_attr) = ref_attr else {
+        return Ok(None);
+    };
     let mut parts = ref_attr.split(':');
-    let start = parts.next()?;
+    let Some(start) = parts.next() else {
+        return Ok(None);
+    };
     let end = parts.next().unwrap_or(start);
 
-    let (start_col, start_row) = parse_cell_reference(start)?;
-    let (end_col, end_row) = parse_cell_reference(end)?;
+    let Some((start_col, start_row)) = parse_cell_reference(start) else {
+        return Ok(None);
+    };
+    let Some((end_col, end_row)) = parse_cell_reference(end) else {
+        return Ok(None);
+    };
 
-    Some(MergedCellRange {
+    Ok(Some(MergedCellRange {
         start_col,
         start_row,
         end_col,
         end_row,
-    })
+    }))
 }

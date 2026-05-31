@@ -171,11 +171,51 @@ fn test_parse_empty_cell_and_formula_helpers() {
         Event::Start(e) => e.into_owned(),
         other => panic!("unexpected event: {other:?}"),
     };
-    let empty_formula = parse_formula_empty(&array_start);
+    let empty_formula =
+        parse_formula_empty(&array_start, "xl/worksheets/sheet1.xml").expect("empty formula");
     assert_eq!(empty_formula.formula_type, FormulaType::Array);
     assert!(empty_formula.is_array);
     assert_eq!(empty_formula.array_ref.as_deref(), Some("B1:B9"));
     assert_eq!(empty_formula.shared_ref, None);
+}
+
+#[test]
+fn test_parse_formula_reports_malformed_attributes() {
+    let mut reader = Reader::from_str(r#"<f t="shared" t="array">SUM(A1:A3)</f>"#);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let start = match reader.read_event_into(&mut buf).expect("formula start") {
+        Event::Start(e) => e.into_owned(),
+        other => panic!("unexpected event: {other:?}"),
+    };
+    let err = parse_formula(&mut reader, &start, "xl/worksheets/sheet1.xml")
+        .expect_err("duplicate formula attrs must fail");
+    assert!(matches!(
+        err,
+        ParseError::Xml {
+            ref file,
+            ..
+        } if file == "xl/worksheets/sheet1.xml"
+    ));
+
+    let mut empty_reader = Reader::from_str(r#"<f t="shared" t="array"/>"#);
+    buf.clear();
+    let empty_start = match empty_reader
+        .read_event_into(&mut buf)
+        .expect("empty formula")
+    {
+        Event::Empty(e) => e.into_owned(),
+        other => panic!("unexpected event: {other:?}"),
+    };
+    let err = parse_formula_empty(&empty_start, "xl/worksheets/sheet1.xml")
+        .expect_err("duplicate empty formula attrs must fail");
+    assert!(matches!(
+        err,
+        ParseError::Xml {
+            ref file,
+            ..
+        } if file == "xl/worksheets/sheet1.xml"
+    ));
 }
 
 #[test]
