@@ -421,8 +421,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn inspect_metadata_supports_additional_scalar_property_types() {
+    fn additional_scalar_property_streams() -> (Vec<u8>, Vec<u8>) {
         let summary = build_test_property_set_stream(&[
             (1, TestPropertyValue::U16(1200)),
             (3, TestPropertyValue::Str("Specimen subject")),
@@ -452,6 +451,66 @@ mod tests {
             (28, TestPropertyValue::WStr("en-US")),
         ]);
 
+        (summary, doc_summary)
+    }
+
+    fn assert_metadata_properties(
+        section: &super::MetadataSection,
+        expected: &[(&str, &str, &str)],
+    ) {
+        for (name, value_type, value) in expected {
+            assert!(
+                section.properties.iter().any(|prop| {
+                    prop.name == *name && prop.value_type == *value_type && prop.value == *value
+                }),
+                "missing property {name} with type {value_type} and value {value}"
+            );
+        }
+    }
+
+    fn assert_additional_summary_properties(summary: &super::MetadataSection) {
+        assert_metadata_properties(
+            summary,
+            &[
+                ("codepage", "u16", "1200"),
+                ("subject", "lpstr", "Specimen subject"),
+                ("author", "lpstr", "Analyst"),
+                ("keywords", "lpstr", "macro,ole"),
+                ("comments", "lpstr", "sample comment"),
+                ("last-saved-by", "lpstr", "Responder"),
+                ("template", "lpstr", "Normal.dotm"),
+                ("revision-number", "lpstr", "7"),
+                ("edit-time", "i64", "3600"),
+                ("page-count", "i16", "3"),
+                ("word-count", "u32", "42"),
+                ("application-name", "lpstr", "Microsoft Excel"),
+                ("security", "u32", "1"),
+            ],
+        );
+    }
+
+    fn assert_additional_doc_summary_properties(doc_summary: &super::MetadataSection) {
+        assert_metadata_properties(
+            doc_summary,
+            &[
+                ("category", "lpstr", "Malware triage"),
+                ("byte-count", "i64", "2048"),
+                ("heading-pairs", "lpwstr", "Slides"),
+                ("titles-of-parts", "lpwstr", "Part A"),
+                ("manager", "lpwstr", "Analyst"),
+                ("company", "lpwstr", "ACME"),
+                ("hlinks", "f64", "2.5"),
+                ("content-type", "lpwstr", "application/vnd.ms-excel"),
+                ("content-status", "lpwstr", "final"),
+                ("language", "lpwstr", "en-US"),
+                ("document-version", "lpwstr", "16.0"),
+            ],
+        );
+    }
+
+    #[test]
+    fn inspect_metadata_supports_additional_scalar_property_types() {
+        let (summary, doc_summary) = additional_scalar_property_streams();
         let inspection = inspect_metadata_bytes(&build_test_cfb(&[
             (SUMMARY_INFO_STREAM, &summary),
             (DOC_SUMMARY_INFO_STREAM, &doc_summary),
@@ -463,87 +522,13 @@ mod tests {
             .iter()
             .find(|section| section.name == "summary-information")
             .expect("summary section");
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "codepage" && prop.value_type == "u16" && prop.value == "1200"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "subject" && prop.value_type == "lpstr" && prop.value == "Specimen subject"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "author" && prop.value_type == "lpstr" && prop.value == "Analyst"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "keywords" && prop.value_type == "lpstr" && prop.value == "macro,ole"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "comments" && prop.value_type == "lpstr" && prop.value == "sample comment"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "last-saved-by" && prop.value_type == "lpstr" && prop.value == "Responder"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "template" && prop.value_type == "lpstr" && prop.value == "Normal.dotm"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "revision-number" && prop.value_type == "lpstr" && prop.value == "7"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "edit-time" && prop.value_type == "i64" && prop.value == "3600"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "page-count" && prop.value_type == "i16" && prop.value == "3"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "word-count" && prop.value_type == "u32" && prop.value == "42"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "application-name"
-                && prop.value_type == "lpstr"
-                && prop.value == "Microsoft Excel"
-        }));
-        assert!(summary.properties.iter().any(|prop| {
-            prop.name == "security" && prop.value_type == "u32" && prop.value == "1"
-        }));
+        assert_additional_summary_properties(summary);
 
         let doc_summary = inspection
             .sections
             .iter()
             .find(|section| section.name == "document-summary-information")
             .expect("doc summary section");
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "category" && prop.value_type == "lpstr" && prop.value == "Malware triage"
-        }));
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "byte-count" && prop.value_type == "i64" && prop.value == "2048"
-        }));
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "heading-pairs" && prop.value_type == "lpwstr" && prop.value == "Slides"
-        }));
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "titles-of-parts" && prop.value_type == "lpwstr" && prop.value == "Part A"
-        }));
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "manager" && prop.value_type == "lpwstr" && prop.value == "Analyst"
-        }));
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "company" && prop.value_type == "lpwstr" && prop.value == "ACME"
-        }));
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "hlinks" && prop.value_type == "f64" && prop.value == "2.5"
-        }));
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "content-type"
-                && prop.value_type == "lpwstr"
-                && prop.value == "application/vnd.ms-excel"
-        }));
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "content-status" && prop.value_type == "lpwstr" && prop.value == "final"
-        }));
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "language" && prop.value_type == "lpwstr" && prop.value == "en-US"
-        }));
-        assert!(doc_summary.properties.iter().any(|prop| {
-            prop.name == "document-version" && prop.value_type == "lpwstr" && prop.value == "16.0"
-        }));
+        assert_additional_doc_summary_properties(doc_summary);
     }
 }
