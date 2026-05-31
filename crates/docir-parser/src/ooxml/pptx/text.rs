@@ -35,7 +35,9 @@ fn parse_text_body_with_end(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == end_tag => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(slide_path, "unexpected EOF in text body XML"));
+            }
             Err(e) => {
                 return Err(xml_error(slide_path, e));
             }
@@ -96,7 +98,12 @@ fn parse_text_paragraph(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"p" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    slide_path,
+                    "unexpected EOF in text paragraph XML",
+                ));
+            }
             Err(e) => {
                 return Err(xml_error(slide_path, e));
             }
@@ -150,7 +157,9 @@ fn parse_text_run(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"r" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(slide_path, "unexpected EOF in text run XML"));
+            }
             Err(e) => {
                 return Err(xml_error(slide_path, e));
             }
@@ -176,5 +185,70 @@ fn map_alignment(value: &str) -> Option<TextAlignment> {
         "just" => Some(TextAlignment::Justify),
         "dist" => Some(TextAlignment::Distribute),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_text_body, parse_text_paragraph, parse_text_run};
+    use crate::error::ParseError;
+    use quick_xml::Reader;
+    use quick_xml::events::Event;
+
+    fn reader_after_start<'a>(xml: &'a str, expected_start: &[u8]) -> Reader<&'a [u8]> {
+        let mut reader = Reader::from_str(xml);
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        match reader.read_event_into(&mut buf).expect("start event") {
+            Event::Start(e) => {
+                assert_eq!(e.local_name().as_ref(), expected_start);
+            }
+            other => panic!("expected start event, got {other:?}"),
+        }
+        reader
+    }
+
+    fn assert_xml_error(result: Result<impl std::fmt::Debug, ParseError>) {
+        match result.expect_err("truncated text XML must fail") {
+            ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/broken-text.xml"),
+            other => panic!("expected XML error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_text_body_reports_truncated_xml() {
+        let xml = r#"
+            <p:txBody xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:p><a:r><a:t>broken</a:t></a:r></a:p>
+        "#;
+        let mut reader = reader_after_start(xml, b"txBody");
+
+        assert_xml_error(parse_text_body(&mut reader, "ppt/slides/broken-text.xml"));
+    }
+
+    #[test]
+    fn parse_text_paragraph_reports_truncated_xml() {
+        let xml = r#"
+            <a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:r><a:t>broken</a:t></a:r>
+        "#;
+        let mut reader = reader_after_start(xml, b"p");
+
+        assert_xml_error(parse_text_paragraph(
+            &mut reader,
+            "ppt/slides/broken-text.xml",
+        ));
+    }
+
+    #[test]
+    fn parse_text_run_reports_truncated_xml() {
+        let xml = r#"
+            <a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:t>broken</a:t>
+        "#;
+        let mut reader = reader_after_start(xml, b"r");
+
+        assert_xml_error(parse_text_run(&mut reader, "ppt/slides/broken-text.xml"));
     }
 }
