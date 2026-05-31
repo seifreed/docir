@@ -74,7 +74,8 @@ fn parse_text_paragraph(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                 b"pPr" => {
-                    for attr in e.attributes().flatten() {
+                    for attr in e.attributes() {
+                        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
                         if attr.key.as_ref() == b"algn" {
                             alignment = map_alignment(&lossy_attr_value(&attr));
                         }
@@ -130,7 +131,8 @@ fn parse_text_run(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                 b"rPr" => {
-                    for attr in e.attributes().flatten() {
+                    for attr in e.attributes() {
+                        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
                         match attr.key.as_ref() {
                             b"b" => bold = Some(attr.value.as_ref() == b"1"),
                             b"i" => italic = Some(attr.value.as_ref() == b"1"),
@@ -146,7 +148,8 @@ fn parse_text_run(
                     text.push_str(&value);
                 }
                 b"latin" => {
-                    for attr in e.attributes().flatten() {
+                    for attr in e.attributes() {
+                        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
                         if attr.key.as_ref() == b"typeface" {
                             font_family = Some(lossy_attr_value(&attr).to_string());
                         }
@@ -209,7 +212,7 @@ mod tests {
     }
 
     fn assert_xml_error(result: Result<impl std::fmt::Debug, ParseError>) {
-        match result.expect_err("truncated text XML must fail") {
+        match result.expect_err("malformed text XML must fail") {
             ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/broken-text.xml"),
             other => panic!("expected XML error, got {other:?}"),
         }
@@ -246,6 +249,48 @@ mod tests {
         let xml = r#"
             <a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <a:t>broken</a:t>
+        "#;
+        let mut reader = reader_after_start(xml, b"r");
+
+        assert_xml_error(parse_text_run(&mut reader, "ppt/slides/broken-text.xml"));
+    }
+
+    #[test]
+    fn parse_text_paragraph_reports_malformed_paragraph_attrs() {
+        let xml = r#"
+            <a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:pPr algn="ctr" algn="l"></a:pPr>
+              <a:r><a:t>text</a:t></a:r>
+            </a:p>
+        "#;
+        let mut reader = reader_after_start(xml, b"p");
+
+        assert_xml_error(parse_text_paragraph(
+            &mut reader,
+            "ppt/slides/broken-text.xml",
+        ));
+    }
+
+    #[test]
+    fn parse_text_run_reports_malformed_run_attrs() {
+        let xml = r#"
+            <a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:rPr b="1" b="0"></a:rPr>
+              <a:t>text</a:t>
+            </a:r>
+        "#;
+        let mut reader = reader_after_start(xml, b"r");
+
+        assert_xml_error(parse_text_run(&mut reader, "ppt/slides/broken-text.xml"));
+    }
+
+    #[test]
+    fn parse_text_run_reports_malformed_latin_attrs() {
+        let xml = r#"
+            <a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:rPr><a:latin typeface="Arial" typeface="Calibri"></a:latin></a:rPr>
+              <a:t>text</a:t>
+            </a:r>
         "#;
         let mut reader = reader_after_start(xml, b"r");
 
