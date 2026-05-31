@@ -24,7 +24,7 @@ impl OoxmlParser {
         let (styles_id, styles_with_effects_id, numbering_id) =
             self.parse_docx_style_parts(zip, main_part_path, doc_rels, parser)?;
         let (comments, footnotes, endnotes, comments_ext_id, comments_id_map_id) =
-            self.parse_docx_annotation_parts(zip, main_part_path, doc_rels, parser);
+            self.parse_docx_annotation_parts(zip, main_part_path, doc_rels, parser)?;
         let (settings_id, web_settings_id, font_table_id) =
             self.parse_docx_settings_parts(zip, main_part_path, doc_rels, parser)?;
 
@@ -107,8 +107,8 @@ impl OoxmlParser {
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
-    ) -> DocxAnnotationParts {
-        let comments = self.parse_docx_comments(zip, main_part_path, doc_rels, parser);
+    ) -> Result<DocxAnnotationParts, ParseError> {
+        let comments = self.parse_docx_comments(zip, main_part_path, doc_rels, parser)?;
         let footnotes = self.parse_docx_notes(
             zip,
             main_part_path,
@@ -116,7 +116,7 @@ impl OoxmlParser {
             parser,
             rel_type::FOOTNOTES,
             crate::ooxml::docx::document::NoteKind::Footnote,
-        );
+        )?;
         let endnotes = self.parse_docx_notes(
             zip,
             main_part_path,
@@ -124,39 +124,39 @@ impl OoxmlParser {
             parser,
             rel_type::ENDNOTES,
             crate::ooxml::docx::document::NoteKind::Endnote,
-        );
+        )?;
 
-        let comments_ext_id = self.parse_docx_part_by_path_with_span(
+        let comments_ext_id = self.parse_docx_part_by_path_with_span_result(
             zip,
             "word/commentsExtended.xml",
             parser,
-            |parser, _part_path, xml| parser.parse_comments_extended(xml).ok(),
+            |parser, _part_path, xml| parser.parse_comments_extended(xml),
             |store, id, part_path| {
                 if let Some(IRNode::CommentExtensionSet(set)) = store.get_mut(id) {
                     set.span = Some(SourceSpan::new(part_path));
                 }
             },
-        );
+        )?;
 
-        let comments_id_map_id = self.parse_docx_part_by_path_with_span(
+        let comments_id_map_id = self.parse_docx_part_by_path_with_span_result(
             zip,
             "word/commentsIds.xml",
             parser,
-            |parser, _part_path, xml| parser.parse_comments_ids(xml).ok(),
+            |parser, _part_path, xml| parser.parse_comments_ids(xml),
             |store, id, part_path| {
                 if let Some(IRNode::CommentIdMap(map)) = store.get_mut(id) {
                     map.span = Some(SourceSpan::new(part_path));
                 }
             },
-        );
+        )?;
 
-        (
+        Ok((
             comments,
             footnotes,
             endnotes,
             comments_ext_id,
             comments_id_map_id,
-        )
+        ))
     }
 
     fn parse_docx_settings_parts(
@@ -261,41 +261,24 @@ impl OoxmlParser {
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
-    ) -> Vec<NodeId> {
-        let comments = doc_rels
-            .get_first_by_type(rel_type::COMMENTS)
-            .and_then(|rel| {
-                let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-                let rels = read_relationships_optional(zip, &part_path);
-                zip.read_file_string(&part_path).ok().and_then(|xml| {
-                    let ids = parser.parse_comments(&xml, &rels).ok()?;
-                    for id in &ids {
-                        if let Some(IRNode::Comment(comment)) = parser.store_mut().get_mut(*id) {
-                            comment.span = Some(SourceSpan::new(&part_path));
-                        }
-                    }
-                    Some(ids)
-                })
-            })
-            .unwrap_or_default();
-
-        if !comments.is_empty() || !zip.contains("word/comments.xml") {
-            return comments;
+    ) -> Result<Vec<NodeId>, ParseError> {
+        if let Some(rel) = doc_rels.get_first_by_type(rel_type::COMMENTS) {
+            let part_path = Relationships::resolve_target(main_part_path, &rel.target);
+            let rels = read_relationships_optional(zip, &part_path);
+            let xml = zip.read_file_string(&part_path)?;
+            let ids = parser.parse_comments(&xml, &rels)?;
+            set_comment_spans(parser, &ids, &part_path);
+            return Ok(ids);
         }
 
+        if !zip.contains("word/comments.xml") {
+            return Ok(Vec::new());
+        }
         let rels = read_relationships_optional(zip, "word/comments.xml");
-        if let Ok(xml) = zip.read_file_string("word/comments.xml")
-            && let Ok(ids) = parser.parse_comments(&xml, &rels)
-        {
-            for id in &ids {
-                if let Some(IRNode::Comment(comment)) = parser.store_mut().get_mut(*id) {
-                    comment.span = Some(SourceSpan::new("word/comments.xml"));
-                }
-            }
-            return ids;
-        }
-
-        comments
+        let xml = zip.read_file_string("word/comments.xml")?;
+        let ids = parser.parse_comments(&xml, &rels)?;
+        set_comment_spans(parser, &ids, "word/comments.xml");
+        Ok(ids)
     }
 
     fn parse_docx_notes(
@@ -306,35 +289,16 @@ impl OoxmlParser {
         parser: &mut DocxParser,
         rel_type: &str,
         kind: crate::ooxml::docx::document::NoteKind,
-    ) -> Vec<NodeId> {
-        doc_rels
-            .get_first_by_type(rel_type)
-            .and_then(|rel| {
-                let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-                let rels = read_relationships_optional(zip, &part_path);
-                zip.read_file_string(&part_path).ok().and_then(|xml| {
-                    let ids = parser.parse_notes(&xml, kind, &rels).ok()?;
-                    for id in &ids {
-                        match kind {
-                            crate::ooxml::docx::document::NoteKind::Footnote => {
-                                if let Some(IRNode::Footnote(note)) =
-                                    parser.store_mut().get_mut(*id)
-                                {
-                                    note.span = Some(SourceSpan::new(&part_path));
-                                }
-                            }
-                            crate::ooxml::docx::document::NoteKind::Endnote => {
-                                if let Some(IRNode::Endnote(note)) = parser.store_mut().get_mut(*id)
-                                {
-                                    note.span = Some(SourceSpan::new(&part_path));
-                                }
-                            }
-                        }
-                    }
-                    Some(ids)
-                })
-            })
-            .unwrap_or_default()
+    ) -> Result<Vec<NodeId>, ParseError> {
+        let Some(rel) = doc_rels.get_first_by_type(rel_type) else {
+            return Ok(Vec::new());
+        };
+        let part_path = Relationships::resolve_target(main_part_path, &rel.target);
+        let rels = read_relationships_optional(zip, &part_path);
+        let xml = zip.read_file_string(&part_path)?;
+        let ids = parser.parse_notes(&xml, kind, &rels)?;
+        set_note_spans(parser, &ids, kind, &part_path);
+        Ok(ids)
     }
 
     fn parse_docx_font_table(
@@ -403,24 +367,6 @@ impl OoxmlParser {
         parse(part_path, &xml)
     }
 
-    fn parse_docx_part_by_path_with_span<F, S>(
-        &self,
-        zip: &mut impl PackageReader,
-        part_path: &str,
-        parser: &mut DocxParser,
-        parse: F,
-        set_span: S,
-    ) -> Option<NodeId>
-    where
-        F: FnOnce(&mut DocxParser, &str, &str) -> Option<NodeId>,
-        S: FnOnce(&mut IrStore, NodeId, &str),
-    {
-        let xml = self.read_xml_part_optional(zip, part_path)?;
-        let id = parse(parser, part_path, &xml)?;
-        set_span(parser.store_mut(), id, part_path);
-        Some(id)
-    }
-
     fn parse_docx_part_by_path_with_span_result<F, S>(
         &self,
         zip: &mut impl PackageReader,
@@ -447,5 +393,35 @@ impl OoxmlParser {
         part_path: &str,
     ) -> Option<String> {
         read_xml_part(zip, part_path).ok().flatten()
+    }
+}
+
+fn set_comment_spans(parser: &mut DocxParser, ids: &[NodeId], part_path: &str) {
+    for id in ids {
+        if let Some(IRNode::Comment(comment)) = parser.store_mut().get_mut(*id) {
+            comment.span = Some(SourceSpan::new(part_path));
+        }
+    }
+}
+
+fn set_note_spans(
+    parser: &mut DocxParser,
+    ids: &[NodeId],
+    kind: crate::ooxml::docx::document::NoteKind,
+    part_path: &str,
+) {
+    for id in ids {
+        match kind {
+            crate::ooxml::docx::document::NoteKind::Footnote => {
+                if let Some(IRNode::Footnote(note)) = parser.store_mut().get_mut(*id) {
+                    note.span = Some(SourceSpan::new(part_path));
+                }
+            }
+            crate::ooxml::docx::document::NoteKind::Endnote => {
+                if let Some(IRNode::Endnote(note)) = parser.store_mut().get_mut(*id) {
+                    note.span = Some(SourceSpan::new(part_path));
+                }
+            }
+        }
     }
 }

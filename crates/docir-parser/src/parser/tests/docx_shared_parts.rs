@@ -109,6 +109,57 @@ fn test_docx_reports_malformed_settings_part() {
 }
 
 #[test]
+fn test_docx_reports_malformed_comments_part() {
+    let body = r#"
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body>
+            <w:p><w:r><w:t>Commented</w:t></w:r></w:p>
+          </w:body>
+        </w:document>"#;
+
+    let rels_xml = r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rComments"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
+            Target="comments.xml"/>
+        </Relationships>"#;
+
+    let content_types = r#"
+        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+          <Default Extension="xml" ContentType="application/xml"/>
+          <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+          <Override PartName="/word/document.xml"
+            ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+          <Override PartName="/word/comments.xml"
+            ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>
+        </Types>"#;
+
+    let path = create_docx_with_relationships(
+        body,
+        rels_xml,
+        content_types,
+        &[(
+            "word/comments.xml",
+            r#"<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:comment"#,
+        )],
+    );
+
+    let parser = OoxmlParser::new();
+    let err = parser
+        .parse_file(&path)
+        .expect_err("malformed DOCX comments part must fail instead of being ignored");
+    std::fs::remove_file(path).ok();
+
+    match err {
+        ParseError::Xml { file, .. } => {
+            assert_eq!(file, "word/comments.xml");
+        }
+        other => panic!("expected XML error, got {other}"),
+    }
+}
+
+#[test]
 fn test_docx_shared_parts_collects_multiple_part_kinds() {
     let body = r#"
         <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
