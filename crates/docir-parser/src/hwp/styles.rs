@@ -2,20 +2,21 @@ use super::{
     attr_any, local_name, parse_hwpx_paragraph_props, parse_hwpx_table_props,
     run_properties_from_attrs, style_run_props_from_run,
 };
+use crate::error::ParseError;
+use crate::xml_utils::{XmlScanControl, reader_from_str, scan_xml_events};
 use docir_core::ir::{Style, StyleSet, StyleType};
 use docir_core::types::SourceSpan;
-use quick_xml::Reader;
 use quick_xml::events::Event;
 
-pub(super) fn parse_hwpx_styles(xml: &str, source: &str) -> Option<StyleSet> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+pub(super) fn parse_hwpx_styles(xml: &str, source: &str) -> Result<Option<StyleSet>, ParseError> {
+    let mut reader = reader_from_str(xml);
     let mut buf = Vec::new();
     let mut styles = Vec::new();
     let mut current: Option<Style> = None;
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+
+    scan_xml_events(&mut reader, &mut buf, source, |event| {
+        match event {
+            Event::Start(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
                 if local == b"style" {
@@ -24,7 +25,7 @@ pub(super) fn parse_hwpx_styles(xml: &str, source: &str) -> Option<StyleSet> {
                     apply_style_props(local, &e, &mut current);
                 }
             }
-            Ok(Event::Empty(e)) => {
+            Event::Empty(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
                 if local == b"style" {
@@ -33,19 +34,18 @@ pub(super) fn parse_hwpx_styles(xml: &str, source: &str) -> Option<StyleSet> {
                     apply_style_props(local, &e, &mut current);
                 }
             }
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 let name = e.name().as_ref().to_vec();
                 if local_name(&name) == b"style" {
                     styles.extend(current.take());
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
             _ => {}
         }
-        buf.clear();
-    }
-    finalize_style_set(styles, source)
+        Ok(XmlScanControl::Continue)
+    })?;
+
+    Ok(finalize_style_set(styles, source))
 }
 
 fn parse_style_attrs(e: &quick_xml::events::BytesStart<'_>) -> Style {

@@ -278,6 +278,33 @@ fn test_hwpx_styles_parsing() {
 }
 
 #[test]
+fn test_hwpx_styles_reports_malformed_content_hpf() {
+    let styles_xml = r##"<hp:package xmlns:hp="http://www.hancom.co.kr/hwpml">
+  <hp:styles>
+    <hp:style id="s1" name="Body" type="paragraph">
+      <hp:paraPr align="center" />
+    </hp:style>
+    <hp:style id="broken">
+</hp:package>"##;
+    let section_xml = r#"<hp:section xmlns:hp="http://www.hancom.co.kr/hwpml">
+  <hp:p><hp:t>Texto</hp:t></hp:p>
+</hp:section>"#;
+    let data = build_hwpx_zip_with_parts(section_xml, Some(styles_xml), Vec::new());
+    let parser = HwpxParser::new();
+
+    let err = parser
+        .parse_bytes(&data)
+        .expect_err("malformed HWPX styles must fail instead of returning partial styles");
+
+    match err {
+        crate::error::ParseError::Xml { file, .. } => {
+            assert_eq!(file, "Contents/content.hpf");
+        }
+        other => panic!("expected XML error, got {other}"),
+    }
+}
+
+#[test]
 fn test_hwpx_security_signals() {
     let section_xml = r#"<hp:section xmlns:hp="http://www.hancom.co.kr/hwpml"
   xmlns:xlink="http://www.w3.org/1999/xlink">

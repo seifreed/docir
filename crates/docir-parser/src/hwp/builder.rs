@@ -145,7 +145,7 @@ impl ParseStage for HwpxParser {
             &grouped_sections.footer_ids,
         );
         doc.shared_parts.extend(grouped_sections.master_ids);
-        self.parse_hwpx_styles_part(&mut zip, &mut store, &mut doc);
+        self.parse_hwpx_styles_part(&mut zip, &mut store, &mut doc)?;
 
         scan_hwpx_security(&file_names, &mut zip, &mut store, &mut doc)?;
 

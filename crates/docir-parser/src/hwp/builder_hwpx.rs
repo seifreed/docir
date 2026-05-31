@@ -155,17 +155,17 @@ impl HwpxParser {
         zip: &mut SecureZipReader<R>,
         store: &mut IrStore,
         doc: &mut Document,
-    ) {
+    ) -> Result<(), ParseError> {
         if !zip.contains("Contents/content.hpf") {
-            return;
+            return Ok(());
         }
-        if let Ok(xml) = zip.read_file_string("Contents/content.hpf")
-            && let Some(style_set) = parse_hwpx_styles(&xml, "Contents/content.hpf")
-        {
+        let xml = zip.read_file_string("Contents/content.hpf")?;
+        if let Some(style_set) = parse_hwpx_styles(&xml, "Contents/content.hpf")? {
             let style_id = style_set.id;
             store.insert(IRNode::StyleSet(style_set));
             doc.styles = Some(style_id);
         }
+        Ok(())
     }
 }
 
