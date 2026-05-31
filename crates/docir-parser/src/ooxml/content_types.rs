@@ -26,12 +26,12 @@ impl ContentTypes {
             match read_event(&mut reader, &mut buf, "[Content_Types].xml")? {
                 Event::Empty(e) | Event::Start(e) => match local_name(e.name().as_ref()) {
                     b"Default" => {
-                        if let Some((ext, ct)) = parse_default_entry(&e) {
+                        if let Some((ext, ct)) = parse_default_entry(&e)? {
                             content_types.defaults.insert(ext, ct);
                         }
                     }
                     b"Override" => {
-                        if let Some((pn, ct)) = parse_override_entry(&e) {
+                        if let Some((pn, ct)) = parse_override_entry(&e)? {
                             let normalized = normalize_part_name(&pn);
                             content_types.overrides.insert(normalized, ct);
                         }
@@ -107,32 +107,36 @@ impl ContentTypes {
     }
 }
 
-fn parse_default_entry(element: &quick_xml::events::BytesStart<'_>) -> Option<(String, String)> {
+fn parse_default_entry(
+    element: &quick_xml::events::BytesStart<'_>,
+) -> Result<Option<(String, String)>, ParseError> {
     let mut extension = None;
     let mut content_type = None;
-    attr_each(element, |key, value| match key {
+    attr_each(element, "[Content_Types].xml", |key, value| match key {
         b"Extension" => extension = Some(String::from_utf8_lossy(value).to_string()),
         b"ContentType" => content_type = Some(String::from_utf8_lossy(value).to_string()),
         _ => {}
-    });
-    match (extension, content_type) {
+    })?;
+    Ok(match (extension, content_type) {
         (Some(extension), Some(content_type)) => Some((extension, content_type)),
         _ => None,
-    }
+    })
 }
 
-fn parse_override_entry(element: &quick_xml::events::BytesStart<'_>) -> Option<(String, String)> {
+fn parse_override_entry(
+    element: &quick_xml::events::BytesStart<'_>,
+) -> Result<Option<(String, String)>, ParseError> {
     let mut part_name = None;
     let mut content_type = None;
-    attr_each(element, |key, value| match key {
+    attr_each(element, "[Content_Types].xml", |key, value| match key {
         b"PartName" => part_name = Some(String::from_utf8_lossy(value).to_string()),
         b"ContentType" => content_type = Some(String::from_utf8_lossy(value).to_string()),
         _ => {}
-    });
-    match (part_name, content_type) {
+    })?;
+    Ok(match (part_name, content_type) {
         (Some(part_name), Some(content_type)) => Some((part_name, content_type)),
         _ => None,
-    }
+    })
 }
 
 fn normalize_part_name(part_name: &str) -> String {
@@ -300,6 +304,7 @@ pub mod content_type {
 #[cfg(test)]
 mod tests {
     use super::{ContentTypes, content_type};
+    use crate::error::ParseError;
     use docir_core::DocumentFormat;
 
     #[test]
@@ -322,5 +327,21 @@ mod tests {
             Some(content_type::RELATIONSHIPS)
         );
         assert_eq!(types.detect_format(), Some(DocumentFormat::Spreadsheet));
+    }
+
+    #[test]
+    fn parse_reports_malformed_attributes() {
+        let xml = r#"
+        <ct:Types xmlns:ct="http://schemas.openxmlformats.org/package/2006/content-types">
+          <ct:Default Extension="rels" Extension="dup" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        </ct:Types>
+        "#;
+
+        let err = ContentTypes::parse(xml).expect_err("malformed attributes must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "[Content_Types].xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }

@@ -25,7 +25,7 @@ fn parse_web_extension_impl(xml: &str, path: &str) -> Result<WebExtension, Parse
             Event::Start(e) | Event::Empty(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
-                let attrs = collect_local_attrs(&e);
+                let attrs = collect_local_attrs(&e, path)?;
 
                 match local {
                     b"webextension" => {
@@ -74,22 +74,22 @@ pub fn parse_web_extension_taskpanes(
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
                 if local == b"taskpane" {
-                    current = Some(new_taskpane(path, &e));
+                    current = Some(new_taskpane(path, &e)?);
                 } else if local == b"webextensionref"
                     && let Some(pane) = current.as_mut()
                 {
-                    apply_webextension_ref_attrs(pane, &collect_local_attrs(&e));
+                    apply_webextension_ref_attrs(pane, &collect_local_attrs(&e, path)?);
                 }
             }
             Event::Empty(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
                 if local == b"taskpane" {
-                    panes.push(new_taskpane(path, &e));
+                    panes.push(new_taskpane(path, &e)?);
                 } else if local == b"webextensionref"
                     && let Some(pane) = current.as_mut()
                 {
-                    apply_webextension_ref_attrs(pane, &collect_local_attrs(&e));
+                    apply_webextension_ref_attrs(pane, &collect_local_attrs(&e, path)?);
                 }
             }
             Event::End(e) => {
@@ -110,11 +110,11 @@ pub fn parse_web_extension_taskpanes(
     Ok(panes)
 }
 
-fn new_taskpane(path: &str, e: &BytesStart<'_>) -> WebExtensionTaskpane {
+fn new_taskpane(path: &str, e: &BytesStart<'_>) -> Result<WebExtensionTaskpane, ParseError> {
     let mut pane = WebExtensionTaskpane::new();
     pane.span = Some(SourceSpan::new(path));
-    apply_taskpane_attrs(&mut pane, &collect_local_attrs(e));
-    pane
+    apply_taskpane_attrs(&mut pane, &collect_local_attrs(e, path)?);
+    Ok(pane)
 }
 
 fn apply_taskpane_attrs(pane: &mut WebExtensionTaskpane, attrs: &AttrList) {
@@ -169,12 +169,12 @@ fn parse_web_extension_property(attrs: &AttrList) -> Option<(String, String)> {
     Some((name.to_string(), value.to_string()))
 }
 
-fn collect_local_attrs(element: &BytesStart<'_>) -> AttrList {
+fn collect_local_attrs(element: &BytesStart<'_>, path: &str) -> Result<AttrList, ParseError> {
     let mut attrs = Vec::new();
-    attr_each(element, |key, value| {
+    attr_each(element, path, |key, value| {
         attrs.push((key.to_vec(), String::from_utf8_lossy(value).to_string()));
-    });
-    attrs
+    })?;
+    Ok(attrs)
 }
 
 fn find_attr<'a>(attrs: &'a AttrList, keys: &[&[u8]]) -> Option<&'a str> {

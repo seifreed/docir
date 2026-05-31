@@ -252,6 +252,22 @@ mod tests {
             ),
             "word/drawings/drawing1.xml",
         );
+
+        assert_shared_xml_error(
+            parse_web_extension(
+                r#"<we:webextension xmlns:we="x"><we:property name="one" name="two"/></we:webextension>"#,
+                "word/webExtensions/webExtension1.xml",
+            ),
+            "word/webExtensions/webExtension1.xml",
+        );
+
+        assert_shared_xml_error(
+            parse_web_extension_taskpanes(
+                r#"<wetp:taskpanes xmlns:wetp="x"><wetp:taskpane dockState="right" dockState="left"/></wetp:taskpanes>"#,
+                "word/webExtensions/taskpanes.xml",
+            ),
+            "word/webExtensions/taskpanes.xml",
+        );
     }
 
     #[test]

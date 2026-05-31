@@ -88,14 +88,20 @@ pub(crate) fn attr_u64_from_bytes(e: &BytesStart<'_>, name: &[u8]) -> Option<u64
     None
 }
 
-pub(crate) fn attr_each<'a, F>(element: &'a BytesStart<'a>, mut on_attr: F)
+pub(crate) fn attr_each<'a, F>(
+    element: &'a BytesStart<'a>,
+    file: &str,
+    mut on_attr: F,
+) -> Result<(), ParseError>
 where
     F: for<'b> FnMut(&'b [u8], &'b [u8]),
 {
-    for attr in element.attributes().flatten() {
+    for attr in element.attributes() {
+        let attr = attr.map_err(|err| xml_error(file, err))?;
         let key = local_name(attr.key.as_ref());
         on_attr(key, attr.value.as_ref());
     }
+    Ok(())
 }
 
 pub(crate) fn visit_attributes<F>(
