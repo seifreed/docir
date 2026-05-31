@@ -29,6 +29,7 @@ mod comments;
 mod graphic_frame;
 mod graphic_frame_support;
 mod metadata;
+mod picture;
 mod presentation_parts;
 mod relationships;
 #[path = "shape_parse.rs"]
