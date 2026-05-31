@@ -3,7 +3,7 @@ use crate::xml_utils::{lossy_attr_value, xml_error};
 use docir_core::ir::{PptxComment, PptxCommentAuthor};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 pub(crate) fn parse_comment_authors(
@@ -71,24 +71,7 @@ pub(crate) fn parse_comments(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
                 if e.name().as_ref().ends_with(b"cm") {
-                    let mut author_id = None;
-                    let mut dt = None;
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"authorId" => author_id = lossy_attr_value(&attr).parse::<u32>().ok(),
-                            b"dt" => dt = Some(lossy_attr_value(&attr).to_string()),
-                            _ => {}
-                        }
-                    }
-                    current = Some(PptxComment {
-                        id: NodeId::new(),
-                        author_id,
-                        author_name: None,
-                        author_initials: None,
-                        datetime: dt,
-                        text: String::new(),
-                        span: Some(SourceSpan::new(path)),
-                    });
+                    current = Some(comment_from_start(&e, path));
                     text_buf.clear();
                 } else if e.name().as_ref().ends_with(b"t") {
                     in_text = true;
@@ -103,25 +86,9 @@ pub(crate) fn parse_comments(
             Ok(Event::End(e)) => {
                 if e.name().as_ref().ends_with(b"t") {
                     in_text = false;
-                    if !text_buf.is_empty() {
-                        if let Some(cur) = current.as_mut() {
-                            if !cur.text.is_empty() {
-                                cur.text.push(' ');
-                            }
-                            cur.text.push_str(&text_buf);
-                        }
-                        text_buf.clear();
-                    }
-                } else if e.name().as_ref().ends_with(b"cm")
-                    && let Some(mut cur) = current.take()
-                {
-                    if let Some(author_id) = cur.author_id
-                        && let Some((name, initials)) = authors.get(&author_id)
-                    {
-                        cur.author_name = name.clone();
-                        cur.author_initials = initials.clone();
-                    }
-                    comments.push(cur);
+                    flush_comment_text(&mut current, &mut text_buf);
+                } else if e.name().as_ref().ends_with(b"cm") {
+                    finish_comment(&mut current, authors, &mut comments);
                 }
             }
             Ok(Event::Eof) => break,
@@ -134,4 +101,55 @@ pub(crate) fn parse_comments(
     }
 
     Ok(comments)
+}
+
+fn comment_from_start(e: &BytesStart<'_>, path: &str) -> PptxComment {
+    let mut author_id = None;
+    let mut dt = None;
+    for attr in e.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"authorId" => author_id = lossy_attr_value(&attr).parse::<u32>().ok(),
+            b"dt" => dt = Some(lossy_attr_value(&attr).to_string()),
+            _ => {}
+        }
+    }
+    PptxComment {
+        id: NodeId::new(),
+        author_id,
+        author_name: None,
+        author_initials: None,
+        datetime: dt,
+        text: String::new(),
+        span: Some(SourceSpan::new(path)),
+    }
+}
+
+fn flush_comment_text(current: &mut Option<PptxComment>, text_buf: &mut String) {
+    if text_buf.is_empty() {
+        return;
+    }
+    if let Some(cur) = current.as_mut() {
+        if !cur.text.is_empty() {
+            cur.text.push(' ');
+        }
+        cur.text.push_str(text_buf);
+    }
+    text_buf.clear();
+}
+
+fn finish_comment(
+    current: &mut Option<PptxComment>,
+    authors: &HashMap<u32, (Option<String>, Option<String>)>,
+    comments: &mut Vec<PptxComment>,
+) {
+    let Some(mut cur) = current.take() else {
+        return;
+    };
+    if let Some(author_id) = cur.author_id
+        && let Some((name, initials)) = authors.get(&author_id)
+    {
+        cur.author_name = name.clone();
+        cur.author_initials = initials.clone();
+    }
+    comments.push(cur);
 }
