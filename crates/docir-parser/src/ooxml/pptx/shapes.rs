@@ -27,7 +27,12 @@ pub(super) fn parse_shape_properties(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"spPr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    slide_path,
+                    "unexpected EOF in shape properties XML",
+                ));
+            }
             Err(e) => {
                 return Err(xml_error(slide_path, e));
             }
@@ -86,6 +91,21 @@ mod tests {
             .expect_err("expected malformed xml error");
         match err {
             ParseError::Xml { file, .. } => assert_eq!(file, "bad-slide.xml"),
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_shape_properties_reports_truncated_xml() {
+        let xml = r#"<p:spPr><a:prstGeom prst="ellipse">"#;
+        let mut reader = Reader::from_str(xml);
+        reader.config_mut().trim_text(true);
+        let mut shape = Shape::new(ShapeType::Unknown);
+
+        let err = parse_shape_properties(&mut reader, &mut shape, "truncated-slide.xml")
+            .expect_err("truncated shape properties must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "truncated-slide.xml"),
             other => panic!("unexpected error variant: {other:?}"),
         }
     }
