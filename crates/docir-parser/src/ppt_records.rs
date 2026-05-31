@@ -37,6 +37,14 @@ pub fn read_ppt_records(data: &[u8]) -> Result<PptRecordScan, ParseError> {
 }
 
 const MAX_PPT_DEPTH: usize = 100;
+const PPT_RECORD_HEADER_LEN: usize = 8;
+const PPT_CONTAINER_VERSION: u8 = 0x0F;
+
+struct PptRecordFrame {
+    header: PptRecordHeader,
+    payload_start: usize,
+    end: usize,
+}
 
 fn scan_record_block(
     data: &[u8],
@@ -46,72 +54,27 @@ fn scan_record_block(
     anomalies: &mut Vec<PptRecordAnomaly>,
 ) {
     if depth > MAX_PPT_DEPTH {
-        anomalies.push(PptRecordAnomaly {
-            kind: "max-depth-exceeded",
-            offset: block_start,
-            message: format!(
-                "PPT record nesting depth {} exceeds maximum {}",
-                depth, MAX_PPT_DEPTH
-            ),
-        });
+        push_max_depth_anomaly(anomalies, block_start, depth);
         return;
     }
+
     let mut cursor = 0usize;
     while cursor < data.len() {
-        let offset = block_start + cursor;
-        let remaining = data.len() - cursor;
-        if remaining < 8 {
-            anomalies.push(PptRecordAnomaly {
-                kind: "trailing-bytes",
-                offset,
-                message: format!(
-                    "{} trailing byte(s) after last complete PPT record header",
-                    remaining
-                ),
-            });
+        let Some(frame) = read_record_frame(data, block_start, depth, cursor, anomalies) else {
             break;
-        }
+        };
 
-        let ver_inst = u16::from_le_bytes([data[cursor], data[cursor + 1]]);
-        let version = (ver_inst & 0x000F) as u8;
-        let instance = ver_inst >> 4;
-        let record_type = u16::from_le_bytes([data[cursor + 2], data[cursor + 3]]);
-        let length = u32::from_le_bytes([
-            data[cursor + 4],
-            data[cursor + 5],
-            data[cursor + 6],
-            data[cursor + 7],
-        ]);
-        let end = cursor.saturating_add(8).saturating_add(length as usize);
-        if end > data.len() {
-            anomalies.push(PptRecordAnomaly {
-                kind: "truncated-record",
-                offset,
-                message: format!(
-                    "record type 0x{record_type:04X} declares {} byte(s) but stream ends after {}",
-                    length,
-                    data.len().saturating_sub(cursor + 8)
-                ),
-            });
-            break;
-        }
-
-        let is_container = version == 0x0F;
-        records.push(PptRecordHeader {
-            offset,
-            record_type,
-            record_name: record_name(record_type),
-            version,
-            instance,
-            length,
-            is_container,
-            depth,
-        });
+        let payload_start = frame.payload_start;
+        let end = frame.end;
+        let offset = frame.header.offset;
+        let is_container = frame.header.is_container;
+        let length = frame.header.length;
+        records.push(frame.header);
 
         if is_container && length > 0 {
             scan_record_block(
-                &data[cursor + 8..end],
-                offset + 8,
+                &data[payload_start..end],
+                offset + PPT_RECORD_HEADER_LEN,
                 depth + 1,
                 records,
                 anomalies,
@@ -120,6 +83,98 @@ fn scan_record_block(
 
         cursor = end;
     }
+}
+
+fn read_record_frame(
+    data: &[u8],
+    block_start: usize,
+    depth: usize,
+    cursor: usize,
+    anomalies: &mut Vec<PptRecordAnomaly>,
+) -> Option<PptRecordFrame> {
+    let offset = block_start + cursor;
+    let remaining = data.len() - cursor;
+    if remaining < PPT_RECORD_HEADER_LEN {
+        push_trailing_bytes_anomaly(anomalies, offset, remaining);
+        return None;
+    }
+
+    let ver_inst = u16::from_le_bytes([data[cursor], data[cursor + 1]]);
+    let version = (ver_inst & 0x000F) as u8;
+    let instance = ver_inst >> 4;
+    let record_type = u16::from_le_bytes([data[cursor + 2], data[cursor + 3]]);
+    let length = u32::from_le_bytes([
+        data[cursor + 4],
+        data[cursor + 5],
+        data[cursor + 6],
+        data[cursor + 7],
+    ]);
+    let payload_start = cursor.saturating_add(PPT_RECORD_HEADER_LEN);
+    let end = payload_start.saturating_add(length as usize);
+    if end > data.len() {
+        push_truncated_record_anomaly(anomalies, data, cursor, offset, record_type, length);
+        return None;
+    }
+
+    Some(PptRecordFrame {
+        header: PptRecordHeader {
+            offset,
+            record_type,
+            record_name: record_name(record_type),
+            version,
+            instance,
+            length,
+            is_container: version == PPT_CONTAINER_VERSION,
+            depth,
+        },
+        payload_start,
+        end,
+    })
+}
+
+fn push_max_depth_anomaly(anomalies: &mut Vec<PptRecordAnomaly>, offset: usize, depth: usize) {
+    anomalies.push(PptRecordAnomaly {
+        kind: "max-depth-exceeded",
+        offset,
+        message: format!(
+            "PPT record nesting depth {} exceeds maximum {}",
+            depth, MAX_PPT_DEPTH
+        ),
+    });
+}
+
+fn push_trailing_bytes_anomaly(
+    anomalies: &mut Vec<PptRecordAnomaly>,
+    offset: usize,
+    remaining: usize,
+) {
+    anomalies.push(PptRecordAnomaly {
+        kind: "trailing-bytes",
+        offset,
+        message: format!(
+            "{} trailing byte(s) after last complete PPT record header",
+            remaining
+        ),
+    });
+}
+
+fn push_truncated_record_anomaly(
+    anomalies: &mut Vec<PptRecordAnomaly>,
+    data: &[u8],
+    cursor: usize,
+    offset: usize,
+    record_type: u16,
+    length: u32,
+) {
+    anomalies.push(PptRecordAnomaly {
+        kind: "truncated-record",
+        offset,
+        message: format!(
+            "record type 0x{record_type:04X} declares {} byte(s) but stream ends after {}",
+            length,
+            data.len().saturating_sub(cursor + PPT_RECORD_HEADER_LEN)
+        ),
+    });
 }
 
 fn record_name(record_type: u16) -> &'static str {
