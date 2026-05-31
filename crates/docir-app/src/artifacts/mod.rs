@@ -9,6 +9,7 @@ mod legacy_cfb;
 mod ole;
 mod ooxml;
 mod rtf;
+mod zip_package;
 
 /// Runtime options controlling artifact extraction outputs.
 #[derive(Debug, Clone)]
@@ -88,14 +89,37 @@ pub fn extract_artifacts_from_bytes(
         DocumentFormat::Rtf => {
             rtf::extract_rtf_artifacts(input_bytes, options, &mut bundle);
         }
-        _ => {
-            bundle.manifest.warnings.push(ExtractionWarning::new(
-                "UNSUPPORTED_EXTRACTION_FORMAT",
-                format!(
-                    "Embedded artifact extraction is not implemented for {}",
-                    parsed.format().extension()
-                ),
-            ));
+        DocumentFormat::OdfText
+        | DocumentFormat::OdfSpreadsheet
+        | DocumentFormat::OdfPresentation => {
+            if options.only_rtf_objects {
+                bundle.manifest.warnings.push(ExtractionWarning::new(
+                    "NO_MATCHING_ARTIFACTS",
+                    "RTF-only extraction requested for an ODF container",
+                ));
+                return bundle;
+            }
+            zip_package::extract_odf_artifacts(input_bytes, zip_config, options, &mut bundle);
+        }
+        DocumentFormat::Hwpx => {
+            if options.only_rtf_objects {
+                bundle.manifest.warnings.push(ExtractionWarning::new(
+                    "NO_MATCHING_ARTIFACTS",
+                    "RTF-only extraction requested for an HWPX container",
+                ));
+                return bundle;
+            }
+            zip_package::extract_hwpx_artifacts(input_bytes, zip_config, options, &mut bundle);
+        }
+        DocumentFormat::Hwp => {
+            if options.only_rtf_objects {
+                bundle.manifest.warnings.push(ExtractionWarning::new(
+                    "NO_MATCHING_ARTIFACTS",
+                    "RTF-only extraction requested for a HWP CFB container",
+                ));
+                return bundle;
+            }
+            legacy_cfb::extract_legacy_cfb_artifacts(input_bytes, options, &mut bundle);
         }
     }
 

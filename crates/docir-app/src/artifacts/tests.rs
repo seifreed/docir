@@ -52,6 +52,76 @@ fn build_minimal_docx(extra_entries: &[(&str, &[u8])]) -> Vec<u8> {
     cursor.into_inner()
 }
 
+fn build_minimal_odt(extra_entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut cursor = Cursor::new(Vec::<u8>::new());
+    {
+        let mut writer = zip::ZipWriter::new(&mut cursor);
+        let options = SimpleFileOptions::default();
+        writer.start_file("mimetype", options).expect("mimetype");
+        writer
+            .write_all(b"application/vnd.oasis.opendocument.text")
+            .expect("write mimetype");
+        writer.start_file("content.xml", options).expect("content");
+        writer
+            .write_all(
+                br#"<office:document-content xmlns:office="office" xmlns:text="text" xmlns:draw="draw" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <office:body>
+    <office:text>
+      <text:p>docir</text:p>
+      <draw:frame><draw:image xlink:href="Pictures/pic.png"/></draw:frame>
+      <draw:object xlink:href="Object 1"/>
+    </office:text>
+  </office:body>
+</office:document-content>"#,
+            )
+            .expect("write content");
+        for (path, data) in extra_entries {
+            writer.start_file(path, options).expect("extra entry");
+            writer.write_all(data).expect("extra data");
+        }
+        writer.finish().expect("finish zip");
+    }
+    cursor.into_inner()
+}
+
+fn build_minimal_hwpx(extra_entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut cursor = Cursor::new(Vec::<u8>::new());
+    {
+        let mut writer = zip::ZipWriter::new(&mut cursor);
+        let options = SimpleFileOptions::default();
+        writer.start_file("mimetype", options).expect("mimetype");
+        writer
+            .write_all(b"application/hwp+zip")
+            .expect("write mimetype");
+        writer
+            .start_file("META-INF/container.xml", options)
+            .expect("container");
+        writer
+            .write_all(b"<container><rootfiles/></container>")
+            .expect("write container");
+        writer.start_file("version.xml", options).expect("version");
+        writer
+            .write_all(b"<version>1.0</version>")
+            .expect("version");
+        writer
+            .start_file("Contents/section0.xml", options)
+            .expect("section");
+        writer
+            .write_all(
+                br#"<hp:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">
+  <hp:p><hp:run><hp:t>docir</hp:t></hp:run></hp:p>
+</hp:sec>"#,
+            )
+            .expect("write section");
+        for (path, data) in extra_entries {
+            writer.start_file(path, options).expect("extra entry");
+            writer.write_all(data).expect("extra data");
+        }
+        writer.finish().expect("finish zip");
+    }
+    cursor.into_inner()
+}
+
 #[test]
 fn parse_ole10_native_extracts_metadata_and_payload() {
     let mut blob = Vec::new();
@@ -76,6 +146,72 @@ fn parse_ole10_native_extracts_metadata_and_payload() {
 fn scan_rtf_objdata_decodes_embedded_hex() {
     let blobs = scan_rtf_objdata(br"{\rtf1{\object{\objdata 4d5a9000}}}");
     assert_eq!(blobs, vec![vec![0x4d, 0x5a, 0x90, 0x00]]);
+}
+
+#[test]
+fn extract_artifacts_finds_odf_media_and_embedded_object() {
+    let bytes = build_minimal_odt(&[
+        ("Pictures/pic.png", b"\x89PNG\r\n\x1a\n"),
+        ("Object 1", b"\xd0\xcf\x11\xe0object"),
+    ]);
+    let app = DocirApp::new(ParserConfig::default());
+    let parsed = app.parse_bytes(&bytes).expect("parse odt");
+    let bundle = extract_artifacts_from_bytes(
+        &parsed,
+        &bytes,
+        Some("memory.odt".to_string()),
+        &ParserConfig::default().zip_config,
+        &ArtifactExtractionOptions::default(),
+    );
+
+    assert!(bundle.manifest.warnings.iter().all(|warning| {
+        warning.code != "UNSUPPORTED_EXTRACTION_FORMAT"
+            && !warning.message.contains("not implemented")
+    }));
+    assert!(bundle.manifest.artifacts.iter().any(|artifact| {
+        artifact.kind == ExtractedArtifactKind::MediaAsset
+            && artifact.source_path.as_deref() == Some("Pictures/pic.png")
+    }));
+    assert!(bundle.manifest.artifacts.iter().any(|artifact| {
+        artifact.kind == ExtractedArtifactKind::OleObject
+            && artifact.source_path.as_deref() == Some("Object 1")
+    }));
+    assert!(
+        bundle
+            .payloads
+            .iter()
+            .any(|payload| payload.relative_path == "payloads/pic.png")
+    );
+}
+
+#[test]
+fn extract_artifacts_finds_hwpx_bindata_media() {
+    let bytes = build_minimal_hwpx(&[("BinData/pic.png", b"\x89PNG\r\n\x1a\n")]);
+    let app = DocirApp::new(ParserConfig::default());
+    let parsed = app.parse_bytes(&bytes).expect("parse hwpx");
+    let bundle = extract_artifacts_from_bytes(
+        &parsed,
+        &bytes,
+        Some("memory.hwpx".to_string()),
+        &ParserConfig::default().zip_config,
+        &ArtifactExtractionOptions::default(),
+    );
+
+    assert!(bundle.manifest.warnings.iter().all(|warning| {
+        warning.code != "UNSUPPORTED_EXTRACTION_FORMAT"
+            && !warning.message.contains("not implemented")
+    }));
+    assert!(bundle.manifest.artifacts.iter().any(|artifact| {
+        artifact.kind == ExtractedArtifactKind::MediaAsset
+            && artifact.source_path.as_deref() == Some("BinData/pic.png")
+            && artifact.mime_type.as_deref() == Some("image/png")
+    }));
+    assert!(
+        bundle
+            .payloads
+            .iter()
+            .any(|payload| payload.relative_path == "payloads/pic.png")
+    );
 }
 
 #[test]

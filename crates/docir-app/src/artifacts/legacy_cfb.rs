@@ -41,9 +41,11 @@ pub(super) fn extract_legacy_cfb_artifacts(
 
         payload_index += 1;
         let mut artifact =
-            build_legacy_ole_artifact(&path, &data, metadata, payload_index, options);
+            build_legacy_artifact(&path, &upper, &data, metadata, payload_index, options);
 
-        if options.with_raw {
+        if artifact.kind == ExtractedArtifactKind::MediaAsset {
+            push_legacy_media_payload(&mut artifact, &path, data.clone(), bundle);
+        } else if options.with_raw {
             push_legacy_raw_payload(&mut artifact, &path, data.clone(), bundle);
         }
 
@@ -58,6 +60,7 @@ pub(super) fn extract_legacy_cfb_artifacts(
 
 fn is_legacy_ole_stream(upper_path: &str) -> bool {
     upper_path.contains("OBJECTPOOL/")
+        || upper_path.starts_with("BINDATA/")
         || upper_path.ends_with("OLE10NATIVE")
         || upper_path == "PACKAGE"
         || upper_path.ends_with("/PACKAGE")
@@ -72,17 +75,17 @@ fn passes_legacy_only_ole_filter(upper_path: &str, options: &ArtifactExtractionO
         || upper_path.ends_with("/PACKAGE")
 }
 
-fn build_legacy_ole_artifact(
+fn build_legacy_artifact(
     path: &str,
+    upper_path: &str,
     data: &[u8],
     metadata: Option<&CfbEntryMetadata>,
     index: usize,
     options: &ArtifactExtractionOptions,
 ) -> ExtractedArtifact {
-    let mut artifact = ExtractedArtifact::new(
-        format!("legacy-ole-object-{}", index),
-        ExtractedArtifactKind::OleObject,
-    );
+    let kind = legacy_artifact_kind(upper_path);
+    let prefix = legacy_artifact_prefix(kind);
+    let mut artifact = ExtractedArtifact::new(format!("{prefix}-{index}"), kind);
     artifact.source_path = Some(path.to_string());
     artifact.suggested_name = Some(file_name_from_path(path));
     artifact.size_bytes = Some(data.len() as u64);
@@ -91,6 +94,36 @@ fn build_legacy_ole_artifact(
     let (_, mime_type) = classify_payload(data, artifact.suggested_name.as_deref());
     artifact.mime_type = Some(mime_type.to_string());
     artifact
+}
+
+fn legacy_artifact_kind(upper_path: &str) -> ExtractedArtifactKind {
+    if upper_path.starts_with("BINDATA/") {
+        ExtractedArtifactKind::MediaAsset
+    } else {
+        ExtractedArtifactKind::OleObject
+    }
+}
+
+fn legacy_artifact_prefix(kind: ExtractedArtifactKind) -> &'static str {
+    match kind {
+        ExtractedArtifactKind::MediaAsset => "legacy-media-asset",
+        _ => "legacy-ole-object",
+    }
+}
+
+fn push_legacy_media_payload(
+    artifact: &mut ExtractedArtifact,
+    path: &str,
+    data: Vec<u8>,
+    bundle: &mut ArtifactExtractionBundle,
+) {
+    let relative_path = format!("payloads/{}", sanitize_name(&file_name_from_path(path)));
+    artifact.output_path = Some(relative_path.clone());
+    bundle.payloads.push(ExtractedPayload {
+        artifact_id: artifact.id.clone(),
+        relative_path,
+        data,
+    });
 }
 
 fn push_legacy_raw_payload(
@@ -110,6 +143,9 @@ fn push_legacy_raw_payload(
 }
 
 fn extract_legacy_payload(upper_path: &str, path: &str, data: Vec<u8>) -> Option<EmbeddedPayload> {
+    if upper_path.starts_with("BINDATA/") {
+        return None;
+    }
     if upper_path.ends_with("OLE10NATIVE") {
         return parse_ole10_native(&data).map(|payload| EmbeddedPayload {
             stream_name: path.to_string(),
