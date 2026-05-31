@@ -5,6 +5,7 @@ use super::{
 use crate::xml_utils::attr_value_by_suffix;
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::visit_attributes;
 use crate::xml_utils::xml_error;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
@@ -200,14 +201,14 @@ pub(super) fn parse_settings_like(xml: &str) -> Result<WordSettings, ParseError>
                     value: None,
                     attributes: Vec::new(),
                 };
-                for attr in e.attributes().flatten() {
+                visit_attributes(&e, "word/settings.xml", |attr| {
                     let attr_name = String::from_utf8_lossy(attr.key.as_ref()).to_string();
-                    let attr_val = lossy_attr_value(&attr).to_string();
+                    let attr_val = lossy_attr_value(attr).to_string();
                     entry.attributes.push(docir_core::ir::SettingAttribute {
                         name: attr_name,
                         value: attr_val,
                     });
-                }
+                })?;
                 settings.entries.push(entry);
             }
             Ok(Event::Eof) => break,

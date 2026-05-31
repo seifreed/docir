@@ -118,6 +118,19 @@ fn test_parse_settings_entries_and_error_path() {
         ParseError::Xml { file, .. } => assert_eq!(file, "word/settings.xml"),
         other => panic!("unexpected error: {other:?}"),
     }
+
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_settings(
+            r#"<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                 <w:zoom w:percent="120" w:percent="130"/>
+               </w:settings>"#,
+        )
+        .expect_err("duplicate settings attributes must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/settings.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
