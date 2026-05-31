@@ -5,7 +5,10 @@ use crate::ooxml::xlsx::{
 };
 use crate::xml_utils::attr_value;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{XmlScanControl, is_end_event_local, local_name, scan_xml_events_until_end};
+use crate::xml_utils::{
+    XmlScanControl, attr_bool_like, is_end_event_local, local_name, scan_xml_events_until_end,
+    visit_attributes,
+};
 use docir_core::ir::ConditionalFormat;
 use docir_core::ir::{DataValidation, SheetPageMargins};
 use docir_core::types::{NodeId, SourceSpan};
@@ -33,7 +36,7 @@ pub(crate) fn handle_worksheet_common_tag(
             Ok(true)
         }
         b"pageMargins" => {
-            worksheet.page_margins = parse_page_margins(e);
+            worksheet.page_margins = parse_page_margins(e, sheet_path)?;
             Ok(true)
         }
         b"col" => {
@@ -54,7 +57,10 @@ pub(crate) fn handle_worksheet_common_tag(
     }
 }
 
-pub(crate) fn parse_page_margins(start: &BytesStart) -> Option<SheetPageMargins> {
+pub(crate) fn parse_page_margins(
+    start: &BytesStart,
+    sheet_path: &str,
+) -> Result<Option<SheetPageMargins>, ParseError> {
     let mut margins = SheetPageMargins {
         left: None,
         right: None,
@@ -64,55 +70,53 @@ pub(crate) fn parse_page_margins(start: &BytesStart) -> Option<SheetPageMargins>
         footer: None,
     };
     let mut found = false;
-    for attr in start.attributes().flatten() {
-        match attr.key.as_ref() {
-            b"left" => {
-                margins.left = lossy_attr_value(&attr).parse::<f64>().ok();
-                found = true;
-            }
-            b"right" => {
-                margins.right = lossy_attr_value(&attr).parse::<f64>().ok();
-                found = true;
-            }
-            b"top" => {
-                margins.top = lossy_attr_value(&attr).parse::<f64>().ok();
-                found = true;
-            }
-            b"bottom" => {
-                margins.bottom = lossy_attr_value(&attr).parse::<f64>().ok();
-                found = true;
-            }
-            b"header" => {
-                margins.header = lossy_attr_value(&attr).parse::<f64>().ok();
-                found = true;
-            }
-            b"footer" => {
-                margins.footer = lossy_attr_value(&attr).parse::<f64>().ok();
-                found = true;
-            }
-            _ => {}
+    visit_attributes(start, sheet_path, |attr| match attr.key.as_ref() {
+        b"left" => {
+            margins.left = lossy_attr_value(attr).parse::<f64>().ok();
+            found = true;
         }
-    }
-    if found { Some(margins) } else { None }
+        b"right" => {
+            margins.right = lossy_attr_value(attr).parse::<f64>().ok();
+            found = true;
+        }
+        b"top" => {
+            margins.top = lossy_attr_value(attr).parse::<f64>().ok();
+            found = true;
+        }
+        b"bottom" => {
+            margins.bottom = lossy_attr_value(attr).parse::<f64>().ok();
+            found = true;
+        }
+        b"header" => {
+            margins.header = lossy_attr_value(attr).parse::<f64>().ok();
+            found = true;
+        }
+        b"footer" => {
+            margins.footer = lossy_attr_value(attr).parse::<f64>().ok();
+            found = true;
+        }
+        _ => {}
+    })?;
+    Ok(if found { Some(margins) } else { None })
 }
 
 pub(crate) fn parse_conditional_formatting_empty(
     start: &BytesStart,
     sheet_path: &str,
-) -> ConditionalFormat {
+) -> Result<ConditionalFormat, ParseError> {
     let mut ranges: Vec<String> = Vec::new();
-    for attr in start.attributes().flatten() {
+    visit_attributes(start, sheet_path, |attr| {
         if attr.key.as_ref() == b"sqref" {
-            let value = lossy_attr_value(&attr).to_string();
+            let value = lossy_attr_value(attr).to_string();
             ranges = value.split_whitespace().map(|s| s.to_string()).collect();
         }
-    }
-    ConditionalFormat {
+    })?;
+    Ok(ConditionalFormat {
         id: NodeId::new(),
         ranges,
         rules: Vec::new(),
         span: Some(SourceSpan::new(sheet_path)),
-    }
+    })
 }
 
 pub(crate) fn parse_data_validations(
@@ -133,7 +137,7 @@ pub(crate) fn parse_data_validations(
                     validations.push(val);
                 }
                 Event::Empty(e) if local_name(e.name().as_ref()) == b"dataValidation" => {
-                    let val = parse_data_validation_empty(e, sheet_path);
+                    let val = parse_data_validation_empty(e, sheet_path)?;
                     validations.push(val);
                 }
                 _ => {}
@@ -150,7 +154,7 @@ pub(crate) fn parse_data_validation(
     start: &BytesStart,
     sheet_path: &str,
 ) -> Result<DataValidation, ParseError> {
-    let mut validation = parse_data_validation_empty(start, sheet_path);
+    let mut validation = parse_data_validation_empty(start, sheet_path)?;
     let mut formulas = DataValidationFormulaCapture::default();
 
     let mut buf = Vec::new();
@@ -251,7 +255,10 @@ impl DataValidationFormulaCapture {
     }
 }
 
-pub(crate) fn parse_data_validation_empty(start: &BytesStart, sheet_path: &str) -> DataValidation {
+pub(crate) fn parse_data_validation_empty(
+    start: &BytesStart,
+    sheet_path: &str,
+) -> Result<DataValidation, ParseError> {
     let mut validation = DataValidation {
         id: NodeId::new(),
         validation_type: None,
@@ -269,47 +276,42 @@ pub(crate) fn parse_data_validation_empty(start: &BytesStart, sheet_path: &str) 
         span: Some(SourceSpan::new(sheet_path)),
     };
 
-    for attr in start.attributes().flatten() {
-        match attr.key.as_ref() {
-            b"type" => {
-                validation.validation_type = Some(lossy_attr_value(&attr).to_string());
-            }
-            b"operator" => {
-                validation.operator = Some(lossy_attr_value(&attr).to_string());
-            }
-            b"allowBlank" => {
-                let value = lossy_attr_value(&attr);
-                validation.allow_blank = value == "1" || value.eq_ignore_ascii_case("true");
-            }
-            b"showInputMessage" => {
-                let value = lossy_attr_value(&attr);
-                validation.show_input_message = value == "1" || value.eq_ignore_ascii_case("true");
-            }
-            b"showErrorMessage" => {
-                let value = lossy_attr_value(&attr);
-                validation.show_error_message = value == "1" || value.eq_ignore_ascii_case("true");
-            }
-            b"errorTitle" => {
-                validation.error_title = Some(lossy_attr_value(&attr).to_string());
-            }
-            b"error" => {
-                validation.error = Some(lossy_attr_value(&attr).to_string());
-            }
-            b"promptTitle" => {
-                validation.prompt_title = Some(lossy_attr_value(&attr).to_string());
-            }
-            b"prompt" => {
-                validation.prompt = Some(lossy_attr_value(&attr).to_string());
-            }
-            b"sqref" => {
-                let value = lossy_attr_value(&attr).to_string();
-                validation.ranges = value.split_whitespace().map(|s| s.to_string()).collect();
-            }
-            _ => {}
+    visit_attributes(start, sheet_path, |attr| match attr.key.as_ref() {
+        b"type" => {
+            validation.validation_type = Some(lossy_attr_value(attr).to_string());
         }
-    }
+        b"operator" => {
+            validation.operator = Some(lossy_attr_value(attr).to_string());
+        }
+        b"allowBlank" => {
+            validation.allow_blank = attr_bool_like(attr.value.as_ref());
+        }
+        b"showInputMessage" => {
+            validation.show_input_message = attr_bool_like(attr.value.as_ref());
+        }
+        b"showErrorMessage" => {
+            validation.show_error_message = attr_bool_like(attr.value.as_ref());
+        }
+        b"errorTitle" => {
+            validation.error_title = Some(lossy_attr_value(attr).to_string());
+        }
+        b"error" => {
+            validation.error = Some(lossy_attr_value(attr).to_string());
+        }
+        b"promptTitle" => {
+            validation.prompt_title = Some(lossy_attr_value(attr).to_string());
+        }
+        b"prompt" => {
+            validation.prompt = Some(lossy_attr_value(attr).to_string());
+        }
+        b"sqref" => {
+            let value = lossy_attr_value(attr).to_string();
+            validation.ranges = value.split_whitespace().map(|s| s.to_string()).collect();
+        }
+        _ => {}
+    })?;
 
-    validation
+    Ok(validation)
 }
 
 #[cfg(test)]
@@ -318,6 +320,7 @@ mod tests {
         parse_conditional_formatting_empty, parse_data_validation, parse_data_validation_empty,
         parse_page_margins,
     };
+    use crate::error::ParseError;
     use crate::xml_utils::reader_from_str;
     use quick_xml::events::Event;
 
@@ -327,7 +330,9 @@ mod tests {
         start.push_attribute(("left", "0.75"));
         start.push_attribute(("right", "0.5"));
         start.push_attribute(("top", "1.0"));
-        let margins = parse_page_margins(&start).expect("margins expected");
+        let margins = parse_page_margins(&start, "xl/worksheets/sheet1.xml")
+            .expect("valid attrs")
+            .expect("margins expected");
         assert_eq!(margins.left, Some(0.75));
         assert_eq!(margins.right, Some(0.5));
         assert_eq!(margins.top, Some(1.0));
@@ -344,7 +349,8 @@ mod tests {
         start.push_attribute(("showErrorMessage", "false"));
         start.push_attribute(("sqref", "A1 A2:B2"));
 
-        let validation = parse_data_validation_empty(&start, "xl/worksheets/sheet1.xml");
+        let validation =
+            parse_data_validation_empty(&start, "xl/worksheets/sheet1.xml").expect("valid attrs");
         assert_eq!(validation.validation_type.as_deref(), Some("list"));
         assert_eq!(validation.operator.as_deref(), Some("between"));
         assert!(validation.allow_blank);
@@ -385,7 +391,59 @@ mod tests {
     fn parse_conditional_formatting_empty_splits_sqref_ranges() {
         let mut start = quick_xml::events::BytesStart::new("conditionalFormatting");
         start.push_attribute(("sqref", "A1 B2:C3"));
-        let cf = parse_conditional_formatting_empty(&start, "xl/worksheets/sheet1.xml");
+        let cf = parse_conditional_formatting_empty(&start, "xl/worksheets/sheet1.xml")
+            .expect("valid attrs");
         assert_eq!(cf.ranges, vec!["A1".to_string(), "B2:C3".to_string()]);
+    }
+
+    #[test]
+    fn worksheet_attribute_helpers_report_malformed_attributes() {
+        let cases = [
+            (
+                r#"<pageMargins left="0.5" left="0.75"/>"#,
+                "pageMargins",
+                "page margins",
+            ),
+            (
+                r#"<conditionalFormatting sqref="A1" sqref="B2"/>"#,
+                "conditionalFormatting",
+                "conditional formatting",
+            ),
+            (
+                r#"<dataValidation type="list" type="whole"/>"#,
+                "dataValidation",
+                "data validation",
+            ),
+        ];
+
+        for (xml, tag, label) in cases {
+            let mut reader = reader_from_str(xml);
+            let mut buf = Vec::new();
+            let start = match reader.read_event_into(&mut buf).expect(label) {
+                Event::Empty(e) if e.name().as_ref() == tag.as_bytes() => e.into_owned(),
+                other => panic!("unexpected event: {other:?}"),
+            };
+            let err = match tag {
+                "pageMargins" => parse_page_margins(&start, "xl/worksheets/sheet1.xml")
+                    .map(|_| ())
+                    .expect_err("duplicate page margin attrs must fail"),
+                "conditionalFormatting" => {
+                    parse_conditional_formatting_empty(&start, "xl/worksheets/sheet1.xml")
+                        .map(|_| ())
+                        .expect_err("duplicate conditional attrs must fail")
+                }
+                "dataValidation" => parse_data_validation_empty(&start, "xl/worksheets/sheet1.xml")
+                    .map(|_| ())
+                    .expect_err("duplicate validation attrs must fail"),
+                _ => unreachable!(),
+            };
+            assert!(matches!(
+                err,
+                ParseError::Xml {
+                    ref file,
+                    ..
+                } if file == "xl/worksheets/sheet1.xml"
+            ));
+        }
     }
 }

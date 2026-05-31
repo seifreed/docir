@@ -208,7 +208,7 @@ impl XlsxParser {
                 self.insert_cell(cell, accum);
             }
             b"conditionalFormatting" => {
-                let fmt = parse_conditional_formatting_empty(empty, sheet_path);
+                let fmt = parse_conditional_formatting_empty(empty, sheet_path)?;
                 self.insert_conditional_format(fmt, accum);
             }
             b"dataValidations" => {}
