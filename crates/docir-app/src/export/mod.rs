@@ -416,3 +416,6 @@ fn lowercase_debug<T: std::fmt::Debug>(value: T) -> String {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod vba_export_tests;
