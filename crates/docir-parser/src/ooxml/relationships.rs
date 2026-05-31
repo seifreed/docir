@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::local_name;
-use crate::xml_utils::{read_event, reader_from_str};
+use crate::xml_utils::{read_event, reader_from_str, visit_attributes};
 use quick_xml::events::Event;
 use quick_xml::events::attributes::Attribute;
 use std::collections::HashMap;
@@ -57,26 +57,24 @@ impl Relationships {
                     let mut target = None;
                     let mut target_mode = TargetMode::Internal;
 
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"Id" => {
-                                id = Some(unescaped_attr_value(&attr, e.decoder()));
-                            }
-                            b"Type" => {
-                                rel_type = Some(unescaped_attr_value(&attr, e.decoder()));
-                            }
-                            b"Target" => {
-                                target = Some(unescaped_attr_value(&attr, e.decoder()));
-                            }
-                            b"TargetMode" => {
-                                let mode = unescaped_attr_value(&attr, e.decoder());
-                                if mode.eq_ignore_ascii_case("External") {
-                                    target_mode = TargetMode::External;
-                                }
-                            }
-                            _ => {}
+                    visit_attributes(&e, ".rels", |attr| match attr.key.as_ref() {
+                        b"Id" => {
+                            id = Some(unescaped_attr_value(attr, e.decoder()));
                         }
-                    }
+                        b"Type" => {
+                            rel_type = Some(unescaped_attr_value(attr, e.decoder()));
+                        }
+                        b"Target" => {
+                            target = Some(unescaped_attr_value(attr, e.decoder()));
+                        }
+                        b"TargetMode" => {
+                            let mode = unescaped_attr_value(attr, e.decoder());
+                            if mode.eq_ignore_ascii_case("External") {
+                                target_mode = TargetMode::External;
+                            }
+                        }
+                        _ => {}
+                    })?;
 
                     if let (Some(id), Some(rel_type), Some(target)) = (id, rel_type, target) {
                         let rel = Relationship {
@@ -193,6 +191,7 @@ fn looks_like_external_target(target: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{Relationships, rel_type};
+    use crate::error::ParseError;
 
     #[test]
     fn parse_accepts_prefixed_relationship_elements() {
@@ -226,6 +225,22 @@ mod tests {
         let rel = rels.get("rId1").expect("relationship");
 
         assert_eq!(rel.target, "https://example.test/a?x=1&y=2");
+    }
+
+    #[test]
+    fn parse_reports_malformed_relationship_attributes() {
+        let xml = r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Id="rId2"
+                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                Target="media/image1.png"/>
+            </Relationships>
+        "#;
+
+        match Relationships::parse(xml).expect_err("malformed relationship attribute must fail") {
+            ParseError::Xml { file, .. } => assert_eq!(file, ".rels"),
+            other => panic!("expected XML error, got {other:?}"),
+        }
     }
 
     #[test]
