@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events};
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, visit_attributes};
 use docir_core::ir::{PivotCacheRecords, PivotTable, TableColumn, TableDefinition};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
@@ -29,9 +29,9 @@ pub(crate) fn parse_table_definition(
     let mut buf = Vec::new();
     scan_xml_events(&mut reader, &mut buf, table_path, |event| {
         match event {
-            Event::Start(e) => handle_table_start(&e, &mut table),
+            Event::Start(e) => handle_table_start(&e, &mut table, table_path)?,
             Event::Empty(e) if local_name(e.name().as_ref()) == b"tableColumn" => {
-                push_table_column(&e, &mut table.columns);
+                push_table_column(&e, &mut table.columns, table_path)?;
             }
             Event::End(e) if local_name(e.name().as_ref()) == b"table" => {
                 return Ok(XmlScanControl::Break);
@@ -44,45 +44,50 @@ pub(crate) fn parse_table_definition(
     Ok(table)
 }
 
-fn handle_table_start(e: &quick_xml::events::BytesStart<'_>, table: &mut TableDefinition) {
+fn handle_table_start(
+    e: &quick_xml::events::BytesStart<'_>,
+    table: &mut TableDefinition,
+    table_path: &str,
+) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
-        b"table" => apply_table_attrs(e, table),
-        b"tableColumn" => push_table_column(e, &mut table.columns),
+        b"table" => apply_table_attrs(e, table, table_path)?,
+        b"tableColumn" => push_table_column(e, &mut table.columns, table_path)?,
         _ => {}
     }
+    Ok(())
 }
 
-fn apply_table_attrs(e: &quick_xml::events::BytesStart<'_>, table: &mut TableDefinition) {
-    for attr in e.attributes().flatten() {
-        match attr.key.as_ref() {
-            b"name" => table.name = Some(lossy_attr_value(&attr).to_string()),
-            b"displayName" => table.display_name = Some(lossy_attr_value(&attr).to_string()),
-            b"ref" => table.ref_range = Some(lossy_attr_value(&attr).to_string()),
-            b"headerRowCount" => {
-                table.header_row_count = lossy_attr_value(&attr).parse::<u32>().ok()
-            }
-            b"totalsRowCount" => {
-                table.totals_row_count = lossy_attr_value(&attr).parse::<u32>().ok()
-            }
-            _ => {}
-        }
-    }
+fn apply_table_attrs(
+    e: &quick_xml::events::BytesStart<'_>,
+    table: &mut TableDefinition,
+    table_path: &str,
+) -> Result<(), ParseError> {
+    visit_attributes(e, table_path, |attr| match attr.key.as_ref() {
+        b"name" => table.name = Some(lossy_attr_value(attr).to_string()),
+        b"displayName" => table.display_name = Some(lossy_attr_value(attr).to_string()),
+        b"ref" => table.ref_range = Some(lossy_attr_value(attr).to_string()),
+        b"headerRowCount" => table.header_row_count = lossy_attr_value(attr).parse::<u32>().ok(),
+        b"totalsRowCount" => table.totals_row_count = lossy_attr_value(attr).parse::<u32>().ok(),
+        _ => {}
+    })
 }
 
-fn push_table_column(e: &quick_xml::events::BytesStart<'_>, columns: &mut Vec<TableColumn>) {
+fn push_table_column(
+    e: &quick_xml::events::BytesStart<'_>,
+    columns: &mut Vec<TableColumn>,
+    table_path: &str,
+) -> Result<(), ParseError> {
     let mut id = None;
     let mut name = None;
     let mut totals_row_label = None;
     let mut totals_row_function = None;
-    for attr in e.attributes().flatten() {
-        match attr.key.as_ref() {
-            b"id" => id = lossy_attr_value(&attr).parse::<u32>().ok(),
-            b"name" => name = Some(lossy_attr_value(&attr).to_string()),
-            b"totalsRowLabel" => totals_row_label = Some(lossy_attr_value(&attr).to_string()),
-            b"totalsRowFunction" => totals_row_function = Some(lossy_attr_value(&attr).to_string()),
-            _ => {}
-        }
-    }
+    visit_attributes(e, table_path, |attr| match attr.key.as_ref() {
+        b"id" => id = lossy_attr_value(attr).parse::<u32>().ok(),
+        b"name" => name = Some(lossy_attr_value(attr).to_string()),
+        b"totalsRowLabel" => totals_row_label = Some(lossy_attr_value(attr).to_string()),
+        b"totalsRowFunction" => totals_row_function = Some(lossy_attr_value(attr).to_string()),
+        _ => {}
+    })?;
     if let Some(id) = id {
         columns.push(TableColumn {
             id,
@@ -91,6 +96,7 @@ fn push_table_column(e: &quick_xml::events::BytesStart<'_>, columns: &mut Vec<Ta
             totals_row_function,
         });
     }
+    Ok(())
 }
 
 pub(crate) fn parse_pivot_table_definition(
@@ -113,31 +119,27 @@ pub(crate) fn parse_pivot_table_definition(
         match event {
             Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"pivotTableDefinition" => {
-                    for attr in e.attributes().flatten() {
-                        match attr.key.as_ref() {
-                            b"name" => pivot.name = Some(lossy_attr_value(&attr).to_string()),
-                            b"cacheId" => {
-                                pivot.cache_id = lossy_attr_value(&attr).parse::<u32>().ok()
-                            }
-                            _ => {}
-                        }
-                    }
+                    visit_attributes(&e, pivot_path, |attr| match attr.key.as_ref() {
+                        b"name" => pivot.name = Some(lossy_attr_value(attr).to_string()),
+                        b"cacheId" => pivot.cache_id = lossy_attr_value(attr).parse::<u32>().ok(),
+                        _ => {}
+                    })?;
                 }
                 b"location" => {
-                    for attr in e.attributes().flatten() {
+                    visit_attributes(&e, pivot_path, |attr| {
                         if attr.key.as_ref() == b"ref" {
-                            pivot.ref_range = Some(lossy_attr_value(&attr).to_string());
+                            pivot.ref_range = Some(lossy_attr_value(attr).to_string());
                         }
-                    }
+                    })?;
                 }
                 _ => {}
             },
             Event::Empty(e) if local_name(e.name().as_ref()) == b"location" => {
-                for attr in e.attributes().flatten() {
+                visit_attributes(&e, pivot_path, |attr| {
                     if attr.key.as_ref() == b"ref" {
-                        pivot.ref_range = Some(lossy_attr_value(&attr).to_string());
+                        pivot.ref_range = Some(lossy_attr_value(attr).to_string());
                     }
-                }
+                })?;
             }
             Event::End(e) if local_name(e.name().as_ref()) == b"pivotTableDefinition" => {
                 return Ok(XmlScanControl::Break);
@@ -171,12 +173,12 @@ pub(crate) fn parse_pivot_cache_records(
         match event {
             Event::Start(e) => {
                 if local_name(e.name().as_ref()) == b"pivotCacheRecords" {
-                    for attr in e.attributes().flatten() {
+                    visit_attributes(&e, records_path, |attr| {
                         if attr.key.as_ref() == b"count" {
-                            records.record_count = lossy_attr_value(&attr).parse::<u32>().ok();
+                            records.record_count = lossy_attr_value(attr).parse::<u32>().ok();
                             has_count_attr = records.record_count.is_some();
                         }
-                    }
+                    })?;
                 } else if local_name(e.name().as_ref()) == b"r" {
                     in_record = true;
                     current_fields = 0;
@@ -186,12 +188,12 @@ pub(crate) fn parse_pivot_cache_records(
             }
             Event::Empty(e) => {
                 if local_name(e.name().as_ref()) == b"pivotCacheRecords" {
-                    for attr in e.attributes().flatten() {
+                    visit_attributes(&e, records_path, |attr| {
                         if attr.key.as_ref() == b"count" {
-                            records.record_count = lossy_attr_value(&attr).parse::<u32>().ok();
+                            records.record_count = lossy_attr_value(attr).parse::<u32>().ok();
                             has_count_attr = records.record_count.is_some();
                         }
-                    }
+                    })?;
                 } else if local_name(e.name().as_ref()) == b"r" {
                     counted_records = counted_records.saturating_add(1);
                     if max_fields < current_fields {
@@ -273,6 +275,39 @@ mod tests {
     }
 
     #[test]
+    fn parse_table_definition_reports_malformed_attributes() {
+        let xml = r#"
+            <table name="SalesTable" name="Other" ref="A1:C10">
+              <tableColumns count="1">
+                <tableColumn id="1" name="Amount"/>
+              </tableColumns>
+            </table>
+        "#;
+        let err = parse_table_definition(xml, "xl/tables/broken-attrs.xml")
+            .expect_err("malformed table attributes should fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/tables/broken-attrs.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+
+        let xml = r#"
+            <table name="SalesTable" ref="A1:C10">
+              <tableColumns count="1">
+                <tableColumn id="1" id="2" name="Amount"/>
+              </tableColumns>
+            </table>
+        "#;
+        let err = parse_table_definition(xml, "xl/tables/broken-column-attrs.xml")
+            .expect_err("malformed table column attributes should fail");
+        match err {
+            ParseError::Xml { file, .. } => {
+                assert_eq!(file, "xl/tables/broken-column-attrs.xml")
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
     fn parse_pivot_table_definition_reads_name_cache_and_location() {
         let xml = r#"
             <pivotTableDefinition name="PivotA" cacheId="7">
@@ -297,6 +332,35 @@ mod tests {
         let parsed = parse_pivot_table_definition(xml, "xl/pivotTables/pivotTable2.xml")
             .expect("pivot should parse");
         assert_eq!(parsed.ref_range.as_deref(), Some("A1:A5"));
+    }
+
+    #[test]
+    fn parse_pivot_table_definition_reports_malformed_attributes() {
+        let xml = r#"
+            <pivotTableDefinition name="PivotA" name="Other" cacheId="7">
+              <location ref="B3:E20"/>
+            </pivotTableDefinition>
+        "#;
+        let err = parse_pivot_table_definition(xml, "xl/pivotTables/broken-attrs.xml")
+            .expect_err("malformed pivot attributes should fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/pivotTables/broken-attrs.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+
+        let xml = r#"
+            <pivotTableDefinition name="PivotA" cacheId="7">
+              <location ref="B3:E20" ref="B3:F20"/>
+            </pivotTableDefinition>
+        "#;
+        let err = parse_pivot_table_definition(xml, "xl/pivotTables/broken-location-attrs.xml")
+            .expect_err("malformed pivot location attributes should fail");
+        match err {
+            ParseError::Xml { file, .. } => {
+                assert_eq!(file, "xl/pivotTables/broken-location-attrs.xml")
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]
@@ -327,6 +391,21 @@ mod tests {
             .expect("records should parse");
         assert_eq!(parsed.record_count, Some(3));
         assert_eq!(parsed.field_count, Some(3));
+    }
+
+    #[test]
+    fn parse_pivot_cache_records_reports_malformed_attributes() {
+        let xml = r#"
+            <pivotCacheRecords count="4" count="5">
+              <r><x v="1"/></r>
+            </pivotCacheRecords>
+        "#;
+        let err = parse_pivot_cache_records(xml, "xl/pivotCache/broken-attrs.xml")
+            .expect_err("malformed cache record attributes should fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/pivotCache/broken-attrs.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]
