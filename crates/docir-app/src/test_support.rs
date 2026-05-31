@@ -387,73 +387,99 @@ pub fn build_test_property_set_stream(properties: &[(u32, TestPropertyValue)]) -
     let property_table_size = (property_count as usize) * 8;
     let section_header_size = 8usize;
     let values_base = section_header_size + property_table_size;
+    let (prop_entries, values) = build_property_values(properties, values_base);
+    let section_size = (section_header_size + property_table_size + values.len()) as u32;
 
+    assemble_property_set_stream(
+        HEADER_SIZE,
+        section_offset,
+        section_size,
+        property_count,
+        &prop_entries,
+        &values,
+    )
+}
+
+fn build_property_values(
+    properties: &[(u32, TestPropertyValue)],
+    values_base: usize,
+) -> (Vec<(u32, u32)>, Vec<u8>) {
     let mut values = Vec::new();
     let mut prop_entries = Vec::new();
 
     for (property_id, value) in properties {
         let offset = (values_base + values.len()) as u32;
         prop_entries.push((*property_id, offset));
-        match value {
-            TestPropertyValue::I16(value) => {
-                values.extend_from_slice(&2u32.to_le_bytes());
-                values.extend_from_slice(&value.to_le_bytes());
-                values.extend_from_slice(&0u16.to_le_bytes());
-            }
-            TestPropertyValue::U16(value) => {
-                values.extend_from_slice(&18u32.to_le_bytes());
-                values.extend_from_slice(&value.to_le_bytes());
-                values.extend_from_slice(&0u16.to_le_bytes());
-            }
-            TestPropertyValue::I32(value) => {
-                values.extend_from_slice(&3u32.to_le_bytes());
-                values.extend_from_slice(&value.to_le_bytes());
-            }
-            TestPropertyValue::F64(value) => {
-                values.extend_from_slice(&5u32.to_le_bytes());
-                values.extend_from_slice(&value.to_le_bytes());
-            }
-            TestPropertyValue::Bool(value) => {
-                values.extend_from_slice(&11u32.to_le_bytes());
-                values.extend_from_slice(&(if *value { 0xFFFFu16 } else { 0u16 }).to_le_bytes());
-                values.extend_from_slice(&0u16.to_le_bytes());
-            }
-            TestPropertyValue::U32(value) => {
-                values.extend_from_slice(&19u32.to_le_bytes());
-                values.extend_from_slice(&value.to_le_bytes());
-            }
-            TestPropertyValue::Str(value) => {
-                let mut bytes = value.as_bytes().to_vec();
-                bytes.push(0);
-                values.extend_from_slice(&30u32.to_le_bytes());
-                values.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
-                values.extend_from_slice(&bytes);
-                pad_to_dword(&mut values);
-            }
-            TestPropertyValue::WStr(value) => {
-                let mut utf16: Vec<u8> = value
-                    .encode_utf16()
-                    .flat_map(|unit| unit.to_le_bytes())
-                    .collect();
-                utf16.extend_from_slice(&[0, 0]);
-                values.extend_from_slice(&31u32.to_le_bytes());
-                values.extend_from_slice(&((utf16.len() / 2) as u32).to_le_bytes());
-                values.extend_from_slice(&utf16);
-                pad_to_dword(&mut values);
-            }
-            TestPropertyValue::FileTime(value) => {
-                values.extend_from_slice(&64u32.to_le_bytes());
-                values.extend_from_slice(&value.to_le_bytes());
-            }
-            TestPropertyValue::I64(value) => {
-                values.extend_from_slice(&20u32.to_le_bytes());
-                values.extend_from_slice(&value.to_le_bytes());
-            }
-        }
+        write_property_value(&mut values, value);
     }
 
-    let section_size = (section_header_size + property_table_size + values.len()) as u32;
-    let mut out = vec![0u8; HEADER_SIZE];
+    (prop_entries, values)
+}
+
+fn write_property_value(values: &mut Vec<u8>, value: &TestPropertyValue) {
+    match value {
+        TestPropertyValue::I16(value) => write_property_i16(values, *value),
+        TestPropertyValue::U16(value) => write_property_u16(values, *value),
+        TestPropertyValue::I32(value) => write_typed_bytes(values, 3, &value.to_le_bytes()),
+        TestPropertyValue::F64(value) => write_typed_bytes(values, 5, &value.to_le_bytes()),
+        TestPropertyValue::Bool(value) => write_property_bool(values, *value),
+        TestPropertyValue::U32(value) => write_typed_bytes(values, 19, &value.to_le_bytes()),
+        TestPropertyValue::Str(value) => write_property_str(values, value),
+        TestPropertyValue::WStr(value) => write_property_wstr(values, value),
+        TestPropertyValue::FileTime(value) => write_typed_bytes(values, 64, &value.to_le_bytes()),
+        TestPropertyValue::I64(value) => write_typed_bytes(values, 20, &value.to_le_bytes()),
+    }
+}
+
+fn write_property_i16(values: &mut Vec<u8>, value: i16) {
+    write_typed_bytes(values, 2, &value.to_le_bytes());
+    values.extend_from_slice(&0u16.to_le_bytes());
+}
+
+fn write_property_u16(values: &mut Vec<u8>, value: u16) {
+    write_typed_bytes(values, 18, &value.to_le_bytes());
+    values.extend_from_slice(&0u16.to_le_bytes());
+}
+
+fn write_property_bool(values: &mut Vec<u8>, value: bool) {
+    let encoded = if value { 0xFFFFu16 } else { 0u16 };
+    write_typed_bytes(values, 11, &encoded.to_le_bytes());
+    values.extend_from_slice(&0u16.to_le_bytes());
+}
+
+fn write_property_str(values: &mut Vec<u8>, value: &str) {
+    let mut bytes = value.as_bytes().to_vec();
+    bytes.push(0);
+    write_typed_bytes(values, 30, &(bytes.len() as u32).to_le_bytes());
+    values.extend_from_slice(&bytes);
+    pad_to_dword(values);
+}
+
+fn write_property_wstr(values: &mut Vec<u8>, value: &str) {
+    let mut utf16: Vec<u8> = value
+        .encode_utf16()
+        .flat_map(|unit| unit.to_le_bytes())
+        .collect();
+    utf16.extend_from_slice(&[0, 0]);
+    write_typed_bytes(values, 31, &((utf16.len() / 2) as u32).to_le_bytes());
+    values.extend_from_slice(&utf16);
+    pad_to_dword(values);
+}
+
+fn write_typed_bytes(values: &mut Vec<u8>, value_type: u32, bytes: &[u8]) {
+    values.extend_from_slice(&value_type.to_le_bytes());
+    values.extend_from_slice(bytes);
+}
+
+fn assemble_property_set_stream(
+    header_size: usize,
+    section_offset: u32,
+    section_size: u32,
+    property_count: u32,
+    prop_entries: &[(u32, u32)],
+    values: &[u8],
+) -> Vec<u8> {
+    let mut out = vec![0u8; header_size];
     out[0..2].copy_from_slice(&0xFFFEu16.to_le_bytes());
     out[2..4].copy_from_slice(&0u16.to_le_bytes());
     out[4..6].copy_from_slice(&0u16.to_le_bytes());
@@ -462,11 +488,11 @@ pub fn build_test_property_set_stream(properties: &[(u32, TestPropertyValue)]) -
 
     out.extend_from_slice(&section_size.to_le_bytes());
     out.extend_from_slice(&property_count.to_le_bytes());
-    for (property_id, offset) in prop_entries {
+    for (property_id, offset) in prop_entries.iter().copied() {
         out.extend_from_slice(&property_id.to_le_bytes());
         out.extend_from_slice(&offset.to_le_bytes());
     }
-    out.extend_from_slice(&values);
+    out.extend_from_slice(values);
     out
 }
 
