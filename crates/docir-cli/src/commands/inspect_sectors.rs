@@ -315,7 +315,16 @@ mod tests {
 
     #[test]
     fn format_inspection_text_renders_expected_fields() {
-        let inspection = SectorInspection {
+        let text = format_inspection_text(&sector_inspection_fixture());
+
+        assert_sector_header_text(&text);
+        assert_sector_summary_text(&text);
+        assert_sector_map_text(&text);
+        assert_sector_anomaly_text(&text);
+    }
+
+    fn sector_inspection_fixture() -> SectorInspection {
+        SectorInspection {
             container: "cfb-ole".to_string(),
             sector_score: "high".to_string(),
             sector_size: 512,
@@ -336,14 +345,8 @@ mod tests {
             fat_reserved_count: 1,
             mini_fat_entry_count: 0,
             role_counts: vec![
-                RoleCount {
-                    role: "end-of-chain".to_string(),
-                    count: 1,
-                },
-                RoleCount {
-                    role: "special:directory".to_string(),
-                    count: 1,
-                },
+                role_count("end-of-chain", 1),
+                role_count("special:directory", 1),
             ],
             shared_sector_claims: vec![SharedSectorClaim {
                 sector: 0,
@@ -358,94 +361,150 @@ mod tests {
                 sector: 0,
                 owners: vec!["WordDocument".to_string(), "VBA/PROJECT".to_string()],
             }],
-            truncated_chain_counts: vec![TruncatedChainCount {
-                bucket: "fat:WordDocument".to_string(),
-                count: 1,
-            }],
+            truncated_chain_counts: vec![truncated_chain_count("fat:WordDocument", 1)],
             structural_incoherence_counts: vec![StructuralIncoherenceCount {
                 bucket: "directory:marked-free".to_string(),
                 severity: "high".to_string(),
                 count: 1,
             }],
-            chain_health_by_root: vec![ChainHealthCount {
-                bucket: "health:shared:root:WordDocument".to_string(),
-                count: 1,
-            }],
-            chain_health_by_allocation: vec![ChainHealthCount {
-                bucket: "health:shared:allocation:mini-fat".to_string(),
-                count: 1,
-            }],
-            sector_overview: vec![SectorOverviewEntry {
-                sector: 2,
-                fat_raw: u32::MAX - 1,
-                fat_value: "end-of-chain".to_string(),
-                role: "end-of-chain".to_string(),
-                special_roles: vec!["directory".to_string()],
-                owners: Vec::new(),
-            }],
-            streams: vec![StreamSectorMap {
-                path: "WordDocument".to_string(),
-                logical_root: "WordDocument".to_string(),
-                allocation: "mini-fat".to_string(),
-                chain_state: "complete".to_string(),
-                stream_health: "shared".to_string(),
-                stream_risk: "high".to_string(),
-                chain_terminal_raw: u32::MAX - 1,
-                chain_terminal: "end-of-chain".to_string(),
-                size_bytes: 64,
-                start_sector: 0,
-                expected_chain_len: 1,
-                sector_chain: vec![0],
-                chain_steps: vec![ChainStep {
-                    sector: 0,
-                    next_raw: u32::MAX - 1,
-                    next: "end-of-chain".to_string(),
-                }],
-                sector_count: 1,
-            }],
+            chain_health_by_root: vec![chain_health_count("health:shared:root:WordDocument", 1)],
+            chain_health_by_allocation: vec![chain_health_count(
+                "health:shared:allocation:mini-fat",
+                1,
+            )],
+            sector_overview: vec![sector_overview_fixture()],
+            streams: vec![stream_sector_map_fixture()],
             anomalies: vec![SectorAnomaly {
                 kind: "shared-sector".to_string(),
                 severity: "high".to_string(),
                 message: "example anomaly".to_string(),
             }],
-        };
-        let text = format_inspection_text(&inspection);
-        assert!(text.contains("Header FAT Sectors: 1"));
-        assert!(text.contains("Sector Score: high"));
-        assert!(text.contains("DIFAT Entries: 1"));
-        assert!(text.contains("FAT Reserved: 1"));
-        assert!(text.contains("FAT Occupied: 4"));
-        assert!(text.contains("Role Counts:"));
-        assert!(text.contains("special:directory: 1"));
-        assert!(text.contains("Shared Sectors:"));
-        assert!(text.contains("0: WordDocument, VBA/PROJECT"));
-        assert!(text.contains("Shared Chains:"));
-        assert!(text.contains("WordDocument, VBA/PROJECT [high]: [0, 1]"));
-        assert!(text.contains("Start Sector Reuse:"));
-        assert!(text.contains("0: WordDocument, VBA/PROJECT"));
-        assert!(text.contains("Truncated Chains:"));
-        assert!(text.contains("fat:WordDocument: 1"));
-        assert!(text.contains("Chain Health By Root:"));
-        assert!(text.contains("health:shared:root:WordDocument: 1"));
-        assert!(text.contains("Chain Health By Allocation:"));
-        assert!(text.contains("health:shared:allocation:mini-fat: 1"));
-        assert!(text.contains("Structural Incoherence:"));
-        assert!(text.contains("directory:marked-free: 1 [high]"));
-        assert!(text.contains("Sector Overview:"));
-        assert!(text.contains("2: end-of-chain"));
-        assert!(text.contains("Special Roles: directory"));
-        assert!(text.contains("Logical Root: WordDocument"));
-        assert!(text.contains("Chain State: complete"));
-        assert!(text.contains("Stream Health: shared"));
-        assert!(text.contains("Stream Risk: high"));
-        assert!(text.contains("Size: 64 bytes"));
-        assert!(text.contains("Start Sector: 0"));
-        assert!(text.contains("Expected Chain: 1"));
-        assert!(text.contains("Chain Terminal: end-of-chain"));
-        assert!(text.contains("Chain: [0]"));
-        assert!(text.contains("Steps:"));
-        assert!(text.contains("0: 4294967294 (end-of-chain)"));
-        assert!(text.contains("Anomalies:"));
-        assert!(text.contains("shared-sector [high]: example anomaly"));
+        }
+    }
+
+    fn sector_overview_fixture() -> SectorOverviewEntry {
+        SectorOverviewEntry {
+            sector: 2,
+            fat_raw: u32::MAX - 1,
+            fat_value: "end-of-chain".to_string(),
+            role: "end-of-chain".to_string(),
+            special_roles: vec!["directory".to_string()],
+            owners: Vec::new(),
+        }
+    }
+
+    fn stream_sector_map_fixture() -> StreamSectorMap {
+        StreamSectorMap {
+            path: "WordDocument".to_string(),
+            logical_root: "WordDocument".to_string(),
+            allocation: "mini-fat".to_string(),
+            chain_state: "complete".to_string(),
+            stream_health: "shared".to_string(),
+            stream_risk: "high".to_string(),
+            chain_terminal_raw: u32::MAX - 1,
+            chain_terminal: "end-of-chain".to_string(),
+            size_bytes: 64,
+            start_sector: 0,
+            expected_chain_len: 1,
+            sector_chain: vec![0],
+            chain_steps: vec![ChainStep {
+                sector: 0,
+                next_raw: u32::MAX - 1,
+                next: "end-of-chain".to_string(),
+            }],
+            sector_count: 1,
+        }
+    }
+
+    fn role_count(role: &str, count: usize) -> RoleCount {
+        RoleCount {
+            role: role.to_string(),
+            count,
+        }
+    }
+
+    fn truncated_chain_count(bucket: &str, count: usize) -> TruncatedChainCount {
+        TruncatedChainCount {
+            bucket: bucket.to_string(),
+            count,
+        }
+    }
+
+    fn chain_health_count(bucket: &str, count: usize) -> ChainHealthCount {
+        ChainHealthCount {
+            bucket: bucket.to_string(),
+            count,
+        }
+    }
+
+    fn assert_sector_header_text(text: &str) {
+        assert_contains_all(
+            text,
+            &[
+                "Header FAT Sectors: 1",
+                "Sector Score: high",
+                "DIFAT Entries: 1",
+                "FAT Reserved: 1",
+                "FAT Occupied: 4",
+            ],
+        );
+    }
+
+    fn assert_sector_summary_text(text: &str) {
+        assert_contains_all(
+            text,
+            &[
+                "Role Counts:",
+                "special:directory: 1",
+                "Shared Sectors:",
+                "0: WordDocument, VBA/PROJECT",
+                "Shared Chains:",
+                "WordDocument, VBA/PROJECT [high]: [0, 1]",
+                "Start Sector Reuse:",
+                "Truncated Chains:",
+                "fat:WordDocument: 1",
+                "Chain Health By Root:",
+                "health:shared:root:WordDocument: 1",
+                "Chain Health By Allocation:",
+                "health:shared:allocation:mini-fat: 1",
+                "Structural Incoherence:",
+                "directory:marked-free: 1 [high]",
+            ],
+        );
+    }
+
+    fn assert_sector_map_text(text: &str) {
+        assert_contains_all(
+            text,
+            &[
+                "Sector Overview:",
+                "2: end-of-chain",
+                "Special Roles: directory",
+                "Logical Root: WordDocument",
+                "Chain State: complete",
+                "Stream Health: shared",
+                "Stream Risk: high",
+                "Size: 64 bytes",
+                "Start Sector: 0",
+                "Expected Chain: 1",
+                "Chain Terminal: end-of-chain",
+                "Chain: [0]",
+                "Steps:",
+                "0: 4294967294 (end-of-chain)",
+            ],
+        );
+    }
+
+    fn assert_sector_anomaly_text(text: &str) {
+        assert_contains_all(
+            text,
+            &["Anomalies:", "shared-sector [high]: example anomaly"],
+        );
+    }
+
+    fn assert_contains_all(text: &str, expected: &[&str]) {
+        for fragment in expected {
+            assert!(text.contains(fragment), "missing fragment: {fragment}");
+        }
     }
 }
