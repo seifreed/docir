@@ -148,6 +148,15 @@ fn default_jscript_and_len_strings_are_parsed() {
 }
 
 #[test]
+fn default_jscript_rejects_malformed_len_strings() {
+    let mut store = IrStore::new();
+    let err = parse_default_jscript(b"\0\0\0\0\x20\0", &mut store, "Scripts/DefaultJScript")
+        .expect_err("malformed script stream should fail");
+
+    assert!(matches!(err, ParseError::InvalidStructure(_)));
+}
+
+#[test]
 fn extract_urls_finds_multiple_schemes() {
     let text = "before https://a.test/x?q=1 and file://tmp/a.bin and mailto:foo@example.test end";
     let urls = extract_urls(text);

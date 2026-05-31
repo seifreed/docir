@@ -162,9 +162,21 @@ impl HwpParser {
         Ok(sections)
     }
 
-    pub(super) fn parse_default_script(&self, cfb: &Cfb, store: &mut IrStore) {
-        if let Some(script_data) = cfb.read_stream("Scripts/DefaultJScript") {
-            let _ = parse_default_jscript(&script_data, store, "Scripts/DefaultJScript");
+    pub(super) fn parse_default_script(
+        &self,
+        cfb: &Cfb,
+        store: &mut IrStore,
+        diagnostics: &mut Diagnostics,
+    ) {
+        if let Some(script_data) = cfb.read_stream("Scripts/DefaultJScript")
+            && let Err(err) = parse_default_jscript(&script_data, store, "Scripts/DefaultJScript")
+        {
+            push_warning(
+                diagnostics,
+                "HWP_SCRIPT_PARSE_FAILED",
+                err.to_string(),
+                Some("Scripts/DefaultJScript"),
+            );
         }
     }
 

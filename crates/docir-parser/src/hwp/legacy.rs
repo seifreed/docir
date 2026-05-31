@@ -231,8 +231,8 @@ pub(super) fn parse_default_jscript(
     data: &[u8],
     store: &mut IrStore,
     source: &str,
-) -> Option<NodeId> {
-    let (name, source_code) = parse_jscript_stream(data)?;
+) -> Result<NodeId, ParseError> {
+    let (name, source_code) = parse_jscript_stream(data, source)?;
     let mut module = MacroModule::new(name, MacroModuleType::Standard);
     module.source_code = Some(source_code);
     module.span = Some(SourceSpan::new(source));
@@ -246,18 +246,26 @@ pub(super) fn parse_default_jscript(
     let project_id = project.id;
     store.insert(IRNode::MacroProject(project));
 
-    Some(project_id)
+    Ok(project_id)
 }
 
-fn parse_jscript_stream(data: &[u8]) -> Option<(String, String)> {
+fn parse_jscript_stream(data: &[u8], source: &str) -> Result<(String, String), ParseError> {
     if data.len() < 8 {
-        return None;
+        return Err(ParseError::InvalidStructure(format!(
+            "HWP script stream {source} is too short"
+        )));
     }
     let mut offset = 4;
     let mut strings = Vec::new();
-    for _ in 0..3 {
-        let (value, used) = read_len_string(data, offset)?;
-        offset += used;
+    for index in 0..3 {
+        let (value, used) = read_len_string(data, offset).ok_or_else(|| {
+            ParseError::InvalidStructure(format!(
+                "Invalid HWP script string {index} at offset {offset} in {source}"
+            ))
+        })?;
+        offset = offset.checked_add(used).ok_or_else(|| {
+            ParseError::InvalidStructure(format!("HWP script offset overflow in {source}"))
+        })?;
         if !value.is_empty() {
             strings.push(value);
         }
@@ -268,9 +276,11 @@ fn parse_jscript_stream(data: &[u8]) -> Option<(String, String)> {
         .unwrap_or_else(|| "DefaultJScript".to_string());
     let source = strings.last().cloned().unwrap_or_else(String::new);
     if source.is_empty() {
-        None
+        Err(ParseError::InvalidStructure(
+            "HWP script stream has no source code".to_string(),
+        ))
     } else {
-        Some((name, source))
+        Ok((name, source))
     }
 }
 

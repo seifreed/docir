@@ -80,7 +80,7 @@ impl ParseStage for HwpParser {
             );
         }
 
-        self.parse_default_script(&cfb, &mut store);
+        self.parse_default_script(&cfb, &mut store, &mut diagnostics);
         self.scan_external_references(
             &cfb,
             &stream_names,

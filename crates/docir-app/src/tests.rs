@@ -6,6 +6,13 @@ use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 use std::rc::Rc;
 
+fn hwp_file_header() -> Vec<u8> {
+    let mut header = vec![0u8; 40];
+    header[..17].copy_from_slice(b"HWP Document File");
+    header[32..36].copy_from_slice(&0x0500_0000u32.to_le_bytes());
+    header
+}
+
 fn make_parsed_document(format: DocumentFormat) -> ParsedDocument {
     let mut store = IrStore::new();
     let mut doc = Document::new(format);
@@ -141,6 +148,29 @@ fn parsed_document_accessors_return_inner_values() {
     assert!(parsed.document().is_some());
     assert!(parsed.security_info().is_some());
     assert!(parsed.metrics().is_some());
+}
+
+#[test]
+fn hwp_default_jscript_parse_failures_are_reported() {
+    let header = hwp_file_header();
+    let bytes = test_support::build_test_cfb(&[
+        ("FileHeader", &header),
+        ("Scripts/DefaultJScript", b"\0\0\0\0\x20\0"),
+    ]);
+    let app = DocirApp::new(ParserConfig::default());
+    let parsed = app.parse_bytes(&bytes).expect("hwp parse");
+
+    let reported = parsed.store().iter().any(|(_, node)| {
+        matches!(
+            node,
+            IRNode::Diagnostics(diag)
+                if diag.entries.iter().any(|entry| {
+                    entry.code == "HWP_SCRIPT_PARSE_FAILED"
+                        && entry.path.as_deref() == Some("Scripts/DefaultJScript")
+                })
+        )
+    });
+    assert!(reported, "malformed HWP script stream must not be silent");
 }
 
 #[test]
