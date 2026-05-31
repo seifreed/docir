@@ -3,7 +3,7 @@ use super::{
     PptxParser, extract_c_sld_name, parse_comments, parse_shape_properties, parse_slide_layout_meta,
 };
 use crate::error::ParseError;
-use crate::ooxml::relationships::{Relationships, TargetMode, rel_type};
+use crate::ooxml::relationships::{Relationship, Relationships, TargetMode, rel_type};
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
@@ -236,44 +236,13 @@ impl PptxParser {
             buf.clear();
         }
 
-        let primary_rel = embed_rel.clone().or(link_rel.clone());
-        if let Some(rel_id) = primary_rel
-            && let Some(rel) = relationships.get(&rel_id)
-        {
-            shape.relationship_id = Some(rel_id.clone());
-            let resolved = if rel.target_mode == TargetMode::External {
-                rel.target.clone()
-            } else {
-                Relationships::resolve_target(slide_path, &rel.target)
-            };
-            shape.media_target = Some(resolved);
-            if rel.rel_type.contains("audio") {
-                shape.shape_type = ShapeType::Audio;
-            } else if rel.rel_type.contains("video") {
-                shape.shape_type = ShapeType::Video;
-            }
-            if rel.target_mode == TargetMode::External {
-                let ref_type = if rel.rel_type.contains("audio") || rel.rel_type.contains("video") {
-                    ExternalRefType::Other
-                } else {
-                    ExternalRefType::Image
-                };
-                self.add_external_reference(rel, ref_type, slide_path);
-            }
-        }
-
-        if let (Some(link_id), Some(embed_id)) = (link_rel.clone(), embed_rel.clone())
-            && link_id != embed_id
-            && let Some(rel) = relationships.get(&link_id)
-            && rel.target_mode == TargetMode::External
-        {
-            let ref_type = if rel.rel_type.contains("audio") || rel.rel_type.contains("video") {
-                ExternalRefType::Other
-            } else {
-                ExternalRefType::Image
-            };
-            self.add_external_reference(rel, ref_type, slide_path);
-        }
+        self.apply_picture_relationships(
+            &mut shape,
+            relationships,
+            slide_path,
+            embed_rel,
+            link_rel,
+        );
 
         Ok(shape)
     }
@@ -288,36 +257,76 @@ impl PptxParser {
         link_rel: &mut Option<String>,
     ) {
         match local_name(event.name().as_ref()) {
-            b"cNvPr" => {
-                for attr in event.attributes().flatten() {
-                    match attr.key.as_ref() {
-                        b"name" => {
-                            shape.name = Some(lossy_attr_value(&attr).to_string());
-                        }
-                        b"descr" => {
-                            shape.alt_text = Some(lossy_attr_value(&attr).to_string());
-                        }
-                        _ => {}
-                    }
-                }
-            }
+            b"cNvPr" => apply_picture_non_visual_properties(event, shape),
             b"hlinkClick" => {
                 self.attach_hyperlink(shape, event, relationships, slide_path);
             }
-            b"blip" => {
-                for attr in event.attributes().flatten() {
-                    match local_name(attr.key.as_ref()) {
-                        b"embed" => {
-                            *embed_rel = Some(lossy_attr_value(&attr).to_string());
-                        }
-                        b"link" => {
-                            *link_rel = Some(lossy_attr_value(&attr).to_string());
-                        }
-                        _ => {}
-                    }
-                }
-            }
+            b"blip" => capture_picture_relationship_ids(event, embed_rel, link_rel),
             _ => {}
+        }
+    }
+
+    fn apply_picture_relationships(
+        &mut self,
+        shape: &mut Shape,
+        relationships: &Relationships,
+        slide_path: &str,
+        embed_rel: Option<String>,
+        link_rel: Option<String>,
+    ) {
+        let primary_rel = embed_rel.as_ref().or(link_rel.as_ref()).cloned();
+        if let Some(rel_id) = primary_rel {
+            self.apply_primary_picture_relationship(shape, relationships, slide_path, rel_id);
+        }
+        self.add_linked_external_picture_reference(
+            relationships,
+            slide_path,
+            embed_rel.as_deref(),
+            link_rel.as_deref(),
+        );
+    }
+
+    fn apply_primary_picture_relationship(
+        &mut self,
+        shape: &mut Shape,
+        relationships: &Relationships,
+        slide_path: &str,
+        rel_id: String,
+    ) {
+        let Some(rel) = relationships.get(&rel_id) else {
+            return;
+        };
+
+        shape.relationship_id = Some(rel_id);
+        shape.media_target = Some(resolved_picture_target(rel, slide_path));
+        if rel.rel_type.contains("audio") {
+            shape.shape_type = ShapeType::Audio;
+        } else if rel.rel_type.contains("video") {
+            shape.shape_type = ShapeType::Video;
+        }
+        if rel.target_mode == TargetMode::External {
+            self.add_external_reference(rel, picture_external_ref_type(rel), slide_path);
+        }
+    }
+
+    fn add_linked_external_picture_reference(
+        &mut self,
+        relationships: &Relationships,
+        slide_path: &str,
+        embed_rel: Option<&str>,
+        link_rel: Option<&str>,
+    ) {
+        let (Some(embed_id), Some(link_id)) = (embed_rel, link_rel) else {
+            return;
+        };
+        if embed_id == link_id {
+            return;
+        }
+        let Some(rel) = relationships.get(link_id) else {
+            return;
+        };
+        if rel.target_mode == TargetMode::External {
+            self.add_external_reference(rel, picture_external_ref_type(rel), slide_path);
         }
     }
 
@@ -502,6 +511,54 @@ fn update_slide_name(slide: &mut Slide, event: &BytesStart<'_>) {
         if attr.key.as_ref() == b"name" {
             slide.name = Some(lossy_attr_value(&attr).to_string());
         }
+    }
+}
+
+fn apply_picture_non_visual_properties(event: &BytesStart<'_>, shape: &mut Shape) {
+    for attr in event.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"name" => {
+                shape.name = Some(lossy_attr_value(&attr).to_string());
+            }
+            b"descr" => {
+                shape.alt_text = Some(lossy_attr_value(&attr).to_string());
+            }
+            _ => {}
+        }
+    }
+}
+
+fn capture_picture_relationship_ids(
+    event: &BytesStart<'_>,
+    embed_rel: &mut Option<String>,
+    link_rel: &mut Option<String>,
+) {
+    for attr in event.attributes().flatten() {
+        match local_name(attr.key.as_ref()) {
+            b"embed" => {
+                *embed_rel = Some(lossy_attr_value(&attr).to_string());
+            }
+            b"link" => {
+                *link_rel = Some(lossy_attr_value(&attr).to_string());
+            }
+            _ => {}
+        }
+    }
+}
+
+fn resolved_picture_target(rel: &Relationship, slide_path: &str) -> String {
+    if rel.target_mode == TargetMode::External {
+        rel.target.clone()
+    } else {
+        Relationships::resolve_target(slide_path, &rel.target)
+    }
+}
+
+fn picture_external_ref_type(rel: &Relationship) -> ExternalRefType {
+    if rel.rel_type.contains("audio") || rel.rel_type.contains("video") {
+        ExternalRefType::Other
+    } else {
+        ExternalRefType::Image
     }
 }
 
