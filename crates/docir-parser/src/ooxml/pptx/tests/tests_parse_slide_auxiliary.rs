@@ -356,3 +356,36 @@ fn test_parse_slide_transition_reports_truncated_xml() {
         other => panic!("expected XML error, got {other:?}"),
     }
 }
+
+#[test]
+fn test_parse_slide_animations_reports_truncated_xml() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <p:cSld><p:spTree/></p:cSld>
+          <p:timing>
+            <p:tnLst>
+              <p:par>
+                <p:anim dur="300">
+        "#;
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+
+    let err = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/broken-animations.xml",
+            &Relationships::default(),
+            (None, None),
+        )
+        .expect_err("truncated slide animation XML must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => {
+            assert_eq!(file, "ppt/slides/broken-animations.xml");
+        }
+        other => panic!("expected XML error, got {other:?}"),
+    }
+}

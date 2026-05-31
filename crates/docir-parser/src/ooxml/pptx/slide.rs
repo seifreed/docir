@@ -342,7 +342,12 @@ impl PptxParser {
                 Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"timing" => {
                     break;
                 }
-                Ok(Event::Eof) => break,
+                Ok(Event::Eof) => {
+                    return Err(xml_error(
+                        slide_path,
+                        "unexpected EOF in slide animation XML",
+                    ));
+                }
                 Err(e) => {
                     return Err(xml_error(slide_path, e));
                 }
