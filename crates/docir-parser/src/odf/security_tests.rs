@@ -1,0 +1,100 @@
+use super::{scan_external_links, scan_odf_filters, scan_odf_formula_security, scan_odf_objects};
+use docir_core::security::ExternalRefType;
+
+#[test]
+fn scan_external_links_accepts_alternate_namespace_prefixes() {
+    let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:txt="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+              xmlns:dr="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+              xmlns:lnk="http://www.w3.org/1999/xlink">
+              <txt:a lnk:href="https://example.test/link">Link</txt:a>
+              <dr:image lnk:href="Pictures/pic.png"/>
+              <dr:object-ole lnk:href="https://example.test/object.bin"/>
+            </office:document-content>
+        "#;
+
+    let refs = scan_external_links(xml, "content.xml");
+    let types: Vec<_> = refs.iter().map(|r| r.ref_type).collect();
+
+    assert_eq!(refs.len(), 2);
+    assert!(types.contains(&ExternalRefType::Hyperlink));
+    assert!(types.contains(&ExternalRefType::Image));
+}
+
+#[test]
+fn scan_odf_objects_accepts_alternate_namespace_prefixes() {
+    let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:dr="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+              xmlns:lnk="http://www.w3.org/1999/xlink">
+              <dr:object-ole lnk:href="https://example.test/object.bin"/>
+            </office:document-content>
+        "#;
+
+    let (oles, refs) = scan_odf_objects(xml);
+    assert_eq!(oles.len(), 1);
+    assert_eq!(
+        oles[0].link_target.as_deref(),
+        Some("https://example.test/object.bin")
+    );
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].ref_type, ExternalRefType::OleLink);
+}
+
+#[test]
+fn scan_odf_object_internal_targets_are_not_external_ole_links() {
+    let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:dr="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+              xmlns:lnk="http://www.w3.org/1999/xlink">
+              <dr:object-ole lnk:href="Object 1"/>
+            </office:document-content>
+        "#;
+
+    let refs = scan_external_links(xml, "content.xml");
+    let (oles, ole_refs) = scan_odf_objects(xml);
+
+    assert!(refs.is_empty());
+    assert_eq!(oles.len(), 1);
+    assert!(!oles[0].is_linked);
+    assert!(ole_refs.is_empty());
+}
+
+#[test]
+fn scan_odf_formula_security_accepts_alternate_formula_prefix() {
+    let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:tbl="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+              <tbl:table-cell tbl:formula='of:=DDE("cmd";"/c calc";"A1")'/>
+            </office:document-content>
+        "#;
+
+    let scan = scan_odf_formula_security(xml);
+    assert_eq!(scan.dde_fields.len(), 1);
+    assert_eq!(scan.dde_fields[0].application, "cmd");
+}
+
+#[test]
+fn scan_odf_filters_accepts_alternate_namespace_prefixes() {
+    let xml = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:tbl="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+              <tbl:filter tbl:target-range-address="Sheet1.A1:Sheet1.B2"/>
+              <tbl:filter-and tbl:condition="cell-content()&gt;0"/>
+            </office:document-content>
+        "#;
+
+    assert_eq!(
+        scan_odf_filters(xml),
+        vec![
+            "Sheet1.A1:Sheet1.B2".to_string(),
+            "cell-content()>0".to_string()
+        ]
+    );
+}
