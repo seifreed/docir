@@ -10,6 +10,8 @@ mod tests_normalize;
 #[cfg(test)]
 mod tests_parse;
 #[cfg(test)]
+mod tests_parse_shapes;
+#[cfg(test)]
 mod tests_postprocess;
 #[cfg(test)]
 mod tests_tests;
