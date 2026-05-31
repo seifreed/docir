@@ -1,6 +1,8 @@
 use super::{OoxmlParser, ParseError};
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
+use crate::xml_utils::visit_attributes;
+use crate::xml_utils::xml_error;
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{CustomProperty, DocumentMetadata, PropertyValue};
 use docir_core::types::NodeId;
@@ -12,7 +14,7 @@ impl OoxmlParser {
         zip: &mut impl PackageReader,
     ) -> Result<Option<NodeId>, ParseError> {
         if zip.contains("docProps/core.xml") {
-            let metadata = self.build_metadata(zip);
+            let metadata = self.build_metadata(zip)?;
             Ok(metadata.map(|m| m.id))
         } else {
             Ok(None)
@@ -20,7 +22,10 @@ impl OoxmlParser {
     }
 
     /// Build metadata from core.xml and app.xml.
-    pub(super) fn build_metadata(&self, zip: &mut impl PackageReader) -> Option<DocumentMetadata> {
+    pub(super) fn build_metadata(
+        &self,
+        zip: &mut impl PackageReader,
+    ) -> Result<Option<DocumentMetadata>, ParseError> {
         let mut metadata = DocumentMetadata::new();
 
         // Parse core.xml (Dublin Core properties)
@@ -35,10 +40,10 @@ impl OoxmlParser {
 
         // Parse custom.xml (custom properties)
         if let Ok(custom_xml) = zip.read_file_string("docProps/custom.xml") {
-            self.parse_custom_properties(&custom_xml, &mut metadata);
+            self.parse_custom_properties(&custom_xml, &mut metadata)?;
         }
 
-        Some(metadata)
+        Ok(Some(metadata))
     }
 
     /// Parse core.xml properties.
@@ -152,7 +157,11 @@ impl OoxmlParser {
     }
 
     /// Parse custom properties from custom.xml.
-    pub(super) fn parse_custom_properties(&self, xml: &str, metadata: &mut DocumentMetadata) {
+    pub(super) fn parse_custom_properties(
+        &self,
+        xml: &str,
+        metadata: &mut DocumentMetadata,
+    ) -> Result<(), ParseError> {
         use quick_xml::events::Event;
 
         let mut reader = reader_from_str(xml);
@@ -172,18 +181,18 @@ impl OoxmlParser {
                             format_id: None,
                             property_id: None,
                         };
-                        for attr in e.attributes().flatten() {
+                        visit_attributes(&e, "docProps/custom.xml", |attr| {
                             match attr.key.as_ref() {
-                                b"name" => prop.name = lossy_attr_value(&attr).to_string(),
+                                b"name" => prop.name = lossy_attr_value(attr).to_string(),
                                 b"fmtid" => {
-                                    prop.format_id = Some(lossy_attr_value(&attr).to_string())
+                                    prop.format_id = Some(lossy_attr_value(attr).to_string())
                                 }
                                 b"pid" => {
-                                    prop.property_id = lossy_attr_value(&attr).parse::<u32>().ok()
+                                    prop.property_id = lossy_attr_value(attr).parse::<u32>().ok()
                                 }
                                 _ => {}
                             }
-                        }
+                        })?;
                         current_prop = Some(prop);
                     } else if name.starts_with("vt:") || name.contains(':') {
                         current_value_tag = Some(name);
@@ -216,10 +225,12 @@ impl OoxmlParser {
                     }
                 }
                 Ok(Event::Eof) => break,
+                Err(e) => return Err(xml_error("docProps/custom.xml", e)),
                 _ => {}
             }
             buf.clear();
         }
+        Ok(())
     }
 }
 
@@ -361,7 +372,10 @@ mod tests {
             ("docProps/custom.xml", custom_properties_xml()),
         ]);
 
-        parser.build_metadata(&mut zip).expect("metadata built")
+        parser
+            .build_metadata(&mut zip)
+            .expect("metadata parse")
+            .expect("metadata built")
     }
 
     fn assert_core_and_app_metadata(metadata: &DocumentMetadata) {
@@ -431,7 +445,9 @@ mod tests {
         "#;
         let parser = OoxmlParser::new();
         let mut metadata = DocumentMetadata::new();
-        parser.parse_custom_properties(xml, &mut metadata);
+        parser
+            .parse_custom_properties(xml, &mut metadata)
+            .expect("custom properties parse");
 
         assert_eq!(metadata.custom_properties.len(), 4);
         assert!(matches!(
@@ -450,5 +466,26 @@ mod tests {
             metadata.custom_properties[3].value,
             PropertyValue::String(ref v) if v == "raw"
         ));
+    }
+
+    #[test]
+    fn parse_custom_properties_reports_malformed_attributes() {
+        let xml = r#"
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                        xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+              <property pid="2" name="Build" name="Duplicate"><vt:i4>42</vt:i4></property>
+            </Properties>
+        "#;
+        let parser = OoxmlParser::new();
+        let mut metadata = DocumentMetadata::new();
+        let err = parser
+            .parse_custom_properties(xml, &mut metadata)
+            .expect_err("duplicate custom property attributes must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "docProps/custom.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+        assert!(metadata.custom_properties.is_empty());
     }
 }

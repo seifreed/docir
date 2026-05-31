@@ -241,7 +241,7 @@ impl OoxmlParser {
             doc.metadata = metadata_id;
         }
         if metadata_id.is_some()
-            && let Some(metadata) = self.build_metadata(zip)
+            && let Some(metadata) = self.build_metadata(zip)?
         {
             store.insert(IRNode::Metadata(metadata));
         }

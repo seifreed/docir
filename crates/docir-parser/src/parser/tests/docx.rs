@@ -77,7 +77,9 @@ fn test_parse_custom_properties() {
         "#;
     let mut metadata = DocumentMetadata::new();
     let parser = OoxmlParser::new();
-    parser.parse_custom_properties(xml, &mut metadata);
+    parser
+        .parse_custom_properties(xml, &mut metadata)
+        .expect("custom properties parse");
     assert_eq!(metadata.custom_properties.len(), 3);
     assert!(matches!(
         metadata.custom_properties[0].value,
