@@ -207,6 +207,30 @@ mod tests {
     }
 
     #[test]
+    fn parse_chartsheet_reports_malformed_attributes() {
+        let mut parser = XlsxParser::new();
+        let mut zip = MockPackageReader::default();
+        let rels = Relationships::default();
+        let xml = r#"
+            <chartsheet xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <drawing>
+                <c:chart r:id="rIdChart1" r:id="rIdChart2"/>
+              </drawing>
+            </chartsheet>
+        "#;
+
+        let err = parser
+            .parse_chartsheet(&mut zip, xml, "xl/chartsheets/sheet1.xml", &rels)
+            .expect_err("duplicate chartsheet attributes must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/chartsheets/sheet1.xml"),
+            other => panic!("expected XML error, got {other}"),
+        }
+    }
+
+    #[test]
     fn parse_pivot_cache_reads_cache_source_without_records_part() {
         let mut parser = XlsxParser::new();
         let mut zip = MockPackageReader::default();
@@ -282,6 +306,33 @@ mod tests {
             Some("worksheet:Sheet1!A1:B3")
         );
         assert_eq!(cache.cache_id, 9);
+    }
+
+    #[test]
+    fn parse_pivot_cache_reports_malformed_attributes() {
+        let mut parser = XlsxParser::new();
+        let mut zip = MockPackageReader::default();
+        let cache_xml = r#"
+            <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <cacheSource type="worksheet" type="external"/>
+            </pivotCacheDefinition>
+        "#;
+
+        let err = parser
+            .parse_pivot_cache(
+                &mut zip,
+                cache_xml,
+                "xl/pivotCache/pivotCacheDefinition1.xml",
+                10,
+            )
+            .expect_err("duplicate pivot cache attributes must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => {
+                assert_eq!(file, "xl/pivotCache/pivotCacheDefinition1.xml");
+            }
+            other => panic!("expected XML error, got {other}"),
+        }
     }
 
     #[test]

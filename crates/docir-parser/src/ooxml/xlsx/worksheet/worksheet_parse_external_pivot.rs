@@ -6,6 +6,7 @@ use crate::ooxml::xlsx::{
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
     XmlScanControl, is_end_event_local, local_name, reader_from_str, scan_xml_events_until_end,
+    visit_attributes,
 };
 use crate::zip_handler::PackageReader;
 use docir_core::types::SourceSpan;
@@ -33,26 +34,24 @@ pub(super) fn parse_pivot_cache_impl(
             if let Event::Start(e) | Event::Empty(e) = event {
                 match local_name(e.name().as_ref()) {
                     b"cacheSource" => {
-                        for attr in e.attributes().flatten() {
+                        visit_attributes(e, cache_path, |attr| {
                             if attr.key.as_ref() == b"type" {
-                                cache.cache_source = Some(lossy_attr_value(&attr).to_string());
+                                cache.cache_source = Some(lossy_attr_value(attr).to_string());
                             }
                             if attr.key.as_ref() == b"connectionId" {
-                                let conn = lossy_attr_value(&attr).to_string();
+                                let conn = lossy_attr_value(attr).to_string();
                                 cache.cache_source = Some(format!("connection:{conn}"));
                             }
-                        }
+                        })?;
                     }
                     b"worksheetSource" => {
                         let mut sheet = None;
                         let mut range = None;
-                        for attr in e.attributes().flatten() {
-                            match attr.key.as_ref() {
-                                b"sheet" => sheet = Some(lossy_attr_value(&attr).to_string()),
-                                b"ref" => range = Some(lossy_attr_value(&attr).to_string()),
-                                _ => {}
-                            }
-                        }
+                        visit_attributes(e, cache_path, |attr| match attr.key.as_ref() {
+                            b"sheet" => sheet = Some(lossy_attr_value(attr).to_string()),
+                            b"ref" => range = Some(lossy_attr_value(attr).to_string()),
+                            _ => {}
+                        })?;
                         if let Some(sheet) = sheet {
                             let range = range.unwrap_or_else(|| "-".to_string());
                             cache.cache_source = Some(format!("worksheet:{sheet}!{range}"));

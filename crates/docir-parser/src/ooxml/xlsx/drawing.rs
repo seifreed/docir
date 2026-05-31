@@ -2,7 +2,7 @@ use super::XlsxParser;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, xml_error};
+use crate::xml_utils::{local_name, visit_attributes, xml_error};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{IRNode, Shape, ShapeType, WorksheetDrawing};
 use docir_core::security::{ExternalRefType, ExternalReference};
@@ -41,7 +41,10 @@ impl XlsxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => {
                     depth += 1;
-                    handle_xlsx_drawing_start(&e, &mut state);
+                    handle_xlsx_drawing_start(&e, &mut state, drawing_path)?;
+                }
+                Ok(Event::Empty(e)) => {
+                    handle_xlsx_drawing_empty(&e, &mut state, drawing_path)?;
                 }
                 Ok(Event::End(e)) => {
                     depth = depth.saturating_sub(1);
@@ -156,34 +159,63 @@ impl XlsxDrawingState {
     }
 }
 
-fn handle_xlsx_drawing_start(e: &BytesStart<'_>, state: &mut XlsxDrawingState) {
+fn handle_xlsx_drawing_start(
+    e: &BytesStart<'_>,
+    state: &mut XlsxDrawingState,
+    drawing_path: &str,
+) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"pic" => state.current_shape = Some(Shape::new(ShapeType::Picture)),
         b"graphicFrame" => state.current_shape = Some(Shape::new(ShapeType::Chart)),
-        b"cNvPr" => apply_shape_properties(e, state.current_shape.as_mut()),
-        b"blip" => state.current_embed = relationship_attr(e, b"embed"),
-        b"chart" => state.current_chart = relationship_attr(e, b"id"),
+        b"cNvPr" => apply_shape_properties(e, state.current_shape.as_mut(), drawing_path)?,
+        b"blip" => state.current_embed = relationship_attr(e, b"embed", drawing_path)?,
+        b"chart" => state.current_chart = relationship_attr(e, b"id", drawing_path)?,
         _ => {}
     }
+    Ok(())
 }
 
-fn apply_shape_properties(e: &BytesStart<'_>, shape: Option<&mut Shape>) {
-    if let Some(shape) = shape {
-        for attr in e.attributes().flatten() {
-            match attr.key.as_ref() {
-                b"name" => shape.name = Some(lossy_attr_value(&attr).to_string()),
-                b"descr" => shape.alt_text = Some(lossy_attr_value(&attr).to_string()),
-                _ => {}
-            }
-        }
+fn handle_xlsx_drawing_empty(
+    e: &BytesStart<'_>,
+    state: &mut XlsxDrawingState,
+    drawing_path: &str,
+) -> Result<(), ParseError> {
+    match local_name(e.name().as_ref()) {
+        b"cNvPr" => apply_shape_properties(e, state.current_shape.as_mut(), drawing_path)?,
+        b"blip" => state.current_embed = relationship_attr(e, b"embed", drawing_path)?,
+        b"chart" => state.current_chart = relationship_attr(e, b"id", drawing_path)?,
+        _ => {}
     }
+    Ok(())
 }
 
-fn relationship_attr(e: &BytesStart<'_>, local: &[u8]) -> Option<String> {
-    e.attributes()
-        .flatten()
-        .find(|attr| local_name(attr.key.as_ref()) == local)
-        .map(|attr| lossy_attr_value(&attr).to_string())
+fn apply_shape_properties(
+    e: &BytesStart<'_>,
+    shape: Option<&mut Shape>,
+    drawing_path: &str,
+) -> Result<(), ParseError> {
+    if let Some(shape) = shape {
+        visit_attributes(e, drawing_path, |attr| match attr.key.as_ref() {
+            b"name" => shape.name = Some(lossy_attr_value(attr).to_string()),
+            b"descr" => shape.alt_text = Some(lossy_attr_value(attr).to_string()),
+            _ => {}
+        })?;
+    }
+    Ok(())
+}
+
+fn relationship_attr(
+    e: &BytesStart<'_>,
+    local: &[u8],
+    drawing_path: &str,
+) -> Result<Option<String>, ParseError> {
+    let mut value = None;
+    visit_attributes(e, drawing_path, |attr| {
+        if value.is_none() && local_name(attr.key.as_ref()) == local {
+            value = Some(lossy_attr_value(attr).to_string());
+        }
+    })?;
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -303,6 +335,8 @@ mod tests {
                 _ => None,
             })
             .expect("first shape");
+        assert_eq!(first_shape.name.as_deref(), Some("Picture 1"));
+        assert_eq!(first_shape.alt_text.as_deref(), Some("Alt"));
         assert_eq!(
             first_shape.media_target.as_deref(),
             Some("https://cdn.example.test/image.png")
@@ -427,6 +461,30 @@ mod tests {
                 &mut zip,
             )
             .expect_err("truncated drawing XML must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/drawings/drawing1.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_drawing_reports_malformed_attributes() {
+        let mut parser = XlsxParser::new();
+        let rels = Relationships::parse(relationships_xml()).expect("relationships");
+        let mut zip = TestPackageReader::new(&[]);
+        let drawing_xml = r#"
+            <xdr:wsDr xmlns:xdr="xdr">
+              <xdr:pic>
+                <xdr:nvPicPr>
+                  <xdr:cNvPr name="Picture 1" name="Duplicate"/>
+                </xdr:nvPicPr>
+              </xdr:pic>
+            </xdr:wsDr>
+        "#;
+
+        let err = parser
+            .parse_drawing(drawing_xml, "xl/drawings/drawing1.xml", &rels, &mut zip)
+            .expect_err("duplicate drawing attributes must fail");
         match err {
             ParseError::Xml { file, .. } => assert_eq!(file, "xl/drawings/drawing1.xml"),
             other => panic!("unexpected error: {other:?}"),
