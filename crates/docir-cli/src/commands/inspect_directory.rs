@@ -344,184 +344,169 @@ mod tests {
 
     #[test]
     fn format_inspection_text_renders_expected_fields() {
-        let inspection = DirectoryInspection {
+        let text = format_inspection_text(&directory_inspection_fixture());
+
+        assert_inspection_summary_text(&text);
+        assert_inspection_bucket_text(&text);
+        assert_directory_entry_text(&text);
+    }
+
+    fn directory_inspection_fixture() -> DirectoryInspection {
+        DirectoryInspection {
             container: "cfb-ole".to_string(),
             entry_count: 1,
             directory_score: "medium".to_string(),
             role_counts: vec![
-                BucketCount {
-                    bucket: "state:normal".to_string(),
-                    count: 1,
-                },
-                BucketCount {
-                    bucket: "classification:word-main-stream".to_string(),
-                    count: 1,
-                },
+                bucket_count("state:normal", 1),
+                bucket_count("classification:word-main-stream", 1),
             ],
-            anomaly_counts: vec![BucketCount {
-                bucket: "orphaned-entry".to_string(),
-                count: 1,
-            }],
+            anomaly_counts: vec![bucket_count("orphaned-entry", 1)],
             anomaly_catalog: vec![DirectoryAnomalySeverity {
                 anomaly: "orphaned-entry".to_string(),
                 severity: "medium".to_string(),
             }],
-            anomaly_severity_counts: vec![BucketCount {
-                bucket: "medium".to_string(),
-                count: 1,
-            }],
+            anomaly_severity_counts: vec![bucket_count("medium", 1)],
             reference_counts: vec![
-                BucketCount {
-                    bucket: "incoming:many".to_string(),
-                    count: 1,
-                },
-                BucketCount {
-                    bucket: "live-incoming:many".to_string(),
-                    count: 1,
-                },
+                bucket_count("incoming:many", 1),
+                bucket_count("live-incoming:many", 1),
             ],
             pointer_counts: vec![
-                BucketCount {
-                    bucket: "right:present".to_string(),
-                    count: 1,
-                },
-                BucketCount {
-                    bucket: "right:dangling".to_string(),
-                    count: 1,
-                },
+                bucket_count("right:present", 1),
+                bucket_count("right:dangling", 1),
             ],
             tree_density_counts: vec![
-                BucketCount {
-                    bucket: "right:state:normal".to_string(),
-                    count: 1,
-                },
-                BucketCount {
-                    bucket: "right:entry-type:stream".to_string(),
-                    count: 1,
-                },
+                bucket_count("right:state:normal", 1),
+                bucket_count("right:entry-type:stream", 1),
             ],
-            dangling_state_counts: vec![BucketCount {
-                bucket: "right:state:normal".to_string(),
-                count: 1,
-            }],
-            self_reference_counts: vec![BucketCount {
-                bucket: "self-right-sibling".to_string(),
-                count: 1,
-            }],
-            short_cycle_counts: vec![BucketCount {
-                bucket: "sibling-2-cycle".to_string(),
-                count: 1,
-            }],
-            reachability_counts: vec![BucketCount {
-                bucket: "live-reachable".to_string(),
-                count: 1,
-            }],
-            incoming_source_counts: vec![BucketCount {
-                bucket: "incoming:state:normal".to_string(),
-                count: 2,
-            }],
+            dangling_state_counts: vec![bucket_count("right:state:normal", 1)],
+            self_reference_counts: vec![bucket_count("self-right-sibling", 1)],
+            short_cycle_counts: vec![bucket_count("sibling-2-cycle", 1)],
+            reachability_counts: vec![bucket_count("live-reachable", 1)],
+            incoming_source_counts: vec![bucket_count("incoming:state:normal", 2)],
             incoming_source_type_counts: vec![
-                BucketCount {
-                    bucket: "incoming:source-type:root-storage".to_string(),
-                    count: 1,
-                },
-                BucketCount {
-                    bucket: "incoming:source-type:storage".to_string(),
-                    count: 1,
-                },
+                bucket_count("incoming:source-type:root-storage", 1),
+                bucket_count("incoming:source-type:storage", 1),
             ],
-            dead_reference_counts: vec![BucketCount {
-                bucket: "dead-reference:state:orphaned".to_string(),
-                count: 1,
-            }],
-            fanout_counts: vec![
-                BucketCount {
-                    bucket: "fanout:0".to_string(),
-                    count: 1,
-                },
-                BucketCount {
-                    bucket: "fanout:2".to_string(),
-                    count: 1,
-                },
+            dead_reference_counts: vec![bucket_count("dead-reference:state:orphaned", 1)],
+            fanout_counts: vec![bucket_count("fanout:0", 1), bucket_count("fanout:2", 1)],
+            entries: vec![directory_entry_fixture()],
+        }
+    }
+
+    fn directory_entry_fixture() -> DirectoryEntry {
+        DirectoryEntry {
+            entry_index: 1,
+            path: "WordDocument".to_string(),
+            entry_type: "stream".to_string(),
+            name_len_raw: 26,
+            object_type_raw: 2,
+            color_flag_raw: 0,
+            state: "normal".to_string(),
+            classification: "word-main-stream".to_string(),
+            anomaly_severity: "medium".to_string(),
+            anomaly_tags: vec!["orphaned-entry".to_string()],
+            short_cycles: vec!["sibling-2-cycle".to_string()],
+            reachable_from_root: true,
+            fanout_count: 2,
+            incoming_reference_count: 2,
+            incoming_normal_reference_count: 2,
+            incoming_anomalous_reference_count: 0,
+            incoming_from_root_storage_count: 1,
+            incoming_from_storage_count: 1,
+            incoming_from_stream_count: 0,
+            incoming_from: vec!["left:Root Entry#0".to_string(), "right:VBA#2".to_string()],
+            size_bytes: 3,
+            start_sector: 0,
+            left_sibling_raw: u32::MAX,
+            right_sibling_raw: 2,
+            child_raw: u32::MAX,
+            left_sibling: None,
+            right_sibling: Some(2),
+            child: None,
+            created_filetime: None,
+            modified_filetime: None,
+        }
+    }
+
+    fn bucket_count(bucket: &str, count: usize) -> BucketCount {
+        BucketCount {
+            bucket: bucket.to_string(),
+            count,
+        }
+    }
+
+    fn assert_inspection_summary_text(text: &str) {
+        assert_contains_all(
+            text,
+            &[
+                "Entries: 1",
+                "Directory Score: medium",
+                "Role Counts:",
+                "Anomalies:",
+                "Anomaly Severity Catalog:",
+                "Anomaly Severity Summary:",
+                "Reference Summary:",
+                "Pointer Summary:",
+                "Tree Density Summary:",
+                "Dangling By State:",
+                "Self References:",
+                "Short Cycles:",
+                "Reachability Summary:",
+                "Incoming Source Summary:",
+                "Incoming Source Types:",
+                "Dead But Referenced:",
+                "Fanout Summary:",
             ],
-            entries: vec![DirectoryEntry {
-                entry_index: 1,
-                path: "WordDocument".to_string(),
-                entry_type: "stream".to_string(),
-                name_len_raw: 26,
-                object_type_raw: 2,
-                color_flag_raw: 0,
-                state: "normal".to_string(),
-                classification: "word-main-stream".to_string(),
-                anomaly_severity: "medium".to_string(),
-                anomaly_tags: vec!["orphaned-entry".to_string()],
-                short_cycles: vec!["sibling-2-cycle".to_string()],
-                reachable_from_root: true,
-                fanout_count: 2,
-                incoming_reference_count: 2,
-                incoming_normal_reference_count: 2,
-                incoming_anomalous_reference_count: 0,
-                incoming_from_root_storage_count: 1,
-                incoming_from_storage_count: 1,
-                incoming_from_stream_count: 0,
-                incoming_from: vec!["left:Root Entry#0".to_string(), "right:VBA#2".to_string()],
-                size_bytes: 3,
-                start_sector: 0,
-                left_sibling_raw: u32::MAX,
-                right_sibling_raw: 2,
-                child_raw: u32::MAX,
-                left_sibling: None,
-                right_sibling: Some(2),
-                child: None,
-                created_filetime: None,
-                modified_filetime: None,
-            }],
-        };
-        let text = format_inspection_text(&inspection);
-        assert!(text.contains("Entries: 1"));
-        assert!(text.contains("Directory Score: medium"));
-        assert!(text.contains("Role Counts:"));
-        assert!(text.contains("classification:word-main-stream: 1"));
-        assert!(text.contains("Anomalies:"));
-        assert!(text.contains("orphaned-entry: 1"));
-        assert!(text.contains("Anomaly Severity Catalog:"));
-        assert!(text.contains("orphaned-entry: medium"));
-        assert!(text.contains("Anomaly Severity Summary:"));
-        assert!(text.contains("medium: 1"));
-        assert!(text.contains("Reference Summary:"));
-        assert!(text.contains("incoming:many: 1"));
-        assert!(text.contains("Pointer Summary:"));
-        assert!(text.contains("right:present: 1"));
-        assert!(text.contains("Tree Density Summary:"));
-        assert!(text.contains("right:state:normal: 1"));
-        assert!(text.contains("Dangling By State:"));
-        assert!(text.contains("Self References:"));
-        assert!(text.contains("Short Cycles:"));
-        assert!(text.contains("Reachability Summary:"));
-        assert!(text.contains("Incoming Source Summary:"));
-        assert!(text.contains("Incoming Source Types:"));
-        assert!(text.contains("Dead But Referenced:"));
-        assert!(text.contains("Fanout Summary:"));
-        assert!(text.contains("Entry Index: 1"));
-        assert!(text.contains("Name Length Raw: 26"));
-        assert!(text.contains("Object Type Raw: 2"));
-        assert!(text.contains("Color Flag Raw: 0"));
-        assert!(text.contains("State: normal"));
-        assert!(text.contains("Anomaly Severity: medium"));
-        assert!(text.contains("Short Cycles: sibling-2-cycle"));
-        assert!(text.contains("Reachable From Root: true"));
-        assert!(text.contains("Fanout: 2"));
-        assert!(text.contains("Incoming References: 2"));
-        assert!(text.contains("Incoming From Normal: 2"));
-        assert!(text.contains("Incoming From Anomalous: 0"));
-        assert!(text.contains("Incoming From Root Storage: 1"));
-        assert!(text.contains("Incoming From Storage: 1"));
-        assert!(text.contains("Incoming From Stream: 0"));
-        assert!(text.contains("Incoming From: left:Root Entry#0, right:VBA#2"));
-        assert!(text.contains("Sector: 0"));
-        assert!(text.contains("Anomaly Tags: orphaned-entry"));
-        assert!(text.contains("Left Sibling Raw: 4294967295"));
-        assert!(text.contains("Right Sibling Raw: 2"));
-        assert!(text.contains("Right Sibling: 2"));
+        );
+    }
+
+    fn assert_inspection_bucket_text(text: &str) {
+        assert_contains_all(
+            text,
+            &[
+                "classification:word-main-stream: 1",
+                "orphaned-entry: 1",
+                "orphaned-entry: medium",
+                "medium: 1",
+                "incoming:many: 1",
+                "right:present: 1",
+                "right:state:normal: 1",
+            ],
+        );
+    }
+
+    fn assert_directory_entry_text(text: &str) {
+        assert_contains_all(
+            text,
+            &[
+                "Entry Index: 1",
+                "Name Length Raw: 26",
+                "Object Type Raw: 2",
+                "Color Flag Raw: 0",
+                "State: normal",
+                "Anomaly Severity: medium",
+                "Short Cycles: sibling-2-cycle",
+                "Reachable From Root: true",
+                "Fanout: 2",
+                "Incoming References: 2",
+                "Incoming From Normal: 2",
+                "Incoming From Anomalous: 0",
+                "Incoming From Root Storage: 1",
+                "Incoming From Storage: 1",
+                "Incoming From Stream: 0",
+                "Incoming From: left:Root Entry#0, right:VBA#2",
+                "Sector: 0",
+                "Anomaly Tags: orphaned-entry",
+                "Left Sibling Raw: 4294967295",
+                "Right Sibling Raw: 2",
+                "Right Sibling: 2",
+            ],
+        );
+    }
+
+    fn assert_contains_all(text: &str, expected: &[&str]) {
+        for fragment in expected {
+            assert!(text.contains(fragment), "missing fragment: {fragment}");
+        }
     }
 }
