@@ -234,6 +234,26 @@ fn scan_zip_deduplicates_activex_binary_and_scans_other_ole() {
 }
 
 #[test]
+fn scan_zip_reports_malformed_activex_xml() {
+    let mut zip = TestPackageReader::new(&[(
+        "word/activeX/activeX1.xml",
+        br#"<ocx name="Button1" clsid="{ABC}"><prop>"#,
+    )]);
+    let mut store = IrStore::new();
+    let config = ParserConfig::default();
+    let scanner = SecurityScanner::new(&config);
+
+    let err = scanner
+        .scan_zip(&mut zip, &mut store)
+        .expect_err("malformed ActiveX XML must fail security scanning");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/activeX/activeX1.xml"),
+        other => panic!("expected XML error, got {other}"),
+    }
+}
+
+#[test]
 fn scan_zip_sets_ole_hash_when_compute_hashes_enabled() {
     let mut zip = TestPackageReader::new(&[("word/embeddings/object1.bin", b"OLE-HASH")]);
     let mut store = IrStore::new();

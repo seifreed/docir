@@ -75,7 +75,7 @@ impl<'a> SecurityScanner<'a> {
             .collect();
         for path in activex_paths {
             let xml = zip.read_file_string(&path)?;
-            if let Some(mut control) = super::parse_activex_xml(&xml, &path) {
+            if let Some(mut control) = super::parse_activex_xml(&xml, &path)? {
                 control.span = Some(SourceSpan::new(&path));
                 store.insert(IRNode::ActiveXControl(control));
             }

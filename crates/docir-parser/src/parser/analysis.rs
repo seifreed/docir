@@ -1,15 +1,14 @@
 use crate::error::ParseError;
-use crate::xml_utils::local_name;
-use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::xml_error;
+use crate::xml_utils::{XmlScanControl, local_name};
+use crate::xml_utils::{lossy_attr_value, scan_xml_events, xml_error};
 use docir_core::ir::{CellError, ChartData, ChartSeries, IRNode};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
 
 pub(super) fn parse_activex_xml(
     xml: &str,
-    _path: &str,
-) -> Option<docir_core::security::ActiveXControl> {
+    path: &str,
+) -> Result<Option<docir_core::security::ActiveXControl>, ParseError> {
     use quick_xml::Reader;
     use quick_xml::events::Event;
 
@@ -18,34 +17,30 @@ pub(super) fn parse_activex_xml(
     let mut buf = Vec::new();
     let mut control = docir_core::security::ActiveXControl::new();
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                for attr in e.attributes().flatten() {
-                    let key = attr.key.as_ref();
-                    let value = lossy_attr_value(&attr).to_string();
-                    match key {
-                        b"name" => control.name = Some(value.clone()),
-                        b"clsid" | b"classid" => control.clsid = Some(value.clone()),
-                        b"progid" => control.prog_id = Some(value.clone()),
-                        _ => {
-                            let prop_key = String::from_utf8_lossy(key).to_string();
-                            control.properties.push((prop_key, value));
-                        }
+    scan_xml_events(&mut reader, &mut buf, path, |event| {
+        if let Event::Start(e) | Event::Empty(e) = event {
+            for attr in e.attributes() {
+                let attr = attr.map_err(|err| xml_error(path, err))?;
+                let key = attr.key.as_ref();
+                let value = lossy_attr_value(&attr).to_string();
+                match key {
+                    b"name" => control.name = Some(value.clone()),
+                    b"clsid" | b"classid" => control.clsid = Some(value.clone()),
+                    b"progid" => control.prog_id = Some(value.clone()),
+                    _ => {
+                        let prop_key = String::from_utf8_lossy(key).to_string();
+                        control.properties.push((prop_key, value));
                     }
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
         }
-        buf.clear();
-    }
+        Ok(XmlScanControl::Continue)
+    })?;
 
     if control.name.is_some() || control.clsid.is_some() || control.prog_id.is_some() {
-        Some(control)
+        Ok(Some(control))
     } else {
-        None
+        Ok(None)
     }
 }
 
@@ -300,6 +295,7 @@ mod tests {
     fn parse_activex_xml_extracts_core_attributes_and_properties() {
         let xml = r#"<ocx:ocx name="CommandButton1" clsid="{ABC}" progid="Forms.CommandButton.1" custom="x"/>"#;
         let control = parse_activex_xml(xml, "word/activeX/activeX1.xml")
+            .expect("xml parses")
             .expect("expected a parsed ActiveX control");
 
         assert_eq!(control.name.as_deref(), Some("CommandButton1"));
@@ -316,7 +312,11 @@ mod tests {
     #[test]
     fn parse_activex_xml_returns_none_without_identifying_attributes() {
         let xml = r#"<ocx:ocx custom="x" another="y"/>"#;
-        assert!(parse_activex_xml(xml, "word/activeX/activeX1.xml").is_none());
+        assert!(
+            parse_activex_xml(xml, "word/activeX/activeX1.xml")
+                .expect("xml parses")
+                .is_none()
+        );
     }
 
     #[test]
