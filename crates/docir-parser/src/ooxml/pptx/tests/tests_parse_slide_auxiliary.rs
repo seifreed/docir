@@ -325,3 +325,34 @@ fn test_parse_slide_transition_and_animation() {
     assert_eq!(slide.animations.len(), 1);
     assert_eq!(slide.animations[0].target.as_deref(), Some("4"));
 }
+
+#[test]
+fn test_parse_slide_transition_reports_truncated_xml() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <p:cSld><p:spTree/></p:cSld>
+          <p:transition spd="fast">
+            <p:fade>
+        "#;
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+
+    let err = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/broken-transition.xml",
+            &Relationships::default(),
+            (None, None),
+        )
+        .expect_err("truncated slide transition XML must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => {
+            assert_eq!(file, "ppt/slides/broken-transition.xml");
+        }
+        other => panic!("expected XML error, got {other:?}"),
+    }
+}
