@@ -159,13 +159,12 @@ impl PptxParser {
                 let chart_path = Relationships::resolve_target(slide_path, &rel.target);
                 if zip.contains(&chart_path) {
                     let chart_xml = zip.read_file_string(&chart_path)?;
-                    if let Some(chart_id) = crate::ooxml::shared::parse_chart_data(
+                    let chart_id = crate::ooxml::shared::parse_chart_data(
                         &chart_xml,
                         &chart_path,
                         &mut self.store,
-                    ) {
-                        self.chart_nodes.push(chart_id);
-                    }
+                    )?;
+                    self.chart_nodes.push(chart_id);
                 }
             }
         }

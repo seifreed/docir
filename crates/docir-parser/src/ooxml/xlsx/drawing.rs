@@ -108,9 +108,8 @@ impl XlsxParser {
                 shape.media_target = Some(chart_path.clone());
                 if rel.target_mode != TargetMode::External && zip.contains(&chart_path) {
                     let chart_xml = zip.read_file_string(&chart_path)?;
-                    if let Some(chart_id) = self.parse_chart(&chart_xml, &chart_path) {
-                        self.chart_nodes.push(chart_id);
-                    }
+                    let chart_id = self.parse_chart(&chart_xml, &chart_path)?;
+                    self.chart_nodes.push(chart_id);
                 }
             }
             state.insert_shape(shape, &mut self.store);

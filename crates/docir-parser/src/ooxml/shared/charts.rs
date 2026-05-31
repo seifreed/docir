@@ -1,4 +1,7 @@
-use crate::xml_utils::local_name;
+use crate::error::ParseError;
+use crate::xml_utils::{
+    XmlScanControl, decoded_general_ref, decoded_text, local_name, scan_xml_events, xml_error,
+};
 use docir_core::ir::{ChartData, ChartSeries, IRNode};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -13,7 +16,11 @@ enum SeriesSection {
 }
 
 /// Public API entrypoint: parse_chart_data.
-pub fn parse_chart_data(xml: &str, chart_path: &str, store: &mut IrStore) -> Option<NodeId> {
+pub fn parse_chart_data(
+    xml: &str,
+    chart_path: &str,
+    store: &mut IrStore,
+) -> Result<NodeId, ParseError> {
     let mut chart = ChartData::new();
     chart.span = Some(SourceSpan::new(chart_path));
 
@@ -25,9 +32,9 @@ pub fn parse_chart_data(xml: &str, chart_path: &str, store: &mut IrStore) -> Opt
     let mut in_series = false;
     let mut section: Option<SeriesSection> = None;
     let mut current_series: Option<ChartSeries> = None;
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+    scan_xml_events(&mut reader, &mut buf, chart_path, |event| {
+        match event {
+            Event::Start(e) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let name = local_name(&name_buf);
                 handle_start_event(
@@ -39,8 +46,8 @@ pub fn parse_chart_data(xml: &str, chart_path: &str, store: &mut IrStore) -> Opt
                     &mut current_series,
                 );
             }
-            Ok(Event::Text(e)) => {
-                let text = crate::xml_utils::decoded_text_or_default(&e);
+            Event::Text(e) => {
+                let text = decoded_text(&e).map_err(|err| xml_error(chart_path, err))?;
                 handle_text_event(
                     &text,
                     &mut chart,
@@ -50,8 +57,8 @@ pub fn parse_chart_data(xml: &str, chart_path: &str, store: &mut IrStore) -> Opt
                     current_series.as_mut(),
                 );
             }
-            Ok(Event::GeneralRef(e)) => {
-                let text = crate::xml_utils::decoded_general_ref_or_default(&e);
+            Event::GeneralRef(e) => {
+                let text = decoded_general_ref(&e).map_err(|err| xml_error(chart_path, err))?;
                 handle_text_event(
                     &text,
                     &mut chart,
@@ -61,7 +68,7 @@ pub fn parse_chart_data(xml: &str, chart_path: &str, store: &mut IrStore) -> Opt
                     current_series.as_mut(),
                 );
             }
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let name = local_name(&name_buf);
                 handle_end_event(
@@ -73,16 +80,14 @@ pub fn parse_chart_data(xml: &str, chart_path: &str, store: &mut IrStore) -> Opt
                     &mut current_series,
                 );
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
             _ => {}
         }
-        buf.clear();
-    }
+        Ok(XmlScanControl::Continue)
+    })?;
 
     let id = chart.id;
     store.insert(IRNode::ChartData(chart));
-    Some(id)
+    Ok(id)
 }
 
 fn handle_start_event(

@@ -168,6 +168,45 @@ mod tests {
     }
 
     #[test]
+    fn parse_chartsheet_reports_malformed_chart_part() {
+        let mut parser = XlsxParser::new();
+        let mut zip = MockPackageReader::default();
+        zip.insert_str(
+            "xl/charts/chart1.xml",
+            r#"<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart>"#,
+        );
+
+        let mut rels = Relationships::default();
+        rels.by_id.insert(
+            "rIdChart1".to_string(),
+            crate::ooxml::relationships::Relationship {
+                id: "rIdChart1".to_string(),
+                rel_type: crate::ooxml::xlsx::rel_type::CHART.to_string(),
+                target: "../charts/chart1.xml".to_string(),
+                target_mode: crate::ooxml::relationships::TargetMode::Internal,
+            },
+        );
+
+        let xml = r#"
+            <chartsheet xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <drawing>
+                <c:chart r:id="rIdChart1"/>
+              </drawing>
+            </chartsheet>
+        "#;
+
+        let err = parser
+            .parse_chartsheet(&mut zip, xml, "xl/chartsheets/sheet1.xml", &rels)
+            .expect_err("malformed chart part must fail chartsheet parsing");
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/charts/chart1.xml"),
+            other => panic!("expected XML error, got {other}"),
+        }
+    }
+
+    #[test]
     fn parse_pivot_cache_reads_cache_source_without_records_part() {
         let mut parser = XlsxParser::new();
         let mut zip = MockPackageReader::default();

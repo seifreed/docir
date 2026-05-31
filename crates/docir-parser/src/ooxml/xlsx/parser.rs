@@ -168,7 +168,11 @@ impl XlsxParser {
         doc_id
     }
 
-    pub(super) fn parse_chart(&mut self, xml: &str, chart_path: &str) -> Option<NodeId> {
+    pub(super) fn parse_chart(
+        &mut self,
+        xml: &str,
+        chart_path: &str,
+    ) -> Result<NodeId, ParseError> {
         crate::ooxml::shared::parse_chart_data(xml, chart_path, &mut self.store)
     }
 

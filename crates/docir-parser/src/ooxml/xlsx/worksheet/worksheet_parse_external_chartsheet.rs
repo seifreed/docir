@@ -43,7 +43,7 @@ pub(super) fn parse_chartsheet_impl(
     }
 
     let chart_xml = zip.read_file_string(&chart_path)?;
-    let chart_id = parser.parse_chart(&chart_xml, &chart_path);
+    let chart_id = parser.parse_chart(&chart_xml, &chart_path)?;
 
     let mut drawing = WorksheetDrawing::new();
     drawing.span = Some(SourceSpan::new(sheet_path));
@@ -55,9 +55,7 @@ pub(super) fn parse_chartsheet_impl(
     parser.store.insert(IRNode::Shape(shape));
     drawing.shapes.push(shape_id);
 
-    if let Some(chart_id) = chart_id {
-        parser.chart_nodes.push(chart_id);
-    }
+    parser.chart_nodes.push(chart_id);
 
     let drawing_id = drawing.id;
     parser.store.insert(IRNode::WorksheetDrawing(drawing));
