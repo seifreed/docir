@@ -177,6 +177,10 @@ mod tests {
             .to_string()
     }
 
+    fn invalid_profile_json() -> String {
+        String::from(char::from(0x7b))
+    }
+
     #[test]
     fn parse_json_emits_ir_json() {
         let docx = fixture("ooxml/minimal.docx");
@@ -222,7 +226,7 @@ mod tests {
     fn rules_rejects_invalid_profile_json() {
         init_python();
         let docx = fixture("ooxml/minimal.docx");
-        let err = rules(docx, Some("{".to_string()), Some(false)).expect_err("must fail");
+        let err = rules(docx, Some(invalid_profile_json()), Some(false)).expect_err("must fail");
         assert!(!err.to_string().is_empty());
     }
 
