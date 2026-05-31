@@ -11,6 +11,8 @@ pub(crate) use tests_normalize::get_cell;
 pub(crate) use tests_tests::{build_empty_zip, build_zip_with_entries};
 
 #[cfg(test)]
+mod tests_drawing;
+#[cfg(test)]
 mod tests_normalize;
 #[cfg(test)]
 mod tests_parse;
