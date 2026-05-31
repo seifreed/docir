@@ -1,6 +1,6 @@
 use crate::error::ParseError;
 use crate::xml_utils::{XmlScanControl, local_name};
-use crate::xml_utils::{lossy_attr_value, scan_xml_events, xml_error};
+use crate::xml_utils::{lossy_attr_value, scan_xml_events, visit_attributes, xml_error};
 use docir_core::ir::{CellError, ChartData, ChartSeries, IRNode};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -88,15 +88,15 @@ pub(super) fn parse_smartart_part(
                     connection_count += 1;
                 }
                 if name == b"relIds" {
-                    for attr in e.attributes().flatten() {
+                    visit_attributes(&e, path, |attr| {
                         let key = local_name(attr.key.as_ref());
                         if matches!(key, b"dm" | b"lo" | b"qs" | b"cs") {
-                            let value = lossy_attr_value(&attr).to_string();
+                            let value = lossy_attr_value(attr).to_string();
                             if !value.is_empty() {
                                 rel_ids.push(value);
                             }
                         }
-                    }
+                    })?;
                 }
             }
             Ok(Event::Eof) => break,
@@ -363,6 +363,23 @@ mod tests {
             .expect_err("invalid XML should fail");
         match err {
             ParseError::Xml { file, .. } => assert_eq!(file, "bad.xml"),
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_smartart_part_reports_malformed_attributes() {
+        let xml = r#"
+            <dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"
+                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <dgm:relIds r:dm="rId1" r:dm="rId2"/>
+            </dgm:dataModel>
+        "#;
+
+        let err = parse_smartart_part(xml, "ppt/diagrams/data1.xml")
+            .expect_err("duplicate SmartArt relationship attributes must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "ppt/diagrams/data1.xml"),
             other => panic!("unexpected error variant: {other:?}"),
         }
     }
