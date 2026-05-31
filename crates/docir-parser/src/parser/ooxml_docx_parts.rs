@@ -11,6 +11,7 @@ use docir_core::visitor::IrStore;
 use std::collections::HashMap;
 
 type DocxStylePartIds = (Option<NodeId>, Option<NodeId>, Option<NodeId>);
+type DocxSettingsPartIds = (Option<NodeId>, Option<NodeId>, Option<NodeId>);
 
 impl OoxmlParser {
     pub(crate) fn parse_docx_word_parts(
@@ -25,7 +26,7 @@ impl OoxmlParser {
         let (comments, footnotes, endnotes, comments_ext_id, comments_id_map_id) =
             self.parse_docx_annotation_parts(zip, main_part_path, doc_rels, parser);
         let (settings_id, web_settings_id, font_table_id) =
-            self.parse_docx_settings_parts(zip, main_part_path, doc_rels, parser);
+            self.parse_docx_settings_parts(zip, main_part_path, doc_rels, parser)?;
 
         let glossary_id =
             self.parse_docx_part_by_path(zip, "word/glossary/document.xml", |_, xml| {
@@ -164,39 +165,39 @@ impl OoxmlParser {
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
-    ) -> (Option<NodeId>, Option<NodeId>, Option<NodeId>) {
-        let settings_id = self.parse_docx_part_by_rel_with_span(
+    ) -> Result<DocxSettingsPartIds, ParseError> {
+        let settings_id = self.parse_docx_part_by_rel_with_span_result(
             zip,
             main_part_path,
             doc_rels,
             rel_type::SETTINGS,
             parser,
             |parser, part_path, xml| {
-                let id = parser.parse_settings(xml).ok()?;
+                let id = parser.parse_settings(xml)?;
                 if let Some(IRNode::WordSettings(settings)) = parser.store_mut().get_mut(id) {
                     settings.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
+                Ok(id)
             },
-        );
+        )?;
 
-        let web_settings_id = self.parse_docx_part_by_rel_with_span(
+        let web_settings_id = self.parse_docx_part_by_rel_with_span_result(
             zip,
             main_part_path,
             doc_rels,
             rel_type::WEB_SETTINGS,
             parser,
             |parser, part_path, xml| {
-                let id = parser.parse_web_settings(xml).ok()?;
+                let id = parser.parse_web_settings(xml)?;
                 if let Some(IRNode::WebSettings(settings)) = parser.store_mut().get_mut(id) {
                     settings.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
+                Ok(id)
             },
-        );
+        )?;
 
-        let font_table_id = self.parse_docx_font_table(zip, main_part_path, doc_rels, parser);
-        (settings_id, web_settings_id, font_table_id)
+        let font_table_id = self.parse_docx_font_table(zip, main_part_path, doc_rels, parser)?;
+        Ok((settings_id, web_settings_id, font_table_id))
     }
 
     pub(crate) fn parse_docx_headers_footers(
@@ -342,51 +343,32 @@ impl OoxmlParser {
         main_part_path: &str,
         doc_rels: &Relationships,
         parser: &mut DocxParser,
-    ) -> Option<NodeId> {
-        let mut font_table_id = self.parse_docx_part_by_rel_with_span(
+    ) -> Result<Option<NodeId>, ParseError> {
+        let mut font_table_id = self.parse_docx_part_by_rel_with_span_result(
             zip,
             main_part_path,
             doc_rels,
             rel_type::FONT_TABLE,
             parser,
             |parser, part_path, xml| {
-                let id = parser.parse_font_table(xml).ok()?;
+                let id = parser.parse_font_table(xml)?;
                 if let Some(IRNode::FontTable(table)) = parser.store_mut().get_mut(id) {
                     table.span = Some(SourceSpan::new(part_path));
                 }
-                Some(id)
+                Ok(id)
             },
-        );
+        )?;
 
-        if font_table_id.is_none()
-            && zip.contains("word/fontTable.xml")
-            && let Ok(xml) = zip.read_file_string("word/fontTable.xml")
-            && let Ok(id) = parser.parse_font_table(&xml)
-        {
+        if font_table_id.is_none() && zip.contains("word/fontTable.xml") {
+            let xml = zip.read_file_string("word/fontTable.xml")?;
+            let id = parser.parse_font_table(&xml)?;
             if let Some(IRNode::FontTable(table)) = parser.store_mut().get_mut(id) {
                 table.span = Some(SourceSpan::new("word/fontTable.xml"));
             }
             font_table_id = Some(id);
         }
 
-        font_table_id
-    }
-
-    fn parse_docx_part_by_rel_with_span<F>(
-        &self,
-        zip: &mut impl PackageReader,
-        main_part_path: &str,
-        doc_rels: &Relationships,
-        rel_type: &str,
-        parser: &mut DocxParser,
-        parse: F,
-    ) -> Option<NodeId>
-    where
-        F: FnOnce(&mut DocxParser, &str, &str) -> Option<NodeId>,
-    {
-        let (part_path, xml) =
-            self.read_xml_part_by_rel_optional(zip, main_part_path, doc_rels, rel_type)?;
-        parse(parser, &part_path, &xml)
+        Ok(font_table_id)
     }
 
     fn parse_docx_part_by_rel_with_span_result<F>(
@@ -457,18 +439,6 @@ impl OoxmlParser {
         let id = parse(parser, part_path, &xml)?;
         set_span(parser.store_mut(), id, part_path);
         Ok(Some(id))
-    }
-
-    fn read_xml_part_by_rel_optional(
-        &self,
-        zip: &mut impl PackageReader,
-        main_part_path: &str,
-        doc_rels: &Relationships,
-        rel_type: &str,
-    ) -> Option<(String, String)> {
-        read_xml_part_by_rel(zip, main_part_path, doc_rels, rel_type)
-            .ok()
-            .flatten()
     }
 
     fn read_xml_part_optional(
