@@ -318,9 +318,8 @@ mod tests {
         assert!(id.is_none());
     }
 
-    #[test]
-    fn build_metadata_parses_core_app_and_custom_typed_properties() {
-        let core = r#"
+    fn core_properties_xml() -> &'static str {
+        r#"
             <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
                                xmlns:dc="http://purl.org/dc/elements/1.1/"
                                xmlns:dcterms="http://purl.org/dc/terms/">
@@ -336,16 +335,22 @@ mod tests {
               <cp:category>incident</cp:category>
               <cp:contentStatus>final</cp:contentStatus>
             </cp:coreProperties>
-        "#;
-        let app = r#"
+        "#
+    }
+
+    fn app_properties_xml() -> &'static str {
+        r#"
             <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
               <Application>docir</Application>
               <AppVersion>1.0</AppVersion>
               <Company>ACME</Company>
               <Manager>SecOps</Manager>
             </Properties>
-        "#;
-        let custom = r#"
+        "#
+    }
+
+    fn custom_properties_xml() -> &'static str {
+        r#"
             <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
                         xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
               <property fmtid="{A}" pid="2" name="Build"><vt:i4>42</vt:i4></property>
@@ -355,16 +360,21 @@ mod tests {
               <property fmtid="{A}" pid="6" name="Payload"><vt:blob>QUJD</vt:blob></property>
               <property fmtid="{A}" pid="7" name="Tag"><vt:lpwstr>alert</vt:lpwstr></property>
             </Properties>
-        "#;
+        "#
+    }
 
+    fn build_complete_metadata_fixture() -> DocumentMetadata {
         let parser = OoxmlParser::new();
         let mut zip = TestPackageReader::new(&[
-            ("docProps/core.xml", core),
-            ("docProps/app.xml", app),
-            ("docProps/custom.xml", custom),
+            ("docProps/core.xml", core_properties_xml()),
+            ("docProps/app.xml", app_properties_xml()),
+            ("docProps/custom.xml", custom_properties_xml()),
         ]);
 
-        let metadata = parser.build_metadata(&mut zip).expect("metadata built");
+        parser.build_metadata(&mut zip).expect("metadata built")
+    }
+
+    fn assert_core_and_app_metadata(metadata: &DocumentMetadata) {
         assert_eq!(metadata.title.as_deref(), Some("Threat Report"));
         assert_eq!(metadata.subject.as_deref(), Some("Forensics"));
         assert_eq!(metadata.creator.as_deref(), Some("analyst"));
@@ -380,6 +390,9 @@ mod tests {
         assert_eq!(metadata.app_version.as_deref(), Some("1.0"));
         assert_eq!(metadata.company.as_deref(), Some("ACME"));
         assert_eq!(metadata.manager.as_deref(), Some("SecOps"));
+    }
+
+    fn assert_custom_metadata_values(metadata: &DocumentMetadata) {
         assert_eq!(metadata.custom_properties.len(), 6);
         assert!(matches!(
             metadata.custom_properties[0].value,
@@ -405,6 +418,14 @@ mod tests {
             metadata.custom_properties[5].value,
             PropertyValue::String(ref v) if v == "alert"
         ));
+    }
+
+    #[test]
+    fn build_metadata_parses_core_app_and_custom_typed_properties() {
+        let metadata = build_complete_metadata_fixture();
+
+        assert_core_and_app_metadata(&metadata);
+        assert_custom_metadata_values(&metadata);
     }
 
     #[test]
