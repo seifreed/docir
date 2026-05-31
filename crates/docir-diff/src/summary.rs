@@ -4,6 +4,8 @@ mod summary_normalize;
 mod summary_parse;
 mod summary_postprocess;
 #[cfg(test)]
+mod summary_signature_tests;
+#[cfg(test)]
 mod summary_tests;
 
 pub(crate) use self::summary_parse::*;
