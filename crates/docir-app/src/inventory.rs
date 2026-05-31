@@ -4,8 +4,9 @@ use docir_core::security::{
     ActiveXControl, DdeField, ExternalReference, MacroModule, MacroProject, OleObject,
 };
 use docir_core::types::{DocumentFormat, NodeId};
-use docir_parser::ole::{Cfb, CfbEntryType};
 use serde::Serialize;
+
+mod cfb_entries;
 
 /// Container classification surfaced to inventory clients.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -147,7 +148,9 @@ impl ArtifactInventory {
     pub fn from_parsed_with_bytes(parsed: &ParsedDocument, input_bytes: &[u8]) -> Self {
         let mut inventory = Self::from_parsed(parsed);
         if inventory.container_kind == ContainerKind::CfbOle {
-            inventory.append_cfb_container_entries(input_bytes);
+            inventory
+                .artifacts
+                .extend(cfb_entries::build_cfb_container_entries(input_bytes));
             inventory.artifact_count = inventory.artifacts.len();
         }
         inventory
@@ -344,30 +347,6 @@ impl ArtifactInventory {
             format!("{} diagnostic entrie(s)", diag.entries.len()),
         );
     }
-
-    fn append_cfb_container_entries(&mut self, input_bytes: &[u8]) {
-        let Ok(cfb) = Cfb::parse(input_bytes.to_vec()) else {
-            return;
-        };
-
-        for entry in cfb.list_entries() {
-            self.push_node_artifact(
-                InventoryArtifactKind::ContainerEntry,
-                None,
-                Some(entry.path.clone()),
-                None,
-                InventoryArtifactMeta {
-                    size_bytes: Some(entry.size),
-                    start_sector: Some(entry.start_sector),
-                    created_filetime: entry.created_filetime,
-                    modified_filetime: entry.modified_filetime,
-                    media_type: None,
-                    sha256: None,
-                },
-                classify_cfb_entry_detail(&entry.path, entry.entry_type),
-            );
-        }
-    }
 }
 
 pub(crate) fn classify_container_kind(parsed: &ParsedDocument) -> ContainerKind {
@@ -390,48 +369,6 @@ pub(crate) fn classify_container_kind(parsed: &ParsedDocument) -> ContainerKind 
         DocumentFormat::Hwpx => ContainerKind::ZipHwpx,
         DocumentFormat::Hwp => ContainerKind::CfbOle,
         DocumentFormat::Rtf => ContainerKind::Rtf,
-    }
-}
-
-fn classify_cfb_entry_detail(path: &str, entry_type: CfbEntryType) -> String {
-    match entry_type {
-        CfbEntryType::RootStorage => "root-storage".to_string(),
-        CfbEntryType::Storage => classify_cfb_storage(path),
-        CfbEntryType::Stream => classify_cfb_stream(path),
-    }
-}
-
-fn classify_cfb_storage(path: &str) -> String {
-    let upper = path.to_ascii_uppercase();
-    if upper == "OBJECTPOOL" || upper.starts_with("OBJECTPOOL/") {
-        "embedded-object-storage".to_string()
-    } else if upper == "VBA" || upper.ends_with("/VBA") {
-        "vba-storage".to_string()
-    } else {
-        "storage".to_string()
-    }
-}
-
-fn classify_cfb_stream(path: &str) -> String {
-    let upper = path.to_ascii_uppercase();
-    if upper == "WORDDOCUMENT" {
-        "word-main-stream".to_string()
-    } else if upper == "WORKBOOK" || upper == "BOOK" {
-        "excel-main-stream".to_string()
-    } else if upper == "POWERPOINT DOCUMENT" {
-        "powerpoint-main-stream".to_string()
-    } else if upper.ends_with("/PROJECT") || upper == "PROJECT" {
-        "vba-project-metadata".to_string()
-    } else if upper.contains("/VBA/") || upper.starts_with("VBA/") {
-        "vba-module-stream".to_string()
-    } else if upper.ends_with("OLE10NATIVE") {
-        "ole-native-payload".to_string()
-    } else if upper.ends_with("/PACKAGE") {
-        "package-payload".to_string()
-    } else if upper.ends_with("/CONTENTS") {
-        "embedded-contents".to_string()
-    } else {
-        "stream".to_string()
     }
 }
 
