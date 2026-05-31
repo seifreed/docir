@@ -71,6 +71,19 @@ pub(super) fn handle_group_controls(
     param: Option<i32>,
     ctx: &mut RtfParseContext,
 ) -> Result<bool, ParseError> {
+    if handle_group_kind_control(word, ctx) {
+        return Ok(true);
+    }
+    if handle_style_control(word, param, ctx) {
+        return Ok(true);
+    }
+    if handle_list_control(word, param, ctx) {
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+fn handle_group_kind_control(word: &str, ctx: &mut RtfParseContext) -> bool {
     match word {
         "fonttbl" => {
             set_last_group_kind(ctx, GroupKind::FontTable);
@@ -89,6 +102,22 @@ pub(super) fn handle_group_controls(
                 ctx.style_set = Some(StyleSet::new());
             }
         }
+        "info" => {
+            set_last_group_kind(ctx, GroupKind::Info);
+        }
+        "listtable" => {
+            set_last_group_kind(ctx, GroupKind::ListTable);
+        }
+        "listoverridetable" => {
+            set_last_group_kind(ctx, GroupKind::ListOverrideTable);
+        }
+        _ => return false,
+    }
+    true
+}
+
+fn handle_style_control(word: &str, param: Option<i32>, ctx: &mut RtfParseContext) -> bool {
+    match word {
         "s" => {
             if let Some(id) = param {
                 let style_id = format!("s{}", id.max(0));
@@ -126,15 +155,13 @@ pub(super) fn handle_group_controls(
                 set_stylesheet_entry(ctx, format!("ts{}", id.max(0)), StyleType::Table);
             }
         }
-        "info" => {
-            set_last_group_kind(ctx, GroupKind::Info);
-        }
-        "listtable" => {
-            set_last_group_kind(ctx, GroupKind::ListTable);
-        }
-        "listoverridetable" => {
-            set_last_group_kind(ctx, GroupKind::ListOverrideTable);
-        }
+        _ => return false,
+    }
+    true
+}
+
+fn handle_list_control(word: &str, param: Option<i32>, ctx: &mut RtfParseContext) -> bool {
+    match word {
         "list" => {
             if ctx.current_group_kind() == GroupKind::ListTable {
                 set_last_group_kind(ctx, GroupKind::List);
@@ -191,9 +218,9 @@ pub(super) fn handle_group_controls(
                 apply_pending_numbering_to_current_paragraph(ctx);
             }
         }
-        _ => return Ok(false),
+        _ => return false,
     }
-    Ok(true)
+    true
 }
 
 pub(super) fn handle_object_controls(
