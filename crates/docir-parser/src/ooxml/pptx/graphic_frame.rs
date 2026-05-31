@@ -35,7 +35,7 @@ impl PptxParser {
         state: &mut GraphicFrameState,
     ) -> Result<(), ParseError> {
         match local_name(e.name().as_ref()) {
-            b"cNvPr" => apply_non_visual_shape_props(shape, e),
+            b"cNvPr" => apply_non_visual_shape_props(shape, e, slide_path)?,
             b"hlinkClick" => {
                 self.attach_hyperlink(shape, e, relationships, slide_path);
             }
@@ -43,7 +43,7 @@ impl PptxParser {
                 parse_transform(reader, &mut shape.transform, slide_path)?;
             }
             b"graphicData" => {
-                apply_graphic_data_shape_type(shape, e);
+                apply_graphic_data_shape_type(shape, e, slide_path)?;
             }
             b"tbl" => {
                 let table = self.parse_pptx_table(reader, slide_path)?;
@@ -53,11 +53,11 @@ impl PptxParser {
                 shape.shape_type = ShapeType::Table;
             }
             b"chart" => {
-                capture_chart_rel(state, e);
+                capture_chart_rel(state, e, slide_path)?;
                 shape.shape_type = ShapeType::Chart;
             }
             b"oleObj" | b"oleObject" => {
-                capture_ole_rel(state, e);
+                capture_ole_rel(state, e, slide_path)?;
                 shape.shape_type = ShapeType::OleObject;
             }
             _ => {}
@@ -75,7 +75,7 @@ impl PptxParser {
         state: &mut GraphicFrameState,
     ) -> Result<(), ParseError> {
         match local_name(e.name().as_ref()) {
-            b"cNvPr" => apply_non_visual_shape_props(shape, e),
+            b"cNvPr" => apply_non_visual_shape_props(shape, e, slide_path)?,
             b"hlinkClick" => {
                 self.attach_hyperlink(shape, e, relationships, slide_path);
             }
@@ -89,11 +89,11 @@ impl PptxParser {
                 shape.shape_type = ShapeType::Table;
             }
             b"chart" => {
-                capture_chart_rel(state, e);
+                capture_chart_rel(state, e, slide_path)?;
                 shape.shape_type = ShapeType::Chart;
             }
             b"oleObj" | b"oleObject" => {
-                capture_ole_rel(state, e);
+                capture_ole_rel(state, e, slide_path)?;
                 shape.shape_type = ShapeType::OleObject;
             }
             _ => {}
@@ -176,6 +176,8 @@ impl PptxParser {
 mod tests {
     use super::*;
     use crate::ooxml::relationships::{Relationship, TargetMode};
+    use crate::xml_utils::xml_error;
+    use quick_xml::events::Event;
     use std::collections::HashMap;
 
     struct DummyZip;
@@ -214,12 +216,84 @@ mod tests {
         Relationships { by_id, by_type }
     }
 
+    fn parse_graphic_frame_fixture(xml: &str) -> Result<Shape, ParseError> {
+        let mut reader = Reader::from_str(xml);
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"graphicFrame" => {
+                    let mut parser = PptxParser::new();
+                    let mut zip = DummyZip;
+                    return parser.parse_shape_graphic_frame(
+                        &mut reader,
+                        &e,
+                        "ppt/slides/broken-graphic-frame.xml",
+                        &Relationships::default(),
+                        &mut zip,
+                    );
+                }
+                Ok(Event::Eof) => {
+                    return Err(xml_error(
+                        "ppt/slides/broken-graphic-frame.xml",
+                        "missing graphic frame",
+                    ));
+                }
+                Err(err) => {
+                    return Err(xml_error("ppt/slides/broken-graphic-frame.xml", err));
+                }
+                _ => {}
+            }
+            buf.clear();
+        }
+    }
+
+    fn assert_graphic_frame_xml_error(result: Result<Shape, ParseError>) {
+        match result.expect_err("malformed graphic frame XML must fail") {
+            ParseError::Xml { file, .. } => {
+                assert_eq!(file, "ppt/slides/broken-graphic-frame.xml");
+            }
+            other => panic!("expected XML error, got {other:?}"),
+        }
+    }
+
     #[test]
     fn graphic_frame_state_new_initializes_empty_fields() {
         let state = GraphicFrameState::new();
         assert!(state.chart_rel.is_none());
         assert!(state.ole_rel.is_none());
         assert!(state.table_id.is_none());
+    }
+
+    #[test]
+    fn parse_graphic_frame_reports_malformed_non_visual_attrs() {
+        let xml = r#"
+            <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+              <p:nvGraphicFramePr>
+                <p:cNvPr name="Frame 1" name="Duplicate"/>
+              </p:nvGraphicFramePr>
+            </p:graphicFrame>
+        "#;
+
+        assert_graphic_frame_xml_error(parse_graphic_frame_fixture(xml));
+    }
+
+    #[test]
+    fn parse_graphic_frame_reports_malformed_chart_attrs() {
+        let xml = r#"
+            <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                            xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <a:graphic>
+                <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                  <c:chart r:id="rId1" r:id="rId2"/>
+                </a:graphicData>
+              </a:graphic>
+            </p:graphicFrame>
+        "#;
+
+        assert_graphic_frame_xml_error(parse_graphic_frame_fixture(xml));
     }
 
     #[test]
