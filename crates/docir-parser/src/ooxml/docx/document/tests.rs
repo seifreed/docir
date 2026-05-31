@@ -5,6 +5,8 @@ pub(crate) use tests_prelude::*;
 mod advanced_features;
 
 #[cfg(test)]
+mod tests_drawing;
+#[cfg(test)]
 mod tests_normalize;
 #[cfg(test)]
 mod tests_parse;
