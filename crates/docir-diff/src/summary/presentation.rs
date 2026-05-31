@@ -2,7 +2,7 @@ use docir_core::ir::IRNode;
 use docir_core::visitor::IrStore;
 
 use super::format_helpers::{abbreviate, opt_bool, opt_str, opt_u32};
-use super::summary_parse::{summarize_shape, summarize_slide};
+use super::summary_primary::{summarize_shape, summarize_slide};
 
 pub(crate) fn summarize(node: &IRNode, _store: &IrStore) -> Option<String> {
     match node {
