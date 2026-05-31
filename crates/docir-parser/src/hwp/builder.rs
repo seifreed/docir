@@ -147,7 +147,7 @@ impl ParseStage for HwpxParser {
         doc.shared_parts.extend(grouped_sections.master_ids);
         self.parse_hwpx_styles_part(&mut zip, &mut store, &mut doc);
 
-        scan_hwpx_security(&file_names, &mut zip, &mut store, &mut doc);
+        scan_hwpx_security(&file_names, &mut zip, &mut store, &mut doc)?;
 
         let diagnostics = build_hwp_diagnostics(DocumentFormat::Hwpx, &file_names);
         attach_diagnostics_if_any(&mut store, &mut doc, diagnostics);

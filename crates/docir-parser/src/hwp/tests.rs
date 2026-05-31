@@ -320,3 +320,28 @@ fn test_hwpx_security_signals() {
     }
     assert!(has_protected);
 }
+
+#[test]
+fn test_hwpx_security_reports_malformed_extra_xml() {
+    let section_xml = r#"<hp:section xmlns:hp="http://www.hancom.co.kr/hwpml"><hp:p><hp:t>Ok</hp:t></hp:p></hp:section>"#;
+    let data = build_hwpx_zip_with_parts(
+        section_xml,
+        None,
+        vec![(
+            "Contents/security-extra.xml",
+            br#"<extra href="https://example.test"><dangling>"#,
+        )],
+    );
+    let parser = HwpxParser::new();
+
+    let err = parser
+        .parse_bytes(&data)
+        .expect_err("malformed HWPX XML scanned for security must fail");
+
+    match err {
+        crate::error::ParseError::Xml { file, .. } => {
+            assert_eq!(file, "Contents/security-extra.xml");
+        }
+        other => panic!("expected XML error, got {other}"),
+    }
+}
