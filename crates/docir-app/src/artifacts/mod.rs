@@ -123,13 +123,7 @@ pub fn extract_artifacts_from_bytes(
         }
     }
 
-    if bundle.manifest.artifacts.is_empty() {
-        bundle.manifest.warnings.push(ExtractionWarning::new(
-            "NO_ARTIFACTS",
-            "No extractable embedded artifacts were found",
-        ));
-    }
-
+    add_no_artifacts_warning_if_empty(&mut bundle);
     bundle
 }
 
@@ -139,6 +133,15 @@ fn is_legacy_cfb_document(parsed: &ParsedDocument) -> bool {
         .and_then(|doc| doc.span.as_ref())
         .map(|span| span.file_path.starts_with("cfb:/"))
         .unwrap_or(false)
+}
+
+fn add_no_artifacts_warning_if_empty(bundle: &mut ArtifactExtractionBundle) {
+    if bundle.manifest.artifacts.is_empty() {
+        bundle.manifest.warnings.push(ExtractionWarning::new(
+            "NO_ARTIFACTS",
+            "No extractable embedded artifacts were found",
+        ));
+    }
 }
 
 pub(crate) use rtf::scan_rtf_objdata;
