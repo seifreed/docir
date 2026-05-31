@@ -1,4 +1,5 @@
 use super::*;
+use crate::error::ParseError;
 use crate::ooxml::xlsx::{connection_targets, parse_connections_part, parse_sheet_metadata};
 use docir_core::ir::IRNode;
 
@@ -86,4 +87,44 @@ fn test_parse_sheet_metadata() {
     );
     assert_eq!(meta.cell_metadata_count, Some(2));
     assert_eq!(meta.value_metadata_count, Some(3));
+}
+
+#[test]
+fn test_parse_sheet_metadata_reports_malformed_attributes() {
+    let cases = [
+        (
+            r#"
+            <metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <metadataTypes count="1">
+                <metadataType name="XLDynamicArray" name="Other"/>
+              </metadataTypes>
+            </metadata>
+            "#,
+            "xl/metadata-type-broken.xml",
+        ),
+        (
+            r#"
+            <metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <cellMetadata count="2" count="3"/>
+            </metadata>
+            "#,
+            "xl/cell-metadata-broken.xml",
+        ),
+        (
+            r#"
+            <metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <valueMetadata count="2" count="3"/>
+            </metadata>
+            "#,
+            "xl/value-metadata-broken.xml",
+        ),
+    ];
+
+    for (xml, path) in cases {
+        match parse_sheet_metadata(xml, path).expect_err("malformed metadata attributes must fail")
+        {
+            ParseError::Xml { file, .. } => assert_eq!(file, path),
+            other => panic!("expected XML error, got {other:?}"),
+        }
+    }
 }
