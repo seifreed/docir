@@ -2,7 +2,7 @@ use crate::error::ParseError;
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::xml_error;
-use docir_core::ir::{CellError, IRNode};
+use docir_core::ir::{CellError, ChartData, ChartSeries, IRNode};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
 
@@ -141,110 +141,29 @@ pub(super) fn parse_chart_data(
     use quick_xml::Reader;
     use quick_xml::events::Event;
 
-    let mut chart = docir_core::ir::ChartData::new();
-    chart.span = Some(SourceSpan::new(chart_path));
+    let mut state = ChartParseState::new(chart_path);
 
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
-
     let mut buf = Vec::new();
-    let mut in_title = false;
-    let mut in_series = false;
-    let mut section: Option<&[u8]> = None;
-    let mut current_series: Option<docir_core::ir::ChartSeries> = None;
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
                 let name_bytes = e.name().as_ref().to_vec();
-                let name = local_name(&name_bytes);
-                if name.ends_with(b"Chart") || name.ends_with(b"chart") {
-                    chart.chart_type = Some(String::from_utf8_lossy(name).to_string());
-                }
-                if name == b"ser" {
-                    in_series = true;
-                    current_series = Some(docir_core::ir::ChartSeries::new());
-                }
-                if !in_series && (name == b"title") {
-                    in_title = true;
-                }
-                if in_series {
-                    if name == b"tx" {
-                        section = Some(b"tx");
-                    } else if name == b"cat" {
-                        section = Some(b"cat");
-                    } else if name == b"val" {
-                        section = Some(b"val");
-                    }
-                }
+                state.handle_start(local_name(&name_bytes));
             }
             Ok(Event::End(e)) => {
                 let name_bytes = e.name().as_ref().to_vec();
-                let name = local_name(&name_bytes);
-                if name == b"title" {
-                    in_title = false;
-                }
-                if name == b"ser" {
-                    in_series = false;
-                    section = None;
-                    if let Some(series) = current_series.take() {
-                        if let Some(name) = &series.name {
-                            chart.series.push(name.clone());
-                        }
-                        chart.series_data.push(series);
-                    }
-                }
-                if name == b"tx" || name == b"cat" || name == b"val" {
-                    section = None;
-                }
+                state.handle_end(local_name(&name_bytes));
             }
             Ok(Event::Text(e)) => {
                 let text = crate::xml_utils::decoded_text_or_default(&e);
-                if in_title && chart.title.is_none() {
-                    chart.title = Some(text);
-                } else if in_series {
-                    let trimmed = text.trim();
-                    if trimmed.is_empty() {
-                        // skip
-                    } else if let Some(series) = current_series.as_mut() {
-                        match section {
-                            Some(b"tx") if series.name.is_none() => {
-                                series.name = Some(trimmed.to_string());
-                            }
-                            Some(b"cat") => {
-                                series.categories.push(trimmed.to_string());
-                            }
-                            Some(b"val") => {
-                                series.values.push(trimmed.to_string());
-                            }
-                            _ => {}
-                        }
-                    }
-                }
+                state.handle_text(&text);
             }
             Ok(Event::GeneralRef(e)) => {
                 let text = crate::xml_utils::decoded_general_ref_or_default(&e);
-                if in_title && chart.title.is_none() {
-                    chart.title = Some(text);
-                } else if in_series {
-                    let trimmed = text.trim();
-                    if trimmed.is_empty() {
-                        // skip
-                    } else if let Some(series) = current_series.as_mut() {
-                        match section {
-                            Some(b"tx") if series.name.is_none() => {
-                                series.name = Some(trimmed.to_string());
-                            }
-                            Some(b"cat") => {
-                                series.categories.push(trimmed.to_string());
-                            }
-                            Some(b"val") => {
-                                series.values.push(trimmed.to_string());
-                            }
-                            _ => {}
-                        }
-                    }
-                }
+                state.handle_text(&text);
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -255,9 +174,112 @@ pub(super) fn parse_chart_data(
         buf.clear();
     }
 
+    let chart = state.into_chart();
     let id = chart.id;
     store.insert(IRNode::ChartData(chart));
     Ok(id)
+}
+
+#[derive(Clone, Copy)]
+enum ChartSeriesSection {
+    Name,
+    Category,
+    Value,
+}
+
+struct ChartParseState {
+    chart: ChartData,
+    in_title: bool,
+    in_series: bool,
+    section: Option<ChartSeriesSection>,
+    current_series: Option<ChartSeries>,
+}
+
+impl ChartParseState {
+    fn new(chart_path: &str) -> Self {
+        let mut chart = ChartData::new();
+        chart.span = Some(SourceSpan::new(chart_path));
+        Self {
+            chart,
+            in_title: false,
+            in_series: false,
+            section: None,
+            current_series: None,
+        }
+    }
+
+    fn handle_start(&mut self, name: &[u8]) {
+        if name.ends_with(b"Chart") || name.ends_with(b"chart") {
+            self.chart.chart_type = Some(String::from_utf8_lossy(name).to_string());
+        }
+        if name == b"ser" {
+            self.in_series = true;
+            self.current_series = Some(ChartSeries::new());
+        }
+        if !self.in_series && name == b"title" {
+            self.in_title = true;
+        }
+        if self.in_series {
+            self.section = match name {
+                b"tx" => Some(ChartSeriesSection::Name),
+                b"cat" => Some(ChartSeriesSection::Category),
+                b"val" => Some(ChartSeriesSection::Value),
+                _ => self.section,
+            };
+        }
+    }
+
+    fn handle_end(&mut self, name: &[u8]) {
+        if name == b"title" {
+            self.in_title = false;
+        }
+        if name == b"ser" {
+            self.in_series = false;
+            self.section = None;
+            self.finish_series();
+        }
+        if matches!(name, b"tx" | b"cat" | b"val") {
+            self.section = None;
+        }
+    }
+
+    fn handle_text(&mut self, text: &str) {
+        if self.in_title && self.chart.title.is_none() {
+            self.chart.title = Some(text.to_string());
+            return;
+        }
+        if !self.in_series {
+            return;
+        }
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        let Some(series) = self.current_series.as_mut() else {
+            return;
+        };
+        match self.section {
+            Some(ChartSeriesSection::Name) if series.name.is_none() => {
+                series.name = Some(trimmed.to_string());
+            }
+            Some(ChartSeriesSection::Category) => series.categories.push(trimmed.to_string()),
+            Some(ChartSeriesSection::Value) => series.values.push(trimmed.to_string()),
+            _ => {}
+        }
+    }
+
+    fn finish_series(&mut self) {
+        if let Some(series) = self.current_series.take() {
+            if let Some(name) = &series.name {
+                self.chart.series.push(name.clone());
+            }
+            self.chart.series_data.push(series);
+        }
+    }
+
+    fn into_chart(self) -> ChartData {
+        self.chart
+    }
 }
 
 /// Helper function to encode bytes as hex.
