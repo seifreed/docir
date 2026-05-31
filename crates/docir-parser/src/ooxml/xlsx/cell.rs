@@ -1,6 +1,7 @@
 use super::XlsxParser;
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::visit_attributes;
 use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events_with_reader, xml_error};
 use docir_core::ir::{Cell, CellFormula, CellValue};
 use docir_core::types::SourceSpan;
@@ -14,7 +15,7 @@ impl XlsxParser {
         start: &BytesStart,
         sheet_path: &str,
     ) -> Result<Cell, ParseError> {
-        let attrs = CellAttributes::from_start(start)?;
+        let attrs = CellAttributes::from_start(start, sheet_path)?;
         let (col, row) = super::parse_cell_reference(&attrs.reference).ok_or_else(|| {
             ParseError::InvalidStructure(format!("Invalid cell reference: {}", attrs.reference))
         })?;
@@ -46,26 +47,25 @@ struct CellAttributes {
 }
 
 impl CellAttributes {
-    fn from_start(start: &BytesStart) -> Result<Self, ParseError> {
+    fn from_start(start: &BytesStart, sheet_path: &str) -> Result<Self, ParseError> {
         let mut reference: Option<String> = None;
         let mut cell_type: Option<String> = None;
-        let mut style_id: Option<u32> = None;
+        let mut style_raw: Option<String> = None;
 
-        for attr in start.attributes().flatten() {
-            match attr.key.as_ref() {
-                b"r" => reference = Some(lossy_attr_value(&attr).to_string()),
-                b"t" => cell_type = Some(lossy_attr_value(&attr).to_string()),
-                b"s" => {
-                    let raw = lossy_attr_value(&attr);
-                    style_id = Some(parse_style_id(raw.as_ref(), reference.as_deref())?);
-                }
-                _ => {}
-            }
-        }
+        visit_attributes(start, sheet_path, |attr| match attr.key.as_ref() {
+            b"r" => reference = Some(lossy_attr_value(attr).to_string()),
+            b"t" => cell_type = Some(lossy_attr_value(attr).to_string()),
+            b"s" => style_raw = Some(lossy_attr_value(attr).to_string()),
+            _ => {}
+        })?;
 
         let reference = reference.ok_or_else(|| {
             ParseError::InvalidStructure("Cell missing reference attribute".to_string())
         })?;
+        let style_id = style_raw
+            .as_deref()
+            .map(|raw| parse_style_id(raw, Some(&reference)))
+            .transpose()?;
 
         Ok(Self {
             reference,
@@ -231,6 +231,17 @@ mod tests {
             buf.clear();
         };
         parser.parse_cell(&mut reader, &start, "xl/worksheets/sheet1.xml")
+    }
+
+    #[test]
+    fn parse_cell_reports_malformed_attributes() {
+        let mut parser = XlsxParser::new();
+        let err = parse_cell_from_xml(&mut parser, r#"<c r="A1" r="B1"><v>1</v></c>"#)
+            .expect_err("duplicate cell attributes must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/worksheets/sheet1.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]
