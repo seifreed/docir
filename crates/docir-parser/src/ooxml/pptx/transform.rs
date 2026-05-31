@@ -13,9 +13,9 @@ pub(super) fn parse_transform(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
                 depth += 1;
-                apply_transform_event(&e, transform);
+                apply_transform_event(&e, transform, slide_path)?;
             }
-            Ok(Event::Empty(e)) => apply_transform_event(&e, transform),
+            Ok(Event::Empty(e)) => apply_transform_event(&e, transform, slide_path)?,
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"xfrm" => {
                 if depth == 1 {
                     break;
@@ -39,32 +39,49 @@ pub(super) fn parse_transform(
     Ok(())
 }
 
-fn apply_transform_event(e: &BytesStart<'_>, transform: &mut ShapeTransform) {
+fn apply_transform_event(
+    e: &BytesStart<'_>,
+    transform: &mut ShapeTransform,
+    slide_path: &str,
+) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
-        b"off" => apply_transform_offset(e, transform),
-        b"ext" => apply_transform_extent(e, transform),
+        b"off" => apply_transform_offset(e, transform, slide_path)?,
+        b"ext" => apply_transform_extent(e, transform, slide_path)?,
         _ => {}
     }
+    Ok(())
 }
 
-fn apply_transform_offset(e: &BytesStart<'_>, transform: &mut ShapeTransform) {
-    for attr in e.attributes().flatten() {
+fn apply_transform_offset(
+    e: &BytesStart<'_>,
+    transform: &mut ShapeTransform,
+    slide_path: &str,
+) -> Result<(), ParseError> {
+    for attr in e.attributes() {
+        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
         match attr.key.as_ref() {
             b"x" => transform.x = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0),
             b"y" => transform.y = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0),
             _ => {}
         }
     }
+    Ok(())
 }
 
-fn apply_transform_extent(e: &BytesStart<'_>, transform: &mut ShapeTransform) {
-    for attr in e.attributes().flatten() {
+fn apply_transform_extent(
+    e: &BytesStart<'_>,
+    transform: &mut ShapeTransform,
+    slide_path: &str,
+) -> Result<(), ParseError> {
+    for attr in e.attributes() {
+        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
         match attr.key.as_ref() {
             b"cx" => transform.width = lossy_attr_value(&attr).parse::<u64>().unwrap_or(0),
             b"cy" => transform.height = lossy_attr_value(&attr).parse::<u64>().unwrap_or(0),
             _ => {}
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -121,6 +138,34 @@ mod tests {
         let xml = "<a:xfrm><a:off x='1' y='2'><a:ext cx='3' cy='4'/>";
         let err =
             parse_transform_fixture(xml, "broken-slide.xml").expect_err("truncated XML must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "broken-slide.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_transform_reports_malformed_offset_attributes() {
+        let xml = r#"<a:xfrm>
+            <a:off x="120" x="121" y="-45"/>
+            <a:ext cx="3000" cy="4000"/>
+        </a:xfrm>"#;
+        let err =
+            parse_transform_fixture(xml, "broken-slide.xml").expect_err("malformed XML must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "broken-slide.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_transform_reports_malformed_extent_attributes() {
+        let xml = r#"<a:xfrm>
+            <a:off x="120" y="-45"/>
+            <a:ext cx="3000" cx="4000"/>
+        </a:xfrm>"#;
+        let err =
+            parse_transform_fixture(xml, "broken-slide.xml").expect_err("malformed XML must fail");
         match err {
             ParseError::Xml { file, .. } => assert_eq!(file, "broken-slide.xml"),
             other => panic!("unexpected error: {other:?}"),
