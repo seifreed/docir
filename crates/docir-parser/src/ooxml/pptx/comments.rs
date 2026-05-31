@@ -31,7 +31,8 @@ pub(crate) fn parse_comment_authors(
                 let mut author_id = None;
                 let mut name = None;
                 let mut initials = None;
-                for attr in e.attributes().flatten() {
+                for attr in e.attributes() {
+                    let attr = attr.map_err(|err| xml_error(path, err))?;
                     match attr.key.as_ref() {
                         b"id" => author_id = lossy_attr_value(&attr).parse::<u32>().ok(),
                         b"name" => name = Some(lossy_attr_value(&attr).to_string()),
@@ -84,7 +85,7 @@ pub(crate) fn parse_comments(
             Ok(Event::Start(e)) => {
                 if local_name(e.name().as_ref()) == b"cmLst" {
                 } else if local_name(e.name().as_ref()) == b"cm" {
-                    current = Some(comment_from_start(&e, path));
+                    current = Some(comment_from_start(&e, path)?);
                     text_buf.clear();
                 } else if local_name(e.name().as_ref()) == b"t" {
                     in_text = true;
@@ -121,17 +122,18 @@ pub(crate) fn parse_comments(
     Ok(comments)
 }
 
-fn comment_from_start(e: &BytesStart<'_>, path: &str) -> PptxComment {
+fn comment_from_start(e: &BytesStart<'_>, path: &str) -> Result<PptxComment, ParseError> {
     let mut author_id = None;
     let mut dt = None;
-    for attr in e.attributes().flatten() {
+    for attr in e.attributes() {
+        let attr = attr.map_err(|err| xml_error(path, err))?;
         match attr.key.as_ref() {
             b"authorId" => author_id = lossy_attr_value(&attr).parse::<u32>().ok(),
             b"dt" => dt = Some(lossy_attr_value(&attr).to_string()),
             _ => {}
         }
     }
-    PptxComment {
+    Ok(PptxComment {
         id: NodeId::new(),
         author_id,
         author_name: None,
@@ -139,7 +141,7 @@ fn comment_from_start(e: &BytesStart<'_>, path: &str) -> PptxComment {
         datetime: dt,
         text: String::new(),
         span: Some(SourceSpan::new(path)),
-    }
+    })
 }
 
 fn flush_comment_text(current: &mut Option<PptxComment>, text_buf: &mut String) {
@@ -179,7 +181,7 @@ mod tests {
     use std::collections::HashMap;
 
     fn assert_xml_error(result: Result<impl std::fmt::Debug, ParseError>, path: &str) {
-        match result.expect_err("truncated comments XML must fail") {
+        match result.expect_err("malformed comments XML must fail") {
             ParseError::Xml { file, .. } => assert_eq!(file, path),
             other => panic!("expected XML error, got {other:?}"),
         }
@@ -220,6 +222,37 @@ mod tests {
             <p:cmLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
               <p:cm authorId="1">
                 <p:text><p:t>Note</p:t></p:text>
+        "#;
+        let authors = HashMap::new();
+
+        assert_xml_error(
+            parse_comments(xml, "ppt/comments/comment1.xml", &authors),
+            "ppt/comments/comment1.xml",
+        );
+    }
+
+    #[test]
+    fn parse_comment_authors_reports_malformed_attributes() {
+        let xml = r#"
+            <p:cmAuthorLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+              <p:cmAuthor id="1" name="Alice" name="Duplicate"/>
+            </p:cmAuthorLst>
+        "#;
+
+        assert_xml_error(
+            parse_comment_authors(xml, "ppt/commentAuthors.xml"),
+            "ppt/commentAuthors.xml",
+        );
+    }
+
+    #[test]
+    fn parse_comments_reports_malformed_comment_attributes() {
+        let xml = r#"
+            <p:cmLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+              <p:cm authorId="1" authorId="2">
+                <p:text><p:t>Note</p:t></p:text>
+              </p:cm>
+            </p:cmLst>
         "#;
         let authors = HashMap::new();
 
