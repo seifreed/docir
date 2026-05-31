@@ -79,6 +79,9 @@ where
 mod inline_parse_markers;
 #[path = "inline_parse_run.rs"]
 mod inline_parse_run;
+#[path = "inline_parse_sdt.rs"]
+mod inline_parse_sdt;
 
 pub(crate) use inline_parse_markers::*;
 pub(crate) use inline_parse_run::*;
+pub(crate) use inline_parse_sdt::*;
