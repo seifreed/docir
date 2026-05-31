@@ -82,17 +82,15 @@ mod tests {
     use crate::cli::JsonOutputOpts;
     use crate::test_support;
     use docir_app::{
-        DocumentIndicator, IndicatorReport, ParserConfig, inspect_directory_bytes,
+        DirectoryInspection, DocumentIndicator, IndicatorReport, ParserConfig,
+        inspect_directory_bytes,
         test_support::{TestCfbDirectoryPatch, build_test_cfb, patch_test_cfb_directory_entry},
     };
     use docir_core::security::ThreatLevel;
     use serde_json::Value;
     use std::fs;
 
-    #[test]
-    fn report_indicators_run_writes_json() {
-        let input = test_support::temp_file("legacy", "doc");
-        let output = test_support::temp_file("legacy", "json");
+    fn structurally_anomalous_legacy_cfb() -> Vec<u8> {
         let base = build_test_cfb(&[
             ("WordDocument", b"doc"),
             (
@@ -105,44 +103,72 @@ Module=Module1
             ("ObjectPool/1/Ole10Native", b"payload"),
         ]);
         let inspection = inspect_directory_bytes(&base).expect("directory");
-        let word = inspection
-            .entries
-            .iter()
-            .find(|entry| entry.path == "WordDocument")
-            .expect("word");
-        let vba = inspection
-            .entries
-            .iter()
-            .find(|entry| entry.path == "VBA/PROJECT")
-            .expect("vba");
-        let objectpool = inspection
-            .entries
-            .iter()
-            .find(|entry| entry.path == "ObjectPool/1/Ole10Native")
-            .expect("objectpool");
-        let patched = patch_test_cfb_directory_entry(
+        let (word_index, word_start) = directory_entry(&inspection, "WordDocument");
+        let (vba_index, _) = directory_entry(&inspection, "VBA/PROJECT");
+        let (objectpool_index, _) = directory_entry(&inspection, "ObjectPool/1/Ole10Native");
+
+        patch_test_cfb_directory_entry(
             &patch_test_cfb_directory_entry(
                 &patch_test_cfb_directory_entry(
                     &base,
-                    vba.entry_index,
+                    vba_index,
                     TestCfbDirectoryPatch {
-                        start_sector: Some(word.start_sector),
+                        start_sector: Some(word_start),
                         ..Default::default()
                     },
                 ),
-                objectpool.entry_index,
+                objectpool_index,
                 TestCfbDirectoryPatch {
                     start_sector: Some(99),
                     ..Default::default()
                 },
             ),
-            word.entry_index,
+            word_index,
             TestCfbDirectoryPatch {
                 start_sector: Some(98),
                 ..Default::default()
             },
-        );
-        fs::write(&input, patched).expect("fixture");
+        )
+    }
+
+    fn directory_entry(inspection: &DirectoryInspection, path: &str) -> (u32, u32) {
+        let entry = inspection
+            .entries
+            .iter()
+            .find(|entry| entry.path == path)
+            .expect("directory entry");
+        (entry.entry_index, entry.start_sector)
+    }
+
+    fn assert_report_indicator_keys(text: &str) {
+        for key in [
+            "macros",
+            "object-pool",
+            "cfb-directory-score",
+            "cfb-sector-score",
+            "cfb-stream-score",
+            "cfb-objectpool-corruption",
+            "cfb-vba-structure-anomalies",
+            "cfb-main-stream-corruption",
+            "cfb-dominant-anomaly-class",
+        ] {
+            assert!(text.contains(&format!("\"key\": \"{key}\"")));
+        }
+    }
+
+    fn indicator_value<'a>(indicators: &'a [Value], key: &str) -> &'a str {
+        indicators
+            .iter()
+            .find(|entry| entry["key"].as_str() == Some(key))
+            .and_then(|entry| entry["value"].as_str())
+            .expect("indicator value")
+    }
+
+    #[test]
+    fn report_indicators_run_writes_json() {
+        let input = test_support::temp_file("legacy", "doc");
+        let output = test_support::temp_file("legacy", "json");
+        fs::write(&input, structurally_anomalous_legacy_cfb()).expect("fixture");
 
         run(
             input.clone(),
@@ -160,37 +186,16 @@ Module=Module1
         let indicators = json["report"]["indicators"]
             .as_array()
             .expect("indicator array");
-        let find_indicator = |key: &str| {
-            indicators
-                .iter()
-                .find(|entry| entry["key"].as_str() == Some(key))
-                .expect("indicator present")
-        };
         assert!(text.contains("\"report\""));
-        assert!(text.contains("\"key\": \"macros\""));
-        assert!(text.contains("\"key\": \"object-pool\""));
-        assert!(text.contains("\"key\": \"cfb-directory-score\""));
-        assert!(text.contains("\"key\": \"cfb-sector-score\""));
-        assert!(text.contains("\"key\": \"cfb-stream-score\""));
-        assert!(text.contains("\"key\": \"cfb-objectpool-corruption\""));
-        assert!(text.contains("\"key\": \"cfb-vba-structure-anomalies\""));
-        assert!(text.contains("\"key\": \"cfb-main-stream-corruption\""));
-        assert!(text.contains("\"key\": \"cfb-dominant-anomaly-class\""));
+        assert_report_indicator_keys(&text);
         assert!(text.contains("objectpool:"));
         assert!(text.contains("vba:"));
         assert!(text.contains("main-stream:word:"));
         assert_eq!(
-            find_indicator("cfb-dominant-anomaly-class")["value"]
-                .as_str()
-                .expect("dominant value"),
+            indicator_value(indicators, "cfb-dominant-anomaly-class"),
             "invalid-start"
         );
-        assert_eq!(
-            find_indicator("cfb-stream-score")["value"]
-                .as_str()
-                .expect("stream score"),
-            "high"
-        );
+        assert_eq!(indicator_value(indicators, "cfb-stream-score"), "high");
 
         let _ = fs::remove_file(input);
         let _ = fs::remove_file(output);
