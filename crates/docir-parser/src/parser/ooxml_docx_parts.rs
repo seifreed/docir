@@ -28,10 +28,10 @@ impl OoxmlParser {
         let (settings_id, web_settings_id, font_table_id) =
             self.parse_docx_settings_parts(zip, main_part_path, doc_rels, parser)?;
 
-        let glossary_id =
-            self.parse_docx_part_by_path(zip, "word/glossary/document.xml", |_, xml| {
-                parser.parse_glossary_document(xml, doc_rels).ok()
-            });
+        let glossary_id = match read_xml_part(zip, "word/glossary/document.xml")? {
+            Some(xml) => Some(parser.parse_glossary_document(&xml, doc_rels)?),
+            None => None,
+        };
 
         Ok(DocxWordParts {
             styles_id,
@@ -354,19 +354,6 @@ impl OoxmlParser {
         parse(parser, &part_path, &xml).map(Some)
     }
 
-    fn parse_docx_part_by_path<F>(
-        &self,
-        zip: &mut impl PackageReader,
-        part_path: &str,
-        mut parse: F,
-    ) -> Option<NodeId>
-    where
-        F: FnMut(&str, &str) -> Option<NodeId>,
-    {
-        let xml = self.read_xml_part_optional(zip, part_path)?;
-        parse(part_path, &xml)
-    }
-
     fn parse_docx_part_by_path_with_span_result<F, S>(
         &self,
         zip: &mut impl PackageReader,
@@ -385,14 +372,6 @@ impl OoxmlParser {
         let id = parse(parser, part_path, &xml)?;
         set_span(parser.store_mut(), id, part_path);
         Ok(Some(id))
-    }
-
-    fn read_xml_part_optional(
-        &self,
-        zip: &mut impl PackageReader,
-        part_path: &str,
-    ) -> Option<String> {
-        read_xml_part(zip, part_path).ok().flatten()
     }
 }
 
