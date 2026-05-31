@@ -37,9 +37,47 @@ JSON
   exit 0
 fi
 
+if [ "${subcmd}" = "cyclonedx" ] && [ "$*" = "--help" ]; then
+  exit 0
+fi
+
+if [ "${subcmd}" = "cyclonedx" ]; then
+  mkdir -p crates/docir-core
+  cat > crates/docir-core/docir-quality-sbom.json <<'JSON'
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "docir-core",
+      "version": "0.1.0",
+      "purl": "pkg:cargo/docir-core@0.1.0"
+    }
+  },
+  "components": [],
+  "dependencies": []
+}
+JSON
+  exit 0
+fi
+
 exit 0
 SH
 chmod +x "${fake_bin}/cargo"
+
+cat >"${fake_bin}/sbom-tools" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+chmod +x "${fake_bin}/sbom-tools"
+
+cat >"${fake_bin}/sbomqs" <<'SH'
+#!/usr/bin/env bash
+printf '10.0\tA\tNTIA Minimum Elements (2021)\t1.5\tjson\t%s\n' "${@: -1}"
+SH
+chmod +x "${fake_bin}/sbomqs"
 
 run_case() {
   local name="$1"
@@ -122,6 +160,8 @@ run_case \
   "check --workspace --all-targets --all-features" \
   "deny check" \
   "audit " \
+  "cyclonedx --help" \
+  "cyclonedx --manifest-path Cargo.toml --format json --all-features --spec-version 1.5 --override-filename docir-quality-sbom" \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test " \
@@ -158,6 +198,8 @@ if ! rg -q '^metadata --format-version 1 --no-deps --offline$' "${log_file}" \
   || ! rg -q '^check --workspace --all-targets --all-features$' "${log_file}" \
   || ! rg -q '^deny check$' "${log_file}" \
   || ! rg -q '^audit $' "${log_file}" \
+  || ! rg -q '^cyclonedx --help$' "${log_file}" \
+  || ! rg -q '^cyclonedx --manifest-path Cargo.toml --format json --all-features --spec-version 1.5 --override-filename docir-quality-sbom$' "${log_file}" \
   || ! rg -q "^llvm-cov --workspace --all-features --summary-only --fail-under-lines ${coverage_threshold}\$" "${log_file}"; then
   echo "coverage-threshold-fail: missing expected llvm-cov command invocation"
   cat "${log_file}"

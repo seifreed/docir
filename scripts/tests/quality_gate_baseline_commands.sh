@@ -27,10 +27,6 @@ shift || true
 printf '%s %s\n' "${subcmd}" "$*" >> "${QUALITY_GATE_BASELINE_LOG}"
 
 fail_stage="${QUALITY_GATE_BASELINE_FAIL_STAGE:-}"
-if [ -n "${fail_stage}" ] && [ "${subcmd}" = "${fail_stage}" ]; then
-  exit 101
-fi
-
 if [ "${subcmd}" = "metadata" ]; then
   cat <<'JSON'
 {"workspace_members":[],"packages":[],"resolve":{}}
@@ -38,9 +34,51 @@ JSON
   exit 0
 fi
 
+if [ "${subcmd}" = "cyclonedx" ] && [ "$*" = "--help" ]; then
+  exit 0
+fi
+
+if [ -n "${fail_stage}" ] && [ "${subcmd}" = "${fail_stage}" ]; then
+  exit 101
+fi
+
+if [ "${subcmd}" = "cyclonedx" ]; then
+  mkdir -p crates/docir-core
+  cat > crates/docir-core/docir-quality-sbom.json <<'JSON'
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "docir-core",
+      "version": "0.1.0",
+      "purl": "pkg:cargo/docir-core@0.1.0"
+    }
+  },
+  "components": [],
+  "dependencies": []
+}
+JSON
+  exit 0
+fi
+
 exit 0
 SH
 chmod +x "${fake_bin}/cargo"
+
+cat >"${fake_bin}/sbom-tools" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+chmod +x "${fake_bin}/sbom-tools"
+
+cat >"${fake_bin}/sbomqs" <<'SH'
+#!/usr/bin/env bash
+printf '10.0\tA\tNTIA Minimum Elements (2021)\t1.5\tjson\t%s\n' "${@: -1}"
+SH
+chmod +x "${fake_bin}/sbomqs"
 
 run_case() {
   local name="$1"
@@ -126,6 +164,8 @@ run_case \
   "check --workspace --all-targets --all-features" \
   "deny check" \
   "audit " \
+  "cyclonedx --help" \
+  "cyclonedx --manifest-path Cargo.toml --format json --all-features --spec-version 1.5 --override-filename docir-quality-sbom" \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test " \
@@ -140,6 +180,8 @@ run_case \
   "check --workspace --all-targets --all-features" \
   "deny check" \
   "audit " \
+  "cyclonedx --help" \
+  "cyclonedx --manifest-path Cargo.toml --format json --all-features --spec-version 1.5 --override-filename docir-quality-sbom" \
   "fmt --all --check"
 
 run_case \
@@ -151,6 +193,8 @@ run_case \
   "check --workspace --all-targets --all-features" \
   "deny check" \
   "audit " \
+  "cyclonedx --help" \
+  "cyclonedx --manifest-path Cargo.toml --format json --all-features --spec-version 1.5 --override-filename docir-quality-sbom" \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings"
 
@@ -163,6 +207,8 @@ run_case \
   "check --workspace --all-targets --all-features" \
   "deny check" \
   "audit " \
+  "cyclonedx --help" \
+  "cyclonedx --manifest-path Cargo.toml --format json --all-features --spec-version 1.5 --override-filename docir-quality-sbom" \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test "
@@ -176,10 +222,24 @@ run_case \
   "check --workspace --all-targets --all-features" \
   "deny check" \
   "audit " \
+  "cyclonedx --help" \
+  "cyclonedx --manifest-path Cargo.toml --format json --all-features --spec-version 1.5 --override-filename docir-quality-sbom" \
   "fmt --all --check" \
   "clippy --all-targets --all-features -- -D warnings" \
   "test " \
   "llvm-cov --workspace --all-features --summary-only --fail-under-lines ${coverage_threshold}"
+
+run_case \
+  "baseline-fail-sbom" \
+  "cyclonedx" \
+  1 \
+  "QUALITY_GATE_RESULT=FAIL CLASS=quality_failure EXIT_CODE=1" \
+  "metadata --format-version 1 --no-deps --offline" \
+  "check --workspace --all-targets --all-features" \
+  "deny check" \
+  "audit " \
+  "cyclonedx --help" \
+  "cyclonedx --manifest-path Cargo.toml --format json --all-features --spec-version 1.5 --override-filename docir-quality-sbom"
 
 run_case \
   "baseline-fail-deny" \

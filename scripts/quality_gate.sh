@@ -110,6 +110,10 @@ stage_cargo_audit() {
   gate_run_command cargo audit
 }
 
+stage_sbom_quality() {
+  gate_run_command bash "${SCRIPT_DIR}/quality_sbom_gate.sh"
+}
+
 stage_api_hygiene() {
   gate_run_command bash "${SCRIPT_DIR}/quality_api_hygiene.sh"
 }
@@ -172,6 +176,9 @@ dispatch_stage() {
     cargo_audit)
       stage_cargo_audit
       ;;
+    sbom_quality)
+      stage_sbom_quality
+      ;;
     api_hygiene)
       stage_api_hygiene
       ;;
@@ -205,6 +212,7 @@ DEFAULT_STAGES=(
   check_workspace
   cargo_deny
   cargo_audit
+  sbom_quality
   fmt_check
   clippy_strict
   test_workspace
