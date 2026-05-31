@@ -103,6 +103,68 @@ fn test_parse_shape_reports_truncated_xml() {
 }
 
 #[test]
+fn test_parse_group_shape_reports_truncated_xml() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <p:cSld>
+            <p:spTree>
+              <p:grpSp>
+                <p:nvGrpSpPr>
+                  <p:cNvPr id="2" name="Group 1"/>
+                </p:nvGrpSpPr>
+    "#;
+
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+    let err = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/broken-group-shape.xml",
+            &Relationships::default(),
+            (None, None),
+        )
+        .expect_err("truncated group shape XML must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/broken-group-shape.xml"),
+        other => panic!("expected XML error, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_group_properties_reports_truncated_xml() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <p:cSld>
+            <p:spTree>
+              <p:grpSp>
+                <p:grpSpPr>
+    "#;
+
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+    let err = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/broken-group-props.xml",
+            &Relationships::default(),
+            (None, None),
+        )
+        .expect_err("truncated group properties XML must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/broken-group-props.xml"),
+        other => panic!("expected XML error, got {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_slide_accepts_alternate_namespace_prefixes() {
     let slide_xml = r#"
         <deck:sld xmlns:deck="http://schemas.openxmlformats.org/presentationml/2006/main"

@@ -163,7 +163,9 @@ impl PptxParser {
                 Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"grpSp" => {
                     break;
                 }
-                Ok(Event::Eof) => break,
+                Ok(Event::Eof) => {
+                    return Err(xml_error(slide_path, "unexpected EOF in group shape XML"));
+                }
                 Err(e) => {
                     return Err(xml_error(slide_path, e));
                 }
@@ -227,7 +229,12 @@ fn parse_group_properties(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"grpSpPr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    slide_path,
+                    "unexpected EOF in group shape properties XML",
+                ));
+            }
             Err(e) => {
                 return Err(xml_error(slide_path, e));
             }
