@@ -81,8 +81,8 @@ impl PptxParser {
         slide: &mut Slide,
     ) -> Result<(), ParseError> {
         match local_name(event.name().as_ref()) {
-            b"sld" => update_slide_visibility(slide, event),
-            b"cSld" => update_slide_name(slide, event),
+            b"sld" => update_slide_visibility(slide, event, slide_path)?,
+            b"cSld" => update_slide_name(slide, event, slide_path)?,
             b"sp" => {
                 let shape = self.parse_shape_sp(reader, event, slide_path, relationships)?;
                 self.push_slide_shape(slide, shape);
@@ -252,7 +252,8 @@ impl PptxParser {
             duration_ms: None,
         };
 
-        for attr in start.attributes().flatten() {
+        for attr in start.attributes() {
+            let attr = attr.map_err(|err| xml_error(slide_path, err))?;
             match attr.key.as_ref() {
                 b"spd" => transition.speed = Some(lossy_attr_value(&attr).to_string()),
                 b"advClick" => {
@@ -312,30 +313,22 @@ impl PptxParser {
                     let name = e.name().as_ref().to_vec();
                     let local = local_name(&name);
                     if is_standard_animation(local) || is_media_animation(local) {
-                        let anim = build_animation_from_event(
-                            &name,
-                            e.attributes().flatten(),
-                            slide_path,
-                            relationships,
-                        );
+                        let anim =
+                            build_animation_from_event(&name, &e, slide_path, relationships)?;
                         animations.push(anim);
                         current_index = Some(animations.len() - 1);
                     } else if local == b"spTgt" {
-                        apply_sp_target(&mut animations, current_index, e.attributes().flatten());
+                        apply_sp_target(&mut animations, current_index, &e, slide_path)?;
                     }
                 }
                 Ok(Event::Empty(e)) => {
                     let name = e.name().as_ref().to_vec();
                     let local = local_name(&name);
                     if local == b"spTgt" {
-                        apply_sp_target(&mut animations, current_index, e.attributes().flatten());
+                        apply_sp_target(&mut animations, current_index, &e, slide_path)?;
                     } else if is_media_animation(local) {
-                        let anim = build_animation_from_event(
-                            &name,
-                            e.attributes().flatten(),
-                            slide_path,
-                            relationships,
-                        );
+                        let anim =
+                            build_animation_from_event(&name, &e, slide_path, relationships)?;
                         animations.push(anim);
                     }
                 }
@@ -360,8 +353,13 @@ impl PptxParser {
     }
 }
 
-fn update_slide_visibility(slide: &mut Slide, event: &BytesStart<'_>) {
-    for attr in event.attributes().flatten() {
+fn update_slide_visibility(
+    slide: &mut Slide,
+    event: &BytesStart<'_>,
+    slide_path: &str,
+) -> Result<(), ParseError> {
+    for attr in event.attributes() {
+        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
         if attr.key.as_ref() == b"show" {
             let value = lossy_attr_value(&attr);
             if value == "0" || value.eq_ignore_ascii_case("false") {
@@ -369,14 +367,21 @@ fn update_slide_visibility(slide: &mut Slide, event: &BytesStart<'_>) {
             }
         }
     }
+    Ok(())
 }
 
-fn update_slide_name(slide: &mut Slide, event: &BytesStart<'_>) {
-    for attr in event.attributes().flatten() {
+fn update_slide_name(
+    slide: &mut Slide,
+    event: &BytesStart<'_>,
+    slide_path: &str,
+) -> Result<(), ParseError> {
+    for attr in event.attributes() {
+        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
         if attr.key.as_ref() == b"name" {
             slide.name = Some(lossy_attr_value(&attr).to_string());
         }
     }
+    Ok(())
 }
 
 fn is_standard_animation(name: &[u8]) -> bool {
@@ -390,15 +395,12 @@ fn is_media_animation(name: &[u8]) -> bool {
     name == b"audio" || name == b"video"
 }
 
-fn build_animation_from_event<'a, I>(
+fn build_animation_from_event(
     name: &[u8],
-    attrs: I,
+    event: &BytesStart<'_>,
     slide_path: &str,
     relationships: &Relationships,
-) -> SlideAnimation
-where
-    I: Iterator<Item = quick_xml::events::attributes::Attribute<'a>>,
-{
+) -> Result<SlideAnimation, ParseError> {
     let mut anim = SlideAnimation {
         animation_type: String::from_utf8_lossy(name).to_string(),
         target: None,
@@ -408,7 +410,8 @@ where
         media_asset: None,
     };
 
-    for attr in attrs {
+    for attr in event.attributes() {
+        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
         match attr.key.as_ref() {
             b"dur" => {
                 anim.duration_ms = lossy_attr_value(&attr).parse::<u32>().ok();
@@ -427,7 +430,7 @@ where
         }
     }
 
-    anim
+    Ok(anim)
 }
 
 fn resolve_animation_target(
@@ -446,16 +449,23 @@ fn resolve_animation_target(
     }
 }
 
-fn apply_sp_target<'a, I>(animations: &mut [SlideAnimation], current_index: Option<usize>, attrs: I)
-where
-    I: Iterator<Item = quick_xml::events::attributes::Attribute<'a>>,
-{
-    let Some(idx) = current_index else {
-        return;
-    };
-    for attr in attrs {
+fn apply_sp_target(
+    animations: &mut [SlideAnimation],
+    current_index: Option<usize>,
+    event: &BytesStart<'_>,
+    slide_path: &str,
+) -> Result<(), ParseError> {
+    let mut target = None;
+    for attr in event.attributes() {
+        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
         if attr.key.as_ref() == b"spid" {
-            animations[idx].target = Some(lossy_attr_value(&attr).to_string());
+            target = Some(lossy_attr_value(&attr).to_string());
         }
     }
+    if let Some(idx) = current_index
+        && let Some(target) = target
+    {
+        animations[idx].target = Some(target);
+    }
+    Ok(())
 }

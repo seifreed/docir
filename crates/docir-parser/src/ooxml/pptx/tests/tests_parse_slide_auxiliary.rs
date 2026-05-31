@@ -389,3 +389,93 @@ fn test_parse_slide_animations_reports_truncated_xml() {
         other => panic!("expected XML error, got {other:?}"),
     }
 }
+
+fn assert_slide_xml_error(
+    result: Result<docir_core::types::NodeId, ParseError>,
+    expected_file: &str,
+) {
+    match result.expect_err("malformed slide XML must fail") {
+        ParseError::Xml { file, .. } => assert_eq!(file, expected_file),
+        other => panic!("expected XML error, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_slide_reports_malformed_slide_attrs() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+               show="1" show="0">
+          <p:cSld><p:spTree/></p:cSld>
+        </p:sld>
+        "#;
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+
+    assert_slide_xml_error(
+        parser.parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/broken-slide-attrs.xml",
+            &Relationships::default(),
+            (None, None),
+        ),
+        "ppt/slides/broken-slide-attrs.xml",
+    );
+}
+
+#[test]
+fn test_parse_slide_reports_malformed_transition_attrs() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:cSld><p:spTree/></p:cSld>
+          <p:transition spd="fast" spd="slow"></p:transition>
+        </p:sld>
+        "#;
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+
+    assert_slide_xml_error(
+        parser.parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/broken-transition-attrs.xml",
+            &Relationships::default(),
+            (None, None),
+        ),
+        "ppt/slides/broken-transition-attrs.xml",
+    );
+}
+
+#[test]
+fn test_parse_slide_reports_malformed_animation_attrs() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:cSld><p:spTree/></p:cSld>
+          <p:timing>
+            <p:tnLst>
+              <p:par>
+                <p:anim dur="300" dur="400">
+                  <p:tgtEl><p:spTgt spid="4"/></p:tgtEl>
+                </p:anim>
+              </p:par>
+            </p:tnLst>
+          </p:timing>
+        </p:sld>
+        "#;
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+
+    assert_slide_xml_error(
+        parser.parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/broken-animation-attrs.xml",
+            &Relationships::default(),
+            (None, None),
+        ),
+        "ppt/slides/broken-animation-attrs.xml",
+    );
+}
