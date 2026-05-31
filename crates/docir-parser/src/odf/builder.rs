@@ -92,7 +92,7 @@ impl ParseStage for OdfParser {
             &read_state.settings_xml,
             &read_state.file_names,
             &mut store,
-        );
+        )?;
         self.insert_macro_project(&mut store, &mut macro_project);
 
         let scanner = DefaultSecurityScanner;

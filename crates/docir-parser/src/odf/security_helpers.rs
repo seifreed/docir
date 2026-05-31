@@ -6,7 +6,6 @@ use crate::xml_utils::{
 use docir_core::ir::IRNode;
 use docir_core::security::{MacroModule, MacroModuleType, MacroProject};
 use docir_core::visitor::IrStore;
-use quick_xml::Reader;
 use quick_xml::events::Event;
 
 use super::manifest::OdfManifestEntry;
@@ -18,7 +17,7 @@ pub(crate) fn build_odf_macro_project(
     settings_xml: &Option<String>,
     file_names: &[String],
     store: &mut IrStore,
-) -> Option<MacroProject> {
+) -> Result<Option<MacroProject>, ParseError> {
     let mut module_paths = Vec::new();
     for entry in manifest_entries {
         if let Some(media) = entry.media_type.as_deref()
@@ -34,20 +33,20 @@ pub(crate) fn build_odf_macro_project(
     }
 
     if let Some(xml) = content_xml.as_deref() {
-        module_paths.extend(scan_script_links(xml));
+        module_paths.extend(scan_script_links(xml, "content.xml")?);
     }
     if let Some(xml) = styles_xml.as_deref() {
-        module_paths.extend(scan_script_links(xml));
+        module_paths.extend(scan_script_links(xml, "styles.xml")?);
     }
     if let Some(xml) = settings_xml.as_deref() {
-        module_paths.extend(scan_script_links(xml));
+        module_paths.extend(scan_script_links(xml, "settings.xml")?);
     }
 
     module_paths.sort();
     module_paths.dedup();
 
     if module_paths.is_empty() {
-        return None;
+        return Ok(None);
     }
 
     let mut project = MacroProject::new();
@@ -60,30 +59,29 @@ pub(crate) fn build_odf_macro_project(
         project.modules.push(module_id);
     }
 
-    Some(project)
+    Ok(Some(project))
 }
 
-pub(crate) fn scan_script_links(xml: &str) -> Vec<String> {
+pub(crate) fn scan_script_links(xml: &str, source: &str) -> Result<Vec<String>, ParseError> {
     let mut links = Vec::new();
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let mut reader = reader_from_str(xml);
     let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+
+    scan_xml_events(&mut reader, &mut buf, source, |event| {
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
                 if local_name(e.name().as_ref()) == b"script"
                     && let Some(href) = attr_value_by_suffix(&e, &[b":href"])
                 {
                     links.push(href);
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
             _ => {}
         }
-        buf.clear();
-    }
-    links
+        Ok(XmlScanControl::Continue)
+    })?;
+
+    Ok(links)
 }
 
 pub(crate) fn parse_odf_signatures(
@@ -178,7 +176,10 @@ mod tests {
             </office:document-content>
         "#;
 
-        assert_eq!(scan_script_links(xml), vec!["Scripts/macro.py"]);
+        assert_eq!(
+            scan_script_links(xml, "content.xml").expect("valid script links XML"),
+            vec!["Scripts/macro.py"]
+        );
     }
 
     #[test]

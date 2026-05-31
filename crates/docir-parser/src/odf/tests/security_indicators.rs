@@ -57,6 +57,36 @@ fn test_parse_odf_reports_malformed_signatures_xml() {
     }
 }
 
+#[test]
+fn test_parse_odf_reports_malformed_settings_xml() {
+    let mimetype = "application/vnd.oasis.opendocument.text";
+    let content_xml = odf_security_content_xml();
+    let zip_data = build_odf_zip_custom(
+        mimetype,
+        &content_xml,
+        None,
+        None,
+        vec![(
+            "settings.xml",
+            br#"<office:document-settings xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0">
+  <office:scripts><script:script xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0" xlink:href="Scripts/settings.py" xmlns:xlink="http://www.w3.org/1999/xlink"/>
+</office:document-settings>"#,
+        )],
+    );
+    let parser = DocumentParser::new();
+
+    let err = parser
+        .parse_reader(Cursor::new(zip_data))
+        .expect_err("malformed ODF settings must fail instead of ignoring script scan errors");
+
+    match err {
+        crate::error::ParseError::Xml { file, .. } => {
+            assert_eq!(file, "settings.xml");
+        }
+        other => panic!("expected XML error, got {other}"),
+    }
+}
+
 fn odf_security_content_xml() -> String {
     r#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
