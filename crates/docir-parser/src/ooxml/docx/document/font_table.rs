@@ -1,9 +1,11 @@
 use crate::error::ParseError;
 use crate::ooxml::docx::document::DocxParser;
-use crate::xml_utils::{attr_value, local_name, reader_from_str, xml_error};
+use crate::xml_utils::{local_name, reader_from_str, try_attr_value, xml_error};
 use docir_core::ir::{FontEntry, FontTable};
 use docir_core::types::NodeId;
 use quick_xml::events::Event;
+
+const FONT_TABLE_PATH: &str = "word/fontTable.xml";
 
 impl DocxParser {
     /// Public API entrypoint: parse_font_table.
@@ -20,7 +22,7 @@ impl DocxParser {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"font" => {
-                    let name = attr_value(&e, b"w:name").unwrap_or_default();
+                    let name = try_attr_value(&e, b"w:name", FONT_TABLE_PATH)?.unwrap_or_default();
                     current = Some(FontEntry {
                         name,
                         alt_name: None,
@@ -31,28 +33,29 @@ impl DocxParser {
                 }
                 Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                     b"altName" => {
-                        if let Some(val) = attr_value(&e, b"w:val")
+                        if let Some(val) = try_attr_value(&e, b"w:val", FONT_TABLE_PATH)?
                             && let Some(font) = current.as_mut()
                         {
                             font.alt_name = Some(val);
                         }
                     }
                     b"charset" => {
-                        if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok())
+                        if let Some(val) = try_attr_value(&e, b"w:val", FONT_TABLE_PATH)?
+                            .and_then(|v| v.parse().ok())
                             && let Some(font) = current.as_mut()
                         {
                             font.charset = Some(val);
                         }
                     }
                     b"family" => {
-                        if let Some(val) = attr_value(&e, b"w:val")
+                        if let Some(val) = try_attr_value(&e, b"w:val", FONT_TABLE_PATH)?
                             && let Some(font) = current.as_mut()
                         {
                             font.family = Some(val);
                         }
                     }
                     b"panose1" => {
-                        if let Some(val) = attr_value(&e, b"w:val")
+                        if let Some(val) = try_attr_value(&e, b"w:val", FONT_TABLE_PATH)?
                             && let Some(font) = current.as_mut()
                         {
                             font.panose = Some(val);
@@ -69,7 +72,7 @@ impl DocxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(xml_error("word/fontTable.xml", e));
+                    return Err(xml_error(FONT_TABLE_PATH, e));
                 }
                 _ => {}
             }

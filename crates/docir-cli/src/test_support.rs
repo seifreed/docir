@@ -1,9 +1,12 @@
 //! Shared test utilities for CLI command tests.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io::Write};
 use zip::write::SimpleFileOptions;
+
+static TEMP_PATH_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Path to a named fixture file in the ooxml fixtures directory.
 pub fn fixture(name: &str) -> PathBuf {
@@ -18,7 +21,8 @@ pub fn temp_file(name: &str, ext: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    std::env::temp_dir().join(format!("docir_cli_{name}_{nanos}.{ext}"))
+    let counter = TEMP_PATH_COUNTER.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!("docir_cli_{name}_{nanos}_{counter}.{ext}"))
 }
 
 /// Create a temporary directory path.
@@ -27,7 +31,8 @@ pub fn temp_dir(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    std::env::temp_dir().join(format!("docir_cli_{name}_{nanos}"))
+    let counter = TEMP_PATH_COUNTER.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!("docir_cli_{name}_{nanos}_{counter}"))
 }
 
 /// Create a minimal DOCX file at the given path.
