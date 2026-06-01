@@ -37,7 +37,7 @@ impl PptxParser {
         match local_name(e.name().as_ref()) {
             b"cNvPr" => apply_non_visual_shape_props(shape, e, slide_path)?,
             b"hlinkClick" => {
-                self.attach_hyperlink(shape, e, relationships, slide_path);
+                self.attach_hyperlink(shape, e, relationships, slide_path)?;
             }
             b"xfrm" => {
                 parse_transform(reader, &mut shape.transform, slide_path)?;
@@ -77,7 +77,7 @@ impl PptxParser {
         match local_name(e.name().as_ref()) {
             b"cNvPr" => apply_non_visual_shape_props(shape, e, slide_path)?,
             b"hlinkClick" => {
-                self.attach_hyperlink(shape, e, relationships, slide_path);
+                self.attach_hyperlink(shape, e, relationships, slide_path)?;
             }
             b"xfrm" => {}
             b"graphicData" => {}

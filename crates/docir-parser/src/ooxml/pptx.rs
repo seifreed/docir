@@ -7,8 +7,8 @@ use crate::ooxml::part_utils::{
 };
 use crate::ooxml::relationships::{Relationship, Relationships, TargetMode, rel_type};
 use crate::xml_utils::{
-    attr_u64_from_bytes, attr_value, local_name, read_event, try_attr_value,
-    try_attr_value_by_suffix, xml_error,
+    attr_u64_from_bytes, local_name, read_event, try_attr_value, try_attr_value_by_suffix,
+    xml_error,
 };
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
@@ -360,22 +360,22 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
     if found { Ok(Some(info)) } else { Ok(None) }
 }
 
-fn extract_c_sld_name(xml: &str) -> Option<String> {
+fn extract_c_sld_name(xml: &str, path: &str) -> Result<Option<String>, ParseError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) if e.name().as_ref().ends_with(b"cSld") => {
-                return attr_value(&e, b"name");
+                return try_attr_value(&e, b"name", path);
             }
             Ok(Event::Eof) => break,
-            Err(_) => break,
+            Err(e) => return Err(xml_error(path, e)),
             _ => {}
         }
         buf.clear();
     }
-    None
+    Ok(None)
 }
 
 fn parse_notes_slide(

@@ -1,9 +1,9 @@
 use super::{
     PackageReader, ParseError, PptxParser, Reader, Relationships, Shape, ShapeType, SourceSpan,
-    TargetMode, attr_value, classify_relationship, parse_shape_properties, parse_text_body,
-    parse_transform, read_event,
+    TargetMode, classify_relationship, parse_shape_properties, parse_text_body, parse_transform,
+    read_event,
 };
-use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value, try_attr_value_by_suffix, xml_error};
 use docir_core::ir::IRNode;
 use docir_core::types::NodeId;
 use quick_xml::events::{BytesStart, Event};
@@ -83,10 +83,10 @@ impl PptxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                     b"cNvPr" => {
-                        parse_shape_non_visual_props(&e, &mut shape);
+                        parse_shape_non_visual_props(&e, &mut shape, slide_path)?;
                     }
                     b"hlinkClick" => {
-                        self.attach_hyperlink(&mut shape, &e, relationships, slide_path);
+                        self.attach_hyperlink(&mut shape, &e, relationships, slide_path)?;
                     }
                     b"spPr" => {
                         parse_shape_properties(reader, &mut shape, slide_path)?;
@@ -102,10 +102,10 @@ impl PptxParser {
                 },
                 Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                     b"cNvPr" => {
-                        parse_shape_non_visual_props(&e, &mut shape);
+                        parse_shape_non_visual_props(&e, &mut shape, slide_path)?;
                     }
                     b"hlinkClick" => {
-                        self.attach_hyperlink(&mut shape, &e, relationships, slide_path);
+                        self.attach_hyperlink(&mut shape, &e, relationships, slide_path)?;
                     }
                     b"spPr" => {}
                     _ => {}
@@ -146,7 +146,7 @@ impl PptxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                     b"cNvPr" => {
-                        parse_non_visual_name(&e, &mut shape);
+                        parse_non_visual_name(&e, &mut shape, slide_path)?;
                     }
                     b"grpSpPr" => {
                         parse_group_properties(reader, &mut shape, slide_path)?;
@@ -155,7 +155,7 @@ impl PptxParser {
                 },
                 Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                     b"cNvPr" => {
-                        parse_non_visual_name(&e, &mut shape);
+                        parse_non_visual_name(&e, &mut shape, slide_path)?;
                     }
                     b"grpSpPr" => {}
                     _ => {}
@@ -183,12 +183,12 @@ impl PptxParser {
         element: &BytesStart,
         relationships: &Relationships,
         slide_path: &str,
-    ) {
-        let Some(rel_id) = attr_value_by_suffix(element, &[b":id"]) else {
-            return;
+    ) -> Result<(), ParseError> {
+        let Some(rel_id) = try_attr_value_by_suffix(element, &[b":id"], slide_path)? else {
+            return Ok(());
         };
         let Some(rel) = relationships.get(&rel_id) else {
-            return;
+            return Ok(());
         };
 
         shape.hyperlink = Some(rel.target.clone());
@@ -197,22 +197,34 @@ impl PptxParser {
             let ref_type = classify_relationship(&rel.rel_type);
             self.add_external_reference(rel, ref_type, slide_path);
         }
+
+        Ok(())
     }
 }
 
-fn parse_shape_non_visual_props(start: &BytesStart<'_>, shape: &mut Shape) {
-    if let Some(name) = attr_value(start, b"name") {
+fn parse_shape_non_visual_props(
+    start: &BytesStart<'_>,
+    shape: &mut Shape,
+    slide_path: &str,
+) -> Result<(), ParseError> {
+    if let Some(name) = try_attr_value(start, b"name", slide_path)? {
         shape.name = Some(name);
     }
-    if let Some(alt_text) = attr_value(start, b"descr") {
+    if let Some(alt_text) = try_attr_value(start, b"descr", slide_path)? {
         shape.alt_text = Some(alt_text);
     }
+    Ok(())
 }
 
-fn parse_non_visual_name(start: &BytesStart<'_>, shape: &mut Shape) {
-    if let Some(name) = attr_value(start, b"name") {
+fn parse_non_visual_name(
+    start: &BytesStart<'_>,
+    shape: &mut Shape,
+    slide_path: &str,
+) -> Result<(), ParseError> {
+    if let Some(name) = try_attr_value(start, b"name", slide_path)? {
         shape.name = Some(name);
     }
+    Ok(())
 }
 
 fn parse_group_properties(

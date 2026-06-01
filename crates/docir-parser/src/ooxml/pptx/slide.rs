@@ -170,7 +170,7 @@ impl PptxParser {
     ) -> Result<NodeId, ParseError> {
         let mut layout = docir_core::ir::SlideLayout::new();
         layout.span = Some(SourceSpan::new(layout_path));
-        layout.name = extract_c_sld_name(xml);
+        layout.name = extract_c_sld_name(xml, layout_path)?;
         let meta = parse_slide_layout_meta(xml, layout_path)?;
         layout.layout_type = meta.layout_type;
         layout.matching_name = meta.matching_name;

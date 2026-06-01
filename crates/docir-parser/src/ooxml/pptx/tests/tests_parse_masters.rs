@@ -70,7 +70,8 @@ fn test_parse_master_and_layout_shapes() {
         )
         .expect("parse layout");
     let mut master = docir_core::ir::SlideMaster::new();
-    master.name = extract_c_sld_name(master_xml);
+    master.name = extract_c_sld_name(master_xml, "ppt/slideMasters/slideMaster1.xml")
+        .expect("extract master name");
     let meta = parse_slide_master_meta(master_xml, "ppt/slideMasters/slideMaster1.xml")
         .expect("master meta");
     master.preserve = meta.preserve;
@@ -102,6 +103,33 @@ fn test_parse_master_and_layout_shapes() {
     assert_eq!(layout_node.preserve, Some(true));
     assert_eq!(layout_node.show_master_sp, Some(true));
     assert_eq!(layout_node.show_master_ph_anim, Some(false));
+}
+
+#[test]
+fn test_parse_slide_layout_reports_malformed_csld_name_attributes() {
+    let layout_xml = r#"
+        <p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                     xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <p:cSld name="Layout 1" name="Layout 2">
+            <p:spTree/>
+          </p:cSld>
+        </p:sldLayout>
+        "#;
+
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+    match parser
+        .parse_slide_layout(
+            layout_xml,
+            "ppt/slideLayouts/slideLayout1.xml",
+            &Relationships::default(),
+            &mut zip,
+        )
+        .expect_err("malformed cSld attributes must fail")
+    {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slideLayouts/slideLayout1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
@@ -155,13 +183,16 @@ fn test_parse_notes_and_handout_master_shapes() {
         .expect("parse handout master shapes");
 
     let mut notes_master = docir_core::ir::NotesMaster::new();
-    notes_master.name = extract_c_sld_name(notes_master_xml);
+    notes_master.name = extract_c_sld_name(notes_master_xml, "ppt/notesMasters/notesMaster1.xml")
+        .expect("extract notes master name");
     notes_master.shapes = notes_shapes;
     let notes_id = notes_master.id;
     parser.store.insert(IRNode::NotesMaster(notes_master));
 
     let mut handout_master = docir_core::ir::HandoutMaster::new();
-    handout_master.name = extract_c_sld_name(handout_master_xml);
+    handout_master.name =
+        extract_c_sld_name(handout_master_xml, "ppt/handoutMasters/handoutMaster1.xml")
+            .expect("extract handout master name");
     handout_master.shapes = handout_shapes;
     let handout_id = handout_master.id;
     parser.store.insert(IRNode::HandoutMaster(handout_master));

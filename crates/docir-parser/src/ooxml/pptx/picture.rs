@@ -80,7 +80,7 @@ impl PptxParser {
         match local_name(event.name().as_ref()) {
             b"cNvPr" => apply_picture_non_visual_properties(event, shape, slide_path)?,
             b"hlinkClick" => {
-                self.attach_hyperlink(shape, event, relationships, slide_path);
+                self.attach_hyperlink(shape, event, relationships, slide_path)?;
             }
             b"blip" => capture_picture_relationship_ids(event, embed_rel, link_rel, slide_path)?,
             _ => {}

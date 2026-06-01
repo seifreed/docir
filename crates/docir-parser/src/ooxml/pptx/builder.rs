@@ -132,7 +132,7 @@ impl PptxParser {
             let layout_ids = self.parse_slide_layouts(zip, &master_path, &master_rels)?;
 
             let mut master = docir_core::ir::SlideMaster::new();
-            master.name = extract_c_sld_name(&master_xml);
+            master.name = extract_c_sld_name(&master_xml, &master_path)?;
             master.preserve = master_meta.preserve;
             master.show_master_sp = master_meta.show_master_sp;
             master.show_master_ph_anim = master_meta.show_master_ph_anim;
@@ -183,7 +183,7 @@ impl PptxParser {
 
         let notes_master_xml = zip.read_file_string(&notes_master_path)?;
         let mut notes_master = docir_core::ir::NotesMaster::new();
-        notes_master.name = extract_c_sld_name(&notes_master_xml);
+        notes_master.name = extract_c_sld_name(&notes_master_xml, &notes_master_path)?;
         notes_master.shapes = self.parse_shapes_from_xml(
             &notes_master_xml,
             &notes_master_path,
@@ -214,7 +214,7 @@ impl PptxParser {
 
         let handout_xml = zip.read_file_string(&handout_path)?;
         let mut handout = docir_core::ir::HandoutMaster::new();
-        handout.name = extract_c_sld_name(&handout_xml);
+        handout.name = extract_c_sld_name(&handout_xml, &handout_path)?;
         handout.shapes =
             self.parse_shapes_from_xml(&handout_xml, &handout_path, presentation_rels, zip)?;
         handout.span = Some(SourceSpan::new(&handout_path));
