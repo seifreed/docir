@@ -1,11 +1,13 @@
 use super::{DocxParser, parse_block_until};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{attr_value, local_name, read_event};
+use crate::xml_utils::{local_name, read_event, try_attr_value};
 use docir_core::ir::GlossaryEntry;
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
 use quick_xml::events::Event;
+
+const GLOSSARY_PATH: &str = "word/glossary/document.xml";
 
 pub(super) fn parse_doc_part(
     parser: &mut DocxParser,
@@ -13,11 +15,11 @@ pub(super) fn parse_doc_part(
     rels: &Relationships,
 ) -> Result<GlossaryEntry, ParseError> {
     let mut entry = GlossaryEntry::new();
-    entry.span = Some(SourceSpan::new("word/glossary/document.xml"));
+    entry.span = Some(SourceSpan::new(GLOSSARY_PATH));
     let mut buf = Vec::new();
 
     loop {
-        let event = read_event(reader, &mut buf, "word/glossary/document.xml")?;
+        let event = read_event(reader, &mut buf, GLOSSARY_PATH)?;
         match event {
             Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"docPartPr" => {
@@ -51,16 +53,16 @@ fn parse_doc_part_pr(
     let mut buf = Vec::new();
 
     loop {
-        let event = read_event(reader, &mut buf, "word/glossary/document.xml")?;
+        let event = read_event(reader, &mut buf, GLOSSARY_PATH)?;
         match event {
             Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
                 b"name" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
+                    if let Some(val) = try_attr_value(&e, b"w:val", GLOSSARY_PATH)? {
                         name = Some(val);
                     }
                 }
                 b"gallery" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
+                    if let Some(val) = try_attr_value(&e, b"w:val", GLOSSARY_PATH)? {
                         gallery = Some(val);
                     }
                 }

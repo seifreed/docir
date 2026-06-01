@@ -42,6 +42,31 @@ fn test_parse_glossary_document() {
     assert_eq!(entry.gallery.as_deref(), Some("QuickParts"));
     assert_eq!(entry.content.len(), 1);
 }
+
+#[test]
+fn test_parse_glossary_document_reports_malformed_attributes() {
+    let xml = r#"
+        <w:glossaryDocument xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:docParts>
+            <w:docPart>
+              <w:docPartPr>
+                <w:name w:val="BlockOne" w:val="Duplicate"/>
+              </w:docPartPr>
+            </w:docPart>
+          </w:docParts>
+        </w:glossaryDocument>
+        "#;
+
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_glossary_document(xml, &Relationships::default())
+        .expect_err("malformed glossary attributes must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/glossary/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
 #[test]
 fn test_parse_section_properties_extended() {
     let xml = r#"
