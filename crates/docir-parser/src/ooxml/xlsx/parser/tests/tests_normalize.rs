@@ -104,6 +104,24 @@ fn test_parse_styles_minimal() {
 }
 
 #[test]
+fn test_parse_styles_reports_malformed_numeric_attributes() {
+    let xml = r#"
+        <styleSheet>
+          <numFmts count="1">
+            <numFmt numFmtId="164" numFmtId="165" formatCode="0.00"/>
+          </numFmts>
+        </styleSheet>
+        "#;
+
+    let err = parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_xlsx_auxiliary_parsers_accept_prefixed_main_namespace() {
     let styles_xml = r#"
         <x:styleSheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">

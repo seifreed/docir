@@ -1,7 +1,9 @@
 use super::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, FillDef, FontDef,
-    NumberFormat, TableStyleDef, TableStyleInfo, attr_u32_from_bytes, attr_value,
+    NumberFormat, TableStyleDef, TableStyleInfo,
 };
+use crate::error::ParseError;
+use crate::xml_utils::{attr_u32_from_bytes, attr_value};
 use quick_xml::events::BytesStart;
 
 pub(super) fn apply_font_attr<F>(
@@ -56,16 +58,19 @@ pub(super) fn assign_border_side(border: &mut BorderDef, name: &[u8], side: Bord
     }
 }
 
-pub(super) fn parse_number_format(element: &BytesStart) -> Option<NumberFormat> {
-    let id = attr_u32_from_bytes(element, b"numFmtId");
+pub(super) fn parse_number_format(
+    element: &BytesStart,
+    styles_path: &str,
+) -> Result<Option<NumberFormat>, ParseError> {
+    let id = attr_u32_from_bytes(element, b"numFmtId", styles_path)?;
     let code = attr_value(element, b"formatCode");
-    match (id, code) {
+    Ok(match (id, code) {
         (Some(id), Some(code)) => Some(NumberFormat {
             id,
             format_code: code,
         }),
         _ => None,
-    }
+    })
 }
 
 pub(super) fn parse_pattern_type(element: &BytesStart) -> Option<String> {
@@ -81,7 +86,7 @@ pub(super) fn parse_border_side(element: &BytesStart) -> BorderSide {
     side
 }
 
-pub(super) fn parse_xf(element: &BytesStart) -> CellFormat {
+pub(super) fn parse_xf(element: &BytesStart, styles_path: &str) -> Result<CellFormat, ParseError> {
     let mut xf = CellFormat {
         num_fmt_id: None,
         font_id: None,
@@ -99,11 +104,11 @@ pub(super) fn parse_xf(element: &BytesStart) -> CellFormat {
         alignment: None,
         protection: None,
     };
-    set_opt_u32_attr(&mut xf.num_fmt_id, element, b"numFmtId");
-    set_opt_u32_attr(&mut xf.font_id, element, b"fontId");
-    set_opt_u32_attr(&mut xf.fill_id, element, b"fillId");
-    set_opt_u32_attr(&mut xf.border_id, element, b"borderId");
-    set_opt_u32_attr(&mut xf.xf_id, element, b"xfId");
+    set_opt_u32_attr(&mut xf.num_fmt_id, element, b"numFmtId", styles_path)?;
+    set_opt_u32_attr(&mut xf.font_id, element, b"fontId", styles_path)?;
+    set_opt_u32_attr(&mut xf.fill_id, element, b"fillId", styles_path)?;
+    set_opt_u32_attr(&mut xf.border_id, element, b"borderId", styles_path)?;
+    set_opt_u32_attr(&mut xf.xf_id, element, b"xfId", styles_path)?;
 
     set_bool_attr(&mut xf.apply_number_format, element, b"applyNumberFormat");
     set_bool_attr(&mut xf.apply_font, element, b"applyFont");
@@ -114,13 +119,19 @@ pub(super) fn parse_xf(element: &BytesStart) -> CellFormat {
     set_bool_attr(&mut xf.quote_prefix, element, b"quotePrefix");
     set_bool_attr(&mut xf.pivot_button, element, b"pivotButton");
 
-    xf
+    Ok(xf)
 }
 
-fn set_opt_u32_attr(target: &mut Option<u32>, element: &BytesStart, name: &[u8]) {
-    if let Some(value) = attr_u32_from_bytes(element, name) {
+fn set_opt_u32_attr(
+    target: &mut Option<u32>,
+    element: &BytesStart,
+    name: &[u8],
+    styles_path: &str,
+) -> Result<(), ParseError> {
+    if let Some(value) = attr_u32_from_bytes(element, name, styles_path)? {
         *target = Some(value);
     }
+    Ok(())
 }
 
 fn set_bool_attr(target: &mut bool, element: &BytesStart, name: &[u8]) {

@@ -293,7 +293,7 @@ fn parse_drawing_text_run(
                     text.push_str(&t);
                 }
                 b"rPr" => {
-                    parse_run_style_attrs(&e, &mut bold, &mut italic, &mut font_size);
+                    parse_run_style_attrs(&e, doc_path, &mut bold, &mut italic, &mut font_size)?;
                 }
                 b"latin" => {
                     font_family = parse_run_font_family(&e);
@@ -356,17 +356,19 @@ fn parse_paragraph_alignment(start: &BytesStart<'_>) -> Option<TextAlignment> {
 
 fn parse_run_style_attrs(
     start: &BytesStart<'_>,
+    doc_path: &str,
     bold: &mut Option<bool>,
     italic: &mut Option<bool>,
     font_size: &mut Option<u32>,
-) {
+) -> Result<(), ParseError> {
     if let Some(value) = attr_value(start, b"b") {
         *bold = Some(attr_bool_like(value.as_bytes()));
     }
     if let Some(value) = attr_value(start, b"i") {
         *italic = Some(attr_bool_like(value.as_bytes()));
     }
-    *font_size = attr_u32_from_bytes(start, b"sz");
+    *font_size = attr_u32_from_bytes(start, b"sz", doc_path)?;
+    Ok(())
 }
 
 fn parse_run_font_family(start: &BytesStart<'_>) -> Option<String> {

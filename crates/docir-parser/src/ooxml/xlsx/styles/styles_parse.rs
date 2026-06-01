@@ -2,9 +2,7 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::{XmlScanControl, scan_xml_events};
-use crate::xml_utils::{
-    attr_f64, attr_u32_from_bytes, attr_value, local_name, reader_from_str_with_options,
-};
+use crate::xml_utils::{attr_f64, attr_value, local_name, reader_from_str_with_options};
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,
     NumberFormat, SpreadsheetStyles, TableStyleDef, TableStyleInfo,
@@ -75,8 +73,8 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
 
     scan_xml_events(&mut reader, &mut buf, styles_path, |event| {
         match event {
-            Event::Start(e) => handle_styles_start(&e, &mut state, &mut styles)?,
-            Event::Empty(e) => handle_styles_start(&e, &mut state, &mut styles)?,
+            Event::Start(e) => handle_styles_start(&e, styles_path, &mut state, &mut styles)?,
+            Event::Empty(e) => handle_styles_start(&e, styles_path, &mut state, &mut styles)?,
             Event::End(e) => handle_styles_end(&e, &mut state, &mut styles),
             _ => {}
         }
@@ -91,14 +89,15 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
 
 fn handle_styles_start(
     e: &BytesStart<'_>,
+    styles_path: &str,
     state: &mut StylesParseState,
     styles: &mut SpreadsheetStyles,
 ) -> Result<(), ParseError> {
-    let handled = handle_num_fmt_start(e, state, styles)
+    let handled = handle_num_fmt_start(e, styles_path, state, styles)?
         || handle_font_start(e, state)
         || handle_fill_start(e, state)
         || handle_border_start(e, state)
-        || handle_xf_start(e, state)
+        || handle_xf_start(e, styles_path, state)?
         || handle_table_style_start(e, state, styles);
     if handled {
         return Ok(());
@@ -125,23 +124,24 @@ fn handle_styles_start(
 
 fn handle_num_fmt_start(
     e: &BytesStart<'_>,
+    styles_path: &str,
     state: &mut StylesParseState,
     styles: &mut SpreadsheetStyles,
-) -> bool {
+) -> Result<bool, ParseError> {
     if local_name(e.name().as_ref()) != b"numFmt" {
-        return false;
+        return Ok(false);
     }
     if state.in_num_fmts {
-        if let Some(fmt) = parse_number_format(e) {
+        if let Some(fmt) = parse_number_format(e, styles_path)? {
             styles.number_formats.push(fmt);
         }
     } else if state.in_dxfs
-        && let Some(fmt) = parse_number_format(e)
+        && let Some(fmt) = parse_number_format(e, styles_path)?
         && let Some(dxf) = state.current_dxf.as_mut()
     {
         dxf.num_fmt = Some(fmt);
     }
-    true
+    Ok(true)
 }
 
 fn handle_font_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
@@ -312,21 +312,25 @@ fn handle_border_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool
     }
 }
 
-fn handle_xf_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
+fn handle_xf_start(
+    e: &BytesStart<'_>,
+    styles_path: &str,
+    state: &mut StylesParseState,
+) -> Result<bool, ParseError> {
     match local_name(e.name().as_ref()) {
         b"dxf" if state.in_dxfs => {
             state.current_dxf = Some(DxfStyle::new());
-            true
+            Ok(true)
         }
         b"xf" if state.in_cell_xfs => {
-            state.current_xf = Some(parse_xf(e));
+            state.current_xf = Some(parse_xf(e, styles_path)?);
             state.current_xf_is_style = false;
-            true
+            Ok(true)
         }
         b"xf" if state.in_cell_style_xfs => {
-            state.current_xf = Some(parse_xf(e));
+            state.current_xf = Some(parse_xf(e, styles_path)?);
             state.current_xf_is_style = true;
-            true
+            Ok(true)
         }
         b"alignment" => {
             if let Some(xf) = state.current_xf.as_mut() {
@@ -334,7 +338,7 @@ fn handle_xf_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
             } else if let Some(dxf) = state.current_dxf.as_mut() {
                 dxf.alignment = Some(parse_alignment(e));
             }
-            true
+            Ok(true)
         }
         b"protection" => {
             let protection = parse_protection(e);
@@ -343,9 +347,9 @@ fn handle_xf_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
             } else if let Some(dxf) = state.current_dxf.as_mut() {
                 dxf.protection = Some(protection);
             }
-            true
+            Ok(true)
         }
-        _ => false,
+        _ => Ok(false),
     }
 }
 

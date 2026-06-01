@@ -68,14 +68,22 @@ pub(crate) fn attr_bool_like(raw: &[u8]) -> bool {
     raw == b"1" || raw.eq_ignore_ascii_case(b"true")
 }
 
-pub(crate) fn attr_u32_from_bytes(e: &BytesStart<'_>, name: &[u8]) -> Option<u32> {
-    for attr in e.attributes().flatten() {
+pub(crate) fn attr_u32_from_bytes(
+    e: &BytesStart<'_>,
+    name: &[u8],
+    file: &str,
+) -> Result<Option<u32>, ParseError> {
+    let mut parsed = None;
+    for attr in e.attributes() {
+        let attr = attr.map_err(|err| xml_error(file, err))?;
         if attr.key.as_ref() == name {
-            let value = std::str::from_utf8(attr.value.as_ref()).ok()?;
-            return value.parse::<u32>().ok();
+            let Ok(value) = std::str::from_utf8(attr.value.as_ref()) else {
+                return Ok(None);
+            };
+            parsed = value.parse::<u32>().ok();
         }
     }
-    None
+    Ok(parsed)
 }
 
 pub(crate) fn attr_u64_from_bytes(
@@ -83,16 +91,17 @@ pub(crate) fn attr_u64_from_bytes(
     name: &[u8],
     file: &str,
 ) -> Result<Option<u64>, ParseError> {
+    let mut parsed = None;
     for attr in e.attributes() {
         let attr = attr.map_err(|err| xml_error(file, err))?;
         if attr.key.as_ref() == name {
             let Ok(value) = std::str::from_utf8(attr.value.as_ref()) else {
                 return Ok(None);
             };
-            return Ok(value.parse::<u64>().ok());
+            parsed = value.parse::<u64>().ok();
         }
     }
-    Ok(None)
+    Ok(parsed)
 }
 
 pub(crate) fn attr_each<'a, F>(
