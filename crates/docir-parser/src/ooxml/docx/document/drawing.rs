@@ -3,7 +3,8 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{
-    attr_bool_like, attr_u32_from_bytes, attr_value, attr_value_by_suffix, local_name, xml_error,
+    attr_bool_like, attr_u32_from_bytes, local_name, try_attr_value, try_attr_value_by_suffix,
+    xml_error,
 };
 use docir_core::ir::{
     Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeTransform, ShapeType, TextAlignment,
@@ -11,6 +12,8 @@ use docir_core::ir::{
 use docir_core::types::NodeId;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
+
+const DOC_PATH: &str = "word/document.xml";
 
 pub(super) fn parse_drawing(
     parser: &mut DocxParser,
@@ -30,7 +33,7 @@ pub(super) fn parse_drawing(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_PATH, e));
             }
             _ => {}
         }
@@ -76,55 +79,61 @@ fn handle_drawing_start(
     state: &mut DocxDrawingState,
 ) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
-        b"blip" => state.rel_id = attr_value_by_suffix(e, &[b":embed", b":link"]),
+        b"blip" => state.rel_id = try_attr_value_by_suffix(e, &[b":embed", b":link"], DOC_PATH)?,
         b"docPr" => {
-            state.name = attr_value(e, b"name");
-            state.alt_text = attr_value(e, b"descr");
+            state.name = try_attr_value(e, b"name", DOC_PATH)?;
+            state.alt_text = try_attr_value(e, b"descr", DOC_PATH)?;
         }
-        b"graphicData" => apply_graphic_data_type(e, state),
+        b"graphicData" => apply_graphic_data_type(e, state)?,
         b"prstGeom" => {
-            if let Some(val) = attr_value(e, b"prst") {
+            if let Some(val) = try_attr_value(e, b"prst", DOC_PATH)? {
                 state.shape_type = map_shape_type(&val);
             }
         }
-        b"extent" | b"ext" => apply_extent(e, &mut state.transform),
-        b"off" => apply_offset(e, &mut state.transform),
+        b"extent" | b"ext" => apply_extent(e, &mut state.transform)?,
+        b"off" => apply_offset(e, &mut state.transform)?,
         b"posOffset" => apply_position_offset(reader, e, state),
-        b"txBody" => state.text = Some(parse_drawing_text_body(reader, "word/document.xml")?),
-        b"chart" => state.chart_rel = attr_value_by_suffix(e, &[b":id"]),
-        b"relIds" => collect_diagram_relationships(e, &mut state.diagram_rel_ids),
-        b"hlinkClick" => state.hyperlink_rel = attr_value_by_suffix(e, &[b":id"]),
+        b"txBody" => state.text = Some(parse_drawing_text_body(reader, DOC_PATH)?),
+        b"chart" => state.chart_rel = try_attr_value_by_suffix(e, &[b":id"], DOC_PATH)?,
+        b"relIds" => collect_diagram_relationships(e, &mut state.diagram_rel_ids)?,
+        b"hlinkClick" => state.hyperlink_rel = try_attr_value_by_suffix(e, &[b":id"], DOC_PATH)?,
         _ => {}
     }
     Ok(())
 }
 
-fn apply_graphic_data_type(e: &BytesStart<'_>, state: &mut DocxDrawingState) {
-    if let Some(uri) = attr_value(e, b"uri") {
+fn apply_graphic_data_type(
+    e: &BytesStart<'_>,
+    state: &mut DocxDrawingState,
+) -> Result<(), ParseError> {
+    if let Some(uri) = try_attr_value(e, b"uri", DOC_PATH)? {
         if uri.contains("chart") {
             state.shape_type = ShapeType::Chart;
         } else if uri.contains("diagram") {
             state.shape_type = ShapeType::Custom;
         }
     }
+    Ok(())
 }
 
-fn apply_extent(e: &BytesStart<'_>, transform: &mut ShapeTransform) {
-    if let Some(val) = attr_value(e, b"cx").and_then(|v| v.parse().ok()) {
+fn apply_extent(e: &BytesStart<'_>, transform: &mut ShapeTransform) -> Result<(), ParseError> {
+    if let Some(val) = try_attr_value(e, b"cx", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         transform.width = val;
     }
-    if let Some(val) = attr_value(e, b"cy").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"cy", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         transform.height = val;
     }
+    Ok(())
 }
 
-fn apply_offset(e: &BytesStart<'_>, transform: &mut ShapeTransform) {
-    if let Some(val) = attr_value(e, b"x").and_then(|v| v.parse().ok()) {
+fn apply_offset(e: &BytesStart<'_>, transform: &mut ShapeTransform) -> Result<(), ParseError> {
+    if let Some(val) = try_attr_value(e, b"x", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         transform.x = val;
     }
-    if let Some(val) = attr_value(e, b"y").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"y", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         transform.y = val;
     }
+    Ok(())
 }
 
 fn apply_position_offset(
@@ -144,17 +153,21 @@ fn apply_position_offset(
     }
 }
 
-fn collect_diagram_relationships(e: &BytesStart<'_>, diagram_rel_ids: &mut Vec<String>) {
+fn collect_diagram_relationships(
+    e: &BytesStart<'_>,
+    diagram_rel_ids: &mut Vec<String>,
+) -> Result<(), ParseError> {
     for suffix in [
         b":dm".as_slice(),
         b":lo".as_slice(),
         b":qs".as_slice(),
         b":cs".as_slice(),
     ] {
-        if let Some(val) = attr_value_by_suffix(e, &[suffix]) {
+        if let Some(val) = try_attr_value_by_suffix(e, &[suffix], DOC_PATH)? {
             diagram_rel_ids.push(val);
         }
     }
+    Ok(())
 }
 
 fn finish_drawing_shape(
@@ -178,7 +191,7 @@ fn finish_drawing_shape(
         shape.text = state.text;
         shape.relationship_id = Some(rel_id.clone());
         shape.media_target = Some(normalize_docx_target(&rel.target));
-        let mut span = span_from_reader(reader, "word/document.xml");
+        let mut span = span_from_reader(reader, DOC_PATH);
         span.relationship_id = Some(rel_id.clone());
         shape.span = Some(span);
         if let Some(hrel) = state.hyperlink_rel.as_ref().and_then(|id| rels.get(id)) {
@@ -240,7 +253,7 @@ fn parse_drawing_text_paragraph(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                 b"pPr" => {
-                    alignment = parse_paragraph_alignment(&e);
+                    alignment = parse_paragraph_alignment(&e, doc_path)?;
                 }
                 b"r" => {
                     let run = parse_drawing_text_run(reader, doc_path)?;
@@ -296,7 +309,7 @@ fn parse_drawing_text_run(
                     parse_run_style_attrs(&e, doc_path, &mut bold, &mut italic, &mut font_size)?;
                 }
                 b"latin" => {
-                    font_family = parse_run_font_family(&e);
+                    font_family = parse_run_font_family(&e, doc_path)?;
                 }
                 _ => {}
             },
@@ -350,8 +363,11 @@ fn map_alignment(value: &str) -> Option<TextAlignment> {
     }
 }
 
-fn parse_paragraph_alignment(start: &BytesStart<'_>) -> Option<TextAlignment> {
-    attr_value(start, b"algn").and_then(|value| map_alignment(&value))
+fn parse_paragraph_alignment(
+    start: &BytesStart<'_>,
+    doc_path: &str,
+) -> Result<Option<TextAlignment>, ParseError> {
+    Ok(try_attr_value(start, b"algn", doc_path)?.and_then(|value| map_alignment(&value)))
 }
 
 fn parse_run_style_attrs(
@@ -361,18 +377,21 @@ fn parse_run_style_attrs(
     italic: &mut Option<bool>,
     font_size: &mut Option<u32>,
 ) -> Result<(), ParseError> {
-    if let Some(value) = attr_value(start, b"b") {
+    if let Some(value) = try_attr_value(start, b"b", doc_path)? {
         *bold = Some(attr_bool_like(value.as_bytes()));
     }
-    if let Some(value) = attr_value(start, b"i") {
+    if let Some(value) = try_attr_value(start, b"i", doc_path)? {
         *italic = Some(attr_bool_like(value.as_bytes()));
     }
     *font_size = attr_u32_from_bytes(start, b"sz", doc_path)?;
     Ok(())
 }
 
-fn parse_run_font_family(start: &BytesStart<'_>) -> Option<String> {
-    attr_value(start, b"typeface")
+fn parse_run_font_family(
+    start: &BytesStart<'_>,
+    doc_path: &str,
+) -> Result<Option<String>, ParseError> {
+    try_attr_value(start, b"typeface", doc_path)
 }
 
 #[cfg(test)]

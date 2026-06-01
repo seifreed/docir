@@ -348,6 +348,47 @@ fn test_parse_drawing_reports_malformed_run_style_attributes() {
 }
 
 #[test]
+fn test_parse_drawing_reports_malformed_relationship_attributes() {
+    let xml = r#"
+        <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <w:drawing>
+            <a:graphic>
+              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <a:blip r:embed="rId1" r:embed="rId2"/>
+              </a:graphicData>
+            </a:graphic>
+          </w:drawing>
+        </w:r>
+        "#;
+
+    let mut reader = reader_from_str(xml);
+    let mut parser = DocxParser::new();
+    let rels = Relationships::default();
+    let mut buf = Vec::new();
+    let mut err = None;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:r" => {
+                err = parse_run(&mut parser, &mut reader, &rels).err();
+                break;
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => panic!("xml error: {}", e),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    match err.expect("malformed relationship attributes must fail") {
+        crate::error::ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_drawing_with_missing_relationship_is_ignored() {
     let xml = r#"
         <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"

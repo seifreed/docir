@@ -60,6 +60,29 @@ pub(crate) fn attr_value(e: &BytesStart<'_>, name: &[u8]) -> Option<String> {
     None
 }
 
+pub(crate) fn try_attr_value(
+    e: &BytesStart<'_>,
+    name: &[u8],
+    file: &str,
+) -> Result<Option<String>, ParseError> {
+    let requested_local = name.contains(&b':').then(|| local_name(name));
+    let mut exact_value = None;
+    let mut local_value = None;
+
+    for attr in e.attributes() {
+        let attr = attr.map_err(|err| xml_error(file, err))?;
+        if attr.key.as_ref() == name {
+            exact_value = Some(lossy_attr_value(&attr).to_string());
+        } else if let Some(requested_local) = requested_local
+            && local_name(attr.key.as_ref()) == requested_local
+        {
+            local_value = Some(lossy_attr_value(&attr).to_string());
+        }
+    }
+
+    Ok(exact_value.or(local_value))
+}
+
 pub(crate) fn attr_u32(e: &BytesStart<'_>, name: &[u8]) -> Option<u32> {
     attr_value(e, name).and_then(|v| v.parse::<u32>().ok())
 }
@@ -175,6 +198,24 @@ pub(crate) fn attr_value_by_suffix(e: &BytesStart<'_>, suffixes: &[&[u8]]) -> Op
         }
     }
     None
+}
+
+pub(crate) fn try_attr_value_by_suffix(
+    e: &BytesStart<'_>,
+    suffixes: &[&[u8]],
+    file: &str,
+) -> Result<Option<String>, ParseError> {
+    let mut value = None;
+    for attr in e.attributes() {
+        let attr = attr.map_err(|err| xml_error(file, err))?;
+        let key = attr.key.as_ref();
+        for suffix in suffixes {
+            if key.ends_with(suffix) {
+                value = Some(decoded_attr_value(&attr, e.decoder()));
+            }
+        }
+    }
+    Ok(value)
 }
 
 pub(crate) fn local_name(name: &[u8]) -> &[u8] {
