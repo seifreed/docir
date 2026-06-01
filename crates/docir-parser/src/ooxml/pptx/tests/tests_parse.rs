@@ -88,6 +88,23 @@ fn test_parse_presentation_info_returns_xml_error_for_malformed_show_properties(
 }
 
 #[test]
+fn test_parse_presentation_info_reports_malformed_size_attributes() {
+    let xml = r#"
+        <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:sldSz cx="9144000" cx="duplicate" cy="6858000"/>
+        </p:presentation>
+        "#;
+
+    let err = parse_presentation_info(xml, "ppt/presentation.xml")
+        .expect_err("malformed size attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/presentation.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_presentation_and_view_properties_extended() {
     let pres_xml = r#"
         <p:presentationPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"

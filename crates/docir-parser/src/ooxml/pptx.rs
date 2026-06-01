@@ -242,8 +242,12 @@ fn parse_grid_column(start: &BytesStart<'_>, table: &mut Table) {
     }
 }
 
-fn parse_u64_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<u64> {
-    attr_u64_from_bytes(start, key_name)
+fn parse_u64_attr(
+    start: &BytesStart<'_>,
+    key_name: &[u8],
+    file: &str,
+) -> Result<Option<u64>, ParseError> {
+    attr_u64_from_bytes(start, key_name, file)
 }
 
 fn parse_u32_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<u32> {
@@ -258,13 +262,13 @@ fn parse_size_type_attr(start: &BytesStart<'_>) -> Option<String> {
     attr_value(start, b"type")
 }
 
-fn parse_size_attrs(start: &BytesStart<'_>) -> Option<(u64, u64)> {
-    let cx = parse_u64_attr(start, b"cx");
-    let cy = parse_u64_attr(start, b"cy");
-    match (cx, cy) {
+fn parse_size_attrs(start: &BytesStart<'_>, file: &str) -> Result<Option<(u64, u64)>, ParseError> {
+    let cx = parse_u64_attr(start, b"cx", file)?;
+    let cy = parse_u64_attr(start, b"cy", file)?;
+    Ok(match (cx, cy) {
         (Some(cx), Some(cy)) => Some((cx, cy)),
         _ => None,
-    }
+    })
 }
 
 fn apply_show_properties(start: &BytesStart<'_>, info: &mut PresentationInfo) {
@@ -300,13 +304,13 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                 let name = name_bytes.as_slice();
                 let name = local_name(name);
                 if name == b"sldSz" {
-                    if let Some((cx, cy)) = parse_size_attrs(&e) {
+                    if let Some((cx, cy)) = parse_size_attrs(&e, path)? {
                         let size_type = parse_size_type_attr(&e);
                         info.slide_size = Some(SlideSize { cx, cy, size_type });
                         found = true;
                     }
                 } else if name == b"notesSz" {
-                    if let Some((cx, cy)) = parse_size_attrs(&e) {
+                    if let Some((cx, cy)) = parse_size_attrs(&e, path)? {
                         info.notes_size = Some(SlideSize {
                             cx,
                             cy,
