@@ -83,10 +83,6 @@ pub(crate) fn try_attr_value(
     Ok(exact_value.or(local_value))
 }
 
-pub(crate) fn attr_u32(e: &BytesStart<'_>, name: &[u8]) -> Option<u32> {
-    attr_value(e, name).and_then(|v| v.parse::<u32>().ok())
-}
-
 pub(crate) fn attr_bool_like(raw: &[u8]) -> bool {
     raw == b"1" || raw.eq_ignore_ascii_case(b"true")
 }

@@ -7,8 +7,8 @@ use crate::ooxml::part_utils::{
 };
 use crate::ooxml::relationships::{Relationship, Relationships, TargetMode, rel_type};
 use crate::xml_utils::{
-    attr_u32, attr_u64_from_bytes, attr_value, attr_value_by_suffix, local_name, read_event,
-    xml_error,
+    attr_u64_from_bytes, attr_value, local_name, read_event, try_attr_value,
+    try_attr_value_by_suffix, xml_error,
 };
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
@@ -101,7 +101,7 @@ impl PptxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                     b"gridCol" => {
-                        parse_grid_column(&e, &mut table);
+                        parse_grid_column(&e, &mut table, slide_path)?;
                     }
                     b"tr" => {
                         let row = self.parse_pptx_table_row(reader, slide_path)?;
@@ -112,7 +112,7 @@ impl PptxParser {
                     _ => {}
                 },
                 Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"gridCol" => {
-                    parse_grid_column(&e, &mut table);
+                    parse_grid_column(&e, &mut table, slide_path)?;
                 }
                 Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tbl" => {
                     break;
@@ -219,7 +219,8 @@ fn parse_slide_list(xml: &str) -> Result<Vec<String>, ParseError> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
                 if local_name(e.name().as_ref()) == b"sldId"
-                    && let Some(rel_id) = attr_value_by_suffix(&e, &[b":id"])
+                    && let Some(rel_id) =
+                        try_attr_value_by_suffix(&e, &[b":id"], "ppt/presentation.xml")?
                 {
                     slide_ids.push(rel_id);
                 }
@@ -236,10 +237,15 @@ fn parse_slide_list(xml: &str) -> Result<Vec<String>, ParseError> {
     Ok(slide_ids)
 }
 
-fn parse_grid_column(start: &BytesStart<'_>, table: &mut Table) {
-    if let Some(width) = parse_u32_attr(start, b"w") {
+fn parse_grid_column(
+    start: &BytesStart<'_>,
+    table: &mut Table,
+    file: &str,
+) -> Result<(), ParseError> {
+    if let Some(width) = parse_u32_attr(start, b"w", file)? {
         table.grid.push(GridColumn { width });
     }
+    Ok(())
 }
 
 fn parse_u64_attr(
@@ -250,16 +256,25 @@ fn parse_u64_attr(
     attr_u64_from_bytes(start, key_name, file)
 }
 
-fn parse_u32_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<u32> {
-    attr_u32(start, key_name)
+fn parse_u32_attr(
+    start: &BytesStart<'_>,
+    key_name: &[u8],
+    file: &str,
+) -> Result<Option<u32>, ParseError> {
+    Ok(try_attr_value(start, key_name, file)?.and_then(|value| value.parse::<u32>().ok()))
 }
 
-fn parse_bool_attr(start: &BytesStart<'_>, key_name: &[u8]) -> Option<bool> {
-    attr_value(start, key_name).map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+fn parse_bool_attr(
+    start: &BytesStart<'_>,
+    key_name: &[u8],
+    file: &str,
+) -> Result<Option<bool>, ParseError> {
+    Ok(try_attr_value(start, key_name, file)?
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true")))
 }
 
-fn parse_size_type_attr(start: &BytesStart<'_>) -> Option<String> {
-    attr_value(start, b"type")
+fn parse_size_type_attr(start: &BytesStart<'_>, file: &str) -> Result<Option<String>, ParseError> {
+    try_attr_value(start, b"type", file)
 }
 
 fn parse_size_attrs(start: &BytesStart<'_>, file: &str) -> Result<Option<(u64, u64)>, ParseError> {
@@ -271,22 +286,27 @@ fn parse_size_attrs(start: &BytesStart<'_>, file: &str) -> Result<Option<(u64, u
     })
 }
 
-fn apply_show_properties(start: &BytesStart<'_>, info: &mut PresentationInfo) {
-    if let Some(value) = attr_value(start, b"showType") {
+fn apply_show_properties(
+    start: &BytesStart<'_>,
+    path: &str,
+    info: &mut PresentationInfo,
+) -> Result<(), ParseError> {
+    if let Some(value) = try_attr_value(start, b"showType", path)? {
         info.show_type = Some(value);
     }
-    if let Some(show_loop) = parse_bool_attr(start, b"loop") {
+    if let Some(show_loop) = parse_bool_attr(start, b"loop", path)? {
         info.show_loop = Some(show_loop);
     }
-    if let Some(show_narration) = parse_bool_attr(start, b"showNarration") {
+    if let Some(show_narration) = parse_bool_attr(start, b"showNarration", path)? {
         info.show_narration = Some(show_narration);
     }
-    if let Some(show_animation) = parse_bool_attr(start, b"showAnimation") {
+    if let Some(show_animation) = parse_bool_attr(start, b"showAnimation", path)? {
         info.show_animation = Some(show_animation);
     }
-    if let Some(use_timings) = parse_bool_attr(start, b"useTimings") {
+    if let Some(use_timings) = parse_bool_attr(start, b"useTimings", path)? {
         info.use_timings = Some(use_timings);
     }
+    Ok(())
 }
 
 fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationInfo>, ParseError> {
@@ -305,7 +325,7 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                 let name = local_name(name);
                 if name == b"sldSz" {
                     if let Some((cx, cy)) = parse_size_attrs(&e, path)? {
-                        let size_type = parse_size_type_attr(&e);
+                        let size_type = parse_size_type_attr(&e, path)?;
                         info.slide_size = Some(SlideSize { cx, cy, size_type });
                         found = true;
                     }
@@ -319,10 +339,10 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                         found = true;
                     }
                 } else if name == b"showPr" {
-                    apply_show_properties(&e, &mut info);
+                    apply_show_properties(&e, path, &mut info)?;
                     found = true;
                 } else if name == b"presentation"
-                    && let Some(first_slide_num) = parse_u32_attr(&e, b"firstSlideNum")
+                    && let Some(first_slide_num) = parse_u32_attr(&e, b"firstSlideNum", path)?
                 {
                     info.first_slide_num = Some(first_slide_num);
                     found = true;
