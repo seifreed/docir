@@ -298,6 +298,26 @@ fn test_parse_numbering_level_props() {
 }
 
 #[test]
+fn test_parse_numbering_reports_malformed_attributes() {
+    let xml = r#"
+        <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:abstractNum w:abstractNumId="1" w:abstractNumId="2">
+            <w:lvl w:ilvl="0"/>
+          </w:abstractNum>
+        </w:numbering>
+        "#;
+
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_numbering(xml)
+        .expect_err("malformed numbering attributes must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/numbering.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_revisions_move_and_format() {
     let xml = r#"
         <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
