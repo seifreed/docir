@@ -8,8 +8,8 @@ use crate::odf::{
     utils::parse_frame_transform,
 };
 use crate::xml_utils::{
-    XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events_until_end,
-    scan_xml_events_with_reader, try_attr_value_by_suffix, xml_error,
+    XmlScanControl, local_name, scan_xml_events_until_end, scan_xml_events_with_reader,
+    try_attr_value_by_suffix, xml_error,
 };
 use docir_core::ir::*;
 use docir_core::types::*;
@@ -215,10 +215,10 @@ fn conditional_attr(
     Ok(None)
 }
 
-fn append_text_control(text: &mut String, e: &BytesStart<'_>) {
+fn append_text_control(text: &mut String, e: &BytesStart<'_>) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"s" => {
-            let count = attr_value_by_suffix(e, &[b":c"])
+            let count = try_attr_value_by_suffix(e, &[b":c"], ODF_CONTENT_XML)?
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(1);
             text.extend(std::iter::repeat_n(' ', count));
@@ -227,6 +227,7 @@ fn append_text_control(text: &mut String, e: &BytesStart<'_>) {
         b"line-break" => text.push('\n'),
         _ => {}
     }
+    Ok(())
 }
 
 pub(crate) fn parse_text_element(
@@ -242,7 +243,7 @@ pub(crate) fn parse_text_element(
         move |event| matches!(event, Event::End(e) if e.name().as_ref() == end_name),
         |_reader, event| {
             match event {
-                Event::Start(e) | Event::Empty(e) => append_text_control(&mut text, e),
+                Event::Start(e) | Event::Empty(e) => append_text_control(&mut text, e)?,
                 Event::Text(e) => {
                     let chunk = crate::xml_utils::decoded_text_or_default(e);
                     text.push_str(&chunk);

@@ -598,6 +598,37 @@ fn test_parse_odp_reports_malformed_slide_attributes() {
 }
 
 #[test]
+fn test_parse_odp_reports_malformed_shape_text_space_attributes() {
+    let mimetype = "application/vnd.oasis.opendocument.presentation";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <office:body>
+    <office:presentation>
+      <draw:page draw:name="Slide 1">
+        <draw:custom-shape>
+          <text:p>Before<text:s text:c="1" text:c="2"/>After</text:p>
+        </draw:custom-shape>
+      </draw:page>
+    </office:presentation>
+  </office:body>
+</office:document-content>
+"#;
+    let zip_data = build_odf_zip(mimetype, content_xml, None);
+    let parser = DocumentParser::new();
+
+    let err = parser
+        .parse_reader(Cursor::new(zip_data))
+        .expect_err("malformed shape text space attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_odp_shapes_and_notes() {
     let mimetype = "application/vnd.oasis.opendocument.presentation";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
