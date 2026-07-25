@@ -2,7 +2,9 @@ use super::XlsxParser;
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::visit_attributes;
-use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events_with_reader, xml_error};
+use crate::xml_utils::{
+    XmlScanControl, decoded_text_or_default, local_name, scan_xml_events_with_reader, xml_error,
+};
 use docir_core::ir::{Cell, CellFormula, CellValue};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -125,7 +127,7 @@ impl CellContents {
                 let text = reader
                     .read_text(start.name())
                     .map_err(|e| xml_error(sheet_path, e))?;
-                self.value_text = Some(text.to_string());
+                self.value_text = Some(decoded_text_or_default(&text));
             }
             b"f" => {
                 self.formula = Some(super::parse_formula(reader, start, sheet_path)?);

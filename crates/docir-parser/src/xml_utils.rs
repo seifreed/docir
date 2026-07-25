@@ -1,5 +1,6 @@
 use crate::error::ParseError;
 use quick_xml::Reader;
+use quick_xml::XmlVersion;
 use quick_xml::encoding::Decoder;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{BytesStart, Event};
@@ -16,7 +17,7 @@ pub(crate) fn lossy_attr_value<'a>(
 }
 
 pub(crate) fn decoded_attr_value(attr: &Attribute<'_>, decoder: Decoder) -> String {
-    attr.decode_and_unescape_value(decoder)
+    attr.decoded_and_normalized_value(XmlVersion::Implicit1_0, decoder)
         .map(|value| value.into_owned())
         .unwrap_or_else(|_| String::from_utf8_lossy(attr.value.as_ref()).into_owned())
 }

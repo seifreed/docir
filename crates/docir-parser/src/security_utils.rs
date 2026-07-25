@@ -19,10 +19,9 @@ pub(crate) fn parse_dde_formula(
         }
     } else if let Some(idx) = find_formula_function(&upper, "DDEAUTO(") {
         (DdeFieldType::DdeAuto, idx + "DDEAUTO(".len())
-    } else if let Some(idx) = find_formula_function(&upper, "DDE(") {
-        (DdeFieldType::Dde, idx + "DDE(".len())
     } else {
-        return None;
+        let idx = find_formula_function(&upper, "DDE(")?;
+        (DdeFieldType::Dde, idx + "DDE(".len())
     };
 
     let args_end = find_matching_paren(trimmed, args_start.saturating_sub(1))?;

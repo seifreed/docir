@@ -261,13 +261,7 @@ pub(super) fn parse_border(start: &BytesStart) -> Option<Border> {
         _ => BorderStyle::Single,
     };
     let width = attr_value(start, b"w:sz").and_then(|v| v.parse().ok());
-    let color = attr_value(start, b"w:color").and_then(|v| {
-        if v.eq_ignore_ascii_case("auto") {
-            None
-        } else {
-            Some(v)
-        }
-    });
+    let color = attr_value(start, b"w:color").filter(|v| !v.eq_ignore_ascii_case("auto"));
     Some(Border {
         style,
         width,

@@ -182,7 +182,7 @@ fn coverage_exports_json_and_csv() {
             "section,code,severity,message,path",
             "unexpected CSV header for {:?} (prefix={:?})",
             path,
-            &csv_data.chars().take(64).collect::<String>()
+            csv_data.chars().take(64).collect::<String>()
         );
         if is_ooxml_fixture(&path) {
             assert!(
@@ -307,7 +307,7 @@ fn coverage_exports_parts_only() {
         "status,path,content_type,parser",
         "unexpected parts CSV header for {:?} (prefix={:?})",
         path,
-        &csv_data.chars().take(64).collect::<String>()
+        csv_data.chars().take(64).collect::<String>()
     );
     let csv_rows = csv_data
         .lines()

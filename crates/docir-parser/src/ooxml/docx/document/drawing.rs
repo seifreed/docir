@@ -3,8 +3,8 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{
-    attr_bool_like, attr_u32_from_bytes, local_name, try_attr_value, try_attr_value_by_suffix,
-    xml_error,
+    attr_bool_like, attr_u32_from_bytes, decoded_text_or_default, local_name, try_attr_value,
+    try_attr_value_by_suffix, xml_error,
 };
 use docir_core::ir::{
     Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeTransform, ShapeType, TextAlignment,
@@ -142,7 +142,7 @@ fn apply_position_offset(
     state: &mut DocxDrawingState,
 ) {
     if let Ok(text) = reader.read_text(e.name())
-        && let Ok(val) = text.parse::<i64>()
+        && let Ok(val) = decoded_text_or_default(&text).parse::<i64>()
     {
         if state.next_pos_is_x {
             state.transform.x = val;
@@ -303,7 +303,7 @@ fn parse_drawing_text_run(
                     let t = reader
                         .read_text(e.name())
                         .map_err(|e| xml_error(doc_path, e))?;
-                    text.push_str(&t);
+                    text.push_str(&decoded_text_or_default(&t));
                 }
                 b"rPr" => {
                     parse_run_style_attrs(&e, doc_path, &mut bold, &mut italic, &mut font_size)?;

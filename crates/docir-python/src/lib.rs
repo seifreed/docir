@@ -166,7 +166,7 @@ mod tests {
     static PYTHON_INIT: Once = Once::new();
 
     fn init_python() {
-        PYTHON_INIT.call_once(pyo3::prepare_freethreaded_python);
+        PYTHON_INIT.call_once(Python::initialize);
     }
 
     fn fixture(path: &str) -> String {
@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn docir_module_registers_public_functions() {
         init_python();
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let module = PyModule::new(py, "docir").expect("module creation");
             docir(py, &module).expect("module registration");
             assert!(module.getattr("parse_json").is_ok());

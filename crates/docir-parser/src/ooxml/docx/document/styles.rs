@@ -1,6 +1,6 @@
 use super::DocxParser;
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value, xml_error};
 use docir_core::ir::{Paragraph, RunProperties, Style, StyleSet, StyleType};
 use docir_core::types::NodeId;
 use quick_xml::Reader;
@@ -8,6 +8,8 @@ use quick_xml::events::{BytesStart, Event};
 
 use super::paragraph::parse_paragraph_properties;
 use super::table::parse_table_properties;
+
+const STYLES_PATH: &str = "word/styles.xml";
 
 impl DocxParser {
     /// Public API entrypoint: parse_styles.
@@ -25,7 +27,7 @@ impl DocxParser {
                 Ok(Event::Start(e)) => {
                     handle_style_start(&mut reader, &e, &mut current, &mut in_name)?
                 }
-                Ok(Event::Empty(e)) => handle_style_empty(&e, &mut current),
+                Ok(Event::Empty(e)) => handle_style_empty(&e, &mut current)?,
                 Ok(Event::Text(e)) => {
                     if in_name && let Some(style) = current.as_mut() {
                         style.name = Some(crate::xml_utils::decoded_text_or_default(&e));
@@ -47,7 +49,7 @@ impl DocxParser {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    return Err(xml_error("word/styles.xml", e));
+                    return Err(xml_error(STYLES_PATH, e));
                 }
                 _ => {}
             }
@@ -77,7 +79,7 @@ fn handle_style_start(
 ) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
         b"style" => {
-            *current = Some(build_style(event));
+            *current = Some(build_style(event)?);
         }
         b"name" => {
             *in_name = true;
@@ -104,38 +106,42 @@ fn handle_style_start(
                 style.table_props = Some(props);
             }
         }
-        b"basedOn" => assign_style_attr(event, current.as_mut(), StyleAttr::BasedOn),
-        b"next" => assign_style_attr(event, current.as_mut(), StyleAttr::Next),
+        b"basedOn" => assign_style_attr(event, current.as_mut(), StyleAttr::BasedOn)?,
+        b"next" => assign_style_attr(event, current.as_mut(), StyleAttr::Next)?,
         _ => {}
     }
     Ok(())
 }
 
-fn handle_style_empty(event: &BytesStart<'_>, current: &mut Option<Style>) {
+fn handle_style_empty(
+    event: &BytesStart<'_>,
+    current: &mut Option<Style>,
+) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
-        b"name" => assign_style_attr(event, current.as_mut(), StyleAttr::Name),
-        b"basedOn" => assign_style_attr(event, current.as_mut(), StyleAttr::BasedOn),
-        b"next" => assign_style_attr(event, current.as_mut(), StyleAttr::Next),
+        b"name" => assign_style_attr(event, current.as_mut(), StyleAttr::Name)?,
+        b"basedOn" => assign_style_attr(event, current.as_mut(), StyleAttr::BasedOn)?,
+        b"next" => assign_style_attr(event, current.as_mut(), StyleAttr::Next)?,
         _ => {}
     }
+    Ok(())
 }
 
-fn build_style(event: &BytesStart<'_>) -> Style {
-    let style_id = attr_value(event, b"w:styleId").unwrap_or_default();
+fn build_style(event: &BytesStart<'_>) -> Result<Style, ParseError> {
+    let style_id = try_attr_value(event, b"w:styleId", STYLES_PATH)?.unwrap_or_default();
     let mut style = Style {
         style_id,
         name: None,
         style_type: StyleType::Other,
         based_on: None,
         next: None,
-        is_default: attr_value(event, b"w:default")
+        is_default: try_attr_value(event, b"w:default", STYLES_PATH)?
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false),
         run_props: None,
         paragraph_props: None,
         table_props: None,
     };
-    if let Some(t) = attr_value(event, b"w:type") {
+    if let Some(t) = try_attr_value(event, b"w:type", STYLES_PATH)? {
         style.style_type = match t.as_str() {
             "paragraph" => StyleType::Paragraph,
             "character" => StyleType::Character,
@@ -144,7 +150,7 @@ fn build_style(event: &BytesStart<'_>) -> Style {
             _ => StyleType::Other,
         };
     }
-    style
+    Ok(style)
 }
 
 enum StyleAttr {
@@ -153,16 +159,21 @@ enum StyleAttr {
     Next,
 }
 
-fn assign_style_attr(event: &BytesStart<'_>, style: Option<&mut Style>, attr: StyleAttr) {
+fn assign_style_attr(
+    event: &BytesStart<'_>,
+    style: Option<&mut Style>,
+    attr: StyleAttr,
+) -> Result<(), ParseError> {
     let Some(style) = style else {
-        return;
+        return Ok(());
     };
-    let Some(val) = attr_value(event, b"w:val") else {
-        return;
+    let Some(val) = try_attr_value(event, b"w:val", STYLES_PATH)? else {
+        return Ok(());
     };
     match attr {
         StyleAttr::Name => style.name = Some(val),
         StyleAttr::BasedOn => style.based_on = Some(val),
         StyleAttr::Next => style.next = Some(val),
     }
+    Ok(())
 }

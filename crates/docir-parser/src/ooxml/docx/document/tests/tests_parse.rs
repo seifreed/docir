@@ -182,6 +182,27 @@ fn test_parse_styles_with_table_props() {
             .is_some()
     );
 }
+
+#[test]
+fn test_parse_styles_reports_malformed_attributes() {
+    let xml = r#"
+        <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:style w:type="paragraph" w:styleId="MyStyle" w:styleId="Duplicate">
+            <w:name w:val="My Style"/>
+          </w:style>
+        </w:styles>
+        "#;
+
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_styles(xml)
+        .expect_err("malformed styles attributes must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/styles.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
 #[test]
 fn test_parse_font_table_collects_font_entries() {
     let xml = r#"

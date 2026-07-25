@@ -1,6 +1,8 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{attr_bool_like, local_name, visit_attributes, xml_error};
+use crate::xml_utils::{
+    attr_bool_like, decoded_text_or_default, local_name, visit_attributes, xml_error,
+};
 use docir_core::ir::{
     CalcChain, CalcChainEntry, CellError, CellFormula, ColumnDefinition, ConditionalFormat,
     ConditionalRule, FormulaType, MergedCellRange, parse_cell_reference,
@@ -224,7 +226,7 @@ pub(super) fn parse_formula(
         .map_err(|e| xml_error(sheet_path, e))?;
 
     Ok(CellFormula {
-        text: text.to_string(),
+        text: decoded_text_or_default(&text),
         formula_type,
         shared_index,
         shared_ref,
