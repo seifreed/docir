@@ -89,6 +89,7 @@ fn test_path_traversal_detection() {
     assert!(is_path_traversal("foo/../bar"));
     assert!(is_path_traversal("/absolute/path"));
     assert!(is_path_traversal("C:\\Windows"));
+    assert!(is_path_traversal("C:Windows"));
     assert!(is_path_traversal("foo\\bar"));
 
     assert!(!is_path_traversal("word/document.xml"));

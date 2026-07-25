@@ -72,14 +72,11 @@ pub(super) fn is_path_traversal(path: &str) -> bool {
     }
 
     let bytes = path.as_bytes();
-    if bytes.len() >= 3 {
+    if bytes.len() >= 2 {
         let first = bytes[0];
         let second = bytes[1];
         if first.is_ascii_alphabetic() && second == b':' {
-            let third = bytes[2];
-            if third == b'\\' || third == b'/' {
-                return true;
-            }
+            return true;
         }
     }
 
