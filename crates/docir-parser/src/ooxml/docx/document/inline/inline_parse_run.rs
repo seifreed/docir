@@ -7,7 +7,7 @@ use crate::ooxml::docx::document::{
 };
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::{
-    XmlScanControl, attr_value, decoded_text_or_default, local_name, xml_error,
+    XmlScanControl, decoded_text_or_default, local_name, try_attr_value, xml_error,
 };
 use docir_core::ir::{Revision, RevisionType};
 use docir_core::types::{NodeId, SourceSpan};
@@ -99,16 +99,16 @@ fn handle_run_start_event(
             start,
             docir_core::ir::FieldKind::FootnoteRef,
             &mut state.embedded,
-        ),
+        )?,
         b"endnoteReference" => push_note_reference_if_present(
             parser,
             reader,
             start,
             docir_core::ir::FieldKind::EndnoteRef,
             &mut state.embedded,
-        ),
+        )?,
         b"fldChar" => {
-            state.field_char = attr_value(start, b"w:fldCharType");
+            state.field_char = try_attr_value(start, b"w:fldCharType", super::DOC_XML_PATH)?;
         }
         b"t" | b"instrText" | b"delText" => {
             let content = reader
@@ -136,7 +136,7 @@ fn handle_run_empty_event(
             state.text.push('\t');
         }
         b"fldChar" => {
-            state.field_char = attr_value(start, b"w:fldCharType");
+            state.field_char = try_attr_value(start, b"w:fldCharType", super::DOC_XML_PATH)?;
         }
         b"footnoteReference" => push_note_reference_if_present(
             parser,
@@ -144,14 +144,14 @@ fn handle_run_empty_event(
             start,
             docir_core::ir::FieldKind::FootnoteRef,
             &mut state.embedded,
-        ),
+        )?,
         b"endnoteReference" => push_note_reference_if_present(
             parser,
             reader,
             start,
             docir_core::ir::FieldKind::EndnoteRef,
             &mut state.embedded,
-        ),
+        )?,
         _ => {}
     }
     Ok(())
@@ -163,10 +163,11 @@ fn push_note_reference_if_present(
     start: &BytesStart<'_>,
     kind: docir_core::ir::FieldKind,
     embedded: &mut Vec<NodeId>,
-) {
-    if let Some(field_id) = parse_note_reference(parser, reader, start, kind) {
+) -> Result<(), ParseError> {
+    if let Some(field_id) = parse_note_reference(parser, reader, start, kind)? {
         embedded.push(field_id);
     }
+    Ok(())
 }
 
 fn parse_note_reference(
@@ -174,9 +175,11 @@ fn parse_note_reference(
     reader: &Reader<&[u8]>,
     start: &BytesStart<'_>,
     kind: docir_core::ir::FieldKind,
-) -> Option<NodeId> {
-    let id = attr_value(start, b"w:id")?;
-    Some(insert_note_reference(parser, reader, kind, id))
+) -> Result<Option<NodeId>, ParseError> {
+    let Some(id) = try_attr_value(start, b"w:id", super::DOC_XML_PATH)? else {
+        return Ok(None);
+    };
+    Ok(Some(insert_note_reference(parser, reader, kind, id)))
 }
 
 pub(crate) fn parse_revision_inline(
@@ -227,9 +230,9 @@ fn parse_revision(
     mode: RevisionParseMode,
 ) -> Result<NodeId, ParseError> {
     let mut revision = Revision::new(change_type);
-    revision.revision_id = attr_value(start, b"w:id");
-    revision.author = attr_value(start, b"w:author");
-    revision.date = attr_value(start, b"w:date");
+    revision.revision_id = try_attr_value(start, b"w:id", super::DOC_XML_PATH)?;
+    revision.author = try_attr_value(start, b"w:author", super::DOC_XML_PATH)?;
+    revision.date = try_attr_value(start, b"w:date", super::DOC_XML_PATH)?;
     revision.span = Some(SourceSpan::new(super::DOC_XML_PATH));
 
     let mut buf = Vec::new();
