@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::{
-    XmlScanControl, attr_value, attr_value_by_suffix, local_name, reader_from_str, scan_xml_events,
-    xml_error,
+    XmlScanControl, local_name, reader_from_str, scan_xml_events, try_attr_value,
+    try_attr_value_by_suffix, xml_error,
 };
 use docir_core::ir::IRNode;
 use docir_core::security::{MacroModule, MacroModuleType, MacroProject};
@@ -71,7 +71,7 @@ pub(crate) fn scan_script_links(xml: &str, source: &str) -> Result<Vec<String>, 
         match event {
             Event::Start(e) | Event::Empty(e) => {
                 if local_name(e.name().as_ref()) == b"script"
-                    && let Some(href) = attr_value_by_suffix(&e, &[b":href"])
+                    && let Some(href) = try_attr_value_by_suffix(&e, &[b":href"], source)?
                 {
                     links.push(href);
                 }
@@ -99,12 +99,12 @@ pub(crate) fn parse_odf_signatures(
                 b"Signature" => current = Some(docir_core::ir::DigitalSignature::new()),
                 b"SignatureMethod" => {
                     if let Some(sig) = current.as_mut() {
-                        sig.signature_method = attr_value(&e, b"Algorithm");
+                        sig.signature_method = try_attr_value(&e, b"Algorithm", source)?;
                     }
                 }
                 b"DigestMethod" => {
                     if let Some(sig) = current.as_mut()
-                        && let Some(alg) = attr_value(&e, b"Algorithm")
+                        && let Some(alg) = try_attr_value(&e, b"Algorithm", source)?
                     {
                         sig.digest_methods.push(alg);
                     }
@@ -114,12 +114,12 @@ pub(crate) fn parse_odf_signatures(
             Event::Empty(e) => match local_name(e.name().as_ref()) {
                 b"SignatureMethod" => {
                     if let Some(sig) = current.as_mut() {
-                        sig.signature_method = attr_value(&e, b"Algorithm");
+                        sig.signature_method = try_attr_value(&e, b"Algorithm", source)?;
                     }
                 }
                 b"DigestMethod" => {
                     if let Some(sig) = current.as_mut()
-                        && let Some(alg) = attr_value(&e, b"Algorithm")
+                        && let Some(alg) = try_attr_value(&e, b"Algorithm", source)?
                     {
                         sig.digest_methods.push(alg);
                     }
@@ -162,6 +162,7 @@ pub(crate) fn parse_odf_signatures(
 #[cfg(test)]
 mod tests {
     use super::{parse_odf_signatures, scan_script_links};
+    use crate::error::ParseError;
 
     #[test]
     fn scan_script_links_accepts_alternate_namespace_prefixes() {
@@ -209,5 +210,25 @@ mod tests {
         );
         assert_eq!(signatures[0].digest_methods, vec!["sha256"]);
         assert_eq!(signatures[0].signer.as_deref(), Some("CN=Tester"));
+    }
+
+    #[test]
+    fn parse_odf_signatures_reports_malformed_attributes() {
+        let xml = r#"
+            <sig:Signatures xmlns:sig="http://www.w3.org/2000/09/xmldsig#">
+              <sig:Signature>
+                <sig:SignedInfo>
+                  <sig:SignatureMethod Algorithm="rsa-sha256" Algorithm="rsa-sha512"/>
+                </sig:SignedInfo>
+              </sig:Signature>
+            </sig:Signatures>
+        "#;
+
+        let err = parse_odf_signatures(xml, "META-INF/documentsignatures.xml")
+            .expect_err("malformed ODF signature attributes must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "META-INF/documentsignatures.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }
