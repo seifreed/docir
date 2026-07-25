@@ -1,4 +1,7 @@
-use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events};
+use crate::error::ParseError;
+use crate::xml_utils::{
+    XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events, try_attr_value_by_suffix,
+};
 use docir_core::ir::{DefinedName, ShapeTransform};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
@@ -78,29 +81,32 @@ fn parse_ods_named_definition(
     Some(def)
 }
 
-pub(crate) fn parse_frame_transform(start: &BytesStart<'_>) -> ShapeTransform {
+pub(crate) fn parse_frame_transform(start: &BytesStart<'_>) -> Result<ShapeTransform, ParseError> {
     let mut transform = ShapeTransform::default();
-    if let Some(x) = parse_length_emu_attr(start, b":x") {
+    if let Some(x) = parse_length_emu_attr(start, b":x")? {
         transform.x = x;
     }
-    if let Some(y) = parse_length_emu_attr(start, b":y") {
+    if let Some(y) = parse_length_emu_attr(start, b":y")? {
         transform.y = y;
     }
-    if let Some(width) = parse_length_emu_attr_u64(start, b":width") {
+    if let Some(width) = parse_length_emu_attr_u64(start, b":width")? {
         transform.width = width;
     }
-    if let Some(height) = parse_length_emu_attr_u64(start, b":height") {
+    if let Some(height) = parse_length_emu_attr_u64(start, b":height")? {
         transform.height = height;
     }
-    transform
+    Ok(transform)
 }
 
-fn parse_length_emu_attr(start: &BytesStart<'_>, key: &[u8]) -> Option<i64> {
-    attr_value_by_suffix(start, &[key]).and_then(parse_length_emu)
+fn parse_length_emu_attr(start: &BytesStart<'_>, key: &[u8]) -> Result<Option<i64>, ParseError> {
+    Ok(try_attr_value_by_suffix(start, &[key], "content.xml")?.and_then(parse_length_emu))
 }
 
-fn parse_length_emu_attr_u64(start: &BytesStart<'_>, key: &[u8]) -> Option<u64> {
-    attr_value_by_suffix(start, &[key]).and_then(parse_length_emu_u64)
+fn parse_length_emu_attr_u64(
+    start: &BytesStart<'_>,
+    key: &[u8],
+) -> Result<Option<u64>, ParseError> {
+    Ok(try_attr_value_by_suffix(start, &[key], "content.xml")?.and_then(parse_length_emu_u64))
 }
 
 fn parse_length_emu(value: String) -> Option<i64> {
@@ -205,7 +211,7 @@ mod tests {
             other => panic!("unexpected xml event: {other:?}"),
         };
 
-        let transform = parse_frame_transform(&start);
+        let transform = parse_frame_transform(&start).expect("frame transform");
         assert_eq!(transform.x, 914_400);
         assert_eq!(transform.y, 914_400);
         assert_eq!(transform.width, 914_400);
@@ -224,7 +230,7 @@ mod tests {
             other => panic!("unexpected xml event: {other:?}"),
         };
 
-        let transform = parse_frame_transform(&start);
+        let transform = parse_frame_transform(&start).expect("frame transform");
         assert_eq!(transform.x, 0);
         assert_eq!(transform.y, 0);
         assert_eq!(transform.width, 0);

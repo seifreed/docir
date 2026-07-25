@@ -14,7 +14,7 @@ pub(crate) fn parse_draw_frame_spreadsheet(
     start: &BytesStart<'_>,
     store: &mut IrStore,
 ) -> Result<Option<NodeId>, ParseError> {
-    let transform = parse_frame_transform(start);
+    let transform = parse_frame_transform(start)?;
     let mut frame = FrameShapeState::new();
     let mut buf = Vec::new();
     let mut name = attr_value_by_suffix(start, &[b":name"]);

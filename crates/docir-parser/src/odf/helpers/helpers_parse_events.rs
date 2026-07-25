@@ -298,7 +298,7 @@ pub(crate) fn parse_draw_frame(
     store: &mut IrStore,
 ) -> Result<Option<NodeId>, ParseError> {
     let mut shape = Shape::new(ShapeType::Picture);
-    shape.transform = parse_frame_transform(start);
+    shape.transform = parse_frame_transform(start)?;
     shape.name = attr_value_by_suffix(start, &[b":name"]);
     let mut buf = Vec::new();
     let mut has_shape = false;

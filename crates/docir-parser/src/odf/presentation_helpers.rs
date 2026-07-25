@@ -121,7 +121,7 @@ pub(super) fn parse_draw_frame_presentation(
     start: &BytesStart<'_>,
     store: &mut IrStore,
 ) -> Result<Option<NodeId>, ParseError> {
-    let transform = parse_frame_transform(start);
+    let transform = parse_frame_transform(start)?;
     let mut state = DrawFrameState {
         frame: FrameShapeState::new(),
         text: None,
