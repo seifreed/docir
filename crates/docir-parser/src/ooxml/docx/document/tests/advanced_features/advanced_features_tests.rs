@@ -100,3 +100,35 @@ fn test_parse_sdt_inline_collects_run_hyperlink_field_and_revision_in_order() {
         Some(docir_core::ir::IRNode::Revision(_))
     ));
 }
+
+#[test]
+fn test_parse_sdt_inline_reports_malformed_field_attributes() {
+    let xml = r#"
+        <w:sdt xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:sdtContent>
+            <w:fldSimple w:instr="DATE" w:instr="AUTHOR"><w:r><w:t>C</w:t></w:r></w:fldSimple>
+          </w:sdtContent>
+        </w:sdt>
+    "#;
+
+    let rels = Relationships::default();
+    let mut parser = DocxParser::new();
+    let mut reader = reader_from_str(xml);
+    let mut buf = Vec::new();
+    let err = loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:sdt" => {
+                break parse_sdt(&mut parser, &mut reader, &rels, SdtMode::Inline).err();
+            }
+            Ok(Event::Eof) => panic!("missing sdt"),
+            Err(e) => panic!("xml error: {e}"),
+            _ => {}
+        }
+        buf.clear();
+    };
+
+    match err.expect("malformed SDT field attributes must fail") {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}

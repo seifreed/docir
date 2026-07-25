@@ -5,7 +5,7 @@ use crate::ooxml::docx::DocxParser;
 use crate::ooxml::docx::document::span_from_reader;
 use crate::ooxml::docx::document::{CommentRangeEnd, CommentRangeStart, CommentReference};
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{XmlScanControl, attr_value, local_name};
+use crate::xml_utils::{XmlScanControl, local_name, try_attr_value};
 use docir_core::ir::RevisionType;
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
@@ -71,17 +71,17 @@ fn parse_sdt_properties(
             match event {
                 Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
                     b"tag" => {
-                        if let Some(val) = attr_value(e, b"w:val") {
+                        if let Some(val) = try_attr_value(e, b"w:val", super::DOC_XML_PATH)? {
                             control.tag = Some(val);
                         }
                     }
                     b"alias" => {
-                        if let Some(val) = attr_value(e, b"w:val") {
+                        if let Some(val) = try_attr_value(e, b"w:val", super::DOC_XML_PATH)? {
                             control.alias = Some(val);
                         }
                     }
                     b"id" => {
-                        if let Some(val) = attr_value(e, b"w:val") {
+                        if let Some(val) = try_attr_value(e, b"w:val", super::DOC_XML_PATH)? {
                             control.sdt_id = Some(val);
                         }
                     }
@@ -92,9 +92,12 @@ fn parse_sdt_properties(
                     b"text" => control.control_type = Some("text".to_string()),
                     b"picture" => control.control_type = Some("picture".to_string()),
                     b"dataBinding" => {
-                        control.data_binding_xpath = attr_value(e, b"w:xpath");
-                        control.data_binding_store_item_id = attr_value(e, b"w:storeItemID");
-                        control.data_binding_prefix_mappings = attr_value(e, b"w:prefixMappings");
+                        control.data_binding_xpath =
+                            try_attr_value(e, b"w:xpath", super::DOC_XML_PATH)?;
+                        control.data_binding_store_item_id =
+                            try_attr_value(e, b"w:storeItemID", super::DOC_XML_PATH)?;
+                        control.data_binding_prefix_mappings =
+                            try_attr_value(e, b"w:prefixMappings", super::DOC_XML_PATH)?;
                     }
                     _ => {}
                 },
@@ -178,32 +181,32 @@ fn handle_sdt_content_inline_start(
             runs.push(link_id);
         }
         b"fldSimple" => {
-            let instr = attr_value(start, b"w:instr");
+            let instr = try_attr_value(start, b"w:instr", super::DOC_XML_PATH)?;
             let field_id = parse_field(parser, reader, instr)?;
             runs.push(field_id);
         }
         b"commentRangeStart" => {
-            if let Some(node_id) = insert_comment_range_start(parser, start) {
+            if let Some(node_id) = insert_comment_range_start(parser, start)? {
                 runs.push(node_id);
             }
         }
         b"commentRangeEnd" => {
-            if let Some(node_id) = insert_comment_range_end(parser, start) {
+            if let Some(node_id) = insert_comment_range_end(parser, start)? {
                 runs.push(node_id);
             }
         }
         b"commentReference" => {
-            if let Some(node_id) = insert_comment_reference(parser, start) {
+            if let Some(node_id) = insert_comment_reference(parser, start)? {
                 runs.push(node_id);
             }
         }
         b"bookmarkStart" => {
-            if let Some(node_id) = insert_bookmark_start(parser, start) {
+            if let Some(node_id) = insert_bookmark_start(parser, start)? {
                 runs.push(node_id);
             }
         }
         b"bookmarkEnd" => {
-            if let Some(node_id) = insert_bookmark_end(parser, start) {
+            if let Some(node_id) = insert_bookmark_end(parser, start)? {
                 runs.push(node_id);
             }
         }
@@ -220,54 +223,79 @@ fn handle_sdt_content_inline_start(
     Ok(())
 }
 
-fn insert_comment_range_start(parser: &mut DocxParser, start: &BytesStart<'_>) -> Option<NodeId> {
-    let cid = attr_value(start, b"w:id")?;
+fn insert_comment_range_start(
+    parser: &mut DocxParser,
+    start: &BytesStart<'_>,
+) -> Result<Option<NodeId>, ParseError> {
+    let Some(cid) = try_attr_value(start, b"w:id", super::DOC_XML_PATH)? else {
+        return Ok(None);
+    };
     let mut node = CommentRangeStart::new(cid);
     node.span = Some(SourceSpan::new(super::DOC_XML_PATH));
     let node_id = node.id;
     parser
         .store
         .insert(docir_core::ir::IRNode::CommentRangeStart(node));
-    Some(node_id)
+    Ok(Some(node_id))
 }
 
-fn insert_comment_range_end(parser: &mut DocxParser, start: &BytesStart<'_>) -> Option<NodeId> {
-    let cid = attr_value(start, b"w:id")?;
+fn insert_comment_range_end(
+    parser: &mut DocxParser,
+    start: &BytesStart<'_>,
+) -> Result<Option<NodeId>, ParseError> {
+    let Some(cid) = try_attr_value(start, b"w:id", super::DOC_XML_PATH)? else {
+        return Ok(None);
+    };
     let mut node = CommentRangeEnd::new(cid);
     node.span = Some(SourceSpan::new(super::DOC_XML_PATH));
     let node_id = node.id;
     parser
         .store
         .insert(docir_core::ir::IRNode::CommentRangeEnd(node));
-    Some(node_id)
+    Ok(Some(node_id))
 }
 
-fn insert_comment_reference(parser: &mut DocxParser, start: &BytesStart<'_>) -> Option<NodeId> {
-    let cid = attr_value(start, b"w:id")?;
+fn insert_comment_reference(
+    parser: &mut DocxParser,
+    start: &BytesStart<'_>,
+) -> Result<Option<NodeId>, ParseError> {
+    let Some(cid) = try_attr_value(start, b"w:id", super::DOC_XML_PATH)? else {
+        return Ok(None);
+    };
     let mut node = CommentReference::new(cid);
     node.span = Some(SourceSpan::new(super::DOC_XML_PATH));
     let node_id = node.id;
     parser
         .store
         .insert(docir_core::ir::IRNode::CommentReference(node));
-    Some(node_id)
+    Ok(Some(node_id))
 }
 
-fn insert_bookmark_start(parser: &mut DocxParser, start: &BytesStart<'_>) -> Option<NodeId> {
-    let bm_id = attr_value(start, b"w:id")?;
+fn insert_bookmark_start(
+    parser: &mut DocxParser,
+    start: &BytesStart<'_>,
+) -> Result<Option<NodeId>, ParseError> {
+    let Some(bm_id) = try_attr_value(start, b"w:id", super::DOC_XML_PATH)? else {
+        return Ok(None);
+    };
     let mut bm = docir_core::ir::BookmarkStart::new(bm_id);
-    bm.name = attr_value(start, b"w:name");
+    bm.name = try_attr_value(start, b"w:name", super::DOC_XML_PATH)?;
     let node_id = bm.id;
     parser
         .store
         .insert(docir_core::ir::IRNode::BookmarkStart(bm));
-    Some(node_id)
+    Ok(Some(node_id))
 }
 
-fn insert_bookmark_end(parser: &mut DocxParser, start: &BytesStart<'_>) -> Option<NodeId> {
-    let bm_id = attr_value(start, b"w:id")?;
+fn insert_bookmark_end(
+    parser: &mut DocxParser,
+    start: &BytesStart<'_>,
+) -> Result<Option<NodeId>, ParseError> {
+    let Some(bm_id) = try_attr_value(start, b"w:id", super::DOC_XML_PATH)? else {
+        return Ok(None);
+    };
     let bm = docir_core::ir::BookmarkEnd::new(bm_id);
     let node_id = bm.id;
     parser.store.insert(docir_core::ir::IRNode::BookmarkEnd(bm));
-    Some(node_id)
+    Ok(Some(node_id))
 }
