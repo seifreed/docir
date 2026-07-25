@@ -216,7 +216,7 @@ fn handle_spreadsheet_start_full(
     match local_name(start.name().as_ref()) {
         b"spreadsheet" => *in_spreadsheet = true,
         b"content-validation" if *in_spreadsheet => {
-            insert_validation_definition(validations, start);
+            insert_validation_definition(validations, start)?;
         }
         b"table" if *in_spreadsheet => {
             let worksheet = parse_ods_table(reader, start, *sheet_id, store, validations, limits)?;
@@ -255,7 +255,7 @@ fn handle_spreadsheet_empty_full(
             *sheet_id += 1;
         }
         b"content-validation" if *in_spreadsheet => {
-            insert_validation_definition(validations, empty);
+            insert_validation_definition(validations, empty)?;
         }
         b"data-pilot-table" if *in_spreadsheet => {
             let parsed = parse_ods_pivot_table_empty(empty, *next_cache_id);
@@ -310,10 +310,11 @@ fn handle_spreadsheet_empty_fast(
 fn insert_validation_definition(
     validations: &mut HashMap<String, ValidationDef>,
     element: &BytesStart<'_>,
-) {
-    if let Some((name, def)) = parse_validation_definition(element) {
+) -> Result<(), ParseError> {
+    if let Some((name, def)) = parse_validation_definition(element)? {
         validations.insert(name, def);
     }
+    Ok(())
 }
 
 fn insert_worksheet(

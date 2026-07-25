@@ -9,7 +9,7 @@ use crate::odf::{
 };
 use crate::xml_utils::{
     XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events_until_end,
-    scan_xml_events_with_reader, xml_error,
+    scan_xml_events_with_reader, try_attr_value_by_suffix, xml_error,
 };
 use docir_core::ir::*;
 use docir_core::types::*;
@@ -62,18 +62,21 @@ pub(crate) fn parse_notes(reader: &mut OdfReader<'_>) -> Result<Option<String>, 
 
 pub(crate) fn parse_validation_definition(
     start: &BytesStart<'_>,
-) -> Option<(String, ValidationDef)> {
-    let name = attr_value_by_suffix(start, &[b":name"])?;
-    let condition = attr_value_by_suffix(start, &[b":condition"]);
-    let allow_blank = attr_value_by_suffix(start, &[b":allow-empty-cell"])
+) -> Result<Option<(String, ValidationDef)>, ParseError> {
+    let Some(name) = try_attr_value_by_suffix(start, &[b":name"], "content.xml")? else {
+        return Ok(None);
+    };
+    let condition = try_attr_value_by_suffix(start, &[b":condition"], "content.xml")?;
+    let allow_blank = try_attr_value_by_suffix(start, &[b":allow-empty-cell"], "content.xml")?
         .map(|v| v == "true")
         .unwrap_or(false);
-    let show_input_message = attr_value_by_suffix(start, &[b":display-list"])
+    let show_input_message = try_attr_value_by_suffix(start, &[b":display-list"], "content.xml")?
         .map(|v| v == "true")
         .unwrap_or(false);
-    let show_error_message = attr_value_by_suffix(start, &[b":display-error-message"])
-        .map(|v| v == "true")
-        .unwrap_or(false);
+    let show_error_message =
+        try_attr_value_by_suffix(start, &[b":display-error-message"], "content.xml")?
+            .map(|v| v == "true")
+            .unwrap_or(false);
     let def = ValidationDef {
         validation_type: condition.clone(),
         operator: None,
@@ -87,7 +90,7 @@ pub(crate) fn parse_validation_definition(
         formula1: condition,
         formula2: None,
     };
-    Some((name, def))
+    Ok(Some((name, def)))
 }
 
 pub(crate) fn parse_ods_conditional_formatting(

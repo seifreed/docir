@@ -201,7 +201,7 @@ pub(super) fn collect_validation_definitions(
             Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"spreadsheet" => in_spreadsheet = true,
                 b"content-validation" if in_spreadsheet => {
-                    if let Some((name, def)) = super::parse_validation_definition(&e) {
+                    if let Some((name, def)) = super::parse_validation_definition(&e)? {
                         validations.insert(name, def);
                     }
                 }
@@ -210,7 +210,7 @@ pub(super) fn collect_validation_definitions(
             Event::Empty(e) => {
                 if local_name(e.name().as_ref()) == b"content-validation"
                     && in_spreadsheet
-                    && let Some((name, def)) = super::parse_validation_definition(&e)
+                    && let Some((name, def)) = super::parse_validation_definition(&e)?
                 {
                     validations.insert(name, def);
                 }
