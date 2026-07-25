@@ -61,7 +61,7 @@ pub(super) fn parse_content_text(
             Ok(Event::Start(e)) => {
                 handle_text_start(&e, &mut reader, store, limits, &mut section, &mut state)?
             }
-            Ok(Event::Empty(e)) => handle_text_empty(&e, store, &mut section, &mut state),
+            Ok(Event::Empty(e)) => handle_text_empty(&e, store, &mut section, &mut state)?,
             Ok(Event::End(e)) => handle_text_end(&e, &mut state),
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -103,10 +103,10 @@ fn handle_text_start(
         }
         b"note" if state.in_text => parse_text_note(e, reader, store, limits, state)?,
         b"bookmark-start" | b"reference-mark-start" if state.in_text => {
-            push_bookmark_start(e, store, section);
+            push_bookmark_start(e, store, section)?;
         }
         b"bookmark-end" | b"reference-mark-end" if state.in_text => {
-            push_bookmark_end(e, store, section);
+            push_bookmark_end(e, store, section)?;
         }
         b"date" if state.in_text => push_date_field(store, section),
         b"time" if state.in_text => push_time_field(store, section),
@@ -242,19 +242,19 @@ fn handle_text_empty(
     store: &mut IrStore,
     section: &mut Section,
     state: &mut OdfTextState,
-) {
+) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"bookmark-start" if state.in_text => {
-            push_bookmark_start(e, store, section);
+            push_bookmark_start(e, store, section)?;
         }
         b"bookmark-end" if state.in_text => {
-            push_bookmark_end(e, store, section);
+            push_bookmark_end(e, store, section)?;
         }
         b"reference-mark-start" if state.in_text => {
-            push_bookmark_start(e, store, section);
+            push_bookmark_start(e, store, section)?;
         }
         b"reference-mark-end" if state.in_text => {
-            push_bookmark_end(e, store, section);
+            push_bookmark_end(e, store, section)?;
         }
         b"date" if state.in_text => {
             push_date_field(store, section);
@@ -265,6 +265,7 @@ fn handle_text_empty(
         b"frame" if state.in_text => {}
         _ => {}
     }
+    Ok(())
 }
 
 fn handle_text_end(e: &quick_xml::events::BytesEnd<'_>, state: &mut OdfTextState) {
@@ -277,23 +278,33 @@ fn handle_text_end(e: &quick_xml::events::BytesEnd<'_>, state: &mut OdfTextState
     }
 }
 
-fn push_bookmark_start(e: &BytesStart<'_>, store: &mut IrStore, section: &mut Section) {
-    if let Some(name) = attr_value_by_suffix(e, &[b":name"]) {
+fn push_bookmark_start(
+    e: &BytesStart<'_>,
+    store: &mut IrStore,
+    section: &mut Section,
+) -> Result<(), ParseError> {
+    if let Some(name) = try_attr_value_by_suffix(e, &[b":name"], "content.xml")? {
         let mut bookmark = BookmarkStart::new(name.clone());
         bookmark.name = Some(name);
         let bookmark_id = bookmark.id;
         store.insert(IRNode::BookmarkStart(bookmark));
         section.content.push(bookmark_id);
     }
+    Ok(())
 }
 
-fn push_bookmark_end(e: &BytesStart<'_>, store: &mut IrStore, section: &mut Section) {
-    if let Some(name) = attr_value_by_suffix(e, &[b":name"]) {
+fn push_bookmark_end(
+    e: &BytesStart<'_>,
+    store: &mut IrStore,
+    section: &mut Section,
+) -> Result<(), ParseError> {
+    if let Some(name) = try_attr_value_by_suffix(e, &[b":name"], "content.xml")? {
         let bookmark = BookmarkEnd::new(name);
         let bookmark_id = bookmark.id;
         store.insert(IRNode::BookmarkEnd(bookmark));
         section.content.push(bookmark_id);
     }
+    Ok(())
 }
 
 fn push_date_field(store: &mut IrStore, section: &mut Section) {
