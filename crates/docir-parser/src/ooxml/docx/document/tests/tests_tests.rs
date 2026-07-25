@@ -56,6 +56,37 @@ fn test_parse_field_instruction_ref_pageref() {
 }
 
 #[test]
+fn test_parse_paragraph_reports_malformed_field_attributes() {
+    let xml = r#"
+        <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:fldSimple w:instr="DATE" w:instr="AUTHOR">
+            <w:r><w:t>Field</w:t></w:r>
+          </w:fldSimple>
+        </w:p>
+        "#;
+    let mut parser = DocxParser::new();
+    let rels = Relationships::default();
+    let mut reader = reader_from_str(xml);
+    let mut buf = Vec::new();
+    let err = loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:p" => {
+                break parse_paragraph(&mut parser, &mut reader, &rels, None).err();
+            }
+            Ok(Event::Eof) => panic!("missing paragraph"),
+            Err(e) => panic!("xml error: {}", e),
+            _ => {}
+        }
+        buf.clear();
+    };
+
+    match err.expect("malformed field attributes must fail") {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_paragraph_field_char_sequence_creates_field_node() {
     let xml = r#"
         <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

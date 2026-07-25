@@ -5,7 +5,7 @@ mod paragraph_props;
 use super::SectionRef;
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{attr_value, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value, xml_error};
 use docir_core::ir::RevisionType;
 use docir_core::ir::{CommentRangeEnd, CommentRangeStart, CommentReference, Field, Paragraph};
 use docir_core::types::NodeId;
@@ -33,7 +33,7 @@ pub(super) fn parse_paragraph(
                 &mut state,
                 &e,
             )?,
-            Ok(Event::Empty(e)) => handle_paragraph_empty_event(parser, reader, &mut state, &e),
+            Ok(Event::Empty(e)) => handle_paragraph_empty_event(parser, reader, &mut state, &e)?,
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"p" => {
                 break;
             }
@@ -142,13 +142,13 @@ fn handle_paragraph_start_event(
     if handle_inline_start(parser, reader, rels, state, element)? {
         return Ok(());
     }
-    if handle_comment_start(parser, reader, state, element) {
+    if handle_comment_start(parser, reader, state, element)? {
         return Ok(());
     }
     if handle_revision_start(parser, reader, rels, state, element)? {
         return Ok(());
     }
-    if handle_bookmark_start(parser, state, element) {
+    if handle_bookmark_start(parser, state, element)? {
         return Ok(());
     }
 
@@ -190,7 +190,7 @@ fn handle_inline_start(
             Ok(true)
         }
         b"fldSimple" => {
-            let instr = attr_value(element, b"w:instr");
+            let instr = try_attr_value(element, b"w:instr", "word/document.xml")?;
             let field_id = parse_field(parser, reader, instr)?;
             state.para.runs.push(field_id);
             Ok(true)
@@ -204,15 +204,15 @@ fn handle_comment_start(
     reader: &Reader<&[u8]>,
     state: &mut ParagraphParseState,
     element: &BytesStart<'_>,
-) -> bool {
+) -> Result<bool, ParseError> {
     let kind = match local_name(element.name().as_ref()) {
         b"commentRangeStart" => CommentNodeKind::RangeStart,
         b"commentRangeEnd" => CommentNodeKind::RangeEnd,
         b"commentReference" => CommentNodeKind::Reference,
-        _ => return false,
+        _ => return Ok(false),
     };
-    insert_comment_node(parser, reader, &mut state.para, element, kind);
-    true
+    insert_comment_node(parser, reader, &mut state.para, element, kind)?;
+    Ok(true)
 }
 
 fn handle_revision_start(
@@ -245,17 +245,17 @@ fn handle_bookmark_start(
     parser: &mut DocxParser,
     state: &mut ParagraphParseState,
     element: &BytesStart<'_>,
-) -> bool {
+) -> Result<bool, ParseError> {
     match local_name(element.name().as_ref()) {
         b"bookmarkStart" => {
-            insert_bookmark_start(parser, &mut state.para, element);
-            true
+            insert_bookmark_start(parser, &mut state.para, element)?;
+            Ok(true)
         }
         b"bookmarkEnd" => {
-            insert_bookmark_end(parser, &mut state.para, element);
-            true
+            insert_bookmark_end(parser, &mut state.para, element)?;
+            Ok(true)
         }
-        _ => false,
+        _ => Ok(false),
     }
 }
 
@@ -264,7 +264,7 @@ fn handle_paragraph_empty_event(
     reader: &Reader<&[u8]>,
     state: &mut ParagraphParseState,
     element: &BytesStart<'_>,
-) {
+) -> Result<(), ParseError> {
     match local_name(element.name().as_ref()) {
         b"commentRangeStart" => insert_comment_node(
             parser,
@@ -272,25 +272,26 @@ fn handle_paragraph_empty_event(
             &mut state.para,
             element,
             CommentNodeKind::RangeStart,
-        ),
+        )?,
         b"commentRangeEnd" => insert_comment_node(
             parser,
             reader,
             &mut state.para,
             element,
             CommentNodeKind::RangeEnd,
-        ),
+        )?,
         b"commentReference" => insert_comment_node(
             parser,
             reader,
             &mut state.para,
             element,
             CommentNodeKind::Reference,
-        ),
-        b"bookmarkStart" => insert_bookmark_start(parser, &mut state.para, element),
-        b"bookmarkEnd" => insert_bookmark_end(parser, &mut state.para, element),
+        )?,
+        b"bookmarkStart" => insert_bookmark_start(parser, &mut state.para, element)?,
+        b"bookmarkEnd" => insert_bookmark_end(parser, &mut state.para, element)?,
         _ => {}
     }
+    Ok(())
 }
 
 fn push_revision_inline(
@@ -318,8 +319,8 @@ fn insert_comment_node(
     para: &mut Paragraph,
     element: &BytesStart<'_>,
     kind: CommentNodeKind,
-) {
-    if let Some(cid) = attr_value(element, b"w:id") {
+) -> Result<(), ParseError> {
+    if let Some(cid) = try_attr_value(element, b"w:id", "word/document.xml")? {
         let span = span_from_reader(reader, "word/document.xml");
         let (node, node_id) = match kind {
             CommentNodeKind::RangeStart => {
@@ -344,29 +345,42 @@ fn insert_comment_node(
         parser.store.insert(node);
         para.runs.push(node_id);
     }
+    Ok(())
 }
 
-fn insert_bookmark_start(parser: &mut DocxParser, para: &mut Paragraph, element: &BytesStart<'_>) {
-    if let Some(bm_id) = attr_value(element, b"w:id") {
+fn insert_bookmark_start(
+    parser: &mut DocxParser,
+    para: &mut Paragraph,
+    element: &BytesStart<'_>,
+) -> Result<(), ParseError> {
+    if let Some(bm_id) = try_attr_value(element, b"w:id", "word/document.xml")? {
         let mut bm = docir_core::ir::BookmarkStart::new(bm_id);
-        bm.name = attr_value(element, b"w:name");
-        bm.col_first = attr_value(element, b"w:colFirst").and_then(|v| v.parse().ok());
-        bm.col_last = attr_value(element, b"w:colLast").and_then(|v| v.parse().ok());
+        bm.name = try_attr_value(element, b"w:name", "word/document.xml")?;
+        bm.col_first = try_attr_value(element, b"w:colFirst", "word/document.xml")?
+            .and_then(|v| v.parse().ok());
+        bm.col_last = try_attr_value(element, b"w:colLast", "word/document.xml")?
+            .and_then(|v| v.parse().ok());
         let bm_id = bm.id;
         parser
             .store
             .insert(docir_core::ir::IRNode::BookmarkStart(bm));
         para.runs.push(bm_id);
     }
+    Ok(())
 }
 
-fn insert_bookmark_end(parser: &mut DocxParser, para: &mut Paragraph, element: &BytesStart<'_>) {
-    if let Some(bm_id) = attr_value(element, b"w:id") {
+fn insert_bookmark_end(
+    parser: &mut DocxParser,
+    para: &mut Paragraph,
+    element: &BytesStart<'_>,
+) -> Result<(), ParseError> {
+    if let Some(bm_id) = try_attr_value(element, b"w:id", "word/document.xml")? {
         let bm = docir_core::ir::BookmarkEnd::new(bm_id);
         let bm_id = bm.id;
         parser.store.insert(docir_core::ir::IRNode::BookmarkEnd(bm));
         para.runs.push(bm_id);
     }
+    Ok(())
 }
 
 fn handle_field_char(
