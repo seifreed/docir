@@ -3,7 +3,7 @@ use super::super::{
     Footer, Header, IRNode, IrStore, NodeId, NumberingInfo, OdfLimitCounter, OdfLimits, OdfReader,
     ParseError, ParserConfig, SourceSpan, parse_paragraph, text,
 };
-use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value_by_suffix, xml_error};
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
@@ -114,7 +114,7 @@ fn parse_odf_header_footer_block(
                 &mut content,
                 &list_stack,
                 &mut pending_inline_nodes,
-            ),
+            )?,
             Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
                 b"list" => {
                     list_stack.pop();
@@ -148,7 +148,8 @@ fn handle_header_footer_start(
     } = state;
     match local_name(e.name().as_ref()) {
         b"list" => {
-            let style_name = attr_value_by_suffix(e, &[b":style-name"]).unwrap_or_default();
+            let style_name =
+                try_attr_value_by_suffix(e, &[b":style-name"], "styles.xml")?.unwrap_or_default();
             let num_id = list_id_map.entry(style_name).or_insert_with(|| {
                 let id = *next_list_id;
                 *next_list_id += 1;
@@ -188,11 +189,11 @@ fn handle_header_footer_empty(
     content: &mut Vec<NodeId>,
     list_stack: &[ListContext],
     pending_inline_nodes: &mut Vec<NodeId>,
-) {
+) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"p" | b"h" => {
-            let outline_level =
-                attr_value_by_suffix(e, &[b":outline-level"]).and_then(|v| v.parse::<u8>().ok());
+            let outline_level = try_attr_value_by_suffix(e, &[b":outline-level"], "styles.xml")?
+                .and_then(|v| v.parse::<u8>().ok());
             let numbering = list_stack.last().map(|ctx| NumberingInfo {
                 num_id: ctx.num_id,
                 level: ctx.level,
@@ -204,6 +205,7 @@ fn handle_header_footer_empty(
         }
         _ => {}
     }
+    Ok(())
 }
 
 fn parse_header_footer_paragraph(
@@ -214,8 +216,8 @@ fn parse_header_footer_paragraph(
     list_stack: &[ListContext],
     pending_inline_nodes: &mut Vec<NodeId>,
 ) -> Result<NodeId, ParseError> {
-    let outline_level =
-        attr_value_by_suffix(e, &[b":outline-level"]).and_then(|v| v.parse::<u8>().ok());
+    let outline_level = try_attr_value_by_suffix(e, &[b":outline-level"], "styles.xml")?
+        .and_then(|v| v.parse::<u8>().ok());
     let numbering = list_stack.last().map(|ctx| NumberingInfo {
         num_id: ctx.num_id,
         level: ctx.level,
