@@ -208,3 +208,16 @@ fn inspect_metadata_rejects_property_table_outside_section() {
             .contains("property table exceeds section size")
     );
 }
+
+#[test]
+fn inspect_metadata_rejects_truncated_lpstr_property_value() {
+    let mut summary = build_test_property_set_stream(&[(2, TestPropertyValue::Str("Specimen"))]);
+    summary[0x44..0x48].copy_from_slice(&128u32.to_le_bytes());
+
+    let err = inspect_metadata_bytes(&build_test_cfb(&[(SUMMARY_INFO_STREAM, &summary)]))
+        .expect_err("truncated LPSTR property must fail");
+    assert!(
+        err.to_string()
+            .contains("LPSTR value exceeds property bounds")
+    );
+}

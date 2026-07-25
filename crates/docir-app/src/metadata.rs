@@ -36,6 +36,8 @@ pub struct MetadataProperty {
     pub display_value: Option<String>,
 }
 
+type ParsedPropertyValue = (&'static str, String, Option<String>);
+
 /// Inspect metadata from a legacy CFB/OLE file on disk.
 pub fn inspect_metadata_path<P: AsRef<Path>>(
     path: P,
@@ -150,7 +152,7 @@ fn parse_section_entries(
         }
         let value_type = read_u32(data, absolute_offset)?;
         if let Some((type_name, value, display_value)) =
-            parse_property_value(&data[absolute_offset..section_end], value_type)
+            parse_property_value(&data[absolute_offset..section_end], value_type)?
         {
             entries.push(MetadataProperty {
                 id: property_id,
@@ -207,30 +209,46 @@ fn parse_property_stream(
 fn parse_property_value(
     data: &[u8],
     value_type: u32,
-) -> Option<(&'static str, String, Option<String>)> {
+) -> Result<Option<ParsedPropertyValue>, ParserParseError> {
     match value_type {
-        2 => Some(("i16", read_i16(data, 4).ok()?.to_string(), None)),
-        3 => Some(("i32", read_i32(data, 4).ok()?.to_string(), None)),
-        5 => Some(("f64", read_f64(data, 4).ok()?.to_string(), None)),
-        11 => Some(("bool", (read_u16(data, 4).ok()? != 0).to_string(), None)),
-        18 => Some(("u16", read_u16(data, 4).ok()?.to_string(), None)),
-        19 => Some(("u32", read_u32(data, 4).ok()?.to_string(), None)),
-        20 => Some(("i64", read_i64(data, 4).ok()?.to_string(), None)),
+        2 => Ok(Some(("i16", read_i16(data, 4)?.to_string(), None))),
+        3 => Ok(Some(("i32", read_i32(data, 4)?.to_string(), None))),
+        5 => Ok(Some(("f64", read_f64(data, 4)?.to_string(), None))),
+        11 => Ok(Some(("bool", (read_u16(data, 4)? != 0).to_string(), None))),
+        18 => Ok(Some(("u16", read_u16(data, 4)?.to_string(), None))),
+        19 => Ok(Some(("u32", read_u32(data, 4)?.to_string(), None))),
+        20 => Ok(Some(("i64", read_i64(data, 4)?.to_string(), None))),
         30 => {
-            let len = read_u32(data, 4).ok()? as usize;
+            let len = read_u32(data, 4)? as usize;
             if 8 + len > data.len() {
-                return None;
+                return Err(ParserParseError::InvalidStructure(
+                    "OLE metadata LPSTR value exceeds property bounds".to_string(),
+                ));
             }
             let bytes = &data[8..8 + len];
             let text = bytes.strip_suffix(&[0]).unwrap_or(bytes);
-            Some(("lpstr", String::from_utf8_lossy(text).to_string(), None))
+            Ok(Some((
+                "lpstr",
+                String::from_utf8_lossy(text).to_string(),
+                None,
+            )))
         }
         31 => {
-            let chars = read_u32(data, 4).ok()? as usize;
-            let byte_len = chars.checked_mul(2)?;
-            let start = 8usize.checked_add(byte_len)?;
+            let chars = read_u32(data, 4)? as usize;
+            let byte_len = chars.checked_mul(2).ok_or_else(|| {
+                ParserParseError::InvalidStructure(
+                    "OLE metadata LPWSTR byte length overflow".to_string(),
+                )
+            })?;
+            let start = 8usize.checked_add(byte_len).ok_or_else(|| {
+                ParserParseError::InvalidStructure(
+                    "OLE metadata LPWSTR value bounds overflow".to_string(),
+                )
+            })?;
             if start > data.len() {
-                return None;
+                return Err(ParserParseError::InvalidStructure(
+                    "OLE metadata LPWSTR value exceeds property bounds".to_string(),
+                ));
             }
             let bytes = &data[8..start];
             let units: Vec<u16> = bytes
@@ -238,13 +256,17 @@ fn parse_property_value(
                 .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
                 .collect();
             let text = String::from_utf16_lossy(units.strip_suffix(&[0]).unwrap_or(&units));
-            Some(("lpwstr", text, None))
+            Ok(Some(("lpwstr", text, None)))
         }
         64 => {
-            let raw = read_u64(data, 4).ok()?;
-            Some(("filetime", raw.to_string(), Some(format_filetime_utc(raw))))
+            let raw = read_u64(data, 4)?;
+            Ok(Some((
+                "filetime",
+                raw.to_string(),
+                Some(format_filetime_utc(raw)),
+            )))
         }
-        _ => None,
+        _ => Ok(None),
     }
 }
 
