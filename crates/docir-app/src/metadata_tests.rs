@@ -221,3 +221,13 @@ fn inspect_metadata_rejects_truncated_lpstr_property_value() {
             .contains("LPSTR value exceeds property bounds")
     );
 }
+
+#[test]
+fn inspect_metadata_rejects_property_value_offset_outside_section() {
+    let mut summary = build_test_property_set_stream(&[(2, TestPropertyValue::Str("Specimen"))]);
+    summary[0x3c..0x40].copy_from_slice(&4096u32.to_le_bytes());
+
+    let err = inspect_metadata_bytes(&build_test_cfb(&[(SUMMARY_INFO_STREAM, &summary)]))
+        .expect_err("property value outside section must fail");
+    assert!(err.to_string().contains("property value offset"));
+}

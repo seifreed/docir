@@ -143,12 +143,20 @@ fn parse_section_entries(
         }
         let property_id = read_u32(data, entry_offset)?;
         let value_offset = read_u32(data, entry_offset + 4)? as usize;
-        let absolute_offset = match section_offset.checked_add(value_offset) {
-            Some(off) => off,
-            None => continue,
-        };
-        if absolute_offset + 4 > section_end {
-            continue;
+        let absolute_offset = section_offset.checked_add(value_offset).ok_or_else(|| {
+            ParserParseError::InvalidStructure(
+                "OLE property set property value offset overflow".to_string(),
+            )
+        })?;
+        let value_type_end = absolute_offset.checked_add(4).ok_or_else(|| {
+            ParserParseError::InvalidStructure(
+                "OLE property set property value offset overflow".to_string(),
+            )
+        })?;
+        if value_type_end > section_end {
+            return Err(ParserParseError::InvalidStructure(
+                "OLE property set property value offset exceeds section size".to_string(),
+            ));
         }
         let value_type = read_u32(data, absolute_offset)?;
         if let Some((type_name, value, display_value)) =
