@@ -3,7 +3,9 @@ use super::{DOC_XML_PATH, parse_field_instruction, parse_run};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::relationships::TargetMode;
-use crate::xml_utils::{local_name, try_attr_value, try_attr_value_by_suffix, xml_error};
+use crate::xml_utils::{
+    attr_u32_from_bytes, local_name, try_attr_value, try_attr_value_by_suffix, xml_error,
+};
 use docir_core::ir::RunProperties;
 use docir_core::ir::{Hyperlink, NumberingInfo, UnderlineStyle, VerticalTextAlignment};
 use docir_core::types::NodeId;
@@ -72,9 +74,7 @@ pub(crate) fn parse_run_properties(
                     }
                 }
                 b"sz" => {
-                    if let Some(val) =
-                        try_attr_value(&e, b"w:val", DOC_XML_PATH)?.and_then(|v| v.parse().ok())
-                    {
+                    if let Some(val) = attr_u32_from_bytes(&e, b"w:val", DOC_XML_PATH)? {
                         props.font_size = Some(val);
                     }
                 }

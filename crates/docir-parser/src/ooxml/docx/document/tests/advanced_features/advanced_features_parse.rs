@@ -239,6 +239,40 @@ fn test_parse_run_properties_reports_malformed_attributes() {
 }
 
 #[test]
+fn test_parse_run_properties_reports_malformed_font_size() {
+    let xml = r#"
+        <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:r>
+            <w:rPr>
+              <w:sz w:val="large"/>
+            </w:rPr>
+            <w:t>Text</w:t>
+          </w:r>
+        </w:p>
+        "#;
+    let mut parser = DocxParser::new();
+    let rels = Relationships::default();
+    let mut reader = reader_from_str(xml);
+    let mut buf = Vec::new();
+    let err = loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:p" => {
+                break parse_paragraph(&mut parser, &mut reader, &rels, None).err();
+            }
+            Ok(Event::Eof) => panic!("missing paragraph"),
+            Err(e) => panic!("xml error: {}", e),
+            _ => {}
+        }
+        buf.clear();
+    };
+
+    match err.expect("malformed font size must fail") {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_paragraph_borders_and_flags() {
     let xml = r#"
         <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
