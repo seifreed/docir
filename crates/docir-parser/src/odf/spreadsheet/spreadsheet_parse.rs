@@ -258,7 +258,7 @@ fn handle_spreadsheet_empty_full(
             insert_validation_definition(validations, empty)?;
         }
         b"data-pilot-table" if *in_spreadsheet => {
-            let parsed = parse_ods_pivot_table_empty(empty, *next_cache_id);
+            let parsed = parse_ods_pivot_table_empty(empty, *next_cache_id)?;
             record_pivot_parse(store, pivot_links, pivot_caches, next_cache_id, parsed);
         }
         _ => {}

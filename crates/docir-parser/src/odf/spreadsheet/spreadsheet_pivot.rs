@@ -1,7 +1,7 @@
 use super::super::super::helpers::ValidationDef;
 use super::super::super::{OdfReader, scan_xml_events_with_reader};
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name};
+use crate::xml_utils::{XmlScanControl, local_name, try_attr_value_by_suffix};
 use docir_core::ir::{IRNode, PivotCache, PivotCacheRecords, PivotTable};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -23,7 +23,7 @@ pub(super) fn parse_ods_pivot_table_full(
     start: &BytesStart<'_>,
     cache_id: u32,
 ) -> Result<PivotParseResult, ParseError> {
-    let (mut pivot, sheet_name, cache) = build_ods_pivot(start, cache_id);
+    let (mut pivot, sheet_name, cache) = build_ods_pivot(start, cache_id)?;
     let mut field_count: u32 = 0;
     let mut buf = Vec::new();
     scan_xml_events_with_reader(reader, &mut buf, "content.xml", |reader, event| {
@@ -61,12 +61,12 @@ pub(super) fn parse_ods_pivot_table_full(
 pub(super) fn parse_ods_pivot_table_empty(
     start: &BytesStart<'_>,
     cache_id: u32,
-) -> PivotParseResult {
-    let (mut pivot, sheet_name, cache) = build_ods_pivot(start, cache_id);
+) -> Result<PivotParseResult, ParseError> {
+    let (mut pivot, sheet_name, cache) = build_ods_pivot(start, cache_id)?;
     if let Some(cache) = cache.as_ref() {
         pivot.cache_id = Some(cache.cache_id);
     }
-    Some((pivot, sheet_name, cache, None))
+    Ok(Some((pivot, sheet_name, cache, None)))
 }
 
 pub(super) fn record_pivot_parse(
@@ -100,10 +100,10 @@ pub(super) fn record_pivot_parse(
 fn build_ods_pivot(
     start: &BytesStart<'_>,
     cache_id: u32,
-) -> (PivotTable, Option<String>, Option<PivotCache>) {
-    let name = attr_value_by_suffix(start, &[b":name"]);
-    let target = attr_value_by_suffix(start, &[b":target-range-address"]);
-    let source = attr_value_by_suffix(start, &[b":source-range-address"]);
+) -> Result<(PivotTable, Option<String>, Option<PivotCache>), ParseError> {
+    let name = try_attr_value_by_suffix(start, &[b":name"], "content.xml")?;
+    let target = try_attr_value_by_suffix(start, &[b":target-range-address"], "content.xml")?;
+    let source = try_attr_value_by_suffix(start, &[b":source-range-address"], "content.xml")?;
     let ref_range = target.clone().or(source.clone());
     let sheet_name = ref_range
         .as_deref()
@@ -117,7 +117,7 @@ fn build_ods_pivot(
         span: Some(SourceSpan::new("content.xml")),
     };
     if pivot.name.is_none() {
-        pivot.name = attr_value_by_suffix(start, &[b":display-name"]);
+        pivot.name = try_attr_value_by_suffix(start, &[b":display-name"], "content.xml")?;
     }
     let cache = source.map(|source_range| {
         let mut cache = PivotCache::new(cache_id);
@@ -125,7 +125,7 @@ fn build_ods_pivot(
         cache.span = Some(SourceSpan::new("content.xml"));
         cache
     });
-    (pivot, sheet_name, cache)
+    Ok((pivot, sheet_name, cache))
 }
 
 fn extract_sheet_name(range: &str) -> Option<&str> {
@@ -167,7 +167,7 @@ pub(super) fn parse_ods_pivots_from_xml(
                 if local_name(e.name().as_ref()) == b"data-pilot-table" && in_spreadsheet =>
             {
                 let cache_id = next_cache_id;
-                let parsed = parse_ods_pivot_table_empty(&e, cache_id);
+                let parsed = parse_ods_pivot_table_empty(&e, cache_id)?;
                 record_pivot_parse(
                     store,
                     &mut pivot_links,
