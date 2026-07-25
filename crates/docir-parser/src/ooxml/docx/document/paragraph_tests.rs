@@ -3,6 +3,7 @@ use super::{
     DocxParser, FieldState, Paragraph, RunParse, handle_field_char, parse_paragraph_properties,
     update_field_from_run,
 };
+use crate::error::ParseError;
 use crate::xml_utils::reader_from_str;
 use docir_core::ir::BorderStyle;
 use docir_core::ir::{LineSpacingRule, TextAlignment};
@@ -124,6 +125,25 @@ fn parse_paragraph_properties_reads_flags_spacing_and_section_refs() {
     assert_eq!(para.properties.outline_level, Some(2));
     assert_eq!(section_ref.headers, vec![header_id]);
     assert_eq!(section_ref.footers, vec![footer_id]);
+}
+
+#[test]
+fn parse_paragraph_properties_reports_malformed_attributes() {
+    let xml = r#"
+            <w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:pStyle w:val="Heading1" w:val="Heading2"/>
+            </w:pPr>
+        "#;
+
+    let mut reader = reader_from_str(xml);
+    let mut para = Paragraph::new();
+    let err = parse_paragraph_properties(&mut reader, &mut para, None)
+        .expect_err("malformed paragraph property attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
