@@ -9,7 +9,7 @@ use super::{
     IrStore, NodeId, NumberingInfo, OdfContentResult, OdfLimitCounter, Paragraph,
     ParagraphProperties, ParseError, Run, Section, parse_paragraph,
 };
-use crate::xml_utils::{attr_value_by_suffix, local_name, try_attr_value_by_suffix, xml_error};
+use crate::xml_utils::{local_name, try_attr_value_by_suffix, xml_error};
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
@@ -143,8 +143,8 @@ fn parse_text_paragraph(
     section: &mut Section,
     state: &mut OdfTextState,
 ) -> Result<(), ParseError> {
-    let outline_level =
-        attr_value_by_suffix(e, &[b":outline-level"]).and_then(|v| v.parse::<u8>().ok());
+    let outline_level = try_attr_value_by_suffix(e, &[b":outline-level"], "content.xml")?
+        .and_then(|v| v.parse::<u8>().ok());
     let numbering = state.list_stack.last().map(|ctx| NumberingInfo {
         num_id: ctx.num_id,
         level: ctx.level,
