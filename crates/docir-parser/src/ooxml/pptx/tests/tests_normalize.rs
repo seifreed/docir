@@ -30,38 +30,35 @@ fn test_parse_slide_returns_xml_error_for_malformed_slide_xml() {
 }
 
 #[test]
-fn test_parse_slide_transition_with_invalid_numeric_attrs_keeps_defaults() {
-    let slide_xml = r#"
+fn test_parse_slide_transition_reports_invalid_numeric_attrs() {
+    for attr in ["advTm", "dur"] {
+        let slide_xml = format!(
+            r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
           <p:cSld><p:spTree/></p:cSld>
-          <p:transition spd="slow" advClick="false" advTm="bad" dur="oops"></p:transition>
+          <p:transition spd="slow" {attr}="bad"></p:transition>
         </p:sld>
-        "#;
-    let mut parser = PptxParser::new();
-    let mut zip = build_empty_zip();
+        "#
+        );
+        let mut parser = PptxParser::new();
+        let mut zip = build_empty_zip();
 
-    let slide_id = parser
-        .parse_slide(
-            &mut zip,
-            slide_xml,
-            1,
-            "ppt/slides/slide-transition.xml",
-            &Relationships::default(),
-            (None, None),
-        )
-        .expect("slide parse should succeed");
+        let err = parser
+            .parse_slide(
+                &mut zip,
+                &slide_xml,
+                1,
+                "ppt/slides/slide-transition.xml",
+                &Relationships::default(),
+                (None, None),
+            )
+            .expect_err("malformed transition timing must fail");
 
-    let store = parser.into_store();
-    let slide = match store.get(slide_id) {
-        Some(IRNode::Slide(s)) => s,
-        _ => panic!("missing slide"),
-    };
-    let transition = slide.transition.as_ref().expect("transition");
-    assert_eq!(transition.speed.as_deref(), Some("slow"));
-    assert_eq!(transition.advance_on_click, Some(false));
-    assert_eq!(transition.advance_after_ms, None);
-    assert_eq!(transition.duration_ms, None);
-    assert_eq!(transition.transition_type, None);
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/slide-transition.xml"),
+            other => panic!("unexpected error for {attr}: {other:?}"),
+        }
+    }
 }
 
 #[test]

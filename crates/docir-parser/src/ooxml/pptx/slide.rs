@@ -262,10 +262,10 @@ impl PptxParser {
                         Some(value == "1" || value.eq_ignore_ascii_case("true"));
                 }
                 b"advTm" => {
-                    transition.advance_after_ms = lossy_attr_value(&attr).parse::<u32>().ok();
+                    transition.advance_after_ms = Some(parse_u32_attr(&attr, slide_path)?);
                 }
                 b"dur" => {
-                    transition.duration_ms = lossy_attr_value(&attr).parse::<u32>().ok();
+                    transition.duration_ms = Some(parse_u32_attr(&attr, slide_path)?);
                 }
                 _ => {}
             }
@@ -414,7 +414,7 @@ fn build_animation_from_event(
         let attr = attr.map_err(|err| xml_error(slide_path, err))?;
         match attr.key.as_ref() {
             b"dur" => {
-                anim.duration_ms = lossy_attr_value(&attr).parse::<u32>().ok();
+                anim.duration_ms = Some(parse_u32_attr(&attr, slide_path)?);
             }
             b"presetID" => {
                 anim.preset_id = Some(lossy_attr_value(&attr).to_string());
@@ -431,6 +431,15 @@ fn build_animation_from_event(
     }
 
     Ok(anim)
+}
+
+fn parse_u32_attr(
+    attr: &quick_xml::events::attributes::Attribute<'_>,
+    slide_path: &str,
+) -> Result<u32, ParseError> {
+    lossy_attr_value(attr)
+        .parse::<u32>()
+        .map_err(|err| xml_error(slide_path, err))
 }
 
 fn resolve_animation_target(

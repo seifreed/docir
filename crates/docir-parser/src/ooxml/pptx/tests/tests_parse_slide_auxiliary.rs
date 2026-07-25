@@ -450,7 +450,7 @@ fn test_parse_slide_reports_malformed_transition_attrs() {
 
 #[test]
 fn test_parse_slide_reports_malformed_animation_attrs() {
-    let slide_xml = r#"
+    let duplicate_attr_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
           <p:cSld><p:spTree/></p:cSld>
           <p:timing>
@@ -464,18 +464,35 @@ fn test_parse_slide_reports_malformed_animation_attrs() {
           </p:timing>
         </p:sld>
         "#;
-    let mut parser = PptxParser::new();
-    let mut zip = build_empty_zip();
+    let invalid_duration_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:cSld><p:spTree/></p:cSld>
+          <p:timing>
+            <p:tnLst>
+              <p:par>
+                <p:anim dur="bad">
+                  <p:tgtEl><p:spTgt spid="4"/></p:tgtEl>
+                </p:anim>
+              </p:par>
+            </p:tnLst>
+          </p:timing>
+        </p:sld>
+        "#;
 
-    assert_slide_xml_error(
-        parser.parse_slide(
-            &mut zip,
-            slide_xml,
-            1,
+    for slide_xml in [duplicate_attr_xml, invalid_duration_xml] {
+        let mut parser = PptxParser::new();
+        let mut zip = build_empty_zip();
+
+        assert_slide_xml_error(
+            parser.parse_slide(
+                &mut zip,
+                slide_xml,
+                1,
+                "ppt/slides/broken-animation-attrs.xml",
+                &Relationships::default(),
+                (None, None),
+            ),
             "ppt/slides/broken-animation-attrs.xml",
-            &Relationships::default(),
-            (None, None),
-        ),
-        "ppt/slides/broken-animation-attrs.xml",
-    );
+        );
+    }
 }
