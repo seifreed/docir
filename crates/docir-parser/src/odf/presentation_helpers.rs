@@ -82,8 +82,8 @@ fn handle_draw_page_start_event(
         b"notes" => {
             state.notes_text = parse_notes(reader)?;
         }
-        name if name.starts_with(b"anim:") => {
-            if let Some(anim) = parse_odf_animation(event) {
+        _ if event.name().as_ref().starts_with(b"anim:") => {
+            if let Some(anim) = parse_odf_animation(event)? {
                 state.slide.animations.push(anim);
             }
         }
@@ -109,8 +109,8 @@ fn handle_draw_page_empty_event(
                 state.slide.shapes.push(shape_id);
             }
         }
-        name if name.starts_with(b"anim:") => {
-            if let Some(anim) = parse_odf_animation(event) {
+        _ if event.name().as_ref().starts_with(b"anim:") => {
+            if let Some(anim) = parse_odf_animation(event)? {
                 state.slide.animations.push(anim);
             }
         }
@@ -308,20 +308,20 @@ pub(super) fn parse_odf_chart(
     Ok(chart)
 }
 
-pub(super) fn parse_odf_animation(start: &BytesStart<'_>) -> Option<SlideAnimation> {
+pub(super) fn parse_odf_animation(
+    start: &BytesStart<'_>,
+) -> Result<Option<SlideAnimation>, ParseError> {
     let name = String::from_utf8_lossy(start.name().as_ref()).to_string();
-    let mut anim = SlideAnimation {
+    let anim = SlideAnimation {
         animation_type: name,
-        target: attr_value_by_suffix(start, &[b":targetElement"]),
-        duration_ms: attr_value_by_suffix(start, &[b":dur"]).and_then(|v| parse_duration_ms(&v)),
-        preset_id: attr_value_by_suffix(start, &[b":preset-id"]),
-        preset_class: attr_value_by_suffix(start, &[b":preset-class"]),
+        target: try_attr_value_by_suffix(start, &[b":targetElement"], "content.xml")?,
+        duration_ms: try_attr_value_by_suffix(start, &[b":dur"], "content.xml")?
+            .and_then(|v| parse_duration_ms(&v)),
+        preset_id: try_attr_value_by_suffix(start, &[b":preset-id"], "content.xml")?,
+        preset_class: try_attr_value_by_suffix(start, &[b":preset-class"], "content.xml")?,
         media_asset: None,
     };
-    if anim.target.is_none() {
-        anim.target = attr_value_by_suffix(start, &[b":targetElement"]);
-    }
-    Some(anim)
+    Ok(Some(anim))
 }
 
 pub(super) fn build_media_asset(path: &str, media: &str, size_bytes: u64) -> Option<MediaAsset> {

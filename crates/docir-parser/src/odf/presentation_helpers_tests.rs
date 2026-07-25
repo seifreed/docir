@@ -23,7 +23,9 @@ fn parse_draw_page_extracts_metadata_transition_notes_and_shape_text() {
     let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
   xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:anim="urn:oasis:names:tc:opendocument:xmlns:animation:1.0"
   xmlns:p="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"
+  xmlns:smil="urn:oasis:names:tc:opendocument:xmlns:smil-compatible:1.0"
   xmlns:t="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
   <d:page d:name="SlideA"
     p:master-page-name="MasterA"
@@ -39,6 +41,7 @@ fn parse_draw_page_extracts_metadata_transition_notes_and_shape_text() {
     <p:notes>
       <t:p>Speaker notes</t:p>
     </p:notes>
+    <anim:animate smil:targetElement="TitleShape" smil:dur="PT1S"/>
   </d:page>
 </office:document-content>
 "#;
@@ -58,6 +61,9 @@ fn parse_draw_page_extracts_metadata_transition_notes_and_shape_text() {
     assert_eq!(transition.transition_type.as_deref(), Some("fade"));
     assert_eq!(transition.duration_ms, Some(2));
     assert_eq!(transition.advance_on_click, Some(true));
+    assert_eq!(slide.animations.len(), 1);
+    assert_eq!(slide.animations[0].target.as_deref(), Some("TitleShape"));
+    assert_eq!(slide.animations[0].duration_ms, Some(1000));
 
     let Some(IRNode::Shape(shape)) = store.get(slide.shapes[0]) else {
         panic!("expected shape node");
@@ -182,10 +188,37 @@ fn parse_odf_animation_prefers_target_fallback_and_parses_iso_duration() {
     start.push_attribute(("smil:dur", "PT2.5S"));
     start.push_attribute(("presentation:preset-id", "entrance"));
 
-    let anim = parse_odf_animation(&start).expect("animation metadata");
+    let anim = parse_odf_animation(&start)
+        .expect("animation parse")
+        .expect("animation metadata");
     assert_eq!(anim.target.as_deref(), Some("shape-42"));
     assert_eq!(anim.duration_ms, Some(2500));
     assert_eq!(anim.preset_id.as_deref(), Some("entrance"));
+}
+
+#[test]
+fn parse_draw_page_rejects_malformed_animation_attributes() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:anim="urn:oasis:names:tc:opendocument:xmlns:animation:1.0"
+  xmlns:smil="urn:oasis:names:tc:opendocument:xmlns:smil-compatible:1.0">
+  <d:page d:name="SlideA">
+    <anim:animate smil:targetElement="shape-1" smil:targetElement="shape-2"/>
+  </d:page>
+</office:document-content>
+"#;
+
+    let (mut reader, page_start) = parse_page_start(xml);
+    let mut store = IrStore::new();
+
+    let err = parse_draw_page(&mut reader, &page_start, 1, &mut store)
+        .expect_err("duplicate animation attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
