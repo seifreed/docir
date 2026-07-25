@@ -2,9 +2,10 @@ use super::{
     DocxParser, NodeId, PageBorders, ParseError, Relationships, WordSettings, attr_value,
     normalize_docx_target, parse_border, reader_from_str, span_from_reader,
 };
-use crate::xml_utils::attr_value_by_suffix;
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::try_attr_value;
+use crate::xml_utils::try_attr_value_by_suffix;
 use crate::xml_utils::visit_attributes;
 use crate::xml_utils::xml_error;
 use quick_xml::Reader;
@@ -136,11 +137,16 @@ pub(super) fn parse_vml_pict(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 if local_name(e.name().as_ref()) == b"imagedata" {
-                    rel_id = attr_value_by_suffix(&e, &[b":id"]);
+                    rel_id = try_attr_value_by_suffix(&e, &[b":id"], "word/document.xml")?;
                 } else if local_name(e.name().as_ref()) == b"shape" {
-                    name = attr_value(&e, b"name").or_else(|| attr_value(&e, b"id"));
-                    alt_text = attr_value(&e, b"o:title").or_else(|| attr_value(&e, b"alt"));
-                    if let Some(style) = attr_value(&e, b"style") {
+                    name = try_attr_value(&e, b"name", "word/document.xml")?.or(try_attr_value(
+                        &e,
+                        b"id",
+                        "word/document.xml",
+                    )?);
+                    alt_text = try_attr_value(&e, b"o:title", "word/document.xml")?
+                        .or(try_attr_value(&e, b"alt", "word/document.xml")?);
+                    if let Some(style) = try_attr_value(&e, b"style", "word/document.xml")? {
                         if let Some(val) = parse_vml_style_length(&style, "left") {
                             transform.x = val;
                         }

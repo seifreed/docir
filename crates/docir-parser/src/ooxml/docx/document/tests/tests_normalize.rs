@@ -191,6 +191,41 @@ fn test_parse_vml_picture_shape_and_style_lengths() {
 }
 
 #[test]
+fn test_parse_vml_picture_reports_malformed_attributes() {
+    let xml = r#"
+        <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+             xmlns:v="urn:schemas-microsoft-com:vml"
+             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <w:pict>
+            <v:shape name="VMLPic">
+              <v:imagedata r:id="rIdImg" r:id="rIdOther"></v:imagedata>
+            </v:shape>
+          </w:pict>
+        </w:r>
+        "#;
+    let mut reader = reader_from_str(xml);
+    let mut parser = DocxParser::new();
+    let rels = Relationships::default();
+    let mut buf = Vec::new();
+    let err = loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:r" => {
+                break parse_run(&mut parser, &mut reader, &rels).err();
+            }
+            Ok(Event::Eof) => panic!("missing run"),
+            Err(e) => panic!("xml error: {}", e),
+            _ => {}
+        }
+        buf.clear();
+    };
+
+    match err.expect("malformed VML attributes must fail") {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn parse_run_reports_unclosed_text_node() {
     let xml = r#"
         <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
