@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value, local_name};
+use crate::xml_utils::{local_name, try_attr_value};
 use docir_core::ir::SheetComment;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
@@ -22,7 +22,7 @@ pub(super) fn parse_sheet_comments_impl(
     let mut state = CommentParseState::default();
     loop {
         match crate::xml_utils::read_event(&mut reader, &mut buf, path)? {
-            Event::Start(e) => handle_comment_start(&e, &flavor, &mut state),
+            Event::Start(e) => handle_comment_start(&e, path, &flavor, &mut state)?,
             Event::Text(e) => {
                 let text = crate::xml_utils::decoded_text_or_default(&e);
                 if state.in_author {
@@ -66,25 +66,33 @@ struct CommentParseState {
     out: Vec<SheetComment>,
 }
 
-fn handle_comment_start(e: &BytesStart<'_>, flavor: &CommentFlavor, state: &mut CommentParseState) {
+fn handle_comment_start(
+    e: &BytesStart<'_>,
+    path: &str,
+    flavor: &CommentFlavor,
+    state: &mut CommentParseState,
+) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"author" if matches!(flavor, CommentFlavor::Legacy) => state.in_author = true,
         b"comment" if matches!(flavor, CommentFlavor::Legacy) => {
             state.in_comment = true;
-            state.current_ref = attr_value(e, b"ref");
-            state.current_author = attr_value(e, b"authorId");
+            state.current_ref = try_attr_value(e, b"ref", path)?;
+            state.current_author = try_attr_value(e, b"authorId", path)?;
             state.current_text.clear();
         }
         b"threadedComment" if matches!(flavor, CommentFlavor::Threaded) => {
             state.in_comment = true;
-            state.current_ref = attr_value(e, b"ref");
-            state.current_author =
-                attr_value(e, b"authorId").or_else(|| attr_value(e, b"personId"));
+            state.current_ref = try_attr_value(e, b"ref", path)?;
+            state.current_author = match try_attr_value(e, b"authorId", path)? {
+                Some(author_id) => Some(author_id),
+                None => try_attr_value(e, b"personId", path)?,
+            };
             state.current_text.clear();
         }
         b"text" | b"t" if state.in_comment => state.in_text = true,
         _ => {}
     }
+    Ok(())
 }
 
 fn handle_comment_end(

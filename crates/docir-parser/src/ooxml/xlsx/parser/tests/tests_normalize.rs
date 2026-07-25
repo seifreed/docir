@@ -373,6 +373,26 @@ fn test_parse_sheet_comments() {
 }
 
 #[test]
+fn test_parse_sheet_comments_reports_malformed_attributes() {
+    let xml = r#"
+        <comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <commentList>
+            <comment ref="A1" ref="B2">
+              <text><t>Hello</t></text>
+            </comment>
+          </commentList>
+        </comments>
+        "#;
+    let err = parse_sheet_comments(xml, "xl/comments1.xml", Some("Sheet1"))
+        .expect_err("malformed sheet comments attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "xl/comments1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_conditional_and_validation() {
     let xml = r#"
         <worksheet>
