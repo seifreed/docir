@@ -1,7 +1,7 @@
 //! ODF manifest parsing helpers.
 
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events};
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, try_attr_value_by_suffix};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use quick_xml::Reader;
@@ -36,8 +36,8 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
 
     scan_xml_events(&mut reader, &mut buf, "META-INF/manifest.xml", |event| {
         match event {
-            Event::Start(e) => handle_manifest_start_event(&e, &mut current_entry),
-            Event::Empty(e) => handle_manifest_empty_event(&e, &mut entries, &mut current_entry),
+            Event::Start(e) => handle_manifest_start_event(&e, &mut current_entry)?,
+            Event::Empty(e) => handle_manifest_empty_event(&e, &mut entries, &mut current_entry)?,
             Event::End(e) => {
                 handle_manifest_end_event(e.name().as_ref(), &mut entries, &mut current_entry)
             }
@@ -52,40 +52,42 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
 fn handle_manifest_start_event(
     e: &quick_xml::events::BytesStart<'_>,
     current_entry: &mut Option<OdfManifestEntry>,
-) {
+) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"file-entry" => {
-            *current_entry = Some(parse_manifest_entry(e));
+            *current_entry = Some(parse_manifest_entry(e)?);
         }
         b"encryption-data" => {
-            apply_entry_encryption_attrs(current_entry, e, apply_encryption_data_attrs);
+            apply_entry_encryption_attrs(current_entry, e, apply_encryption_data_attrs)?;
         }
         b"algorithm" => {
-            apply_entry_encryption_attrs(current_entry, e, apply_algorithm_attrs);
+            apply_entry_encryption_attrs(current_entry, e, apply_algorithm_attrs)?;
         }
         b"key-derivation" => {
-            apply_entry_encryption_attrs(current_entry, e, apply_key_derivation_attrs);
+            apply_entry_encryption_attrs(current_entry, e, apply_key_derivation_attrs)?;
         }
         _ => {}
     }
+    Ok(())
 }
 
 fn handle_manifest_empty_event(
     e: &quick_xml::events::BytesStart<'_>,
     entries: &mut Vec<OdfManifestEntry>,
     current_entry: &mut Option<OdfManifestEntry>,
-) {
+) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
-        b"file-entry" => entries.push(parse_manifest_entry(e)),
+        b"file-entry" => entries.push(parse_manifest_entry(e)?),
         b"encryption-data" => {
-            apply_entry_encryption_attrs(current_entry, e, apply_encryption_data_attrs)
+            apply_entry_encryption_attrs(current_entry, e, apply_encryption_data_attrs)?;
         }
-        b"algorithm" => apply_entry_encryption_attrs(current_entry, e, apply_algorithm_attrs),
+        b"algorithm" => apply_entry_encryption_attrs(current_entry, e, apply_algorithm_attrs)?,
         b"key-derivation" => {
-            apply_entry_encryption_attrs(current_entry, e, apply_key_derivation_attrs)
+            apply_entry_encryption_attrs(current_entry, e, apply_key_derivation_attrs)?;
         }
         _ => {}
     }
+    Ok(())
 }
 
 fn handle_manifest_end_event(
@@ -103,42 +105,68 @@ fn handle_manifest_end_event(
 fn apply_entry_encryption_attrs(
     current_entry: &mut Option<OdfManifestEntry>,
     e: &quick_xml::events::BytesStart<'_>,
-    apply_fn: fn(&mut OdfEncryptionData, &quick_xml::events::BytesStart<'_>),
-) {
+    apply_fn: fn(
+        &mut OdfEncryptionData,
+        &quick_xml::events::BytesStart<'_>,
+    ) -> Result<(), ParseError>,
+) -> Result<(), ParseError> {
     if let Some(entry) = current_entry.as_mut() {
         let mut enc = entry.encryption.take().unwrap_or_default();
-        apply_fn(&mut enc, e);
+        apply_fn(&mut enc, e)?;
         entry.encryption = Some(enc);
     }
+    Ok(())
 }
 
-fn parse_manifest_entry(e: &quick_xml::events::BytesStart<'_>) -> OdfManifestEntry {
-    let path = attr_value_by_suffix(e, &[b":full-path"]).unwrap_or_default();
-    let media_type = attr_value_by_suffix(e, &[b":media-type"]);
-    OdfManifestEntry {
+fn parse_manifest_entry(
+    e: &quick_xml::events::BytesStart<'_>,
+) -> Result<OdfManifestEntry, ParseError> {
+    let path =
+        try_attr_value_by_suffix(e, &[b":full-path"], "META-INF/manifest.xml")?.unwrap_or_default();
+    let media_type = try_attr_value_by_suffix(e, &[b":media-type"], "META-INF/manifest.xml")?;
+    Ok(OdfManifestEntry {
         path,
         media_type,
         encryption: None,
-    }
+    })
 }
 
-fn apply_encryption_data_attrs(enc: &mut OdfEncryptionData, e: &quick_xml::events::BytesStart<'_>) {
-    enc.checksum_type = attr_value_by_suffix(e, &[b":checksum-type"]);
-    enc.checksum = attr_value_by_suffix(e, &[b":checksum"]).and_then(|v| decode_base64_bytes(&v));
+fn apply_encryption_data_attrs(
+    enc: &mut OdfEncryptionData,
+    e: &quick_xml::events::BytesStart<'_>,
+) -> Result<(), ParseError> {
+    enc.checksum_type = try_attr_value_by_suffix(e, &[b":checksum-type"], "META-INF/manifest.xml")?;
+    enc.checksum = try_attr_value_by_suffix(e, &[b":checksum"], "META-INF/manifest.xml")?
+        .and_then(|v| decode_base64_bytes(&v));
+    Ok(())
 }
 
-fn apply_algorithm_attrs(enc: &mut OdfEncryptionData, e: &quick_xml::events::BytesStart<'_>) {
-    enc.algorithm_name = attr_value_by_suffix(e, &[b":algorithm-name"]);
+fn apply_algorithm_attrs(
+    enc: &mut OdfEncryptionData,
+    e: &quick_xml::events::BytesStart<'_>,
+) -> Result<(), ParseError> {
+    enc.algorithm_name =
+        try_attr_value_by_suffix(e, &[b":algorithm-name"], "META-INF/manifest.xml")?;
     enc.init_vector =
-        attr_value_by_suffix(e, &[b":initialisation-vector"]).and_then(|v| decode_base64_bytes(&v));
-    enc.key_size = attr_value_by_suffix(e, &[b":key-size"]).and_then(|v| v.parse::<u32>().ok());
+        try_attr_value_by_suffix(e, &[b":initialisation-vector"], "META-INF/manifest.xml")?
+            .and_then(|v| decode_base64_bytes(&v));
+    enc.key_size = try_attr_value_by_suffix(e, &[b":key-size"], "META-INF/manifest.xml")?
+        .and_then(|v| v.parse::<u32>().ok());
+    Ok(())
 }
 
-fn apply_key_derivation_attrs(enc: &mut OdfEncryptionData, e: &quick_xml::events::BytesStart<'_>) {
-    enc.key_derivation_name = attr_value_by_suffix(e, &[b":key-derivation-name"]);
-    enc.salt = attr_value_by_suffix(e, &[b":salt"]).and_then(|v| decode_base64_bytes(&v));
+fn apply_key_derivation_attrs(
+    enc: &mut OdfEncryptionData,
+    e: &quick_xml::events::BytesStart<'_>,
+) -> Result<(), ParseError> {
+    enc.key_derivation_name =
+        try_attr_value_by_suffix(e, &[b":key-derivation-name"], "META-INF/manifest.xml")?;
+    enc.salt = try_attr_value_by_suffix(e, &[b":salt"], "META-INF/manifest.xml")?
+        .and_then(|v| decode_base64_bytes(&v));
     enc.iteration_count =
-        attr_value_by_suffix(e, &[b":iteration-count"]).and_then(|v| v.parse::<u32>().ok());
+        try_attr_value_by_suffix(e, &[b":iteration-count"], "META-INF/manifest.xml")?
+            .and_then(|v| v.parse::<u32>().ok());
+    Ok(())
 }
 
 /// Public API entrypoint: is_manifest_entry_encrypted.
@@ -224,5 +252,22 @@ mod tests {
         assert!(encryption.contains("aes256-cbc"));
         assert!(encryption.contains("PBKDF2"));
         assert!(encryption.contains("2048"));
+    }
+
+    #[test]
+    fn parse_manifest_reports_malformed_file_entry_attributes() {
+        let xml = r#"
+            <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <manifest:file-entry manifest:full-path="content.xml" manifest:full-path="meta.xml"/>
+            </manifest:manifest>
+        "#;
+
+        let err = parse_manifest(xml).expect_err("malformed manifest attributes must fail");
+        match err {
+            crate::error::ParseError::Xml { file, .. } => {
+                assert_eq!(file, "META-INF/manifest.xml");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }
