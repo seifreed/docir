@@ -4,7 +4,7 @@ use super::{
     IRNode, IrStore, OdfContentResult, OdfLimitCounter, ParseError, Slide, parse_draw_page,
     parse_odp_transition,
 };
-use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value_by_suffix, xml_error};
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
@@ -36,7 +36,7 @@ pub(super) fn parse_content_presentation(
             Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                 b"page" if in_presentation => {
                     let mut slide = Slide::new(slide_no);
-                    slide.name = attr_value_by_suffix(&e, &[b":name"]);
+                    slide.name = try_attr_value_by_suffix(&e, &[b":name"], "content.xml")?;
                     slide.transition = parse_odp_transition(&e);
                     let slide_id = slide.id;
                     store.insert(IRNode::Slide(slide));
@@ -102,5 +102,28 @@ mod tests {
         };
         assert_eq!(shape.name.as_deref(), Some("Title"));
         assert_eq!(shape.shape_type, ShapeType::TextBox);
+    }
+
+    #[test]
+    fn parse_content_presentation_reports_malformed_empty_page_attributes() {
+        let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<doc:document-content xmlns:doc="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:o="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0">
+  <o:presentation>
+    <d:page d:name="Slide 1" d:name="Slide 2"/>
+  </o:presentation>
+</doc:document-content>
+"#;
+        let mut store = IrStore::new();
+        let limits = OdfLimits::new(&ParserConfig::default(), false);
+
+        let err = parse_content_presentation(xml, &mut store, &limits)
+            .expect_err("malformed page attributes must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }
