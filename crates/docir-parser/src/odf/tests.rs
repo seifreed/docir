@@ -158,6 +158,34 @@ fn test_parse_odt_reports_malformed_list_attributes() {
 }
 
 #[test]
+fn test_parse_odt_reports_malformed_note_attributes() {
+    let mimetype = "application/vnd.oasis.opendocument.text";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <office:body>
+    <office:text>
+      <text:note text:note-class="footnote" text:note-class="endnote">
+        <text:note-body><text:p>Note</text:p></text:note-body>
+      </text:note>
+    </office:text>
+  </office:body>
+</office:document-content>
+"#;
+    let zip_data = build_odf_zip(mimetype, content_xml, None);
+    let parser = DocumentParser::new();
+
+    let err = parser
+        .parse_reader(Cursor::new(zip_data))
+        .expect_err("malformed note attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_ods_minimal() {
     let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>

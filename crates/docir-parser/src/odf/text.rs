@@ -202,8 +202,8 @@ fn parse_text_note(
     limits: &dyn OdfLimitCounter,
     state: &mut OdfTextState,
 ) -> Result<(), ParseError> {
-    let note_class =
-        attr_value_by_suffix(e, &[b":note-class"]).unwrap_or_else(|| "footnote".to_string());
+    let note_class = try_attr_value_by_suffix(e, &[b":note-class"], "content.xml")?
+        .unwrap_or_else(|| "footnote".to_string());
     let note_id = format!("odf-note-{}", state.comment_counter);
     state.comment_counter += 1;
     let note = parse_note(reader, &note_id, &note_class, store, limits)?;
