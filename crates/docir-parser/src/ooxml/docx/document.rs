@@ -5,6 +5,7 @@ use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{
     XmlScanControl, attr_value, local_name, reader_from_str, scan_xml_events_with_reader,
+    try_attr_value,
 };
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
@@ -246,8 +247,8 @@ fn style_paragraph_from_paragraph_props(props: ParagraphProperties) -> StylePara
 #[cfg(test)]
 mod tests;
 
-pub(super) fn parse_border(start: &BytesStart) -> Option<Border> {
-    let style = match attr_value(start, b"w:val").as_deref() {
+pub(super) fn parse_border(start: &BytesStart, file: &str) -> Result<Option<Border>, ParseError> {
+    let style = match try_attr_value(start, b"w:val", file)?.as_deref() {
         Some("nil") | Some("none") => BorderStyle::None,
         Some("single") => BorderStyle::Single,
         Some("double") => BorderStyle::Double,
@@ -260,13 +261,14 @@ pub(super) fn parse_border(start: &BytesStart) -> Option<Border> {
         Some("wave") => BorderStyle::Wave,
         _ => BorderStyle::Single,
     };
-    let width = attr_value(start, b"w:sz").and_then(|v| v.parse().ok());
-    let color = attr_value(start, b"w:color").filter(|v| !v.eq_ignore_ascii_case("auto"));
-    Some(Border {
+    let width = try_attr_value(start, b"w:sz", file)?.and_then(|v| v.parse().ok());
+    let color =
+        try_attr_value(start, b"w:color", file)?.filter(|v| !v.eq_ignore_ascii_case("auto"));
+    Ok(Some(Border {
         style,
         width,
         color,
-    })
+    }))
 }
 
 fn insert_note_reference(

@@ -146,7 +146,7 @@ pub(crate) fn parse_paragraph_borders(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                let border = parse_border(&e);
+                let border = parse_border(&e, DOC_PATH)?;
                 if border.is_none() {
                     continue;
                 }

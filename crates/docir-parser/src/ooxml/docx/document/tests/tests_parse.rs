@@ -68,6 +68,35 @@ fn test_parse_glossary_document_reports_malformed_attributes() {
 }
 
 #[test]
+fn test_parse_section_properties_reports_malformed_border_attributes() {
+    let xml = r#"
+        <w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:pgBorders>
+            <w:top w:val="single" w:val="double"/>
+          </w:pgBorders>
+        </w:sectPr>
+        "#;
+
+    let mut reader = reader_from_str(xml);
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:sectPr" => break,
+            Ok(Event::Eof) => panic!("no sectPr"),
+            Err(e) => panic!("xml error: {}", e),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    let err = apply_section_refs(&mut reader, None).expect_err("malformed border attributes fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_section_properties_extended() {
     let xml = r#"
         <w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

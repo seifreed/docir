@@ -11,6 +11,8 @@ use crate::xml_utils::xml_error;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
+const DOC_PATH: &str = "word/document.xml";
+
 pub(super) fn parse_page_borders(
     reader: &mut Reader<&[u8]>,
 ) -> Result<Option<PageBorders>, ParseError> {
@@ -20,7 +22,7 @@ pub(super) fn parse_page_borders(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                let border = parse_border(&e);
+                let border = parse_border(&e, DOC_PATH)?;
                 if border.is_none() {
                     continue;
                 }
