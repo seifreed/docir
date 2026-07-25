@@ -4,7 +4,8 @@ use crate::odf::{
     ods::{parse_ods_cell, parse_ods_cell_empty},
 };
 use crate::xml_utils::{
-    XmlScanControl, attr_value_by_suffix, is_end_event_local, local_name, scan_xml_events_until_end,
+    XmlScanControl, is_end_event_local, local_name, scan_xml_events_until_end,
+    try_attr_value_by_suffix,
 };
 use docir_core::ir::{CellFormula, CellValue, MergedCellRange};
 use docir_core::visitor::IrStore;
@@ -140,7 +141,7 @@ pub(crate) fn parse_ods_covered_cell(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
 ) -> Result<OdsCellData, ParseError> {
-    let cell = covered_cell_from_start(start);
+    let cell = covered_cell_from_start(start)?;
     let mut buf = Vec::new();
     scan_xml_events_until_end(
         reader,
@@ -155,18 +156,19 @@ pub(crate) fn parse_ods_covered_cell(
 pub(crate) fn parse_ods_covered_cell_empty(
     start: &BytesStart<'_>,
 ) -> Result<OdsCellData, ParseError> {
-    Ok(covered_cell_from_start(start))
+    covered_cell_from_start(start)
 }
 
-fn covered_cell_from_start(start: &BytesStart<'_>) -> OdsCellData {
-    let col_repeat = attr_value_by_suffix(start, &[b":number-columns-repeated"])
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(1);
-    let col_span = attr_value_by_suffix(start, &[b":number-columns-spanned"])
+fn covered_cell_from_start(start: &BytesStart<'_>) -> Result<OdsCellData, ParseError> {
+    let col_repeat =
+        try_attr_value_by_suffix(start, &[b":number-columns-repeated"], "content.xml")?
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(1);
+    let col_span = try_attr_value_by_suffix(start, &[b":number-columns-spanned"], "content.xml")?
         .and_then(|v| v.parse::<u32>().ok());
-    let row_span =
-        attr_value_by_suffix(start, &[b":number-rows-spanned"]).and_then(|v| v.parse::<u32>().ok());
-    OdsCellData {
+    let row_span = try_attr_value_by_suffix(start, &[b":number-rows-spanned"], "content.xml")?
+        .and_then(|v| v.parse::<u32>().ok());
+    Ok(OdsCellData {
         value: CellValue::Empty,
         formula: None,
         style_id: None,
@@ -175,7 +177,7 @@ fn covered_cell_from_start(start: &BytesStart<'_>) -> OdsCellData {
         col_span,
         row_span,
         is_covered: true,
-    }
+    })
 }
 
 pub(crate) fn column_index_to_name(mut index: u32) -> String {
@@ -210,6 +212,25 @@ mod tests {
         assert_eq!(cell.col_span, Some(3));
         assert_eq!(cell.row_span, Some(4));
         assert!(cell.is_covered);
+    }
+
+    #[test]
+    fn covered_cell_empty_reports_malformed_span_attributes() {
+        let mut reader = quick_xml::Reader::from_str(
+            r#"<table:covered-table-cell table:number-columns-spanned="2" table:number-columns-spanned="3" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"/>"#,
+        );
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        let start = match reader.read_event_into(&mut buf) {
+            Ok(Event::Empty(e)) => e.into_owned(),
+            _ => panic!("expected covered-table-cell"),
+        };
+
+        let err = parse_ods_covered_cell_empty(&start).expect_err("malformed span must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+            other => panic!("expected xml error, got {other:?}"),
+        }
     }
 
     #[test]
