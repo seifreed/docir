@@ -31,7 +31,7 @@ pub(crate) fn handle_worksheet_common_tag(
             Ok(true)
         }
         b"tabColor" => {
-            worksheet.tab_color = parse_color_attr(e);
+            worksheet.tab_color = parse_color_attr(e, sheet_path)?;
             Ok(true)
         }
         b"pageMargins" => {

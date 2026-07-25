@@ -3,7 +3,7 @@ use super::{
     NumberFormat, TableStyleDef, TableStyleInfo,
 };
 use crate::error::ParseError;
-use crate::xml_utils::{attr_u32_from_bytes, attr_value};
+use crate::xml_utils::{attr_u32_from_bytes, attr_value, try_attr_value};
 use quick_xml::events::BytesStart;
 
 pub(super) fn apply_font_attr<F>(
@@ -63,7 +63,7 @@ pub(super) fn parse_number_format(
     styles_path: &str,
 ) -> Result<Option<NumberFormat>, ParseError> {
     let id = attr_u32_from_bytes(element, b"numFmtId", styles_path)?;
-    let code = attr_value(element, b"formatCode");
+    let code = try_attr_value(element, b"formatCode", styles_path)?;
     Ok(match (id, code) {
         (Some(id), Some(code)) => Some(NumberFormat {
             id,
@@ -73,8 +73,11 @@ pub(super) fn parse_number_format(
     })
 }
 
-pub(super) fn parse_pattern_type(element: &BytesStart) -> Option<String> {
-    attr_value(element, b"patternType")
+pub(super) fn parse_pattern_type(
+    element: &BytesStart,
+    styles_path: &str,
+) -> Result<Option<String>, ParseError> {
+    try_attr_value(element, b"patternType", styles_path)
 }
 
 pub(super) fn parse_border_side(element: &BytesStart) -> BorderSide {
@@ -204,15 +207,18 @@ pub(super) fn parse_table_style_def(element: &BytesStart) -> Option<TableStyleDe
     Some(TableStyleDef { name, pivot, table })
 }
 
-pub(crate) fn parse_color_attr(element: &BytesStart) -> Option<String> {
-    let rgb = attr_value(element, b"rgb");
-    let theme = attr_value(element, b"theme");
-    let indexed = attr_value(element, b"indexed");
-    if let Some(rgb) = rgb {
+pub(crate) fn parse_color_attr(
+    element: &BytesStart,
+    styles_path: &str,
+) -> Result<Option<String>, ParseError> {
+    let rgb = try_attr_value(element, b"rgb", styles_path)?;
+    let theme = try_attr_value(element, b"theme", styles_path)?;
+    let indexed = try_attr_value(element, b"indexed", styles_path)?;
+    Ok(if let Some(rgb) = rgb {
         Some(format!("rgb:{rgb}"))
     } else if let Some(theme) = theme {
         Some(format!("theme:{theme}"))
     } else {
         indexed.map(|indexed| format!("indexed:{indexed}"))
-    }
+    })
 }

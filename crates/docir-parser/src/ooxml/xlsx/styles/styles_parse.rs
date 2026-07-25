@@ -94,9 +94,9 @@ fn handle_styles_start(
     styles: &mut SpreadsheetStyles,
 ) -> Result<(), ParseError> {
     let handled = handle_num_fmt_start(e, styles_path, state, styles)?
-        || handle_font_start(e, state)
-        || handle_fill_start(e, state)
-        || handle_border_start(e, state)
+        || handle_font_start(e, styles_path, state)?
+        || handle_fill_start(e, styles_path, state)?
+        || handle_border_start(e, styles_path, state)?
         || handle_xf_start(e, styles_path, state)?
         || handle_table_style_start(e, state, styles);
     if handled {
@@ -144,35 +144,43 @@ fn handle_num_fmt_start(
     Ok(true)
 }
 
-fn handle_font_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
+fn handle_font_start(
+    e: &BytesStart<'_>,
+    styles_path: &str,
+    state: &mut StylesParseState,
+) -> Result<bool, ParseError> {
     let raw_name = e.name();
     let name = local_name(raw_name.as_ref());
     if name == b"font" {
         if state.in_fonts {
             state.current_font = Some(new_font());
-            return true;
+            return Ok(true);
         }
         if state.in_dxfs {
             state.current_dxf_font = Some(new_font());
-            return true;
+            return Ok(true);
         }
-        return false;
+        return Ok(false);
     }
 
     if !state.in_fonts && !state.in_dxfs {
-        return false;
+        return Ok(false);
     }
 
-    match name {
+    Ok(match name {
         b"name" | b"sz" | b"b" | b"i" | b"u" | b"color" => {
-            apply_font_node_attrs(e, state);
+            apply_font_node_attrs(e, styles_path, state)?;
             true
         }
         _ => false,
-    }
+    })
 }
 
-fn apply_font_node_attrs(e: &BytesStart<'_>, state: &mut StylesParseState) {
+fn apply_font_node_attrs(
+    e: &BytesStart<'_>,
+    styles_path: &str,
+    state: &mut StylesParseState,
+) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"name" => {
             if let Some(name) = attr_value(e, b"val") {
@@ -211,34 +219,39 @@ fn apply_font_node_attrs(e: &BytesStart<'_>, state: &mut StylesParseState) {
             &mut state.current_dxf_font,
             |font| font.underline = true,
         ),
-        b"color" => apply_color_attr(e, state),
+        b"color" => apply_color_attr(e, styles_path, state)?,
         _ => {}
     }
+    Ok(())
 }
 
-fn apply_color_attr(e: &BytesStart<'_>, state: &mut StylesParseState) {
-    if let Some(color) = parse_color_attr(e) {
+fn apply_color_attr(
+    e: &BytesStart<'_>,
+    styles_path: &str,
+    state: &mut StylesParseState,
+) -> Result<(), ParseError> {
+    if let Some(color) = parse_color_attr(e, styles_path)? {
         if let Some(font) = state.current_font.as_mut() {
             font.color = Some(color.clone());
-            return;
+            return Ok(());
         }
         if let Some(font) = state.current_dxf_font.as_mut() {
             font.color = Some(color.clone());
-            return;
+            return Ok(());
         }
         if let Some((_, side)) = state.current_border_side.as_mut() {
             side.color = Some(color.clone());
-            return;
+            return Ok(());
         }
         if let Some((_, side)) = state.current_dxf_border_side.as_mut() {
             side.color = Some(color.clone());
-            return;
+            return Ok(());
         }
         if let Some(fill) = state.current_fill.as_mut()
             && fill.fg_color.is_none()
         {
             fill.fg_color = Some(color.clone());
-            return;
+            return Ok(());
         }
         if let Some(fill) = state.current_dxf_fill.as_mut()
             && fill.fg_color.is_none()
@@ -246,10 +259,15 @@ fn apply_color_attr(e: &BytesStart<'_>, state: &mut StylesParseState) {
             fill.fg_color = Some(color);
         }
     }
+    Ok(())
 }
 
-fn handle_fill_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
-    match local_name(e.name().as_ref()) {
+fn handle_fill_start(
+    e: &BytesStart<'_>,
+    styles_path: &str,
+    state: &mut StylesParseState,
+) -> Result<bool, ParseError> {
+    Ok(match local_name(e.name().as_ref()) {
         b"fill" if state.in_fills => {
             state.current_fill = Some(new_fill());
             true
@@ -259,7 +277,7 @@ fn handle_fill_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
             true
         }
         b"patternFill" => {
-            if let Some(pattern_type) = parse_pattern_type(e) {
+            if let Some(pattern_type) = parse_pattern_type(e, styles_path)? {
                 if let Some(fill) = state.current_fill.as_mut() {
                     fill.pattern_type = Some(pattern_type.clone());
                 } else if let Some(fill) = state.current_dxf_fill.as_mut() {
@@ -270,26 +288,30 @@ fn handle_fill_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
         }
         b"fgColor" => {
             if let Some(fill) = state.current_fill.as_mut() {
-                fill.fg_color = parse_color_attr(e);
+                fill.fg_color = parse_color_attr(e, styles_path)?;
             } else if let Some(fill) = state.current_dxf_fill.as_mut() {
-                fill.fg_color = parse_color_attr(e);
+                fill.fg_color = parse_color_attr(e, styles_path)?;
             }
             true
         }
         b"bgColor" => {
             if let Some(fill) = state.current_fill.as_mut() {
-                fill.bg_color = parse_color_attr(e);
+                fill.bg_color = parse_color_attr(e, styles_path)?;
             } else if let Some(fill) = state.current_dxf_fill.as_mut() {
-                fill.bg_color = parse_color_attr(e);
+                fill.bg_color = parse_color_attr(e, styles_path)?;
             }
             true
         }
         _ => false,
-    }
+    })
 }
 
-fn handle_border_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool {
-    match local_name(e.name().as_ref()) {
+fn handle_border_start(
+    e: &BytesStart<'_>,
+    styles_path: &str,
+    state: &mut StylesParseState,
+) -> Result<bool, ParseError> {
+    Ok(match local_name(e.name().as_ref()) {
         b"border" if state.in_borders => {
             state.current_border = Some(new_border());
             true
@@ -308,8 +330,12 @@ fn handle_border_start(e: &BytesStart<'_>, state: &mut StylesParseState) -> bool
             }
             true
         }
+        b"color" => {
+            apply_color_attr(e, styles_path, state)?;
+            true
+        }
         _ => false,
-    }
+    })
 }
 
 fn handle_xf_start(

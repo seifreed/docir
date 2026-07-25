@@ -114,3 +114,33 @@ fn matches_worksheet_empty_event_reports_malformed_dimension_attributes() {
         other => panic!("unexpected error: {other:?}"),
     }
 }
+
+#[test]
+fn matches_worksheet_empty_event_reports_malformed_tab_color_attributes() {
+    let mut parser = XlsxParser::new();
+    let relationships = Relationships::default();
+    let mut worksheet = Worksheet::new("sheet-1", 1);
+    let mut accum = WorksheetParseAccum::new();
+
+    let mut reader = reader_from_str(r#"<tabColor rgb="FF0000" rgb="00FF00"/>"#);
+    let mut buf = Vec::new();
+    let empty = match reader.read_event_into(&mut buf).expect("xml") {
+        Event::Empty(empty) => empty,
+        _ => panic!("expected empty"),
+    };
+
+    let err = parser
+        .matches_worksheet_empty_event(
+            "xl/worksheets/sheet1.xml",
+            &relationships,
+            &mut worksheet,
+            &mut accum,
+            &empty,
+        )
+        .expect_err("duplicate tab color attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "xl/worksheets/sheet1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
