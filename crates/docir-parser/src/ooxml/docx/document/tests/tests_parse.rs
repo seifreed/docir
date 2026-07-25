@@ -97,6 +97,33 @@ fn test_parse_section_properties_reports_malformed_border_attributes() {
 }
 
 #[test]
+fn test_parse_section_properties_reports_malformed_title_page_attributes() {
+    let xml = r#"
+        <w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:titlePg w:val="1" w:val="0"/>
+        </w:sectPr>
+        "#;
+
+    let mut reader = reader_from_str(xml);
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:sectPr" => break,
+            Ok(Event::Eof) => panic!("no sectPr"),
+            Err(e) => panic!("xml error: {}", e),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    let err = apply_section_refs(&mut reader, None).expect_err("malformed titlePg attributes fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_section_properties_extended() {
     let xml = r#"
         <w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -383,6 +410,26 @@ fn test_parse_numbering_reports_malformed_attributes() {
           <w:abstractNum w:abstractNumId="1" w:abstractNumId="2">
             <w:lvl w:ilvl="0"/>
           </w:abstractNum>
+        </w:numbering>
+        "#;
+
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_numbering(xml)
+        .expect_err("malformed numbering attributes must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/numbering.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_numbering_reports_malformed_num_abstract_id_attributes() {
+    let xml = r#"
+        <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:num w:numId="10">
+            <w:abstractNumId w:val="1" w:val="2"/>
+          </w:num>
         </w:numbering>
         "#;
 

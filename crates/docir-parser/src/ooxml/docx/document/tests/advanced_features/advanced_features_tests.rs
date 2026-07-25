@@ -1,6 +1,7 @@
 use super::*;
 use crate::ooxml::relationships::TargetMode;
 use crate::ooxml::relationships::{Relationship, rel_type};
+use crate::xml_utils::try_attr_value;
 
 #[test]
 fn test_parse_field_returns_xml_error_for_malformed_input() {
@@ -16,7 +17,9 @@ fn test_parse_field_returns_xml_error_for_malformed_input() {
     let err = loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) if e.name().as_ref() == b"w:fldSimple" => {
-                break parse_field(&mut parser, &mut reader, attr_value(&e, b"w:instr")).err();
+                let instr =
+                    try_attr_value(&e, b"w:instr", "word/document.xml").expect("field instr");
+                break parse_field(&mut parser, &mut reader, instr).err();
             }
             Ok(Event::Eof) => panic!("missing fldSimple"),
             _ => {}

@@ -1,5 +1,5 @@
 use super::{
-    DocxParser, NodeId, PageBorders, ParseError, Relationships, WordSettings, attr_value,
+    DocxParser, NodeId, PageBorders, ParseError, Relationships, WordSettings,
     normalize_docx_target, parse_border, reader_from_str, span_from_reader,
 };
 use crate::xml_utils::local_name;
@@ -60,11 +60,11 @@ pub(super) fn parse_page_borders(
     if has_any { Ok(Some(borders)) } else { Ok(None) }
 }
 
-pub(super) fn bool_from_val(start: &BytesStart) -> bool {
-    !matches!(
-        attr_value(start, b"w:val").as_deref(),
+pub(super) fn bool_from_val(start: &BytesStart, file: &str) -> Result<bool, ParseError> {
+    Ok(!matches!(
+        try_attr_value(start, b"w:val", file)?.as_deref(),
         Some("0") | Some("false")
-    )
+    ))
 }
 
 pub(super) fn parse_vml_style_length(style: &str, key: &str) -> Option<i64> {
@@ -238,7 +238,8 @@ pub(super) fn parse_num_abstract_id(reader: &mut Reader<&[u8]>) -> Result<u32, P
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) => {
                 if local_name(e.name().as_ref()) == b"abstractNumId"
-                    && let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok())
+                    && let Some(val) = try_attr_value(&e, b"w:val", "word/numbering.xml")?
+                        .and_then(|v| v.parse().ok())
                 {
                     abstract_id = val;
                 }

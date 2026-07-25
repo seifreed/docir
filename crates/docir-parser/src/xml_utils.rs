@@ -44,23 +44,6 @@ pub(crate) fn decoded_general_ref_or_default(e: &quick_xml::events::BytesRef<'_>
     decoded_general_ref(e).unwrap_or_default()
 }
 
-pub(crate) fn attr_value(e: &BytesStart<'_>, name: &[u8]) -> Option<String> {
-    for attr in e.attributes().flatten() {
-        if attr.key.as_ref() == name {
-            return Some(lossy_attr_value(&attr).to_string());
-        }
-    }
-
-    let requested_local = name.contains(&b':').then(|| local_name(name))?;
-    for attr in e.attributes().flatten() {
-        if local_name(attr.key.as_ref()) == requested_local {
-            return Some(lossy_attr_value(&attr).to_string());
-        }
-    }
-
-    None
-}
-
 pub(crate) fn try_attr_value(
     e: &BytesStart<'_>,
     name: &[u8],
@@ -443,7 +426,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn attr_value_accepts_alternate_prefix_for_qualified_lookup() {
+    fn try_attr_value_accepts_alternate_prefix_for_qualified_lookup() {
         let xml = r#"<x:item xmlns:x="urn:x" xmlns:y="urn:y" y:val="42" plain="keep"/>"#;
         let mut reader = Reader::from_str(xml);
         let mut buf = Vec::new();
@@ -451,9 +434,22 @@ mod tests {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Empty(e)) => {
-                    assert_eq!(attr_value(&e, b"x:val").as_deref(), Some("42"));
-                    assert_eq!(attr_value(&e, b"plain").as_deref(), Some("keep"));
-                    assert_eq!(attr_value(&e, b"val"), None);
+                    assert_eq!(
+                        try_attr_value(&e, b"x:val", "test.xml")
+                            .expect("qualified attr")
+                            .as_deref(),
+                        Some("42")
+                    );
+                    assert_eq!(
+                        try_attr_value(&e, b"plain", "test.xml")
+                            .expect("plain attr")
+                            .as_deref(),
+                        Some("keep")
+                    );
+                    assert_eq!(
+                        try_attr_value(&e, b"val", "test.xml").expect("local attr"),
+                        None
+                    );
                     break;
                 }
                 Ok(Event::Eof) => panic!("item not found"),

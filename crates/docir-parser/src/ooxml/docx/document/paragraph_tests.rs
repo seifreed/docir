@@ -147,6 +147,25 @@ fn parse_paragraph_properties_reports_malformed_attributes() {
 }
 
 #[test]
+fn parse_paragraph_properties_reports_malformed_bool_attributes() {
+    let xml = r#"
+            <w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:keepNext w:val="1" w:val="0"/>
+            </w:pPr>
+        "#;
+
+    let mut reader = reader_from_str(xml);
+    let mut para = Paragraph::new();
+    let err = parse_paragraph_properties(&mut reader, &mut para, None)
+        .expect_err("malformed paragraph property attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn handle_field_char_end_with_blank_instruction_creates_field_without_instruction() {
     let mut parser = DocxParser::new();
     let mut para = Paragraph::new();

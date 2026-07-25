@@ -65,10 +65,12 @@ fn handle_paragraph_property_event(
                 para.style_id = Some(val);
             }
         }
-        b"keepNext" => para.properties.keep_next = Some(bool_from_val(e)),
-        b"keepLines" => para.properties.keep_lines = Some(bool_from_val(e)),
-        b"pageBreakBefore" => para.properties.page_break_before = Some(bool_from_val(e)),
-        b"widowControl" => para.properties.widow_control = Some(bool_from_val(e)),
+        b"keepNext" => para.properties.keep_next = Some(bool_from_val(e, DOC_PATH)?),
+        b"keepLines" => para.properties.keep_lines = Some(bool_from_val(e, DOC_PATH)?),
+        b"pageBreakBefore" => {
+            para.properties.page_break_before = Some(bool_from_val(e, DOC_PATH)?);
+        }
+        b"widowControl" => para.properties.widow_control = Some(bool_from_val(e, DOC_PATH)?),
         b"jc" => apply_paragraph_alignment(e, para)?,
         b"ind" => apply_paragraph_indentation(e, para)?,
         b"spacing" => apply_paragraph_spacing(e, para)?,

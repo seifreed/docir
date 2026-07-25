@@ -180,7 +180,7 @@ fn apply_section_title_page(
     properties: &mut SectionProperties,
 ) -> Result<(), ParseError> {
     try_attr_value(e, b"w:val", DOC_PATH)?;
-    properties.title_page = Some(super::bool_from_val(e));
+    properties.title_page = Some(super::bool_from_val(e, DOC_PATH)?);
     Ok(())
 }
 

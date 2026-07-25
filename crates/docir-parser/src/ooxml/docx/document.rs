@@ -4,8 +4,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{
-    XmlScanControl, attr_value, local_name, reader_from_str, scan_xml_events_with_reader,
-    try_attr_value,
+    XmlScanControl, local_name, reader_from_str, scan_xml_events_with_reader, try_attr_value,
 };
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
@@ -297,8 +296,8 @@ fn parse_page_borders(reader: &mut Reader<&[u8]>) -> Result<Option<PageBorders>,
     support::parse_page_borders(reader)
 }
 
-fn bool_from_val(start: &BytesStart) -> bool {
-    support::bool_from_val(start)
+fn bool_from_val(start: &BytesStart, file: &str) -> Result<bool, ParseError> {
+    support::bool_from_val(start, file)
 }
 
 fn parse_settings_like(xml: &str) -> Result<WordSettings, ParseError> {
