@@ -3,11 +3,10 @@ use crate::ooxml::relationships::Relationships;
 use crate::ooxml::xlsx::{
     ParseError, Worksheet, XlsxParser, parse_color_attr, parse_column, parse_merge_cell,
 };
-use crate::xml_utils::attr_value;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
     XmlScanControl, attr_bool_like, is_end_event_local, local_name, scan_xml_events_until_end,
-    visit_attributes,
+    try_attr_value, visit_attributes,
 };
 use docir_core::ir::ConditionalFormat;
 use docir_core::ir::{DataValidation, SheetPageMargins};
@@ -26,7 +25,7 @@ pub(crate) fn handle_worksheet_common_tag(
 ) -> Result<bool, ParseError> {
     match local_name(e.name().as_ref()) {
         b"dimension" => {
-            if let Some(val) = attr_value(e, b"ref") {
+            if let Some(val) = try_attr_value(e, b"ref", sheet_path)? {
                 worksheet.dimension = Some(val);
             }
             Ok(true)
@@ -167,7 +166,7 @@ pub(crate) fn parse_data_validation(
             match event {
                 Event::Start(e) => {
                     formulas.track_start(e);
-                    formulas.track_start_with_context(e, &mut validation);
+                    formulas.track_start_with_context(e, &mut validation, sheet_path)?;
                 }
                 Event::Text(e) => {
                     let text = crate::xml_utils::decoded_text_or_default(e);
@@ -211,21 +210,27 @@ impl DataValidationFormulaCapture {
         }
     }
 
-    fn track_start_with_context(&mut self, e: &BytesStart<'_>, validation: &mut DataValidation) {
+    fn track_start_with_context(
+        &mut self,
+        e: &BytesStart<'_>,
+        validation: &mut DataValidation,
+        sheet_path: &str,
+    ) -> Result<(), ParseError> {
         if local_name(e.name().as_ref()) == b"formula1"
-            && let Some(val) = attr_value(e, b"val")
+            && let Some(val) = try_attr_value(e, b"val", sheet_path)?
         {
             validation.formula1 = Some(val);
             self.in_formula = None;
             self.formula1.clear();
         }
         if local_name(e.name().as_ref()) == b"formula2"
-            && let Some(val) = attr_value(e, b"val")
+            && let Some(val) = try_attr_value(e, b"val", sheet_path)?
         {
             validation.formula2 = Some(val);
             self.in_formula = None;
             self.formula2.clear();
         }
+        Ok(())
     }
 
     fn append_text(&mut self, text: &str) {
@@ -385,6 +390,32 @@ mod tests {
         assert_eq!(validation.formula1, None);
         assert_eq!(validation.formula2.as_deref(), Some("10"));
         assert_eq!(validation.ranges, vec!["C3".to_string()]);
+    }
+
+    #[test]
+    fn parse_data_validation_reports_malformed_formula_attributes() {
+        let xml = r#"
+            <dataValidation type="whole" sqref="C3">
+              <formula1 val="1" val="2"></formula1>
+            </dataValidation>
+        "#;
+        let mut reader = reader_from_str(xml);
+        let mut buf = Vec::new();
+        let start = loop {
+            match reader.read_event_into(&mut buf).expect("xml") {
+                Event::Start(e) if e.name().as_ref() == b"dataValidation" => break e.into_owned(),
+                Event::Eof => panic!("missing dataValidation"),
+                _ => {}
+            }
+            buf.clear();
+        };
+        let err = parse_data_validation(&mut reader, &start, "xl/worksheets/sheet1.xml")
+            .expect_err("duplicate formula attributes must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/worksheets/sheet1.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]
