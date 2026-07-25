@@ -34,7 +34,13 @@ pub(crate) fn parse_comment_authors(
                 for attr in e.attributes() {
                     let attr = attr.map_err(|err| xml_error(path, err))?;
                     match attr.key.as_ref() {
-                        b"id" => author_id = lossy_attr_value(&attr).parse::<u32>().ok(),
+                        b"id" => {
+                            author_id = Some(
+                                lossy_attr_value(&attr)
+                                    .parse::<u32>()
+                                    .map_err(|err| xml_error(path, err))?,
+                            );
+                        }
                         b"name" => name = Some(lossy_attr_value(&attr).to_string()),
                         b"initials" => initials = Some(lossy_attr_value(&attr).to_string()),
                         _ => {}
@@ -128,7 +134,13 @@ fn comment_from_start(e: &BytesStart<'_>, path: &str) -> Result<PptxComment, Par
     for attr in e.attributes() {
         let attr = attr.map_err(|err| xml_error(path, err))?;
         match attr.key.as_ref() {
-            b"authorId" => author_id = lossy_attr_value(&attr).parse::<u32>().ok(),
+            b"authorId" => {
+                author_id = Some(
+                    lossy_attr_value(&attr)
+                        .parse::<u32>()
+                        .map_err(|err| xml_error(path, err))?,
+                );
+            }
             b"dt" => dt = Some(lossy_attr_value(&attr).to_string()),
             _ => {}
         }
@@ -243,6 +255,17 @@ mod tests {
             parse_comment_authors(xml, "ppt/commentAuthors.xml"),
             "ppt/commentAuthors.xml",
         );
+
+        let xml = r#"
+            <p:cmAuthorLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+              <p:cmAuthor id="bad" name="Alice" initials="AL"/>
+            </p:cmAuthorLst>
+        "#;
+
+        assert_xml_error(
+            parse_comment_authors(xml, "ppt/commentAuthors.xml"),
+            "ppt/commentAuthors.xml",
+        );
     }
 
     #[test]
@@ -255,6 +278,19 @@ mod tests {
             </p:cmLst>
         "#;
         let authors = HashMap::new();
+
+        assert_xml_error(
+            parse_comments(xml, "ppt/comments/comment1.xml", &authors),
+            "ppt/comments/comment1.xml",
+        );
+
+        let xml = r#"
+            <p:cmLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+              <p:cm authorId="bad">
+                <p:text><p:t>Note</p:t></p:text>
+              </p:cm>
+            </p:cmLst>
+        "#;
 
         assert_xml_error(
             parse_comments(xml, "ppt/comments/comment1.xml", &authors),
