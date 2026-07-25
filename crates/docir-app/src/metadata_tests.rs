@@ -185,3 +185,13 @@ fn inspect_metadata_rejects_truncated_property_section() {
             .contains("section size exceeds stream length")
     );
 }
+
+#[test]
+fn inspect_metadata_rejects_property_section_smaller_than_header() {
+    let mut summary = build_test_property_set_stream(&[(2, TestPropertyValue::Str("Specimen"))]);
+    summary[0x30..0x34].copy_from_slice(&4u32.to_le_bytes());
+
+    let err = inspect_metadata_bytes(&build_test_cfb(&[(SUMMARY_INFO_STREAM, &summary)]))
+        .expect_err("undersized property section must fail");
+    assert!(err.to_string().contains("section size is too small"));
+}

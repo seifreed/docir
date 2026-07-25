@@ -80,6 +80,8 @@ fn parse_section_entries(
     section_index: usize,
     path: &str,
 ) -> Result<Vec<MetadataProperty>, ParserParseError> {
+    const SECTION_HEADER_SIZE: usize = 8;
+
     let descriptor_offset = match 28usize.checked_add(section_index.saturating_mul(20)) {
         Some(off) => off,
         None => return Ok(Vec::new()),
@@ -88,7 +90,7 @@ fn parse_section_entries(
         return Ok(Vec::new());
     }
     let section_offset = read_u32(data, descriptor_offset + 16)? as usize;
-    if section_offset + 8 > data.len() {
+    if section_offset + SECTION_HEADER_SIZE > data.len() {
         return Err(ParserParseError::InvalidStructure(format!(
             "OLE property set section offset is out of bounds for {}",
             path
@@ -96,6 +98,11 @@ fn parse_section_entries(
     }
 
     let section_size = read_u32(data, section_offset)? as usize;
+    if section_size < SECTION_HEADER_SIZE {
+        return Err(ParserParseError::InvalidStructure(
+            "OLE property set section size is too small".to_string(),
+        ));
+    }
     let property_count = read_u32(data, section_offset + 4)? as usize;
     let section_end = section_offset.checked_add(section_size).ok_or_else(|| {
         ParserParseError::InvalidStructure("OLE property set section size overflow".to_string())
