@@ -97,7 +97,7 @@ pub(crate) fn parse_ods_conditional_formatting(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
 ) -> Result<Option<ConditionalFormat>, ParseError> {
-    let mut cf = init_conditional_format(start);
+    let mut cf = init_conditional_format(start)?;
 
     let mut buf = Vec::new();
     let mut depth: usize = 1;
@@ -105,14 +105,14 @@ pub(crate) fn parse_ods_conditional_formatting(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
                 if depth == 1 && local_name(e.name().as_ref()) == b"conditional-format" {
-                    cf.rules.push(build_ods_conditional_rule(&e));
+                    cf.rules.push(build_ods_conditional_rule(&e)?);
                 }
                 depth = depth.saturating_add(1);
             }
             Ok(Event::Empty(e))
                 if depth == 1 && local_name(e.name().as_ref()) == b"conditional-format" =>
             {
-                cf.rules.push(build_ods_conditional_rule(&e));
+                cf.rules.push(build_ods_conditional_rule(&e)?);
             }
             Ok(Event::End(e)) => {
                 if local_name(e.name().as_ref()) == b"conditional-formatting" && depth == 1 {
@@ -144,7 +144,7 @@ pub(crate) fn parse_ods_conditional_formatting(
 pub(crate) fn parse_ods_conditional_formatting_empty(
     start: &BytesStart<'_>,
 ) -> Result<Option<ConditionalFormat>, ParseError> {
-    let cf = init_conditional_format(start);
+    let cf = init_conditional_format(start)?;
     if cf.rules.is_empty() && cf.ranges.is_empty() {
         Ok(None)
     } else {
@@ -170,38 +170,49 @@ pub(crate) fn parse_odf_condition_operator(condition: &str) -> Option<String> {
     None
 }
 
-fn init_conditional_format(start: &BytesStart<'_>) -> ConditionalFormat {
+fn init_conditional_format(start: &BytesStart<'_>) -> Result<ConditionalFormat, ParseError> {
     let mut cf = ConditionalFormat {
         id: NodeId::new(),
         ranges: Vec::new(),
         rules: Vec::new(),
         span: Some(SourceSpan::new(ODF_CONTENT_XML)),
     };
-    if let Some(ranges) = attr_value_by_suffix(start, &[b":target-range-address"])
-        .or_else(|| attr_value_by_suffix(start, &[b":cell-range-address"]))
+    if let Some(ranges) =
+        conditional_attr(start, &[b":target-range-address", b":cell-range-address"])?
     {
         cf.ranges = ranges.split_whitespace().map(|s| s.to_string()).collect();
     }
-    cf
+    Ok(cf)
 }
 
-fn build_ods_conditional_rule(start: &BytesStart<'_>) -> ConditionalRule {
+fn build_ods_conditional_rule(start: &BytesStart<'_>) -> Result<ConditionalRule, ParseError> {
     let mut rule = ConditionalRule {
         rule_type: "odf-condition".to_string(),
         priority: None,
         operator: None,
         formulae: Vec::new(),
     };
-    rule.priority =
-        attr_value_by_suffix(start, &[b":priority"]).and_then(|v| v.parse::<u32>().ok());
-    if let Some(condition) = attr_value_by_suffix(start, &[b":condition"]) {
+    rule.priority = conditional_attr(start, &[b":priority"])?.and_then(|v| v.parse::<u32>().ok());
+    if let Some(condition) = conditional_attr(start, &[b":condition"])? {
         rule.operator = parse_odf_condition_operator(&condition);
         rule.formulae.push(condition);
     }
-    if let Some(style_name) = attr_value_by_suffix(start, &[b":apply-style-name"]) {
+    if let Some(style_name) = conditional_attr(start, &[b":apply-style-name"])? {
         rule.formulae.push(format!("apply-style:{}", style_name));
     }
-    rule
+    Ok(rule)
+}
+
+fn conditional_attr(
+    start: &BytesStart<'_>,
+    suffixes: &[&[u8]],
+) -> Result<Option<String>, ParseError> {
+    for suffix in suffixes {
+        if let Some(value) = try_attr_value_by_suffix(start, &[*suffix], ODF_CONTENT_XML)? {
+            return Ok(Some(value));
+        }
+    }
+    Ok(None)
 }
 
 fn append_text_control(text: &mut String, e: &BytesStart<'_>) {
