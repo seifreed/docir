@@ -24,12 +24,10 @@ pub(crate) fn parse_numbering(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) | Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                 b"numId" => {
-                    num_id =
-                        try_attr_value(&e, b"w:val", DOC_XML_PATH)?.and_then(|v| v.parse().ok());
+                    num_id = attr_u32_from_bytes(&e, b"w:val", DOC_XML_PATH)?;
                 }
                 b"ilvl" => {
-                    level =
-                        try_attr_value(&e, b"w:val", DOC_XML_PATH)?.and_then(|v| v.parse().ok());
+                    level = attr_u32_from_bytes(&e, b"w:val", DOC_XML_PATH)?;
                 }
                 _ => {}
             },
