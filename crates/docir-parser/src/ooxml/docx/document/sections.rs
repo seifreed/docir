@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value, attr_value_by_suffix, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value, try_attr_value_by_suffix, xml_error};
 use docir_core::ir::{
     LineNumberRestart, PageMargins, PageOrientation, SectionProperties, SectionType,
 };
@@ -7,6 +7,8 @@ use docir_core::types::NodeId;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
+
+const DOC_PATH: &str = "word/document.xml";
 
 #[derive(Debug, Clone)]
 pub(super) struct SectionRef {
@@ -27,19 +29,19 @@ pub(super) fn apply_section_refs(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                 b"headerReference" | b"footerReference" => {
-                    apply_section_header_footer(&e, header_footer_map, &mut headers, &mut footers);
+                    apply_section_header_footer(&e, header_footer_map, &mut headers, &mut footers)?;
                 }
-                b"pgSz" => apply_section_page_size(&e, &mut properties),
-                b"pgMar" => apply_section_margins(&e, &mut properties),
-                b"cols" => apply_section_columns(&e, &mut properties),
-                b"type" => apply_section_type(&e, &mut properties),
-                b"titlePg" => apply_section_title_page(&e, &mut properties),
-                b"pgNumType" => apply_section_page_numbering(&e, &mut properties),
+                b"pgSz" => apply_section_page_size(&e, &mut properties)?,
+                b"pgMar" => apply_section_margins(&e, &mut properties)?,
+                b"cols" => apply_section_columns(&e, &mut properties)?,
+                b"type" => apply_section_type(&e, &mut properties)?,
+                b"titlePg" => apply_section_title_page(&e, &mut properties)?,
+                b"pgNumType" => apply_section_page_numbering(&e, &mut properties)?,
                 b"lnNumType" | b"lineNumberType" => {
-                    apply_section_line_numbering(&e, &mut properties)
+                    apply_section_line_numbering(&e, &mut properties)?
                 }
                 b"pgBorders" => apply_section_page_borders(reader, &mut properties)?,
-                b"textDirection" => apply_section_text_direction(&e, &mut properties),
+                b"textDirection" => apply_section_text_direction(&e, &mut properties)?,
                 _ => {}
             },
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"sectPr" => {
@@ -47,7 +49,7 @@ pub(super) fn apply_section_refs(
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(xml_error("word/document.xml", e));
+                return Err(xml_error(DOC_PATH, e));
             }
             _ => {}
         }
@@ -65,40 +67,48 @@ fn apply_section_header_footer(
     header_footer_map: Option<&HashMap<String, NodeId>>,
     headers: &mut Vec<NodeId>,
     footers: &mut Vec<NodeId>,
-) {
+) -> Result<(), ParseError> {
     let Some(map) = header_footer_map else {
-        return;
+        return Ok(());
     };
-    let Some(id) = attr_value_by_suffix(e, &[b":id"]) else {
-        return;
+    let Some(id) = try_attr_value_by_suffix(e, &[b":id"], DOC_PATH)? else {
+        return Ok(());
     };
     let Some(node_id) = map.get(&id) else {
-        return;
+        return Ok(());
     };
     if local_name(e.name().as_ref()) == b"headerReference" {
         headers.push(*node_id);
     } else {
         footers.push(*node_id);
     }
+    Ok(())
 }
 
-fn apply_section_page_size(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    if let Some(val) = attr_value(e, b"w:w").and_then(|v| v.parse().ok()) {
+fn apply_section_page_size(
+    e: &BytesStart<'_>,
+    properties: &mut SectionProperties,
+) -> Result<(), ParseError> {
+    if let Some(val) = try_attr_value(e, b"w:w", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         properties.page_width = Some(val);
     }
-    if let Some(val) = attr_value(e, b"w:h").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:h", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         properties.page_height = Some(val);
     }
-    if let Some(val) = attr_value(e, b"w:orient") {
+    if let Some(val) = try_attr_value(e, b"w:orient", DOC_PATH)? {
         properties.orientation = match val.as_str() {
             "landscape" => Some(PageOrientation::Landscape),
             "portrait" => Some(PageOrientation::Portrait),
             _ => None,
         };
     }
+    Ok(())
 }
 
-fn apply_section_margins(e: &BytesStart<'_>, properties: &mut SectionProperties) {
+fn apply_section_margins(
+    e: &BytesStart<'_>,
+    properties: &mut SectionProperties,
+) -> Result<(), ParseError> {
     let mut margins = properties.margins.take().unwrap_or(PageMargins {
         top: 0,
         bottom: 0,
@@ -108,44 +118,52 @@ fn apply_section_margins(e: &BytesStart<'_>, properties: &mut SectionProperties)
         footer: None,
         gutter: None,
     });
-    if let Some(val) = attr_value(e, b"w:top").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:top", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         margins.top = val;
     }
-    if let Some(val) = attr_value(e, b"w:bottom").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:bottom", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         margins.bottom = val;
     }
-    if let Some(val) = attr_value(e, b"w:left").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:left", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         margins.left = val;
     }
-    if let Some(val) = attr_value(e, b"w:right").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:right", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         margins.right = val;
     }
-    if let Some(val) = attr_value(e, b"w:header").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:header", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         margins.header = Some(val);
     }
-    if let Some(val) = attr_value(e, b"w:footer").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:footer", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         margins.footer = Some(val);
     }
-    if let Some(val) = attr_value(e, b"w:gutter").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:gutter", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         margins.gutter = Some(val);
     }
     properties.margins = Some(margins);
+    Ok(())
 }
 
-fn apply_section_columns(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    if let Some(val) = attr_value(e, b"w:num").and_then(|v| v.parse().ok()) {
+fn apply_section_columns(
+    e: &BytesStart<'_>,
+    properties: &mut SectionProperties,
+) -> Result<(), ParseError> {
+    if let Some(val) = try_attr_value(e, b"w:num", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         properties.columns = Some(val);
     }
-    if let Some(val) = attr_value(e, b"w:space").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:space", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         properties.column_spacing = Some(val);
     }
-    if let Some(val) = attr_value(e, b"w:sep") {
+    if let Some(val) = try_attr_value(e, b"w:sep", DOC_PATH)? {
         properties.column_separator = Some(val == "1" || val.eq_ignore_ascii_case("true"));
     }
+    Ok(())
 }
 
-fn apply_section_type(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    if let Some(val) = attr_value(e, b"w:val") {
+fn apply_section_type(
+    e: &BytesStart<'_>,
+    properties: &mut SectionProperties,
+) -> Result<(), ParseError> {
+    if let Some(val) = try_attr_value(e, b"w:val", DOC_PATH)? {
         properties.section_type = match val.as_str() {
             "continuous" => Some(SectionType::Continuous),
             "evenPage" => Some(SectionType::EvenPage),
@@ -154,35 +172,48 @@ fn apply_section_type(e: &BytesStart<'_>, properties: &mut SectionProperties) {
             _ => None,
         };
     }
+    Ok(())
 }
 
-fn apply_section_title_page(e: &BytesStart<'_>, properties: &mut SectionProperties) {
+fn apply_section_title_page(
+    e: &BytesStart<'_>,
+    properties: &mut SectionProperties,
+) -> Result<(), ParseError> {
+    try_attr_value(e, b"w:val", DOC_PATH)?;
     properties.title_page = Some(super::bool_from_val(e));
+    Ok(())
 }
 
-fn apply_section_page_numbering(e: &BytesStart<'_>, properties: &mut SectionProperties) {
+fn apply_section_page_numbering(
+    e: &BytesStart<'_>,
+    properties: &mut SectionProperties,
+) -> Result<(), ParseError> {
     let mut numbering = properties.page_numbering.take().unwrap_or_default();
-    if let Some(val) = attr_value(e, b"w:start").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:start", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         numbering.start = Some(val);
     }
-    if let Some(val) = attr_value(e, b"w:fmt") {
+    if let Some(val) = try_attr_value(e, b"w:fmt", DOC_PATH)? {
         numbering.format = Some(val);
     }
     properties.page_numbering = Some(numbering);
+    Ok(())
 }
 
-fn apply_section_line_numbering(e: &BytesStart<'_>, properties: &mut SectionProperties) {
+fn apply_section_line_numbering(
+    e: &BytesStart<'_>,
+    properties: &mut SectionProperties,
+) -> Result<(), ParseError> {
     let mut numbering = properties.line_numbering.take().unwrap_or_default();
-    if let Some(val) = attr_value(e, b"w:start").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:start", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         numbering.start = Some(val);
     }
-    if let Some(val) = attr_value(e, b"w:countBy").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:countBy", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         numbering.count_by = Some(val);
     }
-    if let Some(val) = attr_value(e, b"w:distance").and_then(|v| v.parse().ok()) {
+    if let Some(val) = try_attr_value(e, b"w:distance", DOC_PATH)?.and_then(|v| v.parse().ok()) {
         numbering.distance = Some(val);
     }
-    if let Some(val) = attr_value(e, b"w:restart") {
+    if let Some(val) = try_attr_value(e, b"w:restart", DOC_PATH)? {
         numbering.restart = match val.as_str() {
             "newPage" => Some(LineNumberRestart::NewPage),
             "newSection" => Some(LineNumberRestart::NewSection),
@@ -191,6 +222,7 @@ fn apply_section_line_numbering(e: &BytesStart<'_>, properties: &mut SectionProp
         };
     }
     properties.line_numbering = Some(numbering);
+    Ok(())
 }
 
 fn apply_section_page_borders(
@@ -203,8 +235,12 @@ fn apply_section_page_borders(
     Ok(())
 }
 
-fn apply_section_text_direction(e: &BytesStart<'_>, properties: &mut SectionProperties) {
-    if let Some(val) = attr_value(e, b"w:val") {
+fn apply_section_text_direction(
+    e: &BytesStart<'_>,
+    properties: &mut SectionProperties,
+) -> Result<(), ParseError> {
+    if let Some(val) = try_attr_value(e, b"w:val", DOC_PATH)? {
         properties.text_direction = Some(val);
     }
+    Ok(())
 }
