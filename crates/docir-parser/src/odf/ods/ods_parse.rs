@@ -15,7 +15,7 @@ use crate::odf::{
 };
 use crate::xml_utils::{
     XmlScanControl, attr_value_by_suffix, dispatch_start_or_empty, is_end_event_local, local_name,
-    scan_xml_events_with_reader,
+    scan_xml_events_with_reader, try_attr_value_by_suffix,
 };
 use quick_xml::events::BytesStart;
 use std::collections::HashMap;
@@ -353,21 +353,15 @@ pub(crate) fn parse_ods_cell(
     style_map: &mut HashMap<String, u32>,
     next_style_id: &mut u32,
 ) -> Result<OdsCellData, ParseError> {
-    let mut value_type = attr_value_by_suffix(start, &[b":cell-value-type"])
-        .or_else(|| attr_value_by_suffix(start, &[b":value-type"]));
-    let mut value_attr = attr_value_by_suffix(start, &[b":cell-value"])
-        .or_else(|| attr_value_by_suffix(start, &[b":value"]));
-    let date_value = attr_value_by_suffix(start, &[b":date-value"]);
-    let time_value = attr_value_by_suffix(start, &[b":time-value"]);
-    let formula_attr = attr_value_by_suffix(start, &[b":formula"]);
-    let col_repeat = attr_value_by_suffix(start, &[b":number-columns-repeated"])
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(1);
-    let col_span = attr_value_by_suffix(start, &[b":number-columns-spanned"])
-        .and_then(|v| v.parse::<u32>().ok());
-    let row_span =
-        attr_value_by_suffix(start, &[b":number-rows-spanned"]).and_then(|v| v.parse::<u32>().ok());
-    let validation_name = attr_value_by_suffix(start, &[b":content-validation-name"]);
+    let mut value_type = ods_cell_attr(start, &[b":cell-value-type", b":value-type"])?;
+    let mut value_attr = ods_cell_attr(start, &[b":cell-value", b":value"])?;
+    let date_value = ods_cell_attr(start, &[b":date-value"])?;
+    let time_value = ods_cell_attr(start, &[b":time-value"])?;
+    let formula_attr = ods_cell_attr(start, &[b":formula"])?;
+    let col_repeat = ods_cell_u32_attr(start, b":number-columns-repeated")?.unwrap_or(1);
+    let col_span = ods_cell_u32_attr(start, b":number-columns-spanned")?;
+    let row_span = ods_cell_u32_attr(start, b":number-rows-spanned")?;
+    let validation_name = ods_cell_attr(start, &[b":content-validation-name"])?;
 
     let style_id = resolve_style_id(start, style_map, next_style_id);
     let text = read_ods_cell_text(reader)?;
@@ -399,21 +393,16 @@ pub(crate) fn parse_ods_cell_empty(
     style_map: &mut HashMap<String, u32>,
     next_style_id: &mut u32,
 ) -> Result<OdsCellData, ParseError> {
-    let value_type = attr_value_by_suffix(start, &[b":cell-value-type"])
-        .or_else(|| attr_value_by_suffix(start, &[b":value-type"]));
-    let value_attr = attr_value_by_suffix(start, &[b":cell-value"])
-        .or_else(|| attr_value_by_suffix(start, &[b":value"]))
-        .or_else(|| attr_value_by_suffix(start, &[b":date-value"]))
-        .or_else(|| attr_value_by_suffix(start, &[b":time-value"]));
-    let formula_attr = attr_value_by_suffix(start, &[b":formula"]);
-    let col_repeat = attr_value_by_suffix(start, &[b":number-columns-repeated"])
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(1);
-    let col_span = attr_value_by_suffix(start, &[b":number-columns-spanned"])
-        .and_then(|v| v.parse::<u32>().ok());
-    let row_span =
-        attr_value_by_suffix(start, &[b":number-rows-spanned"]).and_then(|v| v.parse::<u32>().ok());
-    let validation_name = attr_value_by_suffix(start, &[b":content-validation-name"]);
+    let value_type = ods_cell_attr(start, &[b":cell-value-type", b":value-type"])?;
+    let value_attr = ods_cell_attr(
+        start,
+        &[b":cell-value", b":value", b":date-value", b":time-value"],
+    )?;
+    let formula_attr = ods_cell_attr(start, &[b":formula"])?;
+    let col_repeat = ods_cell_u32_attr(start, b":number-columns-repeated")?.unwrap_or(1);
+    let col_span = ods_cell_u32_attr(start, b":number-columns-spanned")?;
+    let row_span = ods_cell_u32_attr(start, b":number-rows-spanned")?;
+    let validation_name = ods_cell_attr(start, &[b":content-validation-name"])?;
     let style_id = resolve_style_id(start, style_map, next_style_id);
     let value = parse_cell_value_empty(value_type.as_deref(), value_attr.as_deref());
     let formula = parse_cell_formula(formula_attr);
@@ -428,4 +417,17 @@ pub(crate) fn parse_ods_cell_empty(
         row_span,
         is_covered: false,
     })
+}
+
+fn ods_cell_attr(start: &BytesStart<'_>, suffixes: &[&[u8]]) -> Result<Option<String>, ParseError> {
+    for suffix in suffixes {
+        if let Some(value) = try_attr_value_by_suffix(start, &[*suffix], "content.xml")? {
+            return Ok(Some(value));
+        }
+    }
+    Ok(None)
+}
+
+fn ods_cell_u32_attr(start: &BytesStart<'_>, suffix: &[u8]) -> Result<Option<u32>, ParseError> {
+    Ok(ods_cell_attr(start, &[suffix])?.and_then(|v| v.parse::<u32>().ok()))
 }

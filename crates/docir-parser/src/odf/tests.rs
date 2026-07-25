@@ -1,4 +1,5 @@
 use super::tests_prelude::*;
+use crate::error::ParseError;
 use crate::parser::DocumentParser;
 use docir_core::security::ThreatIndicatorType;
 use std::io::{Cursor, Write};
@@ -208,6 +209,36 @@ fn test_parse_ods_cells_and_validations() {
     assert_eq!(validation_count, 1);
     assert_eq!(drawing_count, 1);
     assert_eq!(doc.content.len(), 1);
+}
+
+#[test]
+fn test_parse_ods_reports_malformed_cell_attributes() {
+    let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:spreadsheet>
+      <table:table table:name="Sheet1">
+        <table:table-row>
+          <table:table-cell table:cell-value-type="float" table:cell-value="1" table:cell-value="2"/>
+        </table:table-row>
+      </table:table>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>
+"#;
+    let zip_data = build_odf_zip(mimetype, content_xml, None);
+    let parser = DocumentParser::new();
+
+    let err = parser
+        .parse_reader(Cursor::new(zip_data))
+        .expect_err("malformed cell attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
