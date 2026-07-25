@@ -136,7 +136,13 @@ fn parse_text_run(
                         match attr.key.as_ref() {
                             b"b" => bold = Some(attr.value.as_ref() == b"1"),
                             b"i" => italic = Some(attr.value.as_ref() == b"1"),
-                            b"sz" => font_size = lossy_attr_value(&attr).parse::<u32>().ok(),
+                            b"sz" => {
+                                font_size = Some(
+                                    lossy_attr_value(&attr)
+                                        .parse::<u32>()
+                                        .map_err(|err| xml_error(slide_path, err))?,
+                                );
+                            }
                             _ => {}
                         }
                     }
@@ -276,6 +282,16 @@ mod tests {
         let xml = r#"
             <a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <a:rPr b="1" b="0"></a:rPr>
+              <a:t>text</a:t>
+            </a:r>
+        "#;
+        let mut reader = reader_after_start(xml, b"r");
+
+        assert_xml_error(parse_text_run(&mut reader, "ppt/slides/broken-text.xml"));
+
+        let xml = r#"
+            <a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:rPr sz="bad"></a:rPr>
               <a:t>text</a:t>
             </a:r>
         "#;
