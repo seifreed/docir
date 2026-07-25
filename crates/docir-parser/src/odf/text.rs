@@ -9,7 +9,7 @@ use super::{
     IrStore, NodeId, NumberingInfo, OdfContentResult, OdfLimitCounter, Paragraph,
     ParagraphProperties, ParseError, Run, Section, parse_paragraph,
 };
-use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
+use crate::xml_utils::{attr_value_by_suffix, local_name, try_attr_value_by_suffix, xml_error};
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
@@ -93,7 +93,7 @@ fn handle_text_start(
 ) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"text" => state.in_text = true,
-        b"list" if state.in_text => push_text_list(state, e),
+        b"list" if state.in_text => push_text_list(state, e)?,
         b"p" | b"h" if state.in_text => {
             parse_text_paragraph(e, reader, store, limits, section, state)?
         }
@@ -119,8 +119,9 @@ fn handle_text_start(
     Ok(())
 }
 
-fn push_text_list(state: &mut OdfTextState, e: &BytesStart<'_>) {
-    let style_name = attr_value_by_suffix(e, &[b":style-name"]).unwrap_or_default();
+fn push_text_list(state: &mut OdfTextState, e: &BytesStart<'_>) -> Result<(), ParseError> {
+    let style_name =
+        try_attr_value_by_suffix(e, &[b":style-name"], "content.xml")?.unwrap_or_default();
     let num_id = state.list_id_map.entry(style_name).or_insert_with(|| {
         let id = state.next_list_id;
         state.next_list_id += 1;
@@ -131,6 +132,7 @@ fn push_text_list(state: &mut OdfTextState, e: &BytesStart<'_>) {
         num_id: *num_id,
         level,
     });
+    Ok(())
 }
 
 fn parse_text_paragraph(
