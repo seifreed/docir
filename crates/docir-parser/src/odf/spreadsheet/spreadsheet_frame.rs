@@ -30,7 +30,7 @@ pub(crate) fn parse_draw_frame_spreadsheet(
                     parse_frame_shape_start(reader, start, store, &mut frame)?;
                 }
                 Event::Empty(start) => {
-                    parse_frame_shape_empty(start, store, &mut frame);
+                    parse_frame_shape_empty(start, store, &mut frame)?;
                 }
                 _ => {}
             }

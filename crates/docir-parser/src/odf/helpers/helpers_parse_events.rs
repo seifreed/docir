@@ -299,7 +299,7 @@ pub(crate) fn parse_draw_frame(
 ) -> Result<Option<NodeId>, ParseError> {
     let mut shape = Shape::new(ShapeType::Picture);
     shape.transform = parse_frame_transform(start)?;
-    shape.name = attr_value_by_suffix(start, &[b":name"]);
+    shape.name = try_attr_value_by_suffix(start, &[b":name"], ODF_CONTENT_XML)?;
     let mut buf = Vec::new();
     let mut has_shape = false;
 
@@ -312,21 +312,27 @@ pub(crate) fn parse_draw_frame(
             match event {
                 Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
                     b"image" => {
-                        if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
+                        if let Some(href) =
+                            try_attr_value_by_suffix(e, &[b":href"], ODF_CONTENT_XML)?
+                        {
                             shape.media_target = Some(href);
                             shape.shape_type = ShapeType::Picture;
                             has_shape = true;
                         }
                     }
                     b"object" | b"object-ole" => {
-                        if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
+                        if let Some(href) =
+                            try_attr_value_by_suffix(e, &[b":href"], ODF_CONTENT_XML)?
+                        {
                             shape.media_target = Some(href);
                         }
                         shape.shape_type = ShapeType::OleObject;
                         has_shape = true;
                     }
                     b"plugin" => {
-                        if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
+                        if let Some(href) =
+                            try_attr_value_by_suffix(e, &[b":href"], ODF_CONTENT_XML)?
+                        {
                             shape.media_target = Some(href.clone());
                             shape.shape_type = classify_media_shape(&href);
                             has_shape = true;

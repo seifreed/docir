@@ -246,14 +246,14 @@ fn parse_frame_shape_empty_covers_image_chart_and_ole_variants() {
 
     let mut image = BytesStart::new("dr:image");
     image.push_attribute(("lnk:href", "Pictures/img1.png"));
-    parse_frame_shape_empty(&image, &mut store, &mut frame);
+    parse_frame_shape_empty(&image, &mut store, &mut frame).expect("image frame shape");
     assert_eq!(frame.shape_type, ShapeType::Picture);
     assert_eq!(frame.media_target.as_deref(), Some("Pictures/img1.png"));
     assert!(frame.has_shape);
 
     let mut chart = BytesStart::new("ch:chart");
     chart.push_attribute(("ch:class", "bar"));
-    parse_frame_shape_empty(&chart, &mut store, &mut frame);
+    parse_frame_shape_empty(&chart, &mut store, &mut frame).expect("chart frame shape");
     assert_eq!(frame.shape_type, ShapeType::Chart);
     let chart_id = frame.chart_id.expect("chart id");
     let Some(IRNode::ChartData(chart_node)) = store.get(chart_id) else {
@@ -262,7 +262,7 @@ fn parse_frame_shape_empty_covers_image_chart_and_ole_variants() {
     assert_eq!(chart_node.chart_type.as_deref(), Some("bar"));
 
     let object = BytesStart::new("dr:object-ole");
-    parse_frame_shape_empty(&object, &mut store, &mut frame);
+    parse_frame_shape_empty(&object, &mut store, &mut frame).expect("ole frame shape");
     assert_eq!(frame.shape_type, ShapeType::OleObject);
     assert!(frame.has_shape);
 }

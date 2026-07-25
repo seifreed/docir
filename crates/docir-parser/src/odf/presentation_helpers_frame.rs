@@ -2,7 +2,7 @@ use super::{
     ChartData, IRNode, IrStore, NodeId, OdfReader, ParseError, ShapeType, SourceSpan,
     parse_odf_chart,
 };
-use crate::xml_utils::{attr_value_by_suffix, local_name};
+use crate::xml_utils::{local_name, try_attr_value_by_suffix};
 use quick_xml::events::BytesStart;
 
 pub(crate) struct FrameShapeState {
@@ -30,7 +30,7 @@ pub(crate) fn parse_frame_shape_start(
     frame: &mut FrameShapeState,
 ) -> Result<(), ParseError> {
     match local_name(start.name().as_ref()) {
-        b"image" => apply_picture_shape(start, frame),
+        b"image" => apply_picture_shape(start, frame)?,
         b"chart" => {
             frame.shape_type = ShapeType::Chart;
             frame.has_shape = true;
@@ -39,8 +39,8 @@ pub(crate) fn parse_frame_shape_start(
             store.insert(IRNode::ChartData(chart));
             frame.chart_id = Some(id);
         }
-        b"plugin" => apply_plugin_shape(start, frame),
-        b"object" | b"object-ole" => apply_ole_shape(start, frame),
+        b"plugin" => apply_plugin_shape(start, frame)?,
+        b"object" | b"object-ole" => apply_ole_shape(start, frame)?,
         _ => {}
     }
     Ok(())
@@ -50,47 +50,57 @@ pub(crate) fn parse_frame_shape_empty(
     start: &BytesStart<'_>,
     store: &mut IrStore,
     frame: &mut FrameShapeState,
-) {
+) -> Result<(), ParseError> {
     match local_name(start.name().as_ref()) {
-        b"image" => apply_picture_shape(start, frame),
+        b"image" => apply_picture_shape(start, frame)?,
         b"chart" => {
             frame.shape_type = ShapeType::Chart;
             frame.has_shape = true;
             let mut chart = ChartData::new();
-            chart.chart_type = attr_value_by_suffix(start, &[b":class"]);
+            chart.chart_type = try_attr_value_by_suffix(start, &[b":class"], "content.xml")?;
             chart.span = Some(SourceSpan::new("content.xml"));
             let id = chart.id;
             store.insert(IRNode::ChartData(chart));
             frame.chart_id = Some(id);
         }
-        b"plugin" => apply_plugin_shape(start, frame),
-        b"object" | b"object-ole" => apply_ole_shape(start, frame),
+        b"plugin" => apply_plugin_shape(start, frame)?,
+        b"object" | b"object-ole" => apply_ole_shape(start, frame)?,
         _ => {}
     }
+    Ok(())
 }
 
-fn apply_picture_shape(start: &BytesStart<'_>, frame: &mut FrameShapeState) {
-    if let Some(href) = attr_value_by_suffix(start, &[b":href"]) {
+fn apply_picture_shape(
+    start: &BytesStart<'_>,
+    frame: &mut FrameShapeState,
+) -> Result<(), ParseError> {
+    if let Some(href) = try_attr_value_by_suffix(start, &[b":href"], "content.xml")? {
         frame.media_target = Some(href);
         frame.shape_type = ShapeType::Picture;
         frame.has_shape = true;
     }
+    Ok(())
 }
 
-fn apply_plugin_shape(start: &BytesStart<'_>, frame: &mut FrameShapeState) {
-    if let Some(href) = attr_value_by_suffix(start, &[b":href"]) {
+fn apply_plugin_shape(
+    start: &BytesStart<'_>,
+    frame: &mut FrameShapeState,
+) -> Result<(), ParseError> {
+    if let Some(href) = try_attr_value_by_suffix(start, &[b":href"], "content.xml")? {
         frame.media_target = Some(href.clone());
         frame.shape_type = classify_media_shape(&href);
         frame.has_shape = true;
     }
+    Ok(())
 }
 
-fn apply_ole_shape(start: &BytesStart<'_>, frame: &mut FrameShapeState) {
-    if let Some(href) = attr_value_by_suffix(start, &[b":href"]) {
+fn apply_ole_shape(start: &BytesStart<'_>, frame: &mut FrameShapeState) -> Result<(), ParseError> {
+    if let Some(href) = try_attr_value_by_suffix(start, &[b":href"], "content.xml")? {
         frame.media_target = Some(href);
     }
     frame.shape_type = ShapeType::OleObject;
     frame.has_shape = true;
+    Ok(())
 }
 
 pub(crate) fn classify_media_shape(path: &str) -> ShapeType {

@@ -132,7 +132,7 @@ pub(super) fn parse_draw_frame_presentation(
     loop {
         match read_event(reader, &mut buf, "content.xml")? {
             Event::Start(e) => handle_draw_frame_start_event(reader, &e, store, &mut state)?,
-            Event::Empty(e) => parse_frame_shape_empty(&e, store, &mut state.frame),
+            Event::Empty(e) => parse_frame_shape_empty(&e, store, &mut state.frame)?,
             Event::End(e) if local_name(e.name().as_ref()) == b"frame" => {
                 break;
             }

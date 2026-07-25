@@ -325,6 +325,35 @@ fn test_parse_odt_reports_malformed_frame_transform_attributes() {
 }
 
 #[test]
+fn test_parse_odt_reports_malformed_frame_image_attributes() {
+    let mimetype = "application/vnd.oasis.opendocument.text";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:xlink="http://www.w3.org/1999/xlink">
+  <office:body>
+    <office:text>
+      <draw:frame>
+        <draw:image xlink:href="Pictures/one.png" xlink:href="Pictures/two.png"/>
+      </draw:frame>
+    </office:text>
+  </office:body>
+</office:document-content>
+"#;
+    let zip_data = build_odf_zip(mimetype, content_xml, None);
+    let parser = DocumentParser::new();
+
+    let err = parser
+        .parse_reader(Cursor::new(zip_data))
+        .expect_err("malformed frame image attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_ods_minimal() {
     let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
