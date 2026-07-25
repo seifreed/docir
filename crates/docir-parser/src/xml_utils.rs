@@ -80,10 +80,9 @@ pub(crate) fn attr_u32_from_bytes(
     for attr in e.attributes() {
         let attr = attr.map_err(|err| xml_error(file, err))?;
         if attr.key.as_ref() == name {
-            let Ok(value) = std::str::from_utf8(attr.value.as_ref()) else {
-                return Ok(None);
-            };
-            parsed = value.parse::<u32>().ok();
+            let value =
+                std::str::from_utf8(attr.value.as_ref()).map_err(|err| xml_error(file, err))?;
+            parsed = Some(value.parse::<u32>().map_err(|err| xml_error(file, err))?);
         }
     }
     Ok(parsed)
@@ -98,10 +97,9 @@ pub(crate) fn attr_u64_from_bytes(
     for attr in e.attributes() {
         let attr = attr.map_err(|err| xml_error(file, err))?;
         if attr.key.as_ref() == name {
-            let Ok(value) = std::str::from_utf8(attr.value.as_ref()) else {
-                return Ok(None);
-            };
-            parsed = value.parse::<u64>().ok();
+            let value =
+                std::str::from_utf8(attr.value.as_ref()).map_err(|err| xml_error(file, err))?;
+            parsed = Some(value.parse::<u64>().map_err(|err| xml_error(file, err))?);
         }
     }
     Ok(parsed)

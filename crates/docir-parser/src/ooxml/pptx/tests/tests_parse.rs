@@ -140,6 +140,24 @@ fn test_parse_presentation_info_reports_malformed_size_attributes() {
 }
 
 #[test]
+fn test_parse_presentation_info_reports_malformed_first_slide_number() {
+    let xml = r#"
+        <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                        firstSlideNum="bad">
+          <p:sldSz cx="9144000" cy="6858000"/>
+        </p:presentation>
+        "#;
+
+    let err = parse_presentation_info(xml, "ppt/presentation.xml")
+        .expect_err("malformed first slide number must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/presentation.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_presentation_and_view_properties_extended() {
     let pres_xml = r#"
         <p:presentationPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -233,6 +251,17 @@ fn test_parse_pptx_metadata_reports_malformed_attributes() {
             "ppt/slideMasters/slideMaster1.xml",
         ),
         "ppt/slideMasters/slideMaster1.xml",
+    );
+}
+
+#[test]
+fn test_parse_view_properties_reports_malformed_zoom_value() {
+    assert_pptx_metadata_xml_error(
+        parse_view_properties(
+            r#"<p:viewPr xmlns:p="x"><p:zoom percent="bad"/></p:viewPr>"#,
+            "ppt/viewProps.xml",
+        ),
+        "ppt/viewProps.xml",
     );
 }
 

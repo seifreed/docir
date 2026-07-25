@@ -423,7 +423,7 @@ mod tests {
     fn parse_drawing_text_run_parses_text_and_run_style_flags() {
         let xml = r#"
             <a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
-              <a:rPr b="0" i="1" sz="bad"></a:rPr>
+              <a:rPr b="0" i="1" sz="1800"></a:rPr>
               <a:latin typeface="Calibri"></a:latin>
               <a:t>Hello</a:t>
             </a:r>
@@ -445,7 +445,7 @@ mod tests {
         assert_eq!(run.text, "Hello");
         assert_eq!(run.bold, Some(false));
         assert_eq!(run.italic, Some(true));
-        assert_eq!(run.font_size, None);
+        assert_eq!(run.font_size, Some(1800));
         assert_eq!(run.font_family.as_deref(), Some("Calibri"));
     }
 

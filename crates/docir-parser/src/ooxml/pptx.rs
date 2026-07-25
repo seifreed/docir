@@ -261,7 +261,9 @@ fn parse_u32_attr(
     key_name: &[u8],
     file: &str,
 ) -> Result<Option<u32>, ParseError> {
-    Ok(try_attr_value(start, key_name, file)?.and_then(|value| value.parse::<u32>().ok()))
+    try_attr_value(start, key_name, file)?
+        .map(|value| value.parse::<u32>().map_err(|err| xml_error(file, err)))
+        .transpose()
 }
 
 fn parse_bool_attr(

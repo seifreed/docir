@@ -23,13 +23,13 @@ fn test_parse_metadata_meta_and_smartart_variants() {
         <p:viewPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
                   showComments="true"
                   showHiddenSlides="0">
-          <p:zoom percent="invalid"/>
+          <p:zoom percent="85"/>
         </p:viewPr>
     "#;
     let view = parse_view_properties(view_xml, "ppt/viewProps.xml").expect("view props");
     assert_eq!(view.show_comments, Some(true));
     assert_eq!(view.show_hidden_slides, Some(false));
-    assert_eq!(view.zoom, None, "invalid zoom value should be ignored");
+    assert_eq!(view.zoom, Some(85));
 
     let layout_meta_xml = r#"
         <p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -162,7 +162,7 @@ fn test_parse_shapes_from_xml_handles_empty_shape_nodes_and_unknown_children() {
 }
 
 #[test]
-fn test_parse_pptx_table_handles_empty_columns_empty_cells_and_unknown_children() {
+fn test_parse_pptx_table_rejects_invalid_column_width() {
     let tbl_xml = r#"
         <a:tbl xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
           <a:tblGrid>
@@ -183,33 +183,29 @@ fn test_parse_pptx_table_handles_empty_columns_empty_cells_and_unknown_children(
     let mut reader = quick_xml::Reader::from_str(tbl_xml);
     reader.config_mut().trim_text(true);
     let mut parser = PptxParser::new();
-    let table = parser
+    let err = parser
         .parse_pptx_table(&mut reader, "ppt/tables/table1.xml")
-        .expect("parse table");
-    assert_eq!(table.grid.len(), 1);
-    assert_eq!(table.rows.len(), 1);
-
-    let table_store = parser.into_store();
-    let row = match table_store.get(table.rows[0]) {
-        Some(IRNode::TableRow(row)) => row,
-        _ => panic!("missing row"),
-    };
-    assert_eq!(row.cells.len(), 1);
+        .expect_err("invalid column width must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/tables/table1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
-fn test_parse_presentation_info_ignores_invalid_size_values() {
+fn test_parse_presentation_info_rejects_invalid_size_values() {
     let xml = r#"
         <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
           <p:sldSz cx="bad" cy="123"/>
         </p:presentation>
         "#;
 
-    let info = parse_presentation_info(xml, "ppt/presentation.xml").expect("presentation info");
-    assert!(
-        info.is_none(),
-        "invalid dimensions should keep presentation info absent"
-    );
+    let err = parse_presentation_info(xml, "ppt/presentation.xml")
+        .expect_err("invalid dimensions must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/presentation.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
