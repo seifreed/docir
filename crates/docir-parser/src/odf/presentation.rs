@@ -37,7 +37,7 @@ pub(super) fn parse_content_presentation(
                 b"page" if in_presentation => {
                     let mut slide = Slide::new(slide_no);
                     slide.name = try_attr_value_by_suffix(&e, &[b":name"], "content.xml")?;
-                    slide.transition = parse_odp_transition(&e);
+                    slide.transition = parse_odp_transition(&e)?;
                     let slide_id = slide.id;
                     store.insert(IRNode::Slide(slide));
                     slides.push(slide_id);

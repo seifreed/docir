@@ -197,7 +197,9 @@ fn parse_odp_transition_supports_fallback_keys_and_ignores_advance_only() {
     fallback.push_attribute(("presentation:duration", "1200"));
     fallback.push_attribute(("presentation:animation", "click"));
 
-    let transition = parse_odp_transition(&fallback).expect("transition");
+    let transition = parse_odp_transition(&fallback)
+        .expect("transition parse")
+        .expect("transition");
     assert_eq!(transition.transition_type.as_deref(), Some("wipe"));
     assert_eq!(transition.speed.as_deref(), Some("fast"));
     assert_eq!(transition.duration_ms, Some(900));
@@ -206,7 +208,11 @@ fn parse_odp_transition_supports_fallback_keys_and_ignores_advance_only() {
 
     let mut advance_only = BytesStart::new("draw:page");
     advance_only.push_attribute(("presentation:duration", "1000"));
-    assert!(parse_odp_transition(&advance_only).is_none());
+    assert!(
+        parse_odp_transition(&advance_only)
+            .expect("transition parse")
+            .is_none()
+    );
 }
 
 #[test]

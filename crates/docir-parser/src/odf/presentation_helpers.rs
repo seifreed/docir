@@ -1,7 +1,7 @@
 //! ODF presentation parsing helpers extracted from the main module.
 
 use super::helpers::{parse_notes, parse_text_element};
-use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
+use crate::xml_utils::{attr_value_by_suffix, local_name, try_attr_value_by_suffix, xml_error};
 #[path = "presentation_helpers_utils.rs"]
 mod presentation_helpers_utils;
 use super::{
@@ -25,11 +25,14 @@ pub(super) fn parse_draw_page(
     store: &mut IrStore,
 ) -> Result<Slide, ParseError> {
     let mut slide = Slide::new(slide_no);
-    slide.name = attr_value_by_suffix(start, &[b":name"]);
-    slide.master_id = attr_value_by_suffix(start, &[b":master-page-name"]);
-    slide.layout_id = attr_value_by_suffix(start, &[b":page-layout-name"])
-        .or_else(|| attr_value_by_suffix(start, &[b":style-name"]));
-    slide.transition = parse_odp_transition(start);
+    slide.name = try_attr_value_by_suffix(start, &[b":name"], "content.xml")?;
+    slide.master_id = try_attr_value_by_suffix(start, &[b":master-page-name"], "content.xml")?;
+    slide.layout_id = match try_attr_value_by_suffix(start, &[b":page-layout-name"], "content.xml")?
+    {
+        Some(layout) => Some(layout),
+        None => try_attr_value_by_suffix(start, &[b":style-name"], "content.xml")?,
+    };
+    slide.transition = parse_odp_transition(start)?;
 
     let mut state = DrawPageState {
         slide,
@@ -234,24 +237,27 @@ fn parse_shape_text(
     Ok(paragraphs)
 }
 
-pub(super) fn parse_odp_transition(start: &BytesStart<'_>) -> Option<SlideTransition> {
-    let transition_type = attr_value_by_suffix(start, &[b":transition-type"]);
-    let speed = attr_value_by_suffix(start, &[b":transition-speed"]);
-    let duration_ms =
-        attr_value_by_suffix(start, &[b":transition-duration"]).and_then(|v| v.parse::<u32>().ok());
-    let advance_after_ms =
-        attr_value_by_suffix(start, &[b":duration"]).and_then(|v| v.parse::<u32>().ok());
-    let advance_on_click = attr_value_by_suffix(start, &[b":animation"]).map(|v| v == "click");
+pub(super) fn parse_odp_transition(
+    start: &BytesStart<'_>,
+) -> Result<Option<SlideTransition>, ParseError> {
+    let transition_type = try_attr_value_by_suffix(start, &[b":transition-type"], "content.xml")?;
+    let speed = try_attr_value_by_suffix(start, &[b":transition-speed"], "content.xml")?;
+    let duration_ms = try_attr_value_by_suffix(start, &[b":transition-duration"], "content.xml")?
+        .and_then(|v| v.parse::<u32>().ok());
+    let advance_after_ms = try_attr_value_by_suffix(start, &[b":duration"], "content.xml")?
+        .and_then(|v| v.parse::<u32>().ok());
+    let advance_on_click =
+        try_attr_value_by_suffix(start, &[b":animation"], "content.xml")?.map(|v| v == "click");
     if transition_type.is_some() || speed.is_some() || duration_ms.is_some() {
-        Some(SlideTransition {
+        Ok(Some(SlideTransition {
             transition_type,
             speed,
             advance_on_click,
             advance_after_ms,
             duration_ms,
-        })
+        }))
     } else {
-        None
+        Ok(None)
     }
 }
 
