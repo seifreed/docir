@@ -19,7 +19,8 @@ pub(super) fn extract_spreadsheet_table_chunks(xml: &[u8]) -> Vec<OdfTableChunk>
         let chunk_end = if self_closing {
             tag_end
         } else {
-            let Some(close_start) = find_end_tag(xml, prefix, b"table", tag_end + 1, end) else {
+            let Some(close_start) = find_matching_end_tag(xml, prefix, b"table", tag_end + 1, end)
+            else {
                 break;
             };
             let Some(close_end) = find_tag_end(xml, close_start + 2, end) else {
@@ -118,6 +119,55 @@ fn find_end_tag(
     None
 }
 
+fn find_matching_end_tag(
+    xml: &[u8],
+    prefix: &[u8],
+    local: &[u8],
+    start: usize,
+    end: usize,
+) -> Option<usize> {
+    let mut depth = 1usize;
+    let mut i = start;
+    while i < end {
+        if xml[i] != b'<' {
+            i += 1;
+            continue;
+        }
+        match xml.get(i + 1) {
+            Some(b'/') => {
+                let name_start = i + 2;
+                let name_end = find_name_end(xml, name_start, end)?;
+                let (candidate_prefix, candidate_local) =
+                    split_qualified_name(&xml[name_start..name_end]);
+                if candidate_prefix == prefix && candidate_local == local {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+            }
+            Some(b'!') | Some(b'?') => {}
+            Some(_) => {
+                let name_start = i + 1;
+                let name_end = find_name_end(xml, name_start, end)?;
+                let tag_end = find_tag_end(xml, name_end, end)?;
+                let (candidate_prefix, candidate_local) =
+                    split_qualified_name(&xml[name_start..name_end]);
+                if candidate_prefix == prefix
+                    && candidate_local == local
+                    && !is_self_closing_tag(xml, i, tag_end)
+                {
+                    depth += 1;
+                }
+                i = tag_end;
+            }
+            None => return None,
+        }
+        i += 1;
+    }
+    None
+}
+
 fn find_name_end(xml: &[u8], start: usize, end: usize) -> Option<usize> {
     let mut i = start;
     while i < end {
@@ -193,5 +243,36 @@ mod tests {
         assert_eq!(chunks.len(), 2);
         assert_eq!(table_name_from_chunk(&chunks[0].bytes, 1), "Alt1");
         assert_eq!(table_name_from_chunk(&chunks[1].bytes, 2), "Alt2");
+    }
+
+    #[test]
+    fn extract_spreadsheet_table_chunks_keeps_nested_tables_in_parent_chunk() {
+        let xml = br#"<office:document-content>
+  <office:body>
+    <office:spreadsheet>
+      <table:table table:name="Outer">
+        <table:table-row>
+          <table:table-cell>
+            <table:table table:name="Inner"><table:table-row/></table:table>
+          </table:table-cell>
+        </table:table-row>
+        <table:table-row table:style-name="after-inner"/>
+      </table:table>
+      <table:table table:name="Next"/>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let chunks = extract_spreadsheet_table_chunks(xml);
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(table_name_from_chunk(&chunks[0].bytes, 1), "Outer");
+        assert!(
+            chunks[0]
+                .bytes
+                .windows(b"after-inner".len())
+                .any(|w| w == b"after-inner")
+        );
+        assert_eq!(table_name_from_chunk(&chunks[1].bytes, 2), "Next");
     }
 }
