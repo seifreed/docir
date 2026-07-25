@@ -4,7 +4,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{XmlScanControl, scan_xml_events, visit_attributes};
-use crate::xml_utils::{attr_bool_like, local_name};
+use crate::xml_utils::{attr_bool_like, local_name, xml_error};
 use docir_core::ir::{
     ConnectionEntry, ConnectionPart, ExternalLinkPart, ExternalLinkSheet, QueryTablePart,
     SlicerPart, TimelinePart,
@@ -94,15 +94,28 @@ fn apply_connection_attrs(
     e: &BytesStart<'_>,
     path: &str,
 ) -> Result<(), ParseError> {
+    let mut numeric_error = None;
     visit_attributes(e, path, |attr| {
+        if numeric_error.is_some() {
+            return;
+        }
         let key = local_name(attr.key.as_ref());
         let value = lossy_attr_value(attr);
         match key {
-            b"id" => entry.connection_id = value.parse::<u32>().ok(),
+            b"id" => match parse_u32_attr(&value, path) {
+                Ok(parsed) => entry.connection_id = Some(parsed),
+                Err(err) => numeric_error = Some(err),
+            },
             b"name" => entry.name = Some(value.into_owned()),
             b"description" => entry.description = Some(value.into_owned()),
-            b"type" => entry.connection_type = value.parse::<u32>().ok(),
-            b"refreshedVersion" => entry.refreshed_version = value.parse::<u32>().ok(),
+            b"type" => match parse_u32_attr(&value, path) {
+                Ok(parsed) => entry.connection_type = Some(parsed),
+                Err(err) => numeric_error = Some(err),
+            },
+            b"refreshedVersion" => match parse_u32_attr(&value, path) {
+                Ok(parsed) => entry.refreshed_version = Some(parsed),
+                Err(err) => numeric_error = Some(err),
+            },
             b"refreshOnLoad" => entry.refresh_on_load = Some(attr_bool_like(attr.value.as_ref())),
             b"saveData" => entry.save_data = Some(attr_bool_like(attr.value.as_ref())),
             b"background" => entry.background = Some(attr_bool_like(attr.value.as_ref())),
@@ -110,7 +123,11 @@ fn apply_connection_attrs(
             b"odcFile" => entry.connection_file = Some(value.into_owned()),
             _ => {}
         }
-    })
+    })?;
+    if let Some(err) = numeric_error {
+        return Err(err);
+    }
+    Ok(())
 }
 
 fn apply_dbpr_attrs(
@@ -118,16 +135,31 @@ fn apply_dbpr_attrs(
     e: &BytesStart<'_>,
     path: &str,
 ) -> Result<(), ParseError> {
+    let mut numeric_error = None;
     visit_attributes(e, path, |attr| {
+        if numeric_error.is_some() {
+            return;
+        }
         let key = local_name(attr.key.as_ref());
         let value = lossy_attr_value(attr);
         match key {
             b"connection" => entry.connection = Some(value.into_owned()),
             b"command" => entry.command = Some(value.into_owned()),
-            b"commandType" => entry.command_type = value.parse::<u32>().ok(),
+            b"commandType" => match parse_u32_attr(&value, path) {
+                Ok(parsed) => entry.command_type = Some(parsed),
+                Err(err) => numeric_error = Some(err),
+            },
             _ => {}
         }
-    })
+    })?;
+    if let Some(err) = numeric_error {
+        return Err(err);
+    }
+    Ok(())
+}
+
+fn parse_u32_attr(value: &str, path: &str) -> Result<u32, ParseError> {
+    value.parse::<u32>().map_err(|err| xml_error(path, err))
 }
 
 fn apply_textpr_attrs(
@@ -396,14 +428,30 @@ mod tests {
 
     #[test]
     fn connection_parsers_report_malformed_attributes() {
-        let connection_cases: [(&str, &str); 4] = [
+        let connection_cases: [(&str, &str); 8] = [
             (
                 r#"<connections><connection id="1" id="2"/></connections>"#,
                 "xl/connections-connection-broken.xml",
             ),
             (
+                r#"<connections><connection id="bad"/></connections>"#,
+                "xl/connections-connection-id-broken.xml",
+            ),
+            (
+                r#"<connections><connection id="1" type="bad"/></connections>"#,
+                "xl/connections-connection-type-broken.xml",
+            ),
+            (
+                r#"<connections><connection id="1" refreshedVersion="bad"/></connections>"#,
+                "xl/connections-connection-version-broken.xml",
+            ),
+            (
                 r#"<connections><connection id="1"><dbPr connection="a" connection="b"/></connection></connections>"#,
                 "xl/connections-dbpr-broken.xml",
+            ),
+            (
+                r#"<connections><connection id="1"><dbPr commandType="bad"/></connection></connections>"#,
+                "xl/connections-dbpr-command-type-broken.xml",
             ),
             (
                 r#"<connections><connection id="1"><webPr url="a" url="b"/></connection></connections>"#,
