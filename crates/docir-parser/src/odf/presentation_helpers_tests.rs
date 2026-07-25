@@ -135,6 +135,37 @@ fn parse_draw_frame_presentation_classifies_plugin_media() {
 }
 
 #[test]
+fn parse_draw_frame_presentation_rejects_malformed_name_attributes() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<draw:frame xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  draw:name="ClipFrame" draw:name="Duplicate">
+  <draw:plugin xlink:href="media/clip.mp4"/>
+</draw:frame>
+"#;
+    let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+    reader.config_mut().trim_text(false);
+    let mut buf = Vec::new();
+    let frame_start = loop {
+        match reader.read_event_into(&mut buf).unwrap() {
+            Event::Start(e) if e.name().as_ref() == b"draw:frame" => break e.into_owned(),
+            Event::Eof => panic!("missing draw:frame"),
+            _ => {}
+        }
+        buf.clear();
+    };
+    let mut store = IrStore::new();
+
+    let err = parse_draw_frame_presentation(&mut reader, &frame_start, &mut store)
+        .expect_err("duplicate frame name attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn parse_custom_shape_presentation_preserves_text_runs() {
     let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
 <draw:custom-shape xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
@@ -172,6 +203,39 @@ fn parse_custom_shape_presentation_preserves_text_runs() {
     assert_eq!(text.paragraphs.len(), 2);
     assert_eq!(text.paragraphs[0].runs[0].text, "First line");
     assert_eq!(text.paragraphs[1].runs[0].text, "Second line");
+}
+
+#[test]
+fn parse_custom_shape_presentation_rejects_malformed_name_attributes() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<draw:custom-shape xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  draw:name="Badge" draw:name="Duplicate">
+  <text:p>First line</text:p>
+</draw:custom-shape>
+"#;
+    let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+    reader.config_mut().trim_text(false);
+    let mut buf = Vec::new();
+    let shape_start = loop {
+        match reader.read_event_into(&mut buf).unwrap() {
+            Event::Start(e) if e.name().as_ref() == b"draw:custom-shape" => {
+                break e.into_owned();
+            }
+            Event::Eof => panic!("missing draw:custom-shape"),
+            _ => {}
+        }
+        buf.clear();
+    };
+    let mut store = IrStore::new();
+
+    let err = parse_custom_shape_presentation(&mut reader, &shape_start, &mut store)
+        .expect_err("duplicate custom shape name attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
@@ -342,4 +406,34 @@ fn parse_frame_shape_start_extracts_chart_title_text() {
     };
     assert_eq!(chart.chart_type.as_deref(), Some("chart:line"));
     assert_eq!(chart.title.as_deref(), Some("Main Title"));
+}
+
+#[test]
+fn parse_frame_shape_start_rejects_malformed_chart_class_attributes() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<chart:chart xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0"
+  chart:class="chart:line" chart:class="chart:bar">
+</chart:chart>
+"#;
+    let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+    reader.config_mut().trim_text(false);
+    let mut buf = Vec::new();
+    let start = loop {
+        match reader.read_event_into(&mut buf).unwrap() {
+            Event::Start(e) if e.name().as_ref() == b"chart:chart" => break e.into_owned(),
+            Event::Eof => panic!("missing chart:chart"),
+            _ => {}
+        }
+        buf.clear();
+    };
+
+    let mut frame = FrameShapeState::new();
+    let mut store = IrStore::new();
+    let err = parse_frame_shape_start(&mut reader, &start, &mut store, &mut frame)
+        .expect_err("duplicate chart class attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }

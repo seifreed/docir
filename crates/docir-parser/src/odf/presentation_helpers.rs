@@ -191,10 +191,10 @@ pub(super) fn parse_custom_shape_presentation(
     start: &BytesStart<'_>,
     store: &mut IrStore,
 ) -> Result<Option<NodeId>, ParseError> {
-    let mut name = attr_value_by_suffix(start, &[b":name"]);
+    let name = try_attr_value_by_suffix(start, &[b":name"], "content.xml")?;
     let paragraphs = parse_shape_text(reader, start.name().as_ref())?;
     let mut shape = Shape::new(ShapeType::Custom);
-    shape.name = name.take();
+    shape.name = name;
     if !paragraphs.is_empty() {
         shape.text = Some(ShapeText { paragraphs });
     }
@@ -266,7 +266,7 @@ pub(super) fn parse_odf_chart(
     start: &BytesStart<'_>,
 ) -> Result<ChartData, ParseError> {
     let mut chart = ChartData::new();
-    chart.chart_type = attr_value_by_suffix(start, &[b":class"]);
+    chart.chart_type = try_attr_value_by_suffix(start, &[b":class"], "content.xml")?;
     chart.span = Some(SourceSpan::new("content.xml"));
     let mut buf = Vec::new();
     let mut in_title = false;
