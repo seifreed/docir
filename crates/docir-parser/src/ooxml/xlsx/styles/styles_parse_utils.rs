@@ -80,13 +80,16 @@ pub(super) fn parse_pattern_type(
     try_attr_value(element, b"patternType", styles_path)
 }
 
-pub(super) fn parse_border_side(element: &BytesStart) -> BorderSide {
+pub(super) fn parse_border_side(
+    element: &BytesStart,
+    styles_path: &str,
+) -> Result<BorderSide, ParseError> {
     let mut side = BorderSide {
         style: None,
         color: None,
     };
-    side.style = attr_value(element, b"style");
-    side
+    side.style = try_attr_value(element, b"style", styles_path)?;
+    Ok(side)
 }
 
 pub(super) fn parse_xf(element: &BytesStart, styles_path: &str) -> Result<CellFormat, ParseError> {

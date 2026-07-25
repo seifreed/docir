@@ -321,7 +321,7 @@ fn handle_border_start(
             true
         }
         b"left" | b"right" | b"top" | b"bottom" => {
-            let side = parse_border_side(e);
+            let side = parse_border_side(e, styles_path)?;
             let side_name = String::from_utf8_lossy(local_name(e.name().as_ref())).to_string();
             if state.current_border.is_some() {
                 state.current_border_side = Some((side_name, side));

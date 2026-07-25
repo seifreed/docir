@@ -140,6 +140,24 @@ fn test_parse_styles_reports_malformed_fill_pattern_attributes() {
 }
 
 #[test]
+fn test_parse_styles_reports_malformed_border_style_attributes() {
+    let xml = r#"
+        <styleSheet>
+          <borders count="1">
+            <border><left style="thin" style="thick"/></border>
+          </borders>
+        </styleSheet>
+        "#;
+
+    let err = parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_xlsx_auxiliary_parsers_accept_prefixed_main_namespace() {
     let styles_xml = r#"
         <x:styleSheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
