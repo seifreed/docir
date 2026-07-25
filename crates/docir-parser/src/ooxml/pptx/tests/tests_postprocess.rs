@@ -307,7 +307,7 @@ fn test_parse_slide_text_alignment_and_runs() {
 }
 
 #[test]
-fn test_parse_graphic_frame_transform_invalid_numbers_fallback_to_zero() {
+fn test_parse_graphic_frame_transform_invalid_numbers_fail() {
     let slide_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
@@ -329,7 +329,7 @@ fn test_parse_graphic_frame_transform_invalid_numbers_fallback_to_zero() {
 
     let mut parser = PptxParser::new();
     let mut zip = build_empty_zip();
-    let slide_id = parser
+    let err = parser
         .parse_slide(
             &mut zip,
             slide_xml,
@@ -338,20 +338,11 @@ fn test_parse_graphic_frame_transform_invalid_numbers_fallback_to_zero() {
             &Relationships::default(),
             (None, None),
         )
-        .expect("parse slide");
-    let store = parser.into_store();
-    let slide = match store.get(slide_id) {
-        Some(IRNode::Slide(s)) => s,
-        _ => panic!("missing slide"),
-    };
-    let shape = match store.get(slide.shapes[0]) {
-        Some(IRNode::Shape(s)) => s,
-        _ => panic!("missing shape"),
-    };
-    assert_eq!(shape.transform.x, 0);
-    assert_eq!(shape.transform.y, -9);
-    assert_eq!(shape.transform.width, 0);
-    assert_eq!(shape.transform.height, 400);
+        .expect_err("invalid transform must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/slide1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]

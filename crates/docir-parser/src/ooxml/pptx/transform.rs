@@ -1,5 +1,6 @@
 use super::{ParseError, Reader, ShapeTransform};
 use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
+use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{BytesStart, Event};
 
 pub(super) fn parse_transform(
@@ -60,8 +61,8 @@ fn apply_transform_offset(
     for attr in e.attributes() {
         let attr = attr.map_err(|err| xml_error(slide_path, err))?;
         match attr.key.as_ref() {
-            b"x" => transform.x = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0),
-            b"y" => transform.y = lossy_attr_value(&attr).parse::<i64>().unwrap_or(0),
+            b"x" => transform.x = parse_i64_attr(&attr, slide_path)?,
+            b"y" => transform.y = parse_i64_attr(&attr, slide_path)?,
             _ => {}
         }
     }
@@ -76,12 +77,24 @@ fn apply_transform_extent(
     for attr in e.attributes() {
         let attr = attr.map_err(|err| xml_error(slide_path, err))?;
         match attr.key.as_ref() {
-            b"cx" => transform.width = lossy_attr_value(&attr).parse::<u64>().unwrap_or(0),
-            b"cy" => transform.height = lossy_attr_value(&attr).parse::<u64>().unwrap_or(0),
+            b"cx" => transform.width = parse_u64_attr(&attr, slide_path)?,
+            b"cy" => transform.height = parse_u64_attr(&attr, slide_path)?,
             _ => {}
         }
     }
     Ok(())
+}
+
+fn parse_i64_attr(attr: &Attribute<'_>, file: &str) -> Result<i64, ParseError> {
+    lossy_attr_value(attr)
+        .parse()
+        .map_err(|err| xml_error(file, err))
+}
+
+fn parse_u64_attr(attr: &Attribute<'_>, file: &str) -> Result<u64, ParseError> {
+    lossy_attr_value(attr)
+        .parse()
+        .map_err(|err| xml_error(file, err))
 }
 
 #[cfg(test)]
@@ -121,16 +134,12 @@ mod tests {
     }
 
     #[test]
-    fn parse_transform_defaults_to_zero_for_invalid_numbers() {
+    fn parse_transform_rejects_invalid_numbers() {
         let xml = r#"<p:xfrm>
             <a:off x="nan" y="bad"/>
             <a:ext cx="oops" cy="NaN"/>
         </p:xfrm>"#;
-        let transform = parse_transform_fixture(xml, "slide2.xml").expect("parse transform");
-        assert_eq!(transform.x, 0);
-        assert_eq!(transform.y, 0);
-        assert_eq!(transform.width, 0);
-        assert_eq!(transform.height, 0);
+        parse_transform_fixture(xml, "slide2.xml").expect_err("invalid transform must fail");
     }
 
     #[test]
