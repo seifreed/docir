@@ -242,6 +242,32 @@ fn test_parse_ods_reports_malformed_cell_attributes() {
 }
 
 #[test]
+fn test_parse_ods_reports_malformed_table_attributes() {
+    let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:spreadsheet>
+      <table:table table:name="Sheet1" table:name="Sheet2"/>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>
+"#;
+    let zip_data = build_odf_zip(mimetype, content_xml, None);
+    let parser = DocumentParser::new();
+
+    let err = parser
+        .parse_reader(Cursor::new(zip_data))
+        .expect_err("malformed table attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_odp_minimal() {
     let mimetype = "application/vnd.oasis.opendocument.presentation";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>

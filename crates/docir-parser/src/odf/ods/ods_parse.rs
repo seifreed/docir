@@ -14,7 +14,7 @@ use crate::odf::{
     evaluate_ods_formulas, parse_ods_row_sample, spreadsheet,
 };
 use crate::xml_utils::{
-    XmlScanControl, attr_value_by_suffix, dispatch_start_or_empty, is_end_event_local, local_name,
+    XmlScanControl, dispatch_start_or_empty, is_end_event_local, local_name,
     scan_xml_events_with_reader, try_attr_value_by_suffix,
 };
 use quick_xml::events::BytesStart;
@@ -55,8 +55,8 @@ pub(crate) fn parse_ods_table(
     if limits.fast_mode() {
         return parse_ods_table_fast(reader, start, sheet_id, store, validations, limits);
     }
-    let name =
-        attr_value_by_suffix(start, &[b":name"]).unwrap_or_else(|| format!("Sheet{sheet_id}"));
+    let name = try_attr_value_by_suffix(start, &[b":name"], "content.xml")?
+        .unwrap_or_else(|| format!("Sheet{sheet_id}"));
     let mut worksheet = Worksheet::new(name, sheet_id);
     let mut buf = Vec::new();
     let mut row_idx: u32 = 0;
@@ -130,8 +130,8 @@ pub(crate) fn parse_ods_table_fast(
     validations: &HashMap<String, ValidationDef>,
     limits: &dyn OdfLimitCounter,
 ) -> Result<Worksheet, ParseError> {
-    let name =
-        attr_value_by_suffix(start, &[b":name"]).unwrap_or_else(|| format!("Sheet{sheet_id}"));
+    let name = try_attr_value_by_suffix(start, &[b":name"], "content.xml")?
+        .unwrap_or_else(|| format!("Sheet{sheet_id}"));
     let mut worksheet = Worksheet::new(name, sheet_id);
     let mut buf = Vec::new();
     let mut row_idx: u32 = 0;

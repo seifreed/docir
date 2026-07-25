@@ -15,7 +15,8 @@ use super::super::{
 use crate::error::ParseError;
 use crate::parser::ParserConfig;
 use crate::xml_utils::{
-    XmlScanControl, attr_value_by_suffix, is_end_event_local, local_name, scan_xml_events_until_end,
+    XmlScanControl, is_end_event_local, local_name, scan_xml_events_until_end,
+    try_attr_value_by_suffix,
 };
 use docir_core::ir::{IRNode, Worksheet};
 use docir_core::types::NodeId;
@@ -113,7 +114,7 @@ pub(crate) fn parse_content_spreadsheet(
                             pivot_caches: &mut pivot_caches,
                             next_cache_id: &mut next_cache_id,
                         },
-                    );
+                    )?;
                 }
                 _ => {}
             }
@@ -170,7 +171,7 @@ pub(crate) fn parse_content_spreadsheet_fast(
                         &mut sheet_id,
                         store,
                         &mut sheets,
-                    );
+                    )?;
                 }
                 _ => {}
             }
@@ -184,12 +185,15 @@ pub(crate) fn parse_content_spreadsheet_fast(
     })
 }
 
-fn build_empty_sheet(start: &BytesStart<'_>, sheet_id: u32) -> (Worksheet, NodeId) {
-    let name =
-        attr_value_by_suffix(start, &[b":name"]).unwrap_or_else(|| format!("Sheet{}", sheet_id));
+fn build_empty_sheet(
+    start: &BytesStart<'_>,
+    sheet_id: u32,
+) -> Result<(Worksheet, NodeId), ParseError> {
+    let name = try_attr_value_by_suffix(start, &[b":name"], "content.xml")?
+        .unwrap_or_else(|| format!("Sheet{}", sheet_id));
     let sheet = Worksheet::new(name, sheet_id);
     let node_id = sheet.id;
-    (sheet, node_id)
+    Ok((sheet, node_id))
 }
 
 fn handle_spreadsheet_start_full(
@@ -228,7 +232,10 @@ fn handle_spreadsheet_start_full(
     Ok(())
 }
 
-fn handle_spreadsheet_empty_full(empty: &BytesStart<'_>, state: FullSpreadsheetState<'_>) {
+fn handle_spreadsheet_empty_full(
+    empty: &BytesStart<'_>,
+    state: FullSpreadsheetState<'_>,
+) -> Result<(), ParseError> {
     let FullSpreadsheetState {
         in_spreadsheet,
         sheet_id,
@@ -243,7 +250,7 @@ fn handle_spreadsheet_empty_full(empty: &BytesStart<'_>, state: FullSpreadsheetS
     } = state;
     match local_name(empty.name().as_ref()) {
         b"table" if *in_spreadsheet => {
-            let (sheet, _) = build_empty_sheet(empty, *sheet_id);
+            let (sheet, _) = build_empty_sheet(empty, *sheet_id)?;
             insert_worksheet(store, sheets, sheet_index, sheet);
             *sheet_id += 1;
         }
@@ -256,6 +263,7 @@ fn handle_spreadsheet_empty_full(empty: &BytesStart<'_>, state: FullSpreadsheetS
         }
         _ => {}
     }
+    Ok(())
 }
 
 fn handle_spreadsheet_start_fast(
@@ -290,12 +298,13 @@ fn handle_spreadsheet_empty_fast(
     sheet_id: &mut u32,
     store: &mut IrStore,
     sheets: &mut Vec<NodeId>,
-) {
+) -> Result<(), ParseError> {
     if local_name(empty.name().as_ref()) == b"table" && in_spreadsheet {
-        let (sheet, _) = build_empty_sheet(empty, *sheet_id);
+        let (sheet, _) = build_empty_sheet(empty, *sheet_id)?;
         insert_worksheet_no_index(store, sheets, sheet);
         *sheet_id += 1;
     }
+    Ok(())
 }
 
 fn insert_validation_definition(
