@@ -97,7 +97,14 @@ fn parse_section_entries(
 
     let section_size = read_u32(data, section_offset)? as usize;
     let property_count = read_u32(data, section_offset + 4)? as usize;
-    let section_end = section_offset.saturating_add(section_size).min(data.len());
+    let section_end = section_offset.checked_add(section_size).ok_or_else(|| {
+        ParserParseError::InvalidStructure("OLE property set section size overflow".to_string())
+    })?;
+    if section_end > data.len() {
+        return Err(ParserParseError::InvalidStructure(
+            "OLE property set section size exceeds stream length".to_string(),
+        ));
+    }
 
     let mut entries = Vec::new();
     for index in 0..property_count {

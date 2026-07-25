@@ -171,3 +171,17 @@ fn inspect_metadata_supports_additional_scalar_property_types() {
         .expect("doc summary section");
     assert_additional_doc_summary_properties(doc_summary);
 }
+
+#[test]
+fn inspect_metadata_rejects_truncated_property_section() {
+    let mut summary = build_test_property_set_stream(&[(2, TestPropertyValue::Str("Specimen"))]);
+    let declared_size = u32::from_le_bytes(summary[0x30..0x34].try_into().expect("section size"));
+    summary[0x30..0x34].copy_from_slice(&(declared_size + 4).to_le_bytes());
+
+    let err = inspect_metadata_bytes(&build_test_cfb(&[(SUMMARY_INFO_STREAM, &summary)]))
+        .expect_err("truncated property section must fail");
+    assert!(
+        err.to_string()
+            .contains("section size exceeds stream length")
+    );
+}
