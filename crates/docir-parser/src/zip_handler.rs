@@ -190,6 +190,8 @@ impl<R: Read + Seek> SecureZipReader<R> {
 }
 
 const EOCD_SIGNATURE: &[u8; 4] = b"PK\x05\x06";
+const ZIP64_EOCD_SIGNATURE: &[u8; 4] = b"PK\x06\x06";
+const ZIP64_LOCATOR_SIGNATURE: &[u8; 4] = b"PK\x06\x07";
 const CENTRAL_FILE_SIGNATURE: &[u8; 4] = b"PK\x01\x02";
 const EOCD_MIN_SIZE: usize = 22;
 const EOCD_MAX_SEARCH: u64 = 66_000;
@@ -236,12 +238,66 @@ fn read_central_directory_info<R: Read + Seek>(
         || central_size == ZIP64_SENTINEL_U32
         || central_offset == ZIP64_SENTINEL_U32
     {
-        return Ok(None);
+        let eocd_offset = archive_len - tail_len as u64 + eocd as u64;
+        return read_zip64_central_directory_info(reader, eocd_offset, original_pos);
     }
 
     Ok(Some(CentralDirectoryInfo {
         total_entries: total_entries as usize,
         offset: central_offset as u64,
+    }))
+}
+
+fn read_zip64_central_directory_info<R: Read + Seek>(
+    reader: &mut R,
+    eocd_offset: u64,
+    original_pos: u64,
+) -> Result<Option<CentralDirectoryInfo>, ParseError> {
+    const ZIP64_LOCATOR_LEN: u64 = 20;
+    if eocd_offset < ZIP64_LOCATOR_LEN {
+        return Ok(None);
+    }
+    reader.seek(SeekFrom::Start(eocd_offset - ZIP64_LOCATOR_LEN))?;
+    let mut locator = [0u8; ZIP64_LOCATOR_LEN as usize];
+    reader.read_exact(&mut locator)?;
+    reader.seek(SeekFrom::Start(original_pos))?;
+    if &locator[..4] != ZIP64_LOCATOR_SIGNATURE {
+        return Ok(None);
+    }
+
+    let zip64_eocd_offset = u64::from_le_bytes([
+        locator[8],
+        locator[9],
+        locator[10],
+        locator[11],
+        locator[12],
+        locator[13],
+        locator[14],
+        locator[15],
+    ]);
+    reader.seek(SeekFrom::Start(zip64_eocd_offset))?;
+    let mut header = [0u8; 56];
+    reader.read_exact(&mut header)?;
+    reader.seek(SeekFrom::Start(original_pos))?;
+    if &header[..4] != ZIP64_EOCD_SIGNATURE {
+        return Ok(None);
+    }
+
+    let total_entries = u64::from_le_bytes([
+        header[32], header[33], header[34], header[35], header[36], header[37], header[38],
+        header[39],
+    ]);
+    let offset = u64::from_le_bytes([
+        header[48], header[49], header[50], header[51], header[52], header[53], header[54],
+        header[55],
+    ]);
+    let total_entries = usize::try_from(total_entries).map_err(|_| {
+        ParseError::ResourceLimit("ZIP64 central directory entry count too large".to_string())
+    })?;
+
+    Ok(Some(CentralDirectoryInfo {
+        total_entries,
+        offset,
     }))
 }
 

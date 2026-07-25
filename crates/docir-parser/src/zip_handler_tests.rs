@@ -18,52 +18,6 @@ fn make_zip(entries: &[(&str, &[u8])], method: CompressionMethod) -> Vec<u8> {
 }
 
 fn make_duplicate_name_zip() -> Vec<u8> {
-    fn push_u16(out: &mut Vec<u8>, value: u16) {
-        out.extend_from_slice(&value.to_le_bytes());
-    }
-
-    fn push_u32(out: &mut Vec<u8>, value: u32) {
-        out.extend_from_slice(&value.to_le_bytes());
-    }
-
-    fn push_local_file(out: &mut Vec<u8>, name: &[u8]) -> u32 {
-        let offset = out.len() as u32;
-        push_u32(out, 0x0403_4b50);
-        push_u16(out, 20);
-        push_u16(out, 0);
-        push_u16(out, 0);
-        push_u16(out, 0);
-        push_u16(out, 0);
-        push_u32(out, 0);
-        push_u32(out, 0);
-        push_u32(out, 0);
-        push_u16(out, name.len() as u16);
-        push_u16(out, 0);
-        out.extend_from_slice(name);
-        offset
-    }
-
-    fn push_central_file(out: &mut Vec<u8>, name: &[u8], local_offset: u32) {
-        push_u32(out, 0x0201_4b50);
-        push_u16(out, 20);
-        push_u16(out, 20);
-        push_u16(out, 0);
-        push_u16(out, 0);
-        push_u16(out, 0);
-        push_u16(out, 0);
-        push_u32(out, 0);
-        push_u32(out, 0);
-        push_u32(out, 0);
-        push_u16(out, name.len() as u16);
-        push_u16(out, 0);
-        push_u16(out, 0);
-        push_u16(out, 0);
-        push_u16(out, 0);
-        push_u32(out, 0);
-        push_u32(out, local_offset);
-        out.extend_from_slice(name);
-    }
-
     let name = b"word/document.xml";
     let mut out = Vec::new();
     let first = push_local_file(&mut out, name);
@@ -81,6 +35,91 @@ fn make_duplicate_name_zip() -> Vec<u8> {
     push_u32(&mut out, central_offset);
     push_u16(&mut out, 0);
     out
+}
+
+fn make_zip64_duplicate_name_zip() -> Vec<u8> {
+    let name = b"word/document.xml";
+    let mut out = Vec::new();
+    let first = push_local_file(&mut out, name);
+    let second = push_local_file(&mut out, name);
+    let central_offset = out.len() as u64;
+    push_central_file(&mut out, name, first);
+    push_central_file(&mut out, name, second);
+    let central_size = out.len() as u64 - central_offset;
+    let zip64_eocd_offset = out.len() as u64;
+    push_u32(&mut out, 0x0606_4b50);
+    push_u64(&mut out, 44);
+    push_u16(&mut out, 45);
+    push_u16(&mut out, 45);
+    push_u32(&mut out, 0);
+    push_u32(&mut out, 0);
+    push_u64(&mut out, 2);
+    push_u64(&mut out, 2);
+    push_u64(&mut out, central_size);
+    push_u64(&mut out, central_offset);
+    push_u32(&mut out, 0x0706_4b50);
+    push_u32(&mut out, 0);
+    push_u64(&mut out, zip64_eocd_offset);
+    push_u32(&mut out, 1);
+    push_u32(&mut out, 0x0605_4b50);
+    push_u16(&mut out, 0);
+    push_u16(&mut out, 0);
+    push_u16(&mut out, u16::MAX);
+    push_u16(&mut out, u16::MAX);
+    push_u32(&mut out, u32::MAX);
+    push_u32(&mut out, u32::MAX);
+    push_u16(&mut out, 0);
+    out
+}
+
+fn push_u16(out: &mut Vec<u8>, value: u16) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+
+fn push_u32(out: &mut Vec<u8>, value: u32) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+
+fn push_u64(out: &mut Vec<u8>, value: u64) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+
+fn push_local_file(out: &mut Vec<u8>, name: &[u8]) -> u32 {
+    let offset = out.len() as u32;
+    push_u32(out, 0x0403_4b50);
+    push_u16(out, 20);
+    push_u16(out, 0);
+    push_u16(out, 0);
+    push_u16(out, 0);
+    push_u16(out, 0);
+    push_u32(out, 0);
+    push_u32(out, 0);
+    push_u32(out, 0);
+    push_u16(out, name.len() as u16);
+    push_u16(out, 0);
+    out.extend_from_slice(name);
+    offset
+}
+
+fn push_central_file(out: &mut Vec<u8>, name: &[u8], local_offset: u32) {
+    push_u32(out, 0x0201_4b50);
+    push_u16(out, 20);
+    push_u16(out, 20);
+    push_u16(out, 0);
+    push_u16(out, 0);
+    push_u16(out, 0);
+    push_u16(out, 0);
+    push_u32(out, 0);
+    push_u32(out, 0);
+    push_u32(out, 0);
+    push_u16(out, name.len() as u16);
+    push_u16(out, 0);
+    push_u16(out, 0);
+    push_u16(out, 0);
+    push_u16(out, 0);
+    push_u32(out, 0);
+    push_u32(out, local_offset);
+    out.extend_from_slice(name);
 }
 
 #[test]
@@ -173,6 +212,16 @@ fn secure_zip_reader_rejects_duplicate_file_names() {
     let err = SecureZipReader::new(Cursor::new(bytes), ZipConfig::default())
         .err()
         .expect("duplicate file name error");
+    assert!(matches!(err, ParseError::InvalidZip(_)));
+}
+
+#[test]
+fn secure_zip_reader_rejects_zip64_duplicate_file_names() {
+    let bytes = make_zip64_duplicate_name_zip();
+
+    let err = SecureZipReader::new(Cursor::new(bytes), ZipConfig::default())
+        .err()
+        .expect("zip64 duplicate file name error");
     assert!(matches!(err, ParseError::InvalidZip(_)));
 }
 
