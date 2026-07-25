@@ -4,8 +4,8 @@
 //! against zip bombs, path traversal, and other malicious archive attacks.
 
 use crate::error::ParseError;
-use std::collections::HashMap;
-use std::io::{Read, Seek};
+use std::collections::{HashMap, HashSet};
+use std::io::{Read, Seek, SeekFrom};
 use zip::ZipArchive;
 
 #[cfg(test)]
@@ -65,7 +65,8 @@ pub struct SecureZipReader<R: Read + Seek> {
 
 impl<R: Read + Seek> SecureZipReader<R> {
     /// Opens a ZIP archive with security checks.
-    pub fn new(reader: R, config: ZipConfig) -> Result<Self, ParseError> {
+    pub fn new(mut reader: R, config: ZipConfig) -> Result<Self, ParseError> {
+        reject_duplicate_central_directory_names(&mut reader, config.max_file_count)?;
         let mut archive = ZipArchive::new(reader)?;
 
         if archive.len() > config.max_file_count {
@@ -86,7 +87,16 @@ impl<R: Read + Seek> SecureZipReader<R> {
             let compressed_size = file.compressed_size();
             validate_archive_entry(&name, uncompressed_size, compressed_size, &config)?;
 
-            total_uncompressed += uncompressed_size;
+            if file_index.contains_key(&name) {
+                return Err(ParseError::InvalidZip(format!(
+                    "Duplicate file name in archive: {name}"
+                )));
+            }
+            total_uncompressed = total_uncompressed
+                .checked_add(uncompressed_size)
+                .ok_or_else(|| {
+                    ParseError::ResourceLimit("Total uncompressed size overflow".to_string())
+                })?;
             file_index.insert(name, i);
         }
 
@@ -177,6 +187,105 @@ impl<R: Read + Seek> SecureZipReader<R> {
             .map(|s| s.as_str())
             .collect()
     }
+}
+
+const EOCD_SIGNATURE: &[u8; 4] = b"PK\x05\x06";
+const CENTRAL_FILE_SIGNATURE: &[u8; 4] = b"PK\x01\x02";
+const EOCD_MIN_SIZE: usize = 22;
+const EOCD_MAX_SEARCH: u64 = 66_000;
+const ZIP64_SENTINEL_U16: u16 = u16::MAX;
+const ZIP64_SENTINEL_U32: u32 = u32::MAX;
+
+struct CentralDirectoryInfo {
+    total_entries: usize,
+    offset: u64,
+}
+
+fn read_central_directory_info<R: Read + Seek>(
+    reader: &mut R,
+) -> Result<Option<CentralDirectoryInfo>, ParseError> {
+    let original_pos = reader.stream_position()?;
+    let archive_len = reader.seek(SeekFrom::End(0))?;
+    let tail_len = archive_len.min(EOCD_MAX_SEARCH) as usize;
+    reader.seek(SeekFrom::End(-(tail_len as i64)))?;
+    let mut tail = vec![0; tail_len];
+    reader.read_exact(&mut tail)?;
+    reader.seek(SeekFrom::Start(original_pos))?;
+
+    let Some(eocd) = tail.windows(4).rposition(|window| window == EOCD_SIGNATURE) else {
+        return Ok(None);
+    };
+    if eocd + EOCD_MIN_SIZE > tail.len() {
+        return Ok(None);
+    }
+
+    let total_entries = u16::from_le_bytes([tail[eocd + 10], tail[eocd + 11]]);
+    let central_size = u32::from_le_bytes([
+        tail[eocd + 12],
+        tail[eocd + 13],
+        tail[eocd + 14],
+        tail[eocd + 15],
+    ]);
+    let central_offset = u32::from_le_bytes([
+        tail[eocd + 16],
+        tail[eocd + 17],
+        tail[eocd + 18],
+        tail[eocd + 19],
+    ]);
+    if total_entries == ZIP64_SENTINEL_U16
+        || central_size == ZIP64_SENTINEL_U32
+        || central_offset == ZIP64_SENTINEL_U32
+    {
+        return Ok(None);
+    }
+
+    Ok(Some(CentralDirectoryInfo {
+        total_entries: total_entries as usize,
+        offset: central_offset as u64,
+    }))
+}
+
+fn reject_duplicate_central_directory_names<R: Read + Seek>(
+    reader: &mut R,
+    max_file_count: usize,
+) -> Result<(), ParseError> {
+    let Some(info) = read_central_directory_info(reader)? else {
+        return Ok(());
+    };
+    let original_pos = reader.stream_position()?;
+    let total_entries = info.total_entries;
+    if total_entries > max_file_count {
+        return Err(ParseError::ResourceLimit(format!(
+            "Too many files in archive: {total_entries} (max: {max_file_count})"
+        )));
+    }
+
+    reader.seek(SeekFrom::Start(info.offset))?;
+    let mut seen = HashSet::with_capacity(total_entries);
+    for _ in 0..total_entries {
+        let mut header = [0u8; 46];
+        reader.read_exact(&mut header)?;
+        if &header[..4] != CENTRAL_FILE_SIGNATURE {
+            return Err(ParseError::InvalidZip(
+                "Invalid central directory header".to_string(),
+            ));
+        }
+        let name_len = u16::from_le_bytes([header[28], header[29]]) as usize;
+        let extra_len = u16::from_le_bytes([header[30], header[31]]) as i64;
+        let comment_len = u16::from_le_bytes([header[32], header[33]]) as i64;
+        let mut name = vec![0; name_len];
+        reader.read_exact(&mut name)?;
+        if !seen.insert(name.clone()) {
+            return Err(ParseError::InvalidZip(format!(
+                "Duplicate file name in archive: {}",
+                String::from_utf8_lossy(&name)
+            )));
+        }
+        reader.seek(SeekFrom::Current(extra_len + comment_len))?;
+    }
+
+    reader.seek(SeekFrom::Start(original_pos))?;
+    Ok(())
 }
 
 impl<R: Read + Seek> PackageReader for SecureZipReader<R> {
