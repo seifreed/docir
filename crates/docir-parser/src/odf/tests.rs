@@ -264,6 +264,37 @@ fn test_parse_odt_reports_malformed_inline_space_attributes() {
 }
 
 #[test]
+fn test_parse_odt_reports_malformed_table_cell_span_attributes() {
+    let mimetype = "application/vnd.oasis.opendocument.text";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <office:body>
+    <office:text>
+      <table:table>
+        <table:table-row>
+          <table:table-cell table:number-columns-spanned="2" table:number-columns-spanned="3"/>
+        </table:table-row>
+      </table:table>
+    </office:text>
+  </office:body>
+</office:document-content>
+"#;
+    let zip_data = build_odf_zip(mimetype, content_xml, None);
+    let parser = DocumentParser::new();
+
+    let err = parser
+        .parse_reader(Cursor::new(zip_data))
+        .expect_err("malformed table cell span attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_ods_minimal() {
     let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>

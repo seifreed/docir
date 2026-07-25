@@ -3,7 +3,7 @@ use super::{
     TableCell, TableCellProperties, TableRow, XmlScanControl, scan_xml_events_until_end,
 };
 use crate::odf::paragraph::parse_paragraph;
-use crate::xml_utils::{attr_value_by_suffix, is_end_event_local, local_name};
+use crate::xml_utils::{is_end_event_local, local_name, try_attr_value_by_suffix};
 use docir_core::visitor::IrStore;
 use quick_xml::events::BytesStart;
 
@@ -44,8 +44,12 @@ pub(super) fn parse_table(
                     }
                     b"table-cell" => {
                         let mut cell = TableCell::new();
-                        if let Some(span) = attr_value_by_suffix(e, &[b":number-columns-spanned"])
-                            .and_then(|v| v.parse::<u32>().ok())
+                        if let Some(span) = try_attr_value_by_suffix(
+                            e,
+                            &[b":number-columns-spanned"],
+                            ODF_CONTENT_XML,
+                        )?
+                        .and_then(|v| v.parse::<u32>().ok())
                         {
                             cell.properties = TableCellProperties {
                                 grid_span: Some(span),
@@ -85,8 +89,9 @@ pub(super) fn parse_table_cell(
     limits: &dyn OdfLimitCounter,
 ) -> Result<NodeId, ParseError> {
     let mut cell = TableCell::new();
-    if let Some(span) = attr_value_by_suffix(start, &[b":number-columns-spanned"])
-        .and_then(|v| v.parse::<u32>().ok())
+    if let Some(span) =
+        try_attr_value_by_suffix(start, &[b":number-columns-spanned"], ODF_CONTENT_XML)?
+            .and_then(|v| v.parse::<u32>().ok())
     {
         cell.properties = TableCellProperties {
             grid_span: Some(span),
