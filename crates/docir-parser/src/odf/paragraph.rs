@@ -2,7 +2,7 @@ use super::{
     BookmarkEnd, BookmarkStart, Field, FieldInstruction, FieldKind, IRNode, IrStore, NodeId,
     NumberingInfo, OdfLimitCounter, OdfReader, ParseError, text,
 };
-use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value_by_suffix, xml_error};
 use quick_xml::events::{BytesStart, Event};
 
 pub(crate) fn parse_paragraph(
@@ -21,7 +21,7 @@ pub(crate) fn parse_paragraph(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                handle_inline_event(&e, &mut text, store, inline_nodes)
+                handle_inline_event(&e, &mut text, store, inline_nodes)?
             }
             Ok(Event::Text(e)) => {
                 let chunk = crate::xml_utils::decoded_text_or_default(&e);
@@ -54,10 +54,10 @@ fn handle_inline_event(
     text: &mut String,
     store: &mut IrStore,
     inline_nodes: &mut Vec<NodeId>,
-) {
+) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
         b"s" => {
-            let count = attr_value_by_suffix(event, &[b":c"])
+            let count = try_attr_value_by_suffix(event, &[b":c"], "content.xml")?
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(1);
             text.extend(std::iter::repeat_n(' ', count));
@@ -65,7 +65,7 @@ fn handle_inline_event(
         b"tab" => text.push('\t'),
         b"line-break" => text.push('\n'),
         b"bookmark-start" => {
-            if let Some(name) = attr_value_by_suffix(event, &[b":name"]) {
+            if let Some(name) = try_attr_value_by_suffix(event, &[b":name"], "content.xml")? {
                 let mut bookmark = BookmarkStart::new(name.clone());
                 bookmark.name = Some(name);
                 let bookmark_id = bookmark.id;
@@ -78,7 +78,7 @@ fn handle_inline_event(
             }
         }
         b"bookmark-end" => {
-            if let Some(name) = attr_value_by_suffix(event, &[b":name"]) {
+            if let Some(name) = try_attr_value_by_suffix(event, &[b":name"], "content.xml")? {
                 let bookmark = BookmarkEnd::new(name);
                 let bookmark_id = bookmark.id;
                 push_inline_node(
@@ -106,6 +106,7 @@ fn handle_inline_event(
         }
         _ => {}
     }
+    Ok(())
 }
 
 fn push_inline_node(store: &mut IrStore, inline_nodes: &mut Vec<NodeId>, id: NodeId, node: IRNode) {
