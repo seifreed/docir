@@ -346,6 +346,49 @@ fn test_parse_worksheet_reports_malformed_cell_reference_attributes() {
 }
 
 #[test]
+fn test_parse_worksheet_reports_malformed_hyperlink_attributes() {
+    let xml = r#"
+        <worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <hyperlinks>
+            <hyperlink ref="A1" r:id="rIdHyper" r:id="rIdOther"/>
+          </hyperlinks>
+        </worksheet>
+        "#;
+    let rels_xml = r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rIdHyper"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+            Target="https://example.com"
+            TargetMode="External"/>
+        </Relationships>
+        "#;
+    let rels = Relationships::parse(rels_xml).expect("rels");
+    let mut parser = XlsxParser::new();
+    let sheet = SheetInfo {
+        name: "Sheet1".to_string(),
+        sheet_id: 1,
+        rel_id: "rId1".to_string(),
+        state: SheetState::Visible,
+    };
+    let mut zip = build_empty_zip();
+    let err = parser
+        .parse_worksheet(
+            &mut zip,
+            xml,
+            &sheet,
+            "xl/worksheets/sheet1.xml",
+            &rels,
+            SheetKind::Worksheet,
+        )
+        .expect_err("duplicate hyperlink attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "xl/worksheets/sheet1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_worksheet_cells() {
     let xml = r#"
         <worksheet>

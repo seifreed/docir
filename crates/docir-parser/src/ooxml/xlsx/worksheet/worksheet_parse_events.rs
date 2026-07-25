@@ -50,7 +50,7 @@ pub(crate) fn handle_worksheet_common_tag(
             Ok(true)
         }
         b"hyperlink" => {
-            parser.handle_hyperlink(e, relationships, sheet_path);
+            parser.handle_hyperlink(e, relationships, sheet_path)?;
             Ok(true)
         }
         _ => Ok(false),

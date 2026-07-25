@@ -4,7 +4,7 @@ use crate::diagnostics::attach_diagnostics_if_any;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
-use crate::xml_utils::{attr_value_by_suffix, try_attr_value};
+use crate::xml_utils::{try_attr_value, try_attr_value_by_suffix};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     CalcChain, Cell, CellError, CellFormula, ColumnDefinition, ConditionalFormat, Diagnostics,
@@ -198,19 +198,20 @@ impl XlsxParser {
         element: &BytesStart,
         relationships: &Relationships,
         sheet_path: &str,
-    ) {
-        let Some(rel_id) = attr_value_by_suffix(element, &[b":id"]) else {
-            return;
+    ) -> Result<(), ParseError> {
+        let Some(rel_id) = try_attr_value_by_suffix(element, &[b":id"], sheet_path)? else {
+            return Ok(());
         };
         let Some(rel) = relationships.get(&rel_id) else {
-            return;
+            return Ok(());
         };
         if rel.target_mode != TargetMode::External {
-            return;
+            return Ok(());
         }
 
         let ref_type = classify_relationship(&rel.rel_type);
         self.add_external_reference(rel, ref_type, sheet_path);
+        Ok(())
     }
 
     pub(super) fn handle_formula_security(
