@@ -4,7 +4,7 @@ use crate::diagnostics::attach_diagnostics_if_any;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
 use crate::security_utils::parse_dde_formula;
-use crate::xml_utils::{attr_value, attr_value_by_suffix};
+use crate::xml_utils::{attr_value_by_suffix, try_attr_value};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     CalcChain, Cell, CellError, CellFormula, ColumnDefinition, ConditionalFormat, Diagnostics,
@@ -181,7 +181,7 @@ impl XlsxParser {
         start: &BytesStart,
         sheet_path: &str,
     ) -> Result<Cell, ParseError> {
-        let reference = attr_value(start, b"r").ok_or_else(|| {
+        let reference = try_attr_value(start, b"r", sheet_path)?.ok_or_else(|| {
             ParseError::InvalidStructure("Cell missing reference attribute".to_string())
         })?;
         let (col, row) = parse_cell_reference(&reference).ok_or_else(|| {

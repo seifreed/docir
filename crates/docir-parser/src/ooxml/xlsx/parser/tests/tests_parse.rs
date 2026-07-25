@@ -309,6 +309,43 @@ fn test_parse_worksheet_cells_additional_value_branches() {
 }
 
 #[test]
+fn test_parse_worksheet_reports_malformed_cell_reference_attributes() {
+    let xml = r#"
+        <worksheet>
+          <sheetData>
+            <row r="1">
+              <c r="A1" r="B1"/>
+            </row>
+          </sheetData>
+        </worksheet>
+        "#;
+
+    let mut parser = XlsxParser::new();
+    let sheet = SheetInfo {
+        name: "Sheet1".to_string(),
+        sheet_id: 1,
+        rel_id: "rId1".to_string(),
+        state: SheetState::Visible,
+    };
+    let mut zip = build_empty_zip();
+    let err = parser
+        .parse_worksheet(
+            &mut zip,
+            xml,
+            &sheet,
+            "xl/worksheets/sheet1.xml",
+            &Relationships::default(),
+            SheetKind::Worksheet,
+        )
+        .expect_err("duplicate cell reference attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "xl/worksheets/sheet1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_worksheet_cells() {
     let xml = r#"
         <worksheet>
