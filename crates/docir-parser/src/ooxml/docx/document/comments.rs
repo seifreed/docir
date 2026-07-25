@@ -1,7 +1,7 @@
 use super::{DocxParser, NoteKind, parse_block_until};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{attr_value, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value, xml_error};
 use docir_core::ir::{
     Comment, CommentExtension, CommentExtensionSet, CommentIdMap, CommentIdMapEntry, Endnote,
     Footnote, IRNode,
@@ -42,12 +42,17 @@ impl DocxParser {
                 Ok(Event::Empty(e)) | Ok(Event::Start(e))
                     if local_name(e.name().as_ref()) == b"commentExt" =>
                 {
-                    let comment_id = attr_value(&e, b"w:id").unwrap_or_default();
+                    let comment_id = try_attr_value(&e, b"w:id", "word/commentsExtended.xml")?
+                        .unwrap_or_default();
                     let entry = CommentExtension {
                         comment_id,
-                        para_id: attr_value(&e, b"w16cid:paraId"),
-                        parent_para_id: attr_value(&e, b"w16cid:parentParaId"),
-                        done: attr_value(&e, b"w:done")
+                        para_id: try_attr_value(&e, b"w16cid:paraId", "word/commentsExtended.xml")?,
+                        parent_para_id: try_attr_value(
+                            &e,
+                            b"w16cid:parentParaId",
+                            "word/commentsExtended.xml",
+                        )?,
+                        done: try_attr_value(&e, b"w:done", "word/commentsExtended.xml")?
                             .map(|v| v == "1" || v.eq_ignore_ascii_case("true")),
                     };
                     set.entries.push(entry);
@@ -79,9 +84,14 @@ impl DocxParser {
                     if local_name(e.name().as_ref()) == b"commentId" =>
                 {
                     let entry = CommentIdMapEntry {
-                        comment_id: attr_value(&e, b"w:id").unwrap_or_default(),
-                        para_id: attr_value(&e, b"w16cid:paraId"),
-                        parent_para_id: attr_value(&e, b"w16cid:parentParaId"),
+                        comment_id: try_attr_value(&e, b"w:id", "word/commentsIds.xml")?
+                            .unwrap_or_default(),
+                        para_id: try_attr_value(&e, b"w16cid:paraId", "word/commentsIds.xml")?,
+                        parent_para_id: try_attr_value(
+                            &e,
+                            b"w16cid:parentParaId",
+                            "word/commentsIds.xml",
+                        )?,
                     };
                     map.mappings.push(entry);
                 }
@@ -116,17 +126,18 @@ fn parse_comments_like(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                 b"comment" => {
-                    let comment_id = attr_value(&e, b"w:id").unwrap_or_default();
+                    let comment_id =
+                        try_attr_value(&e, b"w:id", "word/comments.xml")?.unwrap_or_default();
                     let mut comment = Comment::new(comment_id);
-                    comment.author = attr_value(&e, b"w:author");
-                    comment.initials = attr_value(&e, b"w:initials");
-                    comment.parent_id = attr_value(&e, b"w:parentId");
-                    comment.para_id = attr_value(&e, b"w:paraId");
-                    if let Some(val) = attr_value(&e, b"w:done") {
+                    comment.author = try_attr_value(&e, b"w:author", "word/comments.xml")?;
+                    comment.initials = try_attr_value(&e, b"w:initials", "word/comments.xml")?;
+                    comment.parent_id = try_attr_value(&e, b"w:parentId", "word/comments.xml")?;
+                    comment.para_id = try_attr_value(&e, b"w:paraId", "word/comments.xml")?;
+                    if let Some(val) = try_attr_value(&e, b"w:done", "word/comments.xml")? {
                         let v = val.as_str();
                         comment.done = Some(v == "1" || v.eq_ignore_ascii_case("true"));
                     }
-                    comment.date = attr_value(&e, b"w:date");
+                    comment.date = try_attr_value(&e, b"w:date", "word/comments.xml")?;
                     comment.content = parse_block_until(parser, &mut reader, rels, b"comment")?;
                     let id = comment.id;
                     parser.store.insert(IRNode::Comment(comment));
@@ -134,9 +145,10 @@ fn parse_comments_like(
                 }
                 b"footnote" => {
                     if matches!(kind, Some(NoteKind::Footnote)) {
-                        let note_id = attr_value(&e, b"w:id").unwrap_or_default();
+                        let note_id =
+                            try_attr_value(&e, b"w:id", "word/comments.xml")?.unwrap_or_default();
                         let mut note = Footnote::new(note_id);
-                        note.note_type = attr_value(&e, b"w:type");
+                        note.note_type = try_attr_value(&e, b"w:type", "word/comments.xml")?;
                         note.content = parse_block_until(parser, &mut reader, rels, b"footnote")?;
                         let id = note.id;
                         parser.store.insert(IRNode::Footnote(note));
@@ -145,9 +157,10 @@ fn parse_comments_like(
                 }
                 b"endnote" => {
                     if matches!(kind, Some(NoteKind::Endnote)) {
-                        let note_id = attr_value(&e, b"w:id").unwrap_or_default();
+                        let note_id =
+                            try_attr_value(&e, b"w:id", "word/comments.xml")?.unwrap_or_default();
                         let mut note = Endnote::new(note_id);
-                        note.note_type = attr_value(&e, b"w:type");
+                        note.note_type = try_attr_value(&e, b"w:type", "word/comments.xml")?;
                         note.content = parse_block_until(parser, &mut reader, rels, b"endnote")?;
                         let id = note.id;
                         parser.store.insert(IRNode::Endnote(note));

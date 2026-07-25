@@ -435,3 +435,24 @@ fn test_parse_comments_and_notes_metadata() {
     };
     assert_eq!(footnote.note_type.as_deref(), Some("separator"));
 }
+
+#[test]
+fn test_parse_comments_reports_malformed_attributes() {
+    let comments_xml = r#"
+        <w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:comment w:id="1" w:id="2">
+            <w:p><w:r><w:t>Note</w:t></w:r></w:p>
+          </w:comment>
+        </w:comments>
+        "#;
+    let mut parser = DocxParser::new();
+    let rels = Relationships::default();
+    let err = parser
+        .parse_comments(comments_xml, &rels)
+        .expect_err("malformed comments attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/comments.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
