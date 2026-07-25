@@ -1,11 +1,9 @@
-use super::super::super::{
-    DocxParser, Field, ParagraphProperties, attr_value, bool_from_val, span_from_reader,
-};
+use super::super::super::{DocxParser, Field, ParagraphProperties, span_from_reader};
 use super::{DOC_XML_PATH, parse_field_instruction, parse_run};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::relationships::TargetMode;
-use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value, try_attr_value_by_suffix, xml_error};
 use docir_core::ir::RunProperties;
 use docir_core::ir::{Hyperlink, NumberingInfo, UnderlineStyle, VerticalTextAlignment};
 use docir_core::types::NodeId;
@@ -24,10 +22,12 @@ pub(crate) fn parse_numbering(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) | Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                 b"numId" => {
-                    num_id = attr_value(&e, b"w:val").and_then(|v| v.parse().ok());
+                    num_id =
+                        try_attr_value(&e, b"w:val", DOC_XML_PATH)?.and_then(|v| v.parse().ok());
                 }
                 b"ilvl" => {
-                    level = attr_value(&e, b"w:val").and_then(|v| v.parse().ok());
+                    level =
+                        try_attr_value(&e, b"w:val", DOC_XML_PATH)?.and_then(|v| v.parse().ok());
                 }
                 _ => {}
             },
@@ -62,24 +62,26 @@ pub(crate) fn parse_run_properties(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                 b"rStyle" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
+                    if let Some(val) = try_attr_value(&e, b"w:val", DOC_XML_PATH)? {
                         props.style_id = Some(val);
                     }
                 }
                 b"rFonts" => {
-                    if let Some(val) = attr_value(&e, b"w:ascii") {
+                    if let Some(val) = try_attr_value(&e, b"w:ascii", DOC_XML_PATH)? {
                         props.font_family = Some(val);
                     }
                 }
                 b"sz" => {
-                    if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
+                    if let Some(val) =
+                        try_attr_value(&e, b"w:val", DOC_XML_PATH)?.and_then(|v| v.parse().ok())
+                    {
                         props.font_size = Some(val);
                     }
                 }
                 b"b" => props.bold = Some(true),
                 b"i" => props.italic = Some(true),
                 b"u" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
+                    if let Some(val) = try_attr_value(&e, b"w:val", DOC_XML_PATH)? {
                         props.underline = match val.as_str() {
                             "double" => Some(UnderlineStyle::Double),
                             "thick" => Some(UnderlineStyle::Thick),
@@ -93,23 +95,23 @@ pub(crate) fn parse_run_properties(
                 }
                 b"strike" => props.strike = Some(true),
                 b"color" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
+                    if let Some(val) = try_attr_value(&e, b"w:val", DOC_XML_PATH)? {
                         props.color = Some(val);
                     }
                 }
                 b"highlight" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
+                    if let Some(val) = try_attr_value(&e, b"w:val", DOC_XML_PATH)? {
                         props.highlight = Some(val);
                     }
                 }
                 b"caps" => {
-                    props.all_caps = Some(bool_from_val(&e));
+                    props.all_caps = Some(try_bool_from_val(&e)?);
                 }
                 b"smallCaps" => {
-                    props.small_caps = Some(bool_from_val(&e));
+                    props.small_caps = Some(try_bool_from_val(&e)?);
                 }
                 b"vertAlign" => {
-                    if let Some(val) = attr_value(&e, b"w:val") {
+                    if let Some(val) = try_attr_value(&e, b"w:val", DOC_XML_PATH)? {
                         props.vertical_align = match val.as_str() {
                             "superscript" => Some(VerticalTextAlignment::Superscript),
                             "subscript" => Some(VerticalTextAlignment::Subscript),
@@ -133,6 +135,13 @@ pub(crate) fn parse_run_properties(
     Ok(())
 }
 
+fn try_bool_from_val(start: &BytesStart<'_>) -> Result<bool, ParseError> {
+    Ok(!matches!(
+        try_attr_value(start, b"w:val", DOC_XML_PATH)?.as_deref(),
+        Some("0") | Some("false")
+    ))
+}
+
 pub(crate) fn parse_hyperlink(
     parser: &mut DocxParser,
     reader: &mut Reader<&[u8]>,
@@ -141,10 +150,10 @@ pub(crate) fn parse_hyperlink(
 ) -> Result<NodeId, ParseError> {
     let mut link = Hyperlink::new("", false);
     let mut rel_id_opt = None;
-    if let Some(tooltip) = attr_value(start, b"w:tooltip") {
+    if let Some(tooltip) = try_attr_value(start, b"w:tooltip", DOC_XML_PATH)? {
         link.tooltip = Some(tooltip);
     }
-    if let Some(rel_id) = attr_value_by_suffix(start, &[b":id"])
+    if let Some(rel_id) = try_attr_value_by_suffix(start, &[b":id"], DOC_XML_PATH)?
         && let Some(rel) = rels.get(&rel_id)
     {
         link.target = rel.target.clone();
@@ -152,7 +161,7 @@ pub(crate) fn parse_hyperlink(
         link.relationship_id = Some(rel_id.clone());
         rel_id_opt = Some(rel_id);
     }
-    if let Some(anchor) = attr_value(start, b"w:anchor") {
+    if let Some(anchor) = try_attr_value(start, b"w:anchor", DOC_XML_PATH)? {
         if link.target.is_empty() {
             link.target = format!("#{}", anchor);
         } else if !link.target.contains('#') {
