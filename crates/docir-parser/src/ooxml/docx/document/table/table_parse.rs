@@ -1,7 +1,7 @@
 use super::super::{DocxParser, parse_border, parse_paragraph_simple, span_from_reader};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{attr_value, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value, xml_error};
 use docir_core::ir::{
     CellMargins, CellVerticalAlignment, MergeType, RowHeight, RowHeightRule, Table, TableAlignment,
     TableBorders, TableCell, TableCellProperties, TableRow, TableWidth, TableWidthType,
@@ -9,6 +9,8 @@ use docir_core::ir::{
 use docir_core::types::NodeId;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
+
+const DOC_PATH: &str = "word/document.xml";
 
 pub(crate) fn parse_table(
     parser: &mut DocxParser,
@@ -162,8 +164,9 @@ fn apply_table_cell_property_event(
 ) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
         b"tcW" => {
-            if let Some(val) = attr_value(event, b"w:w").and_then(|v| v.parse().ok()) {
-                let width_type = match attr_value(event, b"w:type").as_deref() {
+            if let Some(val) = try_attr_value(event, b"w:w", DOC_PATH)?.and_then(|v| v.parse().ok())
+            {
+                let width_type = match try_attr_value(event, b"w:type", DOC_PATH)?.as_deref() {
                     Some("dxa") => TableWidthType::Dxa,
                     Some("pct") => TableWidthType::Pct,
                     Some("auto") => TableWidthType::Auto,
@@ -176,12 +179,14 @@ fn apply_table_cell_property_event(
             }
         }
         b"gridSpan" => {
-            if let Some(val) = attr_value(event, b"w:val").and_then(|v| v.parse().ok()) {
+            if let Some(val) =
+                try_attr_value(event, b"w:val", DOC_PATH)?.and_then(|v| v.parse().ok())
+            {
                 props.grid_span = Some(val);
             }
         }
         b"vMerge" => {
-            let merge = match attr_value(event, b"w:val").as_deref() {
+            let merge = match try_attr_value(event, b"w:val", DOC_PATH)?.as_deref() {
                 Some("restart") => MergeType::Restart,
                 Some("continue") => MergeType::Continue,
                 _ => MergeType::Continue,
@@ -189,7 +194,7 @@ fn apply_table_cell_property_event(
             props.vertical_merge = Some(merge);
         }
         b"vAlign" => {
-            if let Some(val) = attr_value(event, b"w:val") {
+            if let Some(val) = try_attr_value(event, b"w:val", DOC_PATH)? {
                 props.vertical_align = match val.as_str() {
                     "center" => Some(CellVerticalAlignment::Center),
                     "bottom" => Some(CellVerticalAlignment::Bottom),
@@ -203,7 +208,7 @@ fn apply_table_cell_property_event(
             }
         }
         b"shd" => {
-            if let Some(fill) = attr_value(event, b"w:fill") {
+            if let Some(fill) = try_attr_value(event, b"w:fill", DOC_PATH)? {
                 props.shading = Some(fill);
             }
         }
@@ -220,7 +225,7 @@ pub(crate) fn parse_table_properties(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                apply_table_property_attrs(&e, props);
+                apply_table_property_attrs(&e, props)?;
                 match local_name(e.name().as_ref()) {
                     b"tblBorders" => {
                         if let Some(borders) = parse_table_borders(reader, b"tblBorders")? {
@@ -236,7 +241,7 @@ pub(crate) fn parse_table_properties(
                 }
             }
             Ok(Event::Empty(e)) => {
-                apply_table_property_attrs(&e, props);
+                apply_table_property_attrs(&e, props)?;
             }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tblPr" => {
                 break;
@@ -252,11 +257,15 @@ pub(crate) fn parse_table_properties(
     Ok(())
 }
 
-fn apply_table_property_attrs(event: &BytesStart<'_>, props: &mut docir_core::ir::TableProperties) {
+fn apply_table_property_attrs(
+    event: &BytesStart<'_>,
+    props: &mut docir_core::ir::TableProperties,
+) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
         b"tblW" => {
-            if let Some(val) = attr_value(event, b"w:w").and_then(|v| v.parse().ok()) {
-                let width_type = match attr_value(event, b"w:type").as_deref() {
+            if let Some(val) = try_attr_value(event, b"w:w", DOC_PATH)?.and_then(|v| v.parse().ok())
+            {
+                let width_type = match try_attr_value(event, b"w:type", DOC_PATH)?.as_deref() {
                     Some("dxa") => TableWidthType::Dxa,
                     Some("pct") => TableWidthType::Pct,
                     Some("auto") => TableWidthType::Auto,
@@ -269,7 +278,7 @@ fn apply_table_property_attrs(event: &BytesStart<'_>, props: &mut docir_core::ir
             }
         }
         b"jc" => {
-            if let Some(val) = attr_value(event, b"w:val") {
+            if let Some(val) = try_attr_value(event, b"w:val", DOC_PATH)? {
                 props.alignment = match val.as_str() {
                     "center" => Some(TableAlignment::Center),
                     "right" => Some(TableAlignment::Right),
@@ -278,12 +287,13 @@ fn apply_table_property_attrs(event: &BytesStart<'_>, props: &mut docir_core::ir
             }
         }
         b"tblStyle" => {
-            if let Some(val) = attr_value(event, b"w:val") {
+            if let Some(val) = try_attr_value(event, b"w:val", DOC_PATH)? {
                 props.style_id = Some(val);
             }
         }
         _ => {}
     }
+    Ok(())
 }
 
 pub(crate) fn parse_table_grid(
@@ -295,7 +305,8 @@ pub(crate) fn parse_table_grid(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 if local_name(e.name().as_ref()) == b"gridCol"
-                    && let Some(val) = attr_value(&e, b"w:w").and_then(|v| v.parse().ok())
+                    && let Some(val) =
+                        try_attr_value(&e, b"w:w", DOC_PATH)?.and_then(|v| v.parse().ok())
                 {
                     grid.push(docir_core::ir::GridColumn { width: val });
                 }
@@ -323,8 +334,10 @@ pub(crate) fn parse_table_row_properties(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                 b"trHeight" => {
-                    if let Some(val) = attr_value(&e, b"w:val").and_then(|v| v.parse().ok()) {
-                        let rule = match attr_value(&e, b"w:hRule").as_deref() {
+                    if let Some(val) =
+                        try_attr_value(&e, b"w:val", DOC_PATH)?.and_then(|v| v.parse().ok())
+                    {
+                        let rule = match try_attr_value(&e, b"w:hRule", DOC_PATH)?.as_deref() {
                             Some("exact") => RowHeightRule::Exact,
                             Some("atLeast") => RowHeightRule::AtLeast,
                             _ => RowHeightRule::Auto,
@@ -334,14 +347,14 @@ pub(crate) fn parse_table_row_properties(
                 }
                 b"tblHeader" => {
                     let is_header = !matches!(
-                        attr_value(&e, b"w:val").as_deref(),
+                        try_attr_value(&e, b"w:val", DOC_PATH)?.as_deref(),
                         Some("0") | Some("false")
                     );
                     props.is_header = Some(is_header);
                 }
                 b"cantSplit" => {
                     let cant_split = !matches!(
-                        attr_value(&e, b"w:val").as_deref(),
+                        try_attr_value(&e, b"w:val", DOC_PATH)?.as_deref(),
                         Some("0") | Some("false")
                     );
                     props.cant_split = Some(cant_split);
@@ -425,7 +438,7 @@ fn parse_cell_margins(reader: &mut Reader<&[u8]>) -> Result<Option<CellMargins>,
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                let val = attr_value(&e, b"w:w").and_then(|v| v.parse().ok());
+                let val = try_attr_value(&e, b"w:w", DOC_PATH)?.and_then(|v| v.parse().ok());
                 match local_name(e.name().as_ref()) {
                     b"top" => {
                         margins.top = val;

@@ -70,6 +70,25 @@ mod tests {
     }
 
     #[test]
+    fn parse_table_properties_reports_malformed_attributes() {
+        let xml = r#"
+            <w:tblPr>
+              <w:tblW w:w="7200" w:w="1440" w:type="dxa"/>
+            </w:tblPr>
+        "#;
+        let mut reader = reader_from(xml);
+        let mut props = TableProperties::default();
+        seek_start(&mut reader, b"w:tblPr");
+
+        let err = parse_table_properties(&mut reader, &mut props)
+            .expect_err("malformed table attributes must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
     fn parse_table_grid_reads_grid_columns_and_ignores_invalid_widths() {
         let xml = r#"
             <w:tblGrid>
