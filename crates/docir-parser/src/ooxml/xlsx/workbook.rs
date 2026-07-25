@@ -3,7 +3,6 @@
 use super::SheetState;
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::visit_attributes;
 use crate::xml_utils::{
     XmlScanControl, attr_bool_like, decoded_text_or_default, dispatch_start_or_empty, local_name,
     reader_from_str, scan_xml_events_with_reader, xml_error,
@@ -12,6 +11,9 @@ use docir_core::ir::{DefinedName, WorkbookProperties};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
 use quick_xml::events::BytesStart;
+use quick_xml::events::attributes::Attribute;
+use std::fmt::Display;
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SheetInfo {
@@ -121,10 +123,19 @@ fn parse_sheet_info(start: &BytesStart, sheets: &mut Vec<SheetInfo>) -> Result<(
     let mut rel_id = None;
     let mut state = SheetState::Visible;
 
-    visit_attributes(start, "xl/workbook.xml", |attr| match attr.key.as_ref() {
-        b"name" => name = Some(lossy_attr_value(attr).to_string()),
-        b"sheetId" => sheet_id = lossy_attr_value(attr).parse::<u32>().ok(),
-        key if key.ends_with(b":id") => rel_id = Some(lossy_attr_value(attr).to_string()),
+    visit_workbook_attributes(start, |attr| match attr.key.as_ref() {
+        b"name" => {
+            name = Some(lossy_attr_value(attr).to_string());
+            Ok(())
+        }
+        b"sheetId" => {
+            sheet_id = Some(parse_workbook_attr(attr)?);
+            Ok(())
+        }
+        key if key.ends_with(b":id") => {
+            rel_id = Some(lossy_attr_value(attr).to_string());
+            Ok(())
+        }
         b"state" => {
             let val = lossy_attr_value(attr);
             state = match val.as_ref() {
@@ -132,8 +143,9 @@ fn parse_sheet_info(start: &BytesStart, sheets: &mut Vec<SheetInfo>) -> Result<(
                 "veryHidden" => SheetState::VeryHidden,
                 _ => SheetState::Visible,
             };
+            Ok(())
         }
-        _ => {}
+        _ => Ok(()),
     })?;
 
     let info = SheetInfo {
@@ -159,16 +171,24 @@ fn parse_defined_name(
     let mut hidden = false;
     let mut comment = None;
 
-    visit_attributes(start, "xl/workbook.xml", |attr| match attr.key.as_ref() {
-        b"name" => name = Some(lossy_attr_value(attr).to_string()),
-        b"localSheetId" => local_sheet_id = lossy_attr_value(attr).parse::<u32>().ok(),
+    visit_workbook_attributes(start, |attr| match attr.key.as_ref() {
+        b"name" => {
+            name = Some(lossy_attr_value(attr).to_string());
+            Ok(())
+        }
+        b"localSheetId" => {
+            local_sheet_id = Some(parse_workbook_attr(attr)?);
+            Ok(())
+        }
         b"hidden" => {
             hidden = attr_bool_like(attr.value.as_ref());
+            Ok(())
         }
         b"comment" => {
             comment = Some(lossy_attr_value(attr).to_string());
+            Ok(())
         }
-        _ => {}
+        _ => Ok(()),
     })?;
 
     let value = reader
@@ -192,16 +212,24 @@ fn parse_defined_name_empty(start: &BytesStart) -> Result<Option<DefinedName>, P
     let mut hidden = false;
     let mut comment = None;
 
-    visit_attributes(start, "xl/workbook.xml", |attr| match attr.key.as_ref() {
-        b"name" => name = Some(lossy_attr_value(attr).to_string()),
-        b"localSheetId" => local_sheet_id = lossy_attr_value(attr).parse::<u32>().ok(),
+    visit_workbook_attributes(start, |attr| match attr.key.as_ref() {
+        b"name" => {
+            name = Some(lossy_attr_value(attr).to_string());
+            Ok(())
+        }
+        b"localSheetId" => {
+            local_sheet_id = Some(parse_workbook_attr(attr)?);
+            Ok(())
+        }
         b"hidden" => {
             hidden = attr_bool_like(attr.value.as_ref());
+            Ok(())
         }
         b"comment" => {
             comment = Some(lossy_attr_value(attr).to_string());
+            Ok(())
         }
-        _ => {}
+        _ => Ok(()),
     })?;
 
     Ok(name.map(|name| DefinedName {
@@ -220,10 +248,11 @@ fn parse_workbook_pr(
     props: &mut Option<WorkbookProperties>,
 ) -> Result<(), ParseError> {
     let props = props.get_or_insert_with(WorkbookProperties::new);
-    visit_attributes(start, "xl/workbook.xml", |attr| {
+    visit_workbook_attributes(start, |attr| {
         if attr.key.as_ref() == b"date1904" {
             props.date1904 = Some(attr_bool_like(attr.value.as_ref()));
         }
+        Ok(())
     })
 }
 
@@ -232,17 +261,20 @@ fn parse_calc_pr(
     props: &mut Option<WorkbookProperties>,
 ) -> Result<(), ParseError> {
     let props = props.get_or_insert_with(WorkbookProperties::new);
-    visit_attributes(start, "xl/workbook.xml", |attr| match attr.key.as_ref() {
+    visit_workbook_attributes(start, |attr| match attr.key.as_ref() {
         b"calcMode" => {
             props.calc_mode = Some(lossy_attr_value(attr).to_string());
+            Ok(())
         }
         b"fullCalcOnLoad" => {
             props.calc_full = Some(attr_bool_like(attr.value.as_ref()));
+            Ok(())
         }
         b"calcOnSave" => {
             props.calc_on_save = Some(attr_bool_like(attr.value.as_ref()));
+            Ok(())
         }
-        _ => {}
+        _ => Ok(()),
     })
 }
 
@@ -251,38 +283,48 @@ fn parse_workbook_view(
     props: &mut Option<WorkbookProperties>,
 ) -> Result<(), ParseError> {
     let props = props.get_or_insert_with(WorkbookProperties::new);
-    visit_attributes(start, "xl/workbook.xml", |attr| match attr.key.as_ref() {
+    visit_workbook_attributes(start, |attr| match attr.key.as_ref() {
         b"activeTab" => {
-            props.active_tab = lossy_attr_value(attr).parse::<u32>().ok();
+            props.active_tab = Some(parse_workbook_attr(attr)?);
+            Ok(())
         }
         b"firstSheet" => {
-            props.first_sheet = lossy_attr_value(attr).parse::<u32>().ok();
+            props.first_sheet = Some(parse_workbook_attr(attr)?);
+            Ok(())
         }
         b"showHorizontalScroll" => {
             props.show_horizontal_scroll = Some(attr_bool_like(attr.value.as_ref()));
+            Ok(())
         }
         b"showVerticalScroll" => {
             props.show_vertical_scroll = Some(attr_bool_like(attr.value.as_ref()));
+            Ok(())
         }
         b"showSheetTabs" => {
             props.show_sheet_tabs = Some(attr_bool_like(attr.value.as_ref()));
+            Ok(())
         }
         b"tabRatio" => {
-            props.tab_ratio = lossy_attr_value(attr).parse::<u32>().ok();
+            props.tab_ratio = Some(parse_workbook_attr(attr)?);
+            Ok(())
         }
         b"windowWidth" => {
-            props.window_width = lossy_attr_value(attr).parse::<u32>().ok();
+            props.window_width = Some(parse_workbook_attr(attr)?);
+            Ok(())
         }
         b"windowHeight" => {
-            props.window_height = lossy_attr_value(attr).parse::<u32>().ok();
+            props.window_height = Some(parse_workbook_attr(attr)?);
+            Ok(())
         }
         b"xWindow" => {
-            props.x_window = lossy_attr_value(attr).parse::<i32>().ok();
+            props.x_window = Some(parse_workbook_attr(attr)?);
+            Ok(())
         }
         b"yWindow" => {
-            props.y_window = lossy_attr_value(attr).parse::<i32>().ok();
+            props.y_window = Some(parse_workbook_attr(attr)?);
+            Ok(())
         }
-        _ => {}
+        _ => Ok(()),
     })
 }
 
@@ -292,17 +334,40 @@ fn parse_pivot_cache_ref(
 ) -> Result<(), ParseError> {
     let mut cache_id = None;
     let mut rel_id = None;
-    visit_attributes(start, "xl/workbook.xml", |attr| match attr.key.as_ref() {
+    visit_workbook_attributes(start, |attr| match attr.key.as_ref() {
         b"cacheId" => {
-            cache_id = lossy_attr_value(attr).parse::<u32>().ok();
+            cache_id = Some(parse_workbook_attr(attr)?);
+            Ok(())
         }
         key if key.ends_with(b":id") => {
             rel_id = Some(lossy_attr_value(attr).to_string());
+            Ok(())
         }
-        _ => {}
+        _ => Ok(()),
     })?;
     if let (Some(cache_id), Some(rel_id)) = (cache_id, rel_id) {
         out.push(PivotCacheRef { cache_id, rel_id });
     }
     Ok(())
+}
+
+fn visit_workbook_attributes<F>(start: &BytesStart<'_>, mut visit: F) -> Result<(), ParseError>
+where
+    F: FnMut(&Attribute<'_>) -> Result<(), ParseError>,
+{
+    for attr in start.attributes() {
+        let attr = attr.map_err(|err| xml_error("xl/workbook.xml", err))?;
+        visit(&attr)?;
+    }
+    Ok(())
+}
+
+fn parse_workbook_attr<T>(attr: &Attribute<'_>) -> Result<T, ParseError>
+where
+    T: FromStr,
+    T::Err: Display,
+{
+    lossy_attr_value(attr)
+        .parse::<T>()
+        .map_err(|err| xml_error("xl/workbook.xml", err))
 }

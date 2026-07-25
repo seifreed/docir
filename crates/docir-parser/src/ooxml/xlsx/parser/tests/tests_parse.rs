@@ -103,7 +103,6 @@ fn test_parse_workbook_info_defined_names_and_props() {
           </definedNames>
           <pivotCaches>
             <pivotCache cacheId="4" r:id="rIdPivot"/>
-            <pivotCache cacheId="bad" r:id="rIdIgnored"/>
           </pivotCaches>
           <sheets>
             <sheet name="Sheet1" sheetId="1" r:id="rId1"/>
@@ -178,6 +177,19 @@ fn test_parse_workbook_info_reports_malformed_attributes() {
         r#"
         <workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
           <pivotCaches><pivotCache cacheId="1" cacheId="2" r:id="rIdPivot"/></pivotCaches>
+        </workbook>
+        "#,
+        r#"
+        <workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheets><sheet name="Sheet1" sheetId="bad" r:id="rId1"/></sheets>
+        </workbook>
+        "#,
+        r#"
+        <workbook><bookViews><workbookView activeTab="bad"/></bookViews></workbook>
+        "#,
+        r#"
+        <workbook>
+          <definedNames><definedName name="A" localSheetId="bad">Sheet1!$A$1</definedName></definedNames>
         </workbook>
         "#,
     ];
