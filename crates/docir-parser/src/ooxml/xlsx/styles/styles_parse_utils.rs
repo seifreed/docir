@@ -3,7 +3,7 @@ use super::{
     NumberFormat, TableStyleDef, TableStyleInfo,
 };
 use crate::error::ParseError;
-use crate::xml_utils::{attr_u32_from_bytes, attr_value, try_attr_value};
+use crate::xml_utils::{attr_u32_from_bytes, try_attr_value};
 use quick_xml::events::BytesStart;
 
 pub(super) fn apply_font_attr<F>(
@@ -116,14 +116,29 @@ pub(super) fn parse_xf(element: &BytesStart, styles_path: &str) -> Result<CellFo
     set_opt_u32_attr(&mut xf.border_id, element, b"borderId", styles_path)?;
     set_opt_u32_attr(&mut xf.xf_id, element, b"xfId", styles_path)?;
 
-    set_bool_attr(&mut xf.apply_number_format, element, b"applyNumberFormat");
-    set_bool_attr(&mut xf.apply_font, element, b"applyFont");
-    set_bool_attr(&mut xf.apply_fill, element, b"applyFill");
-    set_bool_attr(&mut xf.apply_border, element, b"applyBorder");
-    set_bool_attr(&mut xf.apply_alignment, element, b"applyAlignment");
-    set_bool_attr(&mut xf.apply_protection, element, b"applyProtection");
-    set_bool_attr(&mut xf.quote_prefix, element, b"quotePrefix");
-    set_bool_attr(&mut xf.pivot_button, element, b"pivotButton");
+    set_bool_attr(
+        &mut xf.apply_number_format,
+        element,
+        b"applyNumberFormat",
+        styles_path,
+    )?;
+    set_bool_attr(&mut xf.apply_font, element, b"applyFont", styles_path)?;
+    set_bool_attr(&mut xf.apply_fill, element, b"applyFill", styles_path)?;
+    set_bool_attr(&mut xf.apply_border, element, b"applyBorder", styles_path)?;
+    set_bool_attr(
+        &mut xf.apply_alignment,
+        element,
+        b"applyAlignment",
+        styles_path,
+    )?;
+    set_bool_attr(
+        &mut xf.apply_protection,
+        element,
+        b"applyProtection",
+        styles_path,
+    )?;
+    set_bool_attr(&mut xf.quote_prefix, element, b"quotePrefix", styles_path)?;
+    set_bool_attr(&mut xf.pivot_button, element, b"pivotButton", styles_path)?;
 
     Ok(xf)
 }
@@ -140,13 +155,22 @@ fn set_opt_u32_attr(
     Ok(())
 }
 
-fn set_bool_attr(target: &mut bool, element: &BytesStart, name: &[u8]) {
-    if let Some(value) = parse_bool_attr(element, name) {
+fn set_bool_attr(
+    target: &mut bool,
+    element: &BytesStart,
+    name: &[u8],
+    styles_path: &str,
+) -> Result<(), ParseError> {
+    if let Some(value) = parse_bool_attr(element, name, styles_path)? {
         *target = value;
     }
+    Ok(())
 }
 
-pub(super) fn parse_alignment(element: &BytesStart) -> CellAlignment {
+pub(super) fn parse_alignment(
+    element: &BytesStart,
+    styles_path: &str,
+) -> Result<CellAlignment, ParseError> {
     let mut alignment = CellAlignment {
         horizontal: None,
         vertical: None,
@@ -156,58 +180,77 @@ pub(super) fn parse_alignment(element: &BytesStart) -> CellAlignment {
         shrink_to_fit: false,
         reading_order: None,
     };
-    if let Some(horizontal) = attr_value(element, b"horizontal") {
+    if let Some(horizontal) = try_attr_value(element, b"horizontal", styles_path)? {
         alignment.horizontal = Some(horizontal);
     }
-    if let Some(vertical) = attr_value(element, b"vertical") {
+    if let Some(vertical) = try_attr_value(element, b"vertical", styles_path)? {
         alignment.vertical = Some(vertical);
     }
-    alignment.wrap_text = parse_bool_attr(element, b"wrapText").unwrap_or(false);
-    alignment.indent = attr_value(element, b"indent").and_then(|v| v.parse::<u32>().ok());
+    alignment.wrap_text = parse_bool_attr(element, b"wrapText", styles_path)?.unwrap_or(false);
+    alignment.indent =
+        try_attr_value(element, b"indent", styles_path)?.and_then(|v| v.parse::<u32>().ok());
     alignment.text_rotation =
-        attr_value(element, b"textRotation").and_then(|v| v.parse::<i32>().ok());
-    alignment.shrink_to_fit = parse_bool_attr(element, b"shrinkToFit").unwrap_or(false);
+        try_attr_value(element, b"textRotation", styles_path)?.and_then(|v| v.parse::<i32>().ok());
+    alignment.shrink_to_fit =
+        parse_bool_attr(element, b"shrinkToFit", styles_path)?.unwrap_or(false);
     alignment.reading_order =
-        attr_value(element, b"readingOrder").and_then(|v| v.parse::<u32>().ok());
-    alignment
+        try_attr_value(element, b"readingOrder", styles_path)?.and_then(|v| v.parse::<u32>().ok());
+    Ok(alignment)
 }
 
-fn parse_bool_attr(element: &BytesStart, name: &[u8]) -> Option<bool> {
-    attr_value(element, name).map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+fn parse_bool_attr(
+    element: &BytesStart,
+    name: &[u8],
+    styles_path: &str,
+) -> Result<Option<bool>, ParseError> {
+    Ok(try_attr_value(element, name, styles_path)?
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true")))
 }
 
-pub(super) fn parse_protection(element: &BytesStart) -> CellProtection {
+pub(super) fn parse_protection(
+    element: &BytesStart,
+    styles_path: &str,
+) -> Result<CellProtection, ParseError> {
     let mut protection = CellProtection {
         locked: None,
         hidden: None,
     };
-    if let Some(locked) = parse_bool_attr(element, b"locked") {
+    if let Some(locked) = parse_bool_attr(element, b"locked", styles_path)? {
         protection.locked = Some(locked);
     }
-    if let Some(hidden) = parse_bool_attr(element, b"hidden") {
+    if let Some(hidden) = parse_bool_attr(element, b"hidden", styles_path)? {
         protection.hidden = Some(hidden);
     }
-    protection
+    Ok(protection)
 }
 
-pub(super) fn parse_table_style_info(element: &BytesStart) -> TableStyleInfo {
+pub(super) fn parse_table_style_info(
+    element: &BytesStart,
+    styles_path: &str,
+) -> Result<TableStyleInfo, ParseError> {
     let mut info = TableStyleInfo {
         count: None,
         default_table_style: None,
         default_pivot_style: None,
         styles: Vec::new(),
     };
-    info.count = attr_value(element, b"count").and_then(|v| v.parse::<u32>().ok());
-    info.default_table_style = attr_value(element, b"defaultTableStyle");
-    info.default_pivot_style = attr_value(element, b"defaultPivotStyle");
-    info
+    info.count =
+        try_attr_value(element, b"count", styles_path)?.and_then(|v| v.parse::<u32>().ok());
+    info.default_table_style = try_attr_value(element, b"defaultTableStyle", styles_path)?;
+    info.default_pivot_style = try_attr_value(element, b"defaultPivotStyle", styles_path)?;
+    Ok(info)
 }
 
-pub(super) fn parse_table_style_def(element: &BytesStart) -> Option<TableStyleDef> {
-    let name = attr_value(element, b"name")?;
-    let pivot = parse_bool_attr(element, b"pivot");
-    let table = parse_bool_attr(element, b"table");
-    Some(TableStyleDef { name, pivot, table })
+pub(super) fn parse_table_style_def(
+    element: &BytesStart,
+    styles_path: &str,
+) -> Result<Option<TableStyleDef>, ParseError> {
+    let Some(name) = try_attr_value(element, b"name", styles_path)? else {
+        return Ok(None);
+    };
+    let pivot = parse_bool_attr(element, b"pivot", styles_path)?;
+    let table = parse_bool_attr(element, b"table", styles_path)?;
+    Ok(Some(TableStyleDef { name, pivot, table }))
 }
 
 pub(crate) fn parse_color_attr(

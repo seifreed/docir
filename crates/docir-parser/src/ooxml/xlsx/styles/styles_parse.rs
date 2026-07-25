@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::{XmlScanControl, scan_xml_events};
-use crate::xml_utils::{attr_f64, attr_value, local_name, reader_from_str_with_options};
+use crate::xml_utils::{local_name, reader_from_str_with_options, try_attr_value};
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,
     NumberFormat, SpreadsheetStyles, TableStyleDef, TableStyleInfo,
@@ -98,7 +98,7 @@ fn handle_styles_start(
         || handle_fill_start(e, styles_path, state)?
         || handle_border_start(e, styles_path, state)?
         || handle_xf_start(e, styles_path, state)?
-        || handle_table_style_start(e, state, styles);
+        || handle_table_style_start(e, styles_path, state, styles)?;
     if handled {
         return Ok(());
     }
@@ -183,7 +183,7 @@ fn apply_font_node_attrs(
 ) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"name" => {
-            if let Some(name) = attr_value(e, b"val") {
+            if let Some(name) = try_attr_value(e, b"val", styles_path)? {
                 apply_font_attr(
                     &mut state.current_font,
                     &mut state.current_dxf_font,
@@ -194,7 +194,8 @@ fn apply_font_node_attrs(
             }
         }
         b"sz" => {
-            if let Some(size) = attr_f64(e, b"val") {
+            if let Some(size) = try_attr_value(e, b"val", styles_path)?.and_then(|v| v.parse().ok())
+            {
                 apply_font_attr(
                     &mut state.current_font,
                     &mut state.current_dxf_font,
@@ -360,14 +361,14 @@ fn handle_xf_start(
         }
         b"alignment" => {
             if let Some(xf) = state.current_xf.as_mut() {
-                xf.alignment = Some(parse_alignment(e));
+                xf.alignment = Some(parse_alignment(e, styles_path)?);
             } else if let Some(dxf) = state.current_dxf.as_mut() {
-                dxf.alignment = Some(parse_alignment(e));
+                dxf.alignment = Some(parse_alignment(e, styles_path)?);
             }
             Ok(true)
         }
         b"protection" => {
-            let protection = parse_protection(e);
+            let protection = parse_protection(e, styles_path)?;
             if let Some(xf) = state.current_xf.as_mut() {
                 xf.protection = Some(protection);
             } else if let Some(dxf) = state.current_dxf.as_mut() {
@@ -381,24 +382,25 @@ fn handle_xf_start(
 
 fn handle_table_style_start(
     e: &BytesStart<'_>,
+    styles_path: &str,
     state: &mut StylesParseState,
     styles: &mut SpreadsheetStyles,
-) -> bool {
+) -> Result<bool, ParseError> {
     match local_name(e.name().as_ref()) {
         b"tableStyles" => {
-            styles.table_styles = Some(parse_table_style_info(e));
+            styles.table_styles = Some(parse_table_style_info(e, styles_path)?);
             state.in_table_styles = true;
-            true
+            Ok(true)
         }
         b"tableStyle" if state.in_table_styles => {
             if let Some(info) = styles.table_styles.as_mut()
-                && let Some(style) = parse_table_style_def(e)
+                && let Some(style) = parse_table_style_def(e, styles_path)?
             {
                 info.styles.push(style);
             }
-            true
+            Ok(true)
         }
-        _ => false,
+        _ => Ok(false),
     }
 }
 

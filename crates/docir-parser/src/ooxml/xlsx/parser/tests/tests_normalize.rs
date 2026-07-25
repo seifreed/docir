@@ -158,6 +158,60 @@ fn test_parse_styles_reports_malformed_border_style_attributes() {
 }
 
 #[test]
+fn test_parse_styles_reports_malformed_font_value_attributes() {
+    let xml = r#"
+        <styleSheet>
+          <fonts count="1">
+            <font><name val="Calibri" val="Arial"/></font>
+          </fonts>
+        </styleSheet>
+        "#;
+
+    let err = parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_styles_reports_malformed_alignment_attributes() {
+    let xml = r#"
+        <styleSheet>
+          <cellXfs count="1">
+            <xf><alignment horizontal="left" horizontal="right"/></xf>
+          </cellXfs>
+        </styleSheet>
+        "#;
+
+    let err = parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_styles_reports_malformed_table_style_attributes() {
+    let xml = r#"
+        <styleSheet>
+          <tableStyles count="1" defaultTableStyle="TableStyleMedium2" defaultTableStyle="TableStyleLight1">
+            <tableStyle name="TableStyleMedium2" pivot="0" table="1"/>
+          </tableStyles>
+        </styleSheet>
+        "#;
+
+    let err = parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_xlsx_auxiliary_parsers_accept_prefixed_main_namespace() {
     let styles_xml = r#"
         <x:styleSheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
