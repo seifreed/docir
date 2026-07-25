@@ -81,6 +81,7 @@ fn parse_section_entries(
     path: &str,
 ) -> Result<Vec<MetadataProperty>, ParserParseError> {
     const SECTION_HEADER_SIZE: usize = 8;
+    const PROPERTY_ENTRY_SIZE: usize = 8;
 
     let descriptor_offset = match 28usize.checked_add(section_index.saturating_mul(20)) {
         Some(off) => off,
@@ -110,6 +111,19 @@ fn parse_section_entries(
     if section_end > data.len() {
         return Err(ParserParseError::InvalidStructure(
             "OLE property set section size exceeds stream length".to_string(),
+        ));
+    }
+    let property_table_end = section_offset
+        .checked_add(SECTION_HEADER_SIZE)
+        .and_then(|base| base.checked_add(property_count.checked_mul(PROPERTY_ENTRY_SIZE)?))
+        .ok_or_else(|| {
+            ParserParseError::InvalidStructure(
+                "OLE property set property table size overflow".to_string(),
+            )
+        })?;
+    if property_table_end > section_end {
+        return Err(ParserParseError::InvalidStructure(
+            "OLE property set property table exceeds section size".to_string(),
         ));
     }
 
