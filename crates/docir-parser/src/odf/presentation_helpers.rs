@@ -82,7 +82,7 @@ fn handle_draw_page_start_event(
         b"notes" => {
             state.notes_text = parse_notes(reader)?;
         }
-        _ if event.name().as_ref().starts_with(b"anim:") => {
+        _ if is_odf_animation_event(event) => {
             if let Some(anim) = parse_odf_animation(event)? {
                 state.slide.animations.push(anim);
             }
@@ -109,7 +109,7 @@ fn handle_draw_page_empty_event(
                 state.slide.shapes.push(shape_id);
             }
         }
-        _ if event.name().as_ref().starts_with(b"anim:") => {
+        _ if is_odf_animation_event(event) => {
             if let Some(anim) = parse_odf_animation(event)? {
                 state.slide.animations.push(anim);
             }
@@ -235,6 +235,20 @@ fn parse_shape_text(
         buf.clear();
     }
     Ok(paragraphs)
+}
+
+fn is_odf_animation_event(event: &BytesStart<'_>) -> bool {
+    event.name().as_ref().starts_with(b"anim:")
+        || matches!(
+            local_name(event.name().as_ref()),
+            b"animate"
+                | b"set"
+                | b"animateColor"
+                | b"animateMotion"
+                | b"animateTransform"
+                | b"transitionFilter"
+                | b"audio"
+        )
 }
 
 pub(super) fn parse_odp_transition(

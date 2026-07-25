@@ -286,6 +286,29 @@ fn parse_draw_page_rejects_malformed_animation_attributes() {
 }
 
 #[test]
+fn parse_draw_page_accepts_alternate_animation_prefix() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:a="urn:oasis:names:tc:opendocument:xmlns:animation:1.0"
+  xmlns:smil="urn:oasis:names:tc:opendocument:xmlns:smil-compatible:1.0">
+  <d:page d:name="SlideA">
+    <a:animate smil:targetElement="shape-1" smil:dur="PT1S"/>
+  </d:page>
+</office:document-content>
+"#;
+
+    let (mut reader, page_start) = parse_page_start(xml);
+    let mut store = IrStore::new();
+
+    let slide = parse_draw_page(&mut reader, &page_start, 1, &mut store).expect("slide");
+
+    assert_eq!(slide.animations.len(), 1);
+    assert_eq!(slide.animations[0].target.as_deref(), Some("shape-1"));
+    assert_eq!(slide.animations[0].duration_ms, Some(1000));
+}
+
+#[test]
 fn parse_odp_transition_supports_fallback_keys_and_ignores_advance_only() {
     let mut fallback = BytesStart::new("draw:page");
     fallback.push_attribute(("draw:transition-type", "wipe"));
