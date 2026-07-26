@@ -28,22 +28,20 @@ pub(crate) fn read_relationships(
         return Ok(Relationships::default());
     }
     let rels_xml = zip.read_file_string(&rels_path)?;
-    Relationships::parse(&rels_xml)
+    Relationships::parse_with_path(&rels_xml, &rels_path)
 }
 
-/// Read relationships for a part, returning a default value on any failure.
+/// Read relationships for a part, returning a default value when the relationships file is absent.
 pub(crate) fn read_relationships_optional(
     zip: &mut impl PackageReader,
     part_path: &str,
-) -> Relationships {
+) -> Result<Relationships, ParseError> {
     let rels_path = get_rels_path(part_path);
-    if zip.contains(&rels_path)
-        && let Ok(rels_xml) = zip.read_file_string(&rels_path)
-        && let Ok(rels) = Relationships::parse(&rels_xml)
-    {
-        return rels;
+    if !zip.contains(&rels_path) {
+        return Ok(Relationships::default());
     }
-    Relationships::default()
+    let rels_xml = zip.read_file_string(&rels_path)?;
+    Relationships::parse_with_path(&rels_xml, &rels_path)
 }
 
 pub(crate) fn read_xml_part(

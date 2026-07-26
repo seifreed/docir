@@ -246,7 +246,7 @@ impl OoxmlParser {
     ) -> Result<(), ParseError> {
         for rel in doc_rels.get_by_type(spec.rel_type) {
             let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-            let rels = read_relationships_optional(zip, &part_path);
+            let rels = read_relationships_optional(zip, &part_path)?;
             let xml = zip.read_file_string(&part_path)?;
             let node_id = parser.parse_header_footer(&xml, &part_path, spec.kind, &rels)?;
             map.insert(rel.id.clone(), node_id);
@@ -264,7 +264,7 @@ impl OoxmlParser {
     ) -> Result<Vec<NodeId>, ParseError> {
         if let Some(rel) = doc_rels.get_first_by_type(rel_type::COMMENTS) {
             let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-            let rels = read_relationships_optional(zip, &part_path);
+            let rels = read_relationships_optional(zip, &part_path)?;
             let xml = zip.read_file_string(&part_path)?;
             let ids = parser.parse_comments(&xml, &rels)?;
             set_comment_spans(parser, &ids, &part_path);
@@ -274,7 +274,7 @@ impl OoxmlParser {
         if !zip.contains("word/comments.xml") {
             return Ok(Vec::new());
         }
-        let rels = read_relationships_optional(zip, "word/comments.xml");
+        let rels = read_relationships_optional(zip, "word/comments.xml")?;
         let xml = zip.read_file_string("word/comments.xml")?;
         let ids = parser.parse_comments(&xml, &rels)?;
         set_comment_spans(parser, &ids, "word/comments.xml");
@@ -294,7 +294,7 @@ impl OoxmlParser {
             return Ok(Vec::new());
         };
         let part_path = Relationships::resolve_target(main_part_path, &rel.target);
-        let rels = read_relationships_optional(zip, &part_path);
+        let rels = read_relationships_optional(zip, &part_path)?;
         let xml = zip.read_file_string(&part_path)?;
         let ids = parser.parse_notes(&xml, kind, &rels)?;
         set_note_spans(parser, &ids, kind, &part_path);

@@ -342,6 +342,49 @@ fn test_docx_sections_with_headers_and_footers() {
 }
 
 #[test]
+fn test_docx_header_reports_malformed_relationships() {
+    let (body, header1, footer1, header2, rels) = docx_sections_fixture();
+    let content_types = r#"
+        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+          <Default Extension="xml" ContentType="application/xml"/>
+          <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+          <Override PartName="/word/document.xml"
+            ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+          <Override PartName="/word/header1.xml"
+            ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+          <Override PartName="/word/footer1.xml"
+            ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
+          <Override PartName="/word/header2.xml"
+            ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+        </Types>"#;
+    let path = create_docx_with_relationships(
+        body,
+        rels,
+        content_types,
+        &[
+            ("word/header1.xml", header1),
+            ("word/footer1.xml", footer1),
+            ("word/header2.xml", header2),
+            (
+                "word/_rels/header1.xml.rels",
+                r#"<Relationships><Relationship Id="r1" Id="dup"/></Relationships>"#,
+            ),
+        ],
+    );
+
+    let parser = OoxmlParser::new();
+    let err = parser
+        .parse_file(&path)
+        .expect_err("malformed header relationships must fail");
+    std::fs::remove_file(path).ok();
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/_rels/header1.xml.rels"),
+        other => panic!("expected header relationships XML error, got {other:?}"),
+    }
+}
+
+#[test]
 fn test_docx_content_controls_inline_and_block() {
     let body = r#"
         <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
