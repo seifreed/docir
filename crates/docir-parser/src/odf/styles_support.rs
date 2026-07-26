@@ -136,11 +136,14 @@ mod tests {
   <style:style style:name="OtherStyle" style:family="custom">
     <style:text-properties fo:font-size="bad-unit"/>
   </style:style>
+  <style:style style:name="RepeatedUnit" style:family="text">
+    <style:text-properties fo:font-size="12ptpt"/>
+  </style:style>
 </office:document-styles>
 "#;
 
         let styles = parse_styles(xml).expect("expected styles");
-        assert_eq!(styles.styles.len(), 3);
+        assert_eq!(styles.styles.len(), 4);
 
         let list_style = styles
             .styles
@@ -170,6 +173,19 @@ mod tests {
         assert_eq!(other_style.style_type, StyleType::Other);
         assert_eq!(
             other_style
+                .run_props
+                .as_ref()
+                .and_then(|props| props.font_size),
+            None
+        );
+
+        let repeated_unit = styles
+            .styles
+            .iter()
+            .find(|s| s.style_id == "RepeatedUnit")
+            .expect("missing repeated unit style");
+        assert_eq!(
+            repeated_unit
                 .run_props
                 .as_ref()
                 .and_then(|props| props.font_size),

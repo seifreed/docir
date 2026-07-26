@@ -200,10 +200,10 @@ fn parse_style_properties(reader: &mut Reader<&[u8]>, style: &mut Style, end_nam
 
 fn parse_font_size(value: &str) -> Option<u32> {
     let trimmed = value.trim();
-    let num = trimmed
-        .trim_end_matches("pt")
-        .trim_end_matches("px")
-        .trim_end_matches("cm")
-        .trim_end_matches("mm");
-    num.parse::<f32>().ok().map(|v| v.round() as u32)
+    for unit in ["pt", "px", "cm", "mm"] {
+        if let Some(num) = trimmed.strip_suffix(unit) {
+            return num.parse::<f32>().ok().map(|v| v.round() as u32);
+        }
+    }
+    trimmed.parse::<f32>().ok().map(|v| v.round() as u32)
 }
