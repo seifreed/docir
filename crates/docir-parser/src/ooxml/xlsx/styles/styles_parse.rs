@@ -2,7 +2,7 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::{XmlScanControl, scan_xml_events};
-use crate::xml_utils::{local_name, reader_from_str_with_options, try_attr_value};
+use crate::xml_utils::{local_name, reader_from_str_with_options, try_attr_value, xml_error};
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,
     NumberFormat, SpreadsheetStyles, TableStyleDef, TableStyleInfo,
@@ -194,8 +194,7 @@ fn apply_font_node_attrs(
             }
         }
         b"sz" => {
-            if let Some(size) = try_attr_value(e, b"val", styles_path)?.and_then(|v| v.parse().ok())
-            {
+            if let Some(size) = font_size_attr(e, styles_path)? {
                 apply_font_attr(
                     &mut state.current_font,
                     &mut state.current_dxf_font,
@@ -224,6 +223,16 @@ fn apply_font_node_attrs(
         _ => {}
     }
     Ok(())
+}
+
+fn font_size_attr(e: &BytesStart<'_>, styles_path: &str) -> Result<Option<f64>, ParseError> {
+    try_attr_value(e, b"val", styles_path)?
+        .map(|value| {
+            value
+                .parse::<f64>()
+                .map_err(|err| xml_error(styles_path, err))
+        })
+        .transpose()
 }
 
 fn apply_color_attr(

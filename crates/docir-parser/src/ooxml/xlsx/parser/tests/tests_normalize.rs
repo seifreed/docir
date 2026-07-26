@@ -159,19 +159,29 @@ fn test_parse_styles_reports_malformed_border_style_attributes() {
 
 #[test]
 fn test_parse_styles_reports_malformed_font_value_attributes() {
-    let xml = r#"
-        <styleSheet>
-          <fonts count="1">
-            <font><name val="Calibri" val="Arial"/></font>
-          </fonts>
-        </styleSheet>
-        "#;
+    for xml in [
+        r#"
+            <styleSheet>
+              <fonts count="1">
+                <font><name val="Calibri" val="Arial"/></font>
+              </fonts>
+            </styleSheet>
+            "#,
+        r#"
+            <styleSheet>
+              <fonts count="1">
+                <font><sz val="bad"/></font>
+              </fonts>
+            </styleSheet>
+            "#,
+    ] {
+        let err =
+            parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
 
-    let err = parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
-
-    match err {
-        ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
-        other => panic!("unexpected error: {other:?}"),
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }
 
