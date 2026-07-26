@@ -119,17 +119,17 @@ fn parse_length_emu_u64(value: String) -> Option<u64> {
 
 fn parse_length_emu_str(value: &str) -> Option<f64> {
     let trimmed = value.trim();
-    let mut num = String::new();
-    let mut unit = String::new();
-    for ch in trimmed.chars() {
-        if ch.is_ascii_digit() || ch == '.' || ch == '-' {
-            num.push(ch);
-        } else {
-            unit.push(ch);
+    let mut unit_start = trimmed.len();
+    for (idx, ch) in trimmed.char_indices() {
+        let sign = (ch == '-' || ch == '+') && idx == 0;
+        if !(sign || ch.is_ascii_digit() || ch == '.') {
+            unit_start = idx;
+            break;
         }
     }
+    let (num, unit) = trimmed.split_at(unit_start);
     let magnitude = num.parse::<f64>().ok()?;
-    let emu = match unit.as_str() {
+    let emu = match unit {
         "cm" => magnitude / 2.54 * 914_400.0,
         "mm" => magnitude / 25.4 * 914_400.0,
         "in" => magnitude * 914_400.0,
@@ -235,5 +235,11 @@ mod tests {
         assert_eq!(transform.y, 0);
         assert_eq!(transform.width, 0);
         assert_eq!(transform.height, 95_250);
+    }
+
+    #[test]
+    fn parse_length_emu_str_rejects_digits_after_unit() {
+        assert_eq!(parse_length_emu_str("1cm2"), None);
+        assert_eq!(parse_length_emu_str("2pt3"), None);
     }
 }
