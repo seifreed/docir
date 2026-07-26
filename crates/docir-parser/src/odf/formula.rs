@@ -61,7 +61,7 @@ impl<'a> FormulaEvalContext<'a> {
     fn eval_formula(&mut self, formula: &str) -> Option<f64> {
         let tokens = tokenize_formula(formula);
         let mut parser = FormulaParser::new(tokens, self);
-        parser.parse_expression()
+        parser.parse_expression().filter(|value| value.is_finite())
     }
 
     fn resolve_ref(&mut self, reference: &CellRef) -> Option<f64> {
@@ -393,6 +393,39 @@ mod tests {
         let b1_id = b1.id;
         store.insert(IRNode::Cell(b1));
         let formula = "A1 + 1".to_string();
+        formula_map.insert((0, 1), formula.clone());
+
+        evaluate_ods_formulas(
+            "Sheet1",
+            &[(b1_id, 0, 1, formula)],
+            &mut store,
+            &mut cell_values,
+            &formula_map,
+        );
+
+        assert!(number_from_cell(&store, b1_id).is_none());
+    }
+
+    #[test]
+    fn evaluate_ods_formulas_rejects_non_finite_results() {
+        let mut store = IrStore::new();
+        let mut cell_values: HashMap<(u32, u32), CellValue> = HashMap::new();
+        let mut formula_map: HashMap<(u32, u32), String> = HashMap::new();
+
+        let mut a1 = Cell::new("A1".to_string(), 0, 0);
+        a1.value = CellValue::Number(1.0e308);
+        store.insert(IRNode::Cell(a1));
+        cell_values.insert((0, 0), CellValue::Number(1.0e308));
+
+        let mut a2 = Cell::new("A2".to_string(), 0, 1);
+        a2.value = CellValue::Number(1.0e308);
+        store.insert(IRNode::Cell(a2));
+        cell_values.insert((1, 0), CellValue::Number(1.0e308));
+
+        let b1 = Cell::new("B1".to_string(), 1, 0);
+        let b1_id = b1.id;
+        store.insert(IRNode::Cell(b1));
+        let formula = "A1 * A2".to_string();
         formula_map.insert((0, 1), formula.clone());
 
         evaluate_ods_formulas(
