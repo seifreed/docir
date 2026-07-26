@@ -9,10 +9,33 @@ use docir_core::visitor::IrStore;
 fn parse_control_word_and_param_handles_signed_numeric_parameter() {
     let mut cursor = RtfCursor::new(b"i-42 ");
     let first = cursor.next().expect("expected first control word byte");
-    let (word, param) = parse_control_word_and_param(&mut cursor, first);
+    let (word, param) =
+        parse_control_word_and_param(&mut cursor, first).expect("control word should parse");
     assert_eq!(word, "i");
     assert_eq!(param, Some(-42));
     assert_eq!(cursor.peek(), None);
+}
+
+#[test]
+fn parse_control_word_and_param_reports_numeric_overflow() {
+    let mut cursor = RtfCursor::new(b"ansicpg3000000000 ");
+    let first = cursor.next().expect("expected first control word byte");
+
+    let err = parse_control_word_and_param(&mut cursor, first)
+        .expect_err("overflowing control parameter must fail");
+
+    assert!(matches!(err, ParseError::InvalidFormat(_)));
+}
+
+#[test]
+fn parse_control_word_and_param_reports_too_many_numeric_digits() {
+    let mut cursor = RtfCursor::new(b"fs12345678901 ");
+    let first = cursor.next().expect("expected first control word byte");
+
+    let err = parse_control_word_and_param(&mut cursor, first)
+        .expect_err("overlong control parameter must fail");
+
+    assert!(matches!(err, ParseError::InvalidFormat(_)));
 }
 
 #[test]

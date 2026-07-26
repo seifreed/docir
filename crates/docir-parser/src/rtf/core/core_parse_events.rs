@@ -34,7 +34,7 @@ pub(crate) fn parse_control(
         return Ok(());
     }
 
-    let (word, param) = parse_control_word_and_param(cursor, next);
+    let (word, param) = parse_control_word_and_param(cursor, next)?;
     if handle_control_word_with_guard(&word, param, ctx, store)? {
         return Ok(());
     }
@@ -89,7 +89,7 @@ fn try_handle_simple_control(
 pub(crate) fn parse_control_word_and_param(
     cursor: &mut RtfCursor<'_>,
     first: u8,
-) -> (String, Option<i32>) {
+) -> Result<(String, Option<i32>), ParseError> {
     let mut word = vec![first];
     while let Some(b) = cursor.peek() {
         if b.is_ascii_alphabetic() {
@@ -108,28 +108,34 @@ pub(crate) fn parse_control_word_and_param(
 
     let mut digits = Vec::new();
     while let Some(b) = cursor.peek() {
-        if b.is_ascii_digit() && digits.len() < 10 {
-            digits.push(b);
-            cursor.next();
-        } else {
+        if !b.is_ascii_digit() {
             break;
         }
+        if digits.len() >= 10 {
+            return Err(ParseError::InvalidFormat(
+                "RTF control parameter exceeds 10 digits".to_string(),
+            ));
+        }
+        digits.push(b);
+        cursor.next();
     }
 
     let param = if digits.is_empty() {
         None
     } else {
-        std::str::from_utf8(&digits)
-            .ok()
-            .and_then(|raw| raw.parse::<i32>().ok())
-            .map(|num| num * sign)
+        let raw = std::str::from_utf8(&digits)
+            .map_err(|err| ParseError::InvalidFormat(format!("invalid RTF control word: {err}")))?;
+        let num = raw.parse::<i32>().map_err(|err| {
+            ParseError::InvalidFormat(format!("invalid RTF control parameter: {err}"))
+        })?;
+        Some(num * sign)
     };
 
     if cursor.peek() == Some(b' ') {
         cursor.next();
     }
 
-    (String::from_utf8_lossy(&word).to_ascii_lowercase(), param)
+    Ok((String::from_utf8_lossy(&word).to_ascii_lowercase(), param))
 }
 
 fn handle_control_word_with_guard(
