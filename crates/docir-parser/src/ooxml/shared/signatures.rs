@@ -48,9 +48,8 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
                     })?;
                 }
                 b"X509SubjectName" => {
-                    if let Ok(text) = reader.read_text(e.name()) {
-                        sig.signer = Some(decoded_text_or_default(&text));
-                    }
+                    let text = reader.read_text(e.name()).map_err(|e| xml_error(path, e))?;
+                    sig.signer = Some(decoded_text_or_default(&text));
                 }
                 _ => {}
             },
@@ -133,6 +132,19 @@ mod tests {
             "word/signatures/sig.xml",
         )
         .expect_err("malformed signature attrs should fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "word/signatures/sig.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_signature_reports_malformed_signer_text() {
+        let err = parse_signature(
+            r#"<Signature><X509SubjectName>CN=broken</Signature>"#,
+            "word/signatures/sig.xml",
+        )
+        .expect_err("malformed signer text should fail");
         match err {
             ParseError::Xml { file, .. } => assert_eq!(file, "word/signatures/sig.xml"),
             other => panic!("unexpected error: {other:?}"),
