@@ -187,37 +187,71 @@ fn test_parse_styles_reports_malformed_font_value_attributes() {
 
 #[test]
 fn test_parse_styles_reports_malformed_alignment_attributes() {
-    let xml = r#"
-        <styleSheet>
-          <cellXfs count="1">
-            <xf><alignment horizontal="left" horizontal="right"/></xf>
-          </cellXfs>
-        </styleSheet>
-        "#;
+    for xml in [
+        r#"
+            <styleSheet>
+              <cellXfs count="1">
+                <xf><alignment horizontal="left" horizontal="right"/></xf>
+              </cellXfs>
+            </styleSheet>
+            "#,
+        r#"
+            <styleSheet>
+              <cellXfs count="1">
+                <xf><alignment indent="bad"/></xf>
+              </cellXfs>
+            </styleSheet>
+            "#,
+        r#"
+            <styleSheet>
+              <cellXfs count="1">
+                <xf><alignment textRotation="bad"/></xf>
+              </cellXfs>
+            </styleSheet>
+            "#,
+        r#"
+            <styleSheet>
+              <cellXfs count="1">
+                <xf><alignment readingOrder="bad"/></xf>
+              </cellXfs>
+            </styleSheet>
+            "#,
+    ] {
+        let err =
+            parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
 
-    let err = parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
-
-    match err {
-        ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
-        other => panic!("unexpected error: {other:?}"),
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }
 
 #[test]
 fn test_parse_styles_reports_malformed_table_style_attributes() {
-    let xml = r#"
-        <styleSheet>
-          <tableStyles count="1" defaultTableStyle="TableStyleMedium2" defaultTableStyle="TableStyleLight1">
-            <tableStyle name="TableStyleMedium2" pivot="0" table="1"/>
-          </tableStyles>
-        </styleSheet>
-        "#;
+    for xml in [
+        r#"
+            <styleSheet>
+              <tableStyles count="1" defaultTableStyle="TableStyleMedium2" defaultTableStyle="TableStyleLight1">
+                <tableStyle name="TableStyleMedium2" pivot="0" table="1"/>
+              </tableStyles>
+            </styleSheet>
+            "#,
+        r#"
+            <styleSheet>
+              <tableStyles count="bad" defaultTableStyle="TableStyleMedium2">
+                <tableStyle name="TableStyleMedium2" pivot="0" table="1"/>
+              </tableStyles>
+            </styleSheet>
+            "#,
+    ] {
+        let err =
+            parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
 
-    let err = parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");
-
-    match err {
-        ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
-        other => panic!("unexpected error: {other:?}"),
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/styles.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }
 

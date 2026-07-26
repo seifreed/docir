@@ -3,8 +3,9 @@ use super::{
     NumberFormat, TableStyleDef, TableStyleInfo,
 };
 use crate::error::ParseError;
-use crate::xml_utils::{attr_u32_from_bytes, try_attr_value};
+use crate::xml_utils::{attr_u32_from_bytes, try_attr_value, xml_error};
 use quick_xml::events::BytesStart;
+use std::str::FromStr;
 
 pub(super) fn apply_font_attr<F>(
     current_font: &mut Option<FontDef>,
@@ -187,15 +188,29 @@ pub(super) fn parse_alignment(
         alignment.vertical = Some(vertical);
     }
     alignment.wrap_text = parse_bool_attr(element, b"wrapText", styles_path)?.unwrap_or(false);
-    alignment.indent =
-        try_attr_value(element, b"indent", styles_path)?.and_then(|v| v.parse::<u32>().ok());
-    alignment.text_rotation =
-        try_attr_value(element, b"textRotation", styles_path)?.and_then(|v| v.parse::<i32>().ok());
+    alignment.indent = parse_optional_attr(element, b"indent", styles_path)?;
+    alignment.text_rotation = parse_optional_attr(element, b"textRotation", styles_path)?;
     alignment.shrink_to_fit =
         parse_bool_attr(element, b"shrinkToFit", styles_path)?.unwrap_or(false);
-    alignment.reading_order =
-        try_attr_value(element, b"readingOrder", styles_path)?.and_then(|v| v.parse::<u32>().ok());
+    alignment.reading_order = parse_optional_attr(element, b"readingOrder", styles_path)?;
     Ok(alignment)
+}
+
+fn parse_optional_attr<T: FromStr>(
+    element: &BytesStart,
+    name: &[u8],
+    styles_path: &str,
+) -> Result<Option<T>, ParseError>
+where
+    T::Err: std::fmt::Display,
+{
+    try_attr_value(element, name, styles_path)?
+        .map(|value| {
+            value
+                .parse::<T>()
+                .map_err(|err| xml_error(styles_path, err))
+        })
+        .transpose()
 }
 
 fn parse_bool_attr(
@@ -234,8 +249,7 @@ pub(super) fn parse_table_style_info(
         default_pivot_style: None,
         styles: Vec::new(),
     };
-    info.count =
-        try_attr_value(element, b"count", styles_path)?.and_then(|v| v.parse::<u32>().ok());
+    info.count = parse_optional_attr(element, b"count", styles_path)?;
     info.default_table_style = try_attr_value(element, b"defaultTableStyle", styles_path)?;
     info.default_pivot_style = try_attr_value(element, b"defaultPivotStyle", styles_path)?;
     Ok(info)
