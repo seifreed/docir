@@ -175,35 +175,50 @@ pub fn column_to_letter(col: u32) -> String {
 
 /// Parses an A1-style cell reference into (column, row) 0-based indices.
 pub fn parse_cell_reference(reference: &str) -> Option<(u32, u32)> {
-    let mut col_str = String::new();
-    let mut row_str = String::new();
+    let mut chars = reference.chars().peekable();
 
-    for ch in reference.chars() {
-        if ch.is_ascii_alphabetic() {
-            col_str.push(ch.to_ascii_uppercase());
-        } else if ch.is_ascii_digit() {
-            row_str.push(ch);
-        }
+    if chars.peek() == Some(&'$') {
+        chars.next();
     }
 
-    if col_str.is_empty() || row_str.is_empty() {
+    let mut col: u32 = 0;
+    let mut has_col = false;
+    while let Some(ch) = chars.peek().copied() {
+        if !ch.is_ascii_alphabetic() {
+            break;
+        }
+        chars.next();
+        has_col = true;
+        let value = ch.to_ascii_uppercase() as u32 - 'A' as u32 + 1;
+        col = col.checked_mul(26)?.checked_add(value)?;
+    }
+    if !has_col {
         return None;
     }
 
-    // Convert column letters to index
-    let mut col: u32 = 0;
-    for ch in col_str.chars() {
-        col = col * 26 + (ch as u32 - 'A' as u32 + 1);
+    if chars.peek() == Some(&'$') {
+        chars.next();
     }
-    col -= 1; // Make 0-based
 
-    // Convert row string to index
+    let mut row_str = String::new();
+    while let Some(ch) = chars.peek().copied() {
+        if !ch.is_ascii_digit() {
+            return None;
+        }
+        chars.next();
+        row_str.push(ch);
+    }
+
+    if row_str.is_empty() {
+        return None;
+    }
+
     let row: u32 = row_str.parse().ok()?;
     if row == 0 {
         return None;
     }
 
-    Some((col, row - 1))
+    Some((col - 1, row - 1))
 }
 
 #[cfg(test)]
@@ -228,5 +243,19 @@ mod tests {
         assert_eq!(parse_cell_reference("Z1"), Some((25, 0)));
         assert_eq!(parse_cell_reference("AA1"), Some((26, 0)));
         assert_eq!(parse_cell_reference("AB10"), Some((27, 9)));
+        assert_eq!(parse_cell_reference("$A$1"), Some((0, 0)));
+        assert_eq!(parse_cell_reference("a1"), Some((0, 0)));
+    }
+
+    #[test]
+    fn test_parse_cell_reference_rejects_malformed_references() {
+        assert_eq!(parse_cell_reference("1A"), None);
+        assert_eq!(parse_cell_reference("A1B2"), None);
+        assert_eq!(parse_cell_reference("A"), None);
+        assert_eq!(parse_cell_reference("1"), None);
+        assert_eq!(parse_cell_reference("A0"), None);
+        assert_eq!(parse_cell_reference("A-1"), None);
+        assert_eq!(parse_cell_reference("A1:"), None);
+        assert_eq!(parse_cell_reference("ZZZZZZZZZZZZZZZZZZZZZZZZ1"), None);
     }
 }
