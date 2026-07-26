@@ -110,55 +110,66 @@ pub(crate) fn parse_cell_value_with_text(
     value_type: Option<&str>,
     value_attr: Option<&str>,
     text: &str,
-) -> CellValue {
+) -> Result<CellValue, ParseError> {
     match value_type {
-        Some("string") | Some("text") => {
+        Some("string") | Some("text") => Ok({
             if !text.is_empty() {
                 CellValue::String(text.to_string())
             } else {
                 CellValue::String(value_attr.unwrap_or_default().to_string())
             }
+        }),
+        Some("float") | Some("currency") | Some("percentage") => {
+            Ok(parse_numeric_value(value_attr)?
+                .map(CellValue::Number)
+                .unwrap_or_else(|| CellValue::String(text.to_string())))
         }
-        Some("float") | Some("currency") | Some("percentage") => value_attr
-            .and_then(|v| v.parse::<f64>().ok())
-            .map(CellValue::Number)
-            .unwrap_or_else(|| CellValue::String(text.to_string())),
-        Some("boolean") => {
+        Some("boolean") => Ok({
             let v = value_attr.unwrap_or(text);
             CellValue::Boolean(v == "true" || v == "1")
+        }),
+        Some("date") | Some("time") => {
+            Ok(CellValue::String(value_attr.unwrap_or(text).to_string()))
         }
-        Some("date") | Some("time") => CellValue::String(value_attr.unwrap_or(text).to_string()),
-        _ => {
+        _ => Ok({
             if !text.is_empty() {
                 CellValue::String(text.to_string())
             } else {
                 CellValue::Empty
             }
-        }
+        }),
     }
 }
 
 pub(crate) fn parse_cell_value_empty(
     value_type: Option<&str>,
     value_attr: Option<&str>,
-) -> CellValue {
+) -> Result<CellValue, ParseError> {
     match value_type {
-        Some("float") | Some("currency") | Some("percentage") => value_attr
-            .and_then(|v| v.parse::<f64>().ok())
-            .map(CellValue::Number)
-            .unwrap_or(CellValue::Empty),
-        Some("boolean") => {
+        Some("float") | Some("currency") | Some("percentage") => {
+            Ok(parse_numeric_value(value_attr)?.map_or(CellValue::Empty, CellValue::Number))
+        }
+        Some("boolean") => Ok({
             let v = value_attr.unwrap_or_default();
             if v.is_empty() {
                 CellValue::Empty
             } else {
                 CellValue::Boolean(v == "true" || v == "1")
             }
-        }
-        Some("string") | Some("text") | Some("date") | Some("time") => value_attr
+        }),
+        Some("string") | Some("text") | Some("date") | Some("time") => Ok(value_attr
             .map_or(CellValue::Empty, |value| {
                 CellValue::String(value.to_string())
-            }),
-        _ => CellValue::Empty,
+            })),
+        _ => Ok(CellValue::Empty),
     }
+}
+
+fn parse_numeric_value(value_attr: Option<&str>) -> Result<Option<f64>, ParseError> {
+    value_attr
+        .map(|v| {
+            v.parse::<f64>()
+                .map_err(|err| xml_error("content.xml", err))
+        })
+        .transpose()
 }

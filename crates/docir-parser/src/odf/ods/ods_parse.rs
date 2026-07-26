@@ -373,7 +373,7 @@ pub(crate) fn parse_ods_cell(
         &text,
     );
 
-    let value = parse_cell_value_with_text(value_type.as_deref(), value_attr.as_deref(), &text);
+    let value = parse_cell_value_with_text(value_type.as_deref(), value_attr.as_deref(), &text)?;
     let formula = parse_cell_formula(formula_attr);
 
     Ok(OdsCellData {
@@ -404,7 +404,7 @@ pub(crate) fn parse_ods_cell_empty(
     let row_span = ods_cell_u32_attr(start, b":number-rows-spanned")?;
     let validation_name = ods_cell_attr(start, &[b":content-validation-name"])?;
     let style_id = resolve_style_id(start, style_map, next_style_id);
-    let value = parse_cell_value_empty(value_type.as_deref(), value_attr.as_deref());
+    let value = parse_cell_value_empty(value_type.as_deref(), value_attr.as_deref())?;
     let formula = parse_cell_formula(formula_attr);
 
     Ok(OdsCellData {
