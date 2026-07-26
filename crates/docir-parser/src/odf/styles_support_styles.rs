@@ -210,7 +210,7 @@ fn parse_font_size(value: &str) -> Option<u32> {
 
 fn parse_finite_font_size(value: &str) -> Option<u32> {
     let size = value.parse::<f32>().ok()?;
-    if size.is_finite() {
+    if size.is_finite() && size >= 0.0 {
         Some(size.round() as u32)
     } else {
         None
@@ -225,5 +225,10 @@ mod tests {
     fn parse_font_size_rejects_non_finite_values() {
         assert_eq!(parse_font_size("NaNpt"), None);
         assert_eq!(parse_font_size("inf"), None);
+    }
+
+    #[test]
+    fn parse_font_size_rejects_negative_values() {
+        assert_eq!(parse_font_size("-1pt"), None);
     }
 }

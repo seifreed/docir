@@ -20,7 +20,7 @@ pub(super) fn parse_duration_ms(value: &str) -> Option<u32> {
 
 fn parse_finite_seconds(value: &str) -> Option<u32> {
     let seconds = value.parse::<f32>().ok()?;
-    if seconds.is_finite() {
+    if seconds.is_finite() && seconds >= 0.0 {
         Some((seconds * 1000.0).round() as u32)
     } else {
         None
