@@ -207,6 +207,30 @@ fn parse_conditional_formatting_reports_malformed_attributes() {
             ..
         } if file == "xl/worksheets/sheet1.xml"
     ));
+
+    let xml = r#"
+        <conditionalFormatting sqref="A1">
+          <cfRule type="cellIs" priority="bad">
+            <formula>1</formula>
+          </cfRule>
+        </conditionalFormatting>
+    "#;
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    buf.clear();
+    let start = match reader.read_event_into(&mut buf).expect("conditional start") {
+        Event::Start(e) => e.into_owned(),
+        other => panic!("unexpected event: {other:?}"),
+    };
+    let err = parse_conditional_formatting(&mut reader, &start, "xl/worksheets/sheet1.xml")
+        .expect_err("malformed conditional priority must fail");
+    assert!(matches!(
+        err,
+        ParseError::Xml {
+            ref file,
+            ..
+        } if file == "xl/worksheets/sheet1.xml"
+    ));
 }
 
 pub(crate) fn build_empty_zip() -> crate::zip_handler::SecureZipReader<std::io::Cursor<Vec<u8>>> {

@@ -198,6 +198,30 @@ fn test_parse_formula_reports_malformed_attributes() {
         } if file == "xl/worksheets/sheet1.xml"
     ));
 
+    let mut malformed_si_reader = Reader::from_str(r#"<f t="shared" si="bad">SUM(A1:A3)</f>"#);
+    malformed_si_reader.config_mut().trim_text(true);
+    buf.clear();
+    let malformed_si_start = match malformed_si_reader
+        .read_event_into(&mut buf)
+        .expect("malformed si formula")
+    {
+        Event::Start(e) => e.into_owned(),
+        other => panic!("unexpected event: {other:?}"),
+    };
+    let err = parse_formula(
+        &mut malformed_si_reader,
+        &malformed_si_start,
+        "xl/worksheets/sheet1.xml",
+    )
+    .expect_err("malformed formula shared index must fail");
+    assert!(matches!(
+        err,
+        ParseError::Xml {
+            ref file,
+            ..
+        } if file == "xl/worksheets/sheet1.xml"
+    ));
+
     let mut empty_reader = Reader::from_str(r#"<f t="shared" t="array"/>"#);
     buf.clear();
     let empty_start = match empty_reader
@@ -209,6 +233,25 @@ fn test_parse_formula_reports_malformed_attributes() {
     };
     let err = parse_formula_empty(&empty_start, "xl/worksheets/sheet1.xml")
         .expect_err("duplicate empty formula attrs must fail");
+    assert!(matches!(
+        err,
+        ParseError::Xml {
+            ref file,
+            ..
+        } if file == "xl/worksheets/sheet1.xml"
+    ));
+
+    let mut empty_reader = Reader::from_str(r#"<f t="shared" si="bad"/>"#);
+    buf.clear();
+    let empty_start = match empty_reader
+        .read_event_into(&mut buf)
+        .expect("empty malformed si formula")
+    {
+        Event::Empty(e) => e.into_owned(),
+        other => panic!("unexpected event: {other:?}"),
+    };
+    let err = parse_formula_empty(&empty_start, "xl/worksheets/sheet1.xml")
+        .expect_err("malformed empty formula shared index must fail");
     assert!(matches!(
         err,
         ParseError::Xml {

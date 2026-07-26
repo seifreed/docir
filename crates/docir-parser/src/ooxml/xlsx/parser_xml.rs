@@ -191,12 +191,19 @@ fn parse_conditional_rule(
     let mut rule_type = "unknown".to_string();
     let mut priority = None;
     let mut operator = None;
+    let mut numeric_error = None;
     visit_attributes(e, sheet_path, |attr| match attr.key.as_ref() {
         b"type" => rule_type = lossy_attr_value(attr).to_string(),
-        b"priority" => priority = lossy_attr_value(attr).parse::<u32>().ok(),
+        b"priority" => match parse_u32_attr(&lossy_attr_value(attr), sheet_path) {
+            Ok(parsed) => priority = Some(parsed),
+            Err(err) => numeric_error = Some(err),
+        },
         b"operator" => operator = Some(lossy_attr_value(attr).to_string()),
         _ => {}
     })?;
+    if let Some(err) = numeric_error {
+        return Err(err);
+    }
     Ok(ConditionalRule {
         rule_type,
         priority,
@@ -292,6 +299,7 @@ fn parse_formula_attrs(start: &BytesStart, sheet_path: &str) -> Result<FormulaAt
     let mut shared_ref = None;
     let mut array_ref = None;
     let mut is_array = false;
+    let mut numeric_error = None;
 
     visit_attributes(start, sheet_path, |attr| match attr.key.as_ref() {
         b"t" => {
@@ -306,7 +314,10 @@ fn parse_formula_attrs(start: &BytesStart, sheet_path: &str) -> Result<FormulaAt
                 _ => {}
             }
         }
-        b"si" => shared_index = lossy_attr_value(attr).parse::<u32>().ok(),
+        b"si" => match parse_u32_attr(&lossy_attr_value(attr), sheet_path) {
+            Ok(parsed) => shared_index = Some(parsed),
+            Err(err) => numeric_error = Some(err),
+        },
         b"ref" => {
             let reference = lossy_attr_value(attr).to_string();
             if formula_type == FormulaType::Shared {
@@ -317,6 +328,9 @@ fn parse_formula_attrs(start: &BytesStart, sheet_path: &str) -> Result<FormulaAt
         }
         _ => {}
     })?;
+    if let Some(err) = numeric_error {
+        return Err(err);
+    }
 
     Ok((formula_type, shared_index, shared_ref, is_array, array_ref))
 }
