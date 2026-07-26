@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{local_name, try_attr_value};
+use crate::xml_utils::{local_name, try_attr_value, xml_error};
 use docir_core::ir::SheetComment;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
@@ -42,9 +42,10 @@ pub(super) fn parse_sheet_comments_impl(
             Event::End(e) => handle_comment_end(
                 local_name(e.name().as_ref()),
                 &flavor,
+                path,
                 sheet_name,
                 &mut state,
-            ),
+            )?,
             Event::Eof => break,
             _ => {}
         }
@@ -98,14 +99,15 @@ fn handle_comment_start(
 fn handle_comment_end(
     name: &[u8],
     flavor: &CommentFlavor,
+    path: &str,
     sheet_name: Option<&str>,
     state: &mut CommentParseState,
-) {
+) -> Result<(), ParseError> {
     match name {
         b"author" => state.in_author = false,
         b"text" | b"t" => state.in_text = false,
         b"comment" if matches!(flavor, CommentFlavor::Legacy) => {
-            finish_legacy_comment(sheet_name, state);
+            finish_legacy_comment(path, sheet_name, state)?;
             state.in_comment = false;
         }
         b"threadedComment" if matches!(flavor, CommentFlavor::Threaded) => {
@@ -114,21 +116,26 @@ fn handle_comment_end(
         }
         _ => {}
     }
+    Ok(())
 }
 
-fn finish_legacy_comment(sheet_name: Option<&str>, state: &mut CommentParseState) {
+fn finish_legacy_comment(
+    path: &str,
+    sheet_name: Option<&str>,
+    state: &mut CommentParseState,
+) -> Result<(), ParseError> {
     if let Some(cell_ref) = state.current_ref.take() {
         let mut comment = SheetComment::new(cell_ref, state.current_text.trim().to_string());
         comment.sheet_name = sheet_name.map(|s| s.to_string());
-        let author_id = state
-            .current_author
-            .take()
-            .and_then(|v| v.parse::<usize>().ok());
-        if let Some(id) = author_id {
+        if let Some(raw_author_id) = state.current_author.take() {
+            let id = raw_author_id
+                .parse::<usize>()
+                .map_err(|err| xml_error(path, err))?;
             comment.author = state.authors.get(id).cloned();
         }
         state.out.push(comment);
     }
+    Ok(())
 }
 
 fn finish_threaded_comment(sheet_name: Option<&str>, state: &mut CommentParseState) {

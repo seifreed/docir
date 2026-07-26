@@ -506,6 +506,27 @@ fn test_parse_sheet_comments_reports_malformed_attributes() {
 }
 
 #[test]
+fn test_parse_sheet_comments_reports_malformed_author_id() {
+    let xml = r#"
+        <comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <authors><author>Alice</author></authors>
+          <commentList>
+            <comment ref="A1" authorId="bad">
+              <text><t>Hello</t></text>
+            </comment>
+          </commentList>
+        </comments>
+        "#;
+    let err = parse_sheet_comments(xml, "xl/comments1.xml", Some("Sheet1"))
+        .expect_err("malformed sheet comment authorId must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "xl/comments1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_conditional_and_validation() {
     let xml = r#"
         <worksheet>
