@@ -119,7 +119,7 @@ fn handle_empty_sample_table_cell(
         let cell = parse_ods_cell_empty(e, style_map, next_style_id)?;
         state.push_cell(cell);
     } else {
-        state.skip_columns(repeated_columns(e));
+        state.skip_columns(repeated_columns(e)?);
     }
     Ok(())
 }
@@ -132,7 +132,7 @@ fn handle_empty_sample_covered_cell(
         let cell = parse_ods_covered_cell_empty(e)?;
         state.push_cell(cell);
     } else {
-        state.skip_columns(repeated_columns(e));
+        state.skip_columns(repeated_columns(e)?);
     }
     Ok(())
 }
@@ -142,12 +142,17 @@ fn skip_sampled_cell(
     e: &BytesStart<'_>,
     state: &mut OdsSampleState,
 ) -> Result<(), ParseError> {
-    state.skip_columns(repeated_columns(e));
+    state.skip_columns(repeated_columns(e)?);
     spreadsheet::skip_element(reader, e.name().as_ref())
 }
 
-fn repeated_columns(e: &BytesStart<'_>) -> u32 {
+fn repeated_columns(e: &BytesStart<'_>) -> Result<u32, ParseError> {
     attr_value_by_suffix(e, &[b":number-columns-repeated"])
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(1)
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .map_err(|err| xml_error("content.xml", err))
+        })
+        .transpose()
+        .map(|value| value.unwrap_or(1))
 }
