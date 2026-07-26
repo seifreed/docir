@@ -1,13 +1,18 @@
 use super::super::helpers::parse_text_element;
 use crate::odf::{CellFormula, CellValue, OdfReader, ParseError};
-use crate::xml_utils::{attr_value_by_suffix, local_name};
+use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
-pub(crate) fn row_repeat_from(start: &BytesStart<'_>) -> u32 {
+pub(crate) fn row_repeat_from(start: &BytesStart<'_>) -> Result<u32, ParseError> {
     attr_value_by_suffix(start, &[b":number-rows-repeated"])
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(1)
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .map_err(|err| xml_error("content.xml", err))
+        })
+        .transpose()
+        .map(|value| value.unwrap_or(1))
 }
 
 pub(crate) fn read_ods_cell_text(reader: &mut OdfReader<'_>) -> Result<String, ParseError> {

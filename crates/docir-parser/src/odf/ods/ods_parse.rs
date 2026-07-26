@@ -202,7 +202,7 @@ fn handle_table_start_full(
     } = ctx;
     match local_name(start.name().as_ref()) {
         b"table-row" => {
-            let row_repeat = row_repeat_from(start);
+            let row_repeat = row_repeat_from(start)?;
             limits.bump_rows(row_repeat as u64)?;
             let row_cells = parse_ods_row(reader, start, store, style_map, next_style_id)?;
             for _ in 0..row_repeat {
@@ -253,7 +253,7 @@ fn handle_table_empty_full(
 ) -> Result<(), ParseError> {
     match local_name(empty.name().as_ref()) {
         b"table-row" => {
-            let row_repeat = row_repeat_from(empty);
+            let row_repeat = row_repeat_from(empty)?;
             limits.bump_rows(row_repeat as u64)?;
             *row_idx += row_repeat;
         }
@@ -292,7 +292,7 @@ fn handle_table_start_fast(
     } = ctx;
     match local_name(start.name().as_ref()) {
         b"table-row" => {
-            let row_repeat = row_repeat_from(start);
+            let row_repeat = row_repeat_from(start)?;
             limits.bump_rows(row_repeat as u64)?;
             if sample_enabled && *row_idx < sample_rows {
                 let row_cells = parse_ods_row_sample(
@@ -339,7 +339,7 @@ fn handle_table_empty_fast(
     row_idx: &mut u32,
 ) -> Result<(), ParseError> {
     if local_name(empty.name().as_ref()) == b"table-row" {
-        let row_repeat = row_repeat_from(empty);
+        let row_repeat = row_repeat_from(empty)?;
         limits.bump_rows(row_repeat as u64)?;
         *row_idx += row_repeat;
     }
