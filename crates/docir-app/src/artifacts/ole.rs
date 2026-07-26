@@ -17,8 +17,10 @@ pub(super) fn extract_embedded_payload(data: &[u8]) -> Result<Option<EmbeddedPay
     }
     let cfb = Cfb::parse(data.to_vec()).map_err(|err| err.to_string())?;
     for stream_name in ["\u{0001}Ole10Native", "Ole10Native", "Package"] {
-        let Some(stream) = cfb.read_stream(stream_name) else {
-            continue;
+        let stream = match cfb.try_read_stream(stream_name) {
+            Ok(Some(stream)) => stream,
+            Ok(None) => continue,
+            Err(err) => return Err(err.to_string()),
         };
         if stream_name.contains("Ole10Native") {
             if let Some(payload) = parse_ole10_native(&stream) {

@@ -35,8 +35,16 @@ pub(super) fn extract_legacy_cfb_artifacts(
             continue;
         }
 
-        let Some(data) = cfb.read_stream(&path) else {
-            continue;
+        let data = match cfb.try_read_stream(&path) {
+            Ok(Some(data)) => data,
+            Ok(None) => continue,
+            Err(err) => {
+                bundle.manifest.warnings.push(ExtractionWarning::new(
+                    "CFB_STREAM_READ_FAILED",
+                    format!("Unable to read legacy CFB stream {}: {}", path, err),
+                ));
+                continue;
+            }
         };
 
         payload_index += 1;

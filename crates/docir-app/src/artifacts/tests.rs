@@ -1,7 +1,11 @@
 use super::*;
 use crate::artifacts::ole::parse_ole10_native;
-use crate::{DocirApp, ParserConfig, test_support::build_test_cfb};
+use crate::{
+    DocirApp, ParserConfig,
+    test_support::{build_test_cfb, patch_test_cfb_fat_entry},
+};
 use docir_core::ExtractedArtifactKind;
+use docir_parser::ole::Cfb;
 use std::io::{Cursor, Write};
 use zip::write::SimpleFileOptions;
 
@@ -317,6 +321,48 @@ fn extract_artifacts_finds_legacy_cfb_payload() {
             .iter()
             .any(|artifact| artifact.kind == ExtractedArtifactKind::OleNativePayload)
     );
+}
+
+#[test]
+fn extract_artifacts_warns_for_corrupt_legacy_cfb_stream() {
+    let package = vec![b'A'; 5000];
+    let base = build_test_cfb(&[("WordDocument", b"doc"), ("Package", &package)]);
+    let cfb = Cfb::parse(base.clone()).expect("cfb");
+    let start_sector = cfb
+        .entry_metadata("Package")
+        .expect("stream metadata")
+        .start_sector;
+    let bytes = patch_test_cfb_fat_entry(&base, start_sector, 99);
+    let mut bundle = ArtifactExtractionBundle {
+        manifest: docir_core::ExtractionManifest::new(),
+        ..ArtifactExtractionBundle::default()
+    };
+
+    super::legacy_cfb::extract_legacy_cfb_artifacts(
+        &bytes,
+        &ArtifactExtractionOptions::default(),
+        &mut bundle,
+    );
+
+    assert!(bundle.manifest.warnings.iter().any(|warning| {
+        warning.code == "CFB_STREAM_READ_FAILED" && warning.message.contains("Package")
+    }));
+}
+
+#[test]
+fn extract_embedded_payload_rejects_corrupt_ole10native_stream() {
+    let stream = vec![b'A'; 5000];
+    let base = build_test_cfb(&[("Ole10Native", &stream)]);
+    let cfb = Cfb::parse(base.clone()).expect("cfb");
+    let start_sector = cfb
+        .entry_metadata("Ole10Native")
+        .expect("stream metadata")
+        .start_sector;
+    let bytes = patch_test_cfb_fat_entry(&base, start_sector, 99);
+
+    let err = super::ole::extract_embedded_payload(&bytes)
+        .expect_err("corrupt Ole10Native stream must not be skipped");
+    assert!(err.contains("OLE sector out of bounds"));
 }
 
 #[test]

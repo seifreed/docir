@@ -65,9 +65,10 @@ fn extract_flash_from_cfb(data: &[u8]) -> AppResult<FlashExtractionReport> {
     let cfb = Cfb::parse(data.to_vec())?;
     let mut objects = Vec::new();
     for path in cfb.list_streams() {
-        if let Some(bytes) = cfb.read_stream(&path) {
-            objects.extend(find_flash_objects_in_bytes(&bytes, &path));
-        }
+        let Some(bytes) = cfb.try_read_stream(&path)? else {
+            continue;
+        };
+        objects.extend(find_flash_objects_in_bytes(&bytes, &path));
     }
     Ok(FlashExtractionReport {
         container: "cfb".to_string(),
@@ -161,7 +162,8 @@ fn swf_signature(data: &[u8]) -> Option<&'static str> {
 mod tests {
     use super::{extract_flash_bytes, find_flash_objects_in_bytes};
     use crate::ParserConfig;
-    use crate::test_support::build_test_cfb;
+    use crate::test_support::{build_test_cfb, patch_test_cfb_fat_entry};
+    use docir_parser::ole::Cfb;
     use std::io::Write;
 
     fn swf(signature: &[u8; 3], version: u8, body: &[u8]) -> Vec<u8> {
@@ -191,6 +193,23 @@ mod tests {
         assert_eq!(report.container, "cfb");
         assert_eq!(report.object_count, 1);
         assert_eq!(report.objects[0].signature, "CWS");
+    }
+
+    #[test]
+    fn extract_flash_bytes_rejects_corrupt_cfb_stream() {
+        let mut stream = swf(b"CWS", 10, b"payload");
+        stream.resize(5000, 0);
+        let base = build_test_cfb(&[("ObjectPool/1/Ole10Native", &stream)]);
+        let cfb = Cfb::parse(base.clone()).expect("cfb");
+        let start_sector = cfb
+            .entry_metadata("ObjectPool/1/Ole10Native")
+            .expect("stream metadata")
+            .start_sector;
+        let bytes = patch_test_cfb_fat_entry(&base, start_sector, 99);
+
+        let err = extract_flash_bytes(&bytes, &ParserConfig::default())
+            .expect_err("corrupt CFB stream must not be skipped");
+        assert!(err.to_string().contains("OLE sector out of bounds"));
     }
 
     #[test]
