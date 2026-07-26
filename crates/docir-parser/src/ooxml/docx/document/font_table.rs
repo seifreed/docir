@@ -40,8 +40,7 @@ impl DocxParser {
                         }
                     }
                     b"charset" => {
-                        if let Some(val) = try_attr_value(&e, b"w:val", FONT_TABLE_PATH)?
-                            .and_then(|v| v.parse().ok())
+                        if let Some(val) = charset_attr(&e)?
                             && let Some(font) = current.as_mut()
                         {
                             font.charset = Some(val);
@@ -83,4 +82,14 @@ impl DocxParser {
         self.store.insert(docir_core::ir::IRNode::FontTable(table));
         Ok(id)
     }
+}
+
+fn charset_attr(e: &quick_xml::events::BytesStart<'_>) -> Result<Option<u32>, ParseError> {
+    try_attr_value(e, b"w:val", FONT_TABLE_PATH)?
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .map_err(|err| xml_error(FONT_TABLE_PATH, err))
+        })
+        .transpose()
 }

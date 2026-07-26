@@ -345,18 +345,28 @@ fn test_parse_font_table_returns_xml_error_on_malformed_input() {
 
 #[test]
 fn test_parse_font_table_reports_malformed_attributes() {
-    let xml = r#"
-        <w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-          <w:font w:name="Calibri" w:name="Duplicate"></w:font>
-        </w:fonts>
-        "#;
-    let mut parser = DocxParser::new();
-    let err = parser
-        .parse_font_table(xml)
-        .expect_err("malformed fontTable attributes must fail");
-    match err {
-        ParseError::Xml { file, .. } => assert_eq!(file, "word/fontTable.xml"),
-        other => panic!("unexpected error: {other:?}"),
+    for xml in [
+        r#"
+            <w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:font w:name="Calibri" w:name="Duplicate"></w:font>
+            </w:fonts>
+            "#,
+        r#"
+            <w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:font w:name="Calibri">
+                <w:charset w:val="bad"/>
+              </w:font>
+            </w:fonts>
+            "#,
+    ] {
+        let mut parser = DocxParser::new();
+        let err = parser
+            .parse_font_table(xml)
+            .expect_err("malformed fontTable attributes must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "word/fontTable.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }
 
