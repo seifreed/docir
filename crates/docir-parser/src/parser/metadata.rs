@@ -210,7 +210,7 @@ impl OoxmlParser {
                         && let Some(prop) = current_prop.as_mut()
                     {
                         let text = crate::xml_utils::decoded_text_or_default(&e);
-                        prop.value = custom_property_value(tag, text);
+                        prop.value = custom_property_value(tag, text)?;
                     }
                 }
                 Ok(Event::GeneralRef(e)) => {
@@ -218,7 +218,7 @@ impl OoxmlParser {
                         && let Some(prop) = current_prop.as_mut()
                     {
                         let text = crate::xml_utils::decoded_general_ref_or_default(&e);
-                        prop.value = custom_property_value(tag, text);
+                        prop.value = custom_property_value(tag, text)?;
                     }
                 }
                 Ok(Event::End(e)) => {
@@ -241,18 +241,31 @@ impl OoxmlParser {
     }
 }
 
-fn custom_property_value(tag: &str, text: String) -> PropertyValue {
-    match tag {
+fn custom_property_value(tag: &str, text: String) -> Result<PropertyValue, ParseError> {
+    let value = match tag {
         "vt:lpwstr" | "vt:lpstr" | "vt:bstr" => PropertyValue::String(text),
-        "vt:i2" | "vt:i4" | "vt:int" | "vt:integer" => {
-            PropertyValue::Integer(text.parse::<i64>().unwrap_or(0))
+        "vt:i2" | "vt:i4" | "vt:int" | "vt:integer" => PropertyValue::Integer(
+            text.parse::<i64>()
+                .map_err(|err| xml_error("docProps/custom.xml", err))?,
+        ),
+        "vt:r4" | "vt:r8" | "vt:float" => {
+            let value = text
+                .parse::<f64>()
+                .map_err(|err| xml_error("docProps/custom.xml", err))?;
+            if !value.is_finite() {
+                return Err(xml_error(
+                    "docProps/custom.xml",
+                    "custom property float value must be finite",
+                ));
+            }
+            PropertyValue::Float(value)
         }
-        "vt:r4" | "vt:r8" | "vt:float" => PropertyValue::Float(text.parse::<f64>().unwrap_or(0.0)),
         "vt:bool" => PropertyValue::Boolean(text == "true" || text == "1"),
         "vt:filetime" => PropertyValue::DateTime(text),
         "vt:blob" => PropertyValue::Blob(text),
         _ => PropertyValue::String(text),
-    }
+    };
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -440,39 +453,45 @@ mod tests {
     }
 
     #[test]
-    fn parse_custom_properties_coerces_malformed_values_to_defaults() {
+    fn parse_custom_properties_reports_malformed_integer_values() {
         let xml = r#"
             <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
                         xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
               <property pid="2" name="BadInt"><vt:int>not-a-number</vt:int></property>
-              <property pid="3" name="BadFloat"><vt:r4>NaN?</vt:r4></property>
-              <property pid="4" name="BoolNo"><vt:bool>false</vt:bool></property>
-              <property pid="5" name="Unknown"><vt:custom>raw</vt:custom></property>
             </Properties>
         "#;
         let parser = OoxmlParser::new();
         let mut metadata = DocumentMetadata::new();
-        parser
+        let err = parser
             .parse_custom_properties(xml, &mut metadata)
-            .expect("custom properties parse");
+            .expect_err("malformed integer custom property must fail");
 
-        assert_eq!(metadata.custom_properties.len(), 4);
-        assert!(matches!(
-            metadata.custom_properties[0].value,
-            PropertyValue::Integer(0)
-        ));
-        assert!(matches!(
-            metadata.custom_properties[1].value,
-            PropertyValue::Float(v) if v == 0.0
-        ));
-        assert!(matches!(
-            metadata.custom_properties[2].value,
-            PropertyValue::Boolean(false)
-        ));
-        assert!(matches!(
-            metadata.custom_properties[3].value,
-            PropertyValue::String(ref v) if v == "raw"
-        ));
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "docProps/custom.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+        assert!(metadata.custom_properties.is_empty());
+    }
+
+    #[test]
+    fn parse_custom_properties_reports_non_finite_float_values() {
+        let xml = r#"
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                        xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+              <property pid="2" name="BadFloat"><vt:r8>NaN</vt:r8></property>
+            </Properties>
+        "#;
+        let parser = OoxmlParser::new();
+        let mut metadata = DocumentMetadata::new();
+        let err = parser
+            .parse_custom_properties(xml, &mut metadata)
+            .expect_err("non-finite float custom property must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "docProps/custom.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+        assert!(metadata.custom_properties.is_empty());
     }
 
     #[test]
