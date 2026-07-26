@@ -111,12 +111,14 @@ impl<'a> VbaScanner<'a> {
         project.storage_root = Some(storage_root.to_string());
         project.span = Some(SourceSpan::new(container_path));
 
-        let project_stream =
-            find_stream_case(&streams, &project_stream_name).and_then(|p| cfb.read_stream(p));
-        let project_text = project_stream
-            .as_ref()
-            .map(|data| String::from_utf8_lossy(data).to_string())
-            .unwrap_or_default();
+        let project_text = match find_stream_case(&streams, &project_stream_name) {
+            Some(path) => cfb
+                .try_read_stream(path)?
+                .as_ref()
+                .map(|data| String::from_utf8_lossy(data).to_string())
+                .unwrap_or_default(),
+            None => String::new(),
+        };
 
         let (project_name, module_defs, references, is_protected) =
             parse_vba_project_text(&project_text);
@@ -125,7 +127,7 @@ impl<'a> VbaScanner<'a> {
         project.is_protected = is_protected;
 
         let (modules_out, auto_exec) =
-            self.extract_vba_modules(cfb, &streams, container_path, storage_root, &module_defs);
+            self.extract_vba_modules(cfb, &streams, container_path, storage_root, &module_defs)?;
 
         if !auto_exec.is_empty() {
             project.has_auto_exec = true;
@@ -142,7 +144,7 @@ impl<'a> VbaScanner<'a> {
         container_path: &str,
         storage_root: &str,
         module_defs: &[(String, MacroModuleType)],
-    ) -> (Vec<docir_core::security::MacroModule>, Vec<String>) {
+    ) -> Result<(Vec<docir_core::security::MacroModule>, Vec<String>), ParseError> {
         let mut auto_exec = Vec::new();
         let mut modules_out = Vec::new();
         for (module_name, module_type) in module_defs {
@@ -157,8 +159,10 @@ impl<'a> VbaScanner<'a> {
             module.stream_path = Some(stream_path.clone());
             module.span = Some(SourceSpan::new(container_path));
 
-            let raw_stream =
-                find_stream_case(streams, &stream_path).and_then(|p| cfb.read_stream(p));
+            let raw_stream = match find_stream_case(streams, &stream_path) {
+                Some(path) => cfb.try_read_stream(path)?,
+                None => None,
+            };
             match raw_stream {
                 Some(raw) => {
                     module.compressed_size = Some(raw.len() as u64);
@@ -200,6 +204,6 @@ impl<'a> VbaScanner<'a> {
 
             modules_out.push(module);
         }
-        (modules_out, auto_exec)
+        Ok((modules_out, auto_exec))
     }
 }

@@ -175,7 +175,7 @@ impl<'a> SecurityScanner<'a> {
                 || upper.ends_with("/PACKAGE")
                 || upper.ends_with("/CONTENTS")
         }) {
-            if let Some(bytes) = cfb.read_stream(path) {
+            if let Some(bytes) = cfb.try_read_stream(path)? {
                 store.insert(IRNode::OleObject(
                     self.build_ole_object_from_bytes(path, &bytes),
                 ));

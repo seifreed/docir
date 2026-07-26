@@ -119,7 +119,7 @@ Module=Module1
                 ),
                 objectpool_index,
                 TestCfbDirectoryPatch {
-                    start_sector: Some(99),
+                    start_sector: Some(word_start),
                     ..Default::default()
                 },
             ),
@@ -193,7 +193,7 @@ Module=Module1
         assert!(text.contains("main-stream:word:"));
         assert_eq!(
             indicator_value(indicators, "cfb-dominant-anomaly-class"),
-            "invalid-start"
+            "shared-sector"
         );
         assert_eq!(indicator_value(indicators, "cfb-stream-score"), "high");
 

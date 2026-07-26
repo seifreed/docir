@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_support::build_test_cfb;
 use crate::zip_handler::PackageReader;
 use docir_core::security::ExternalRefType;
 use docir_core::visitor::IrStore;
@@ -113,6 +114,15 @@ fn minimal_valid_cfb() -> Vec<u8> {
     data
 }
 
+fn patch_cfb_fat_entry(bytes: &[u8], fat_index: u32, value: u32) -> Vec<u8> {
+    let mut out = bytes.to_vec();
+    let sector_size = 1usize << u16::from_le_bytes([out[0x1E], out[0x1F]]);
+    let first_fat_sector = u32::from_le_bytes([out[0x4C], out[0x4D], out[0x4E], out[0x4F]]);
+    let fat_offset = sector_size + first_fat_sector as usize * sector_size + fat_index as usize * 4;
+    out[fat_offset..fat_offset + 4].copy_from_slice(&value.to_le_bytes());
+    out
+}
+
 #[test]
 fn scan_zip_detects_macro_project_without_project_stream() {
     let cfb = minimal_valid_cfb();
@@ -138,6 +148,25 @@ fn scan_zip_detects_macro_project_without_project_stream() {
     );
     assert!(projects[0].modules.is_empty());
     assert!(!projects[0].has_auto_exec);
+}
+
+#[test]
+fn scan_cfb_reports_corrupt_vba_project_stream_read() {
+    let project = vec![b'A'; 5000];
+    let bytes = build_test_cfb(&[("WordDocument", b"doc"), ("VBA/PROJECT", &project)]);
+    let cfb = Cfb::parse(patch_cfb_fat_entry(&bytes, 1, 99)).expect("cfb parse");
+    let mut store = IrStore::new();
+    let config = ParserConfig::default();
+    let scanner = SecurityScanner::new(&config);
+
+    let err = scanner
+        .scan_cfb(&cfb, &mut store)
+        .expect_err("corrupt VBA PROJECT stream must fail security scanning");
+
+    assert!(
+        matches!(err, ParseError::InvalidStructure(_)),
+        "unexpected error: {err:?}"
+    );
 }
 
 #[test]
