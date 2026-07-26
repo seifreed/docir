@@ -159,25 +159,47 @@ fn parse_sheeted_cell(input: &str) -> Option<CellRef> {
 fn parse_cell_ref(input: &str) -> Option<CellRef> {
     let mut letters = String::new();
     let mut digits = String::new();
-    for ch in input.chars() {
-        if ch.is_ascii_alphabetic() {
-            letters.push(ch);
-        } else if ch.is_ascii_digit() {
-            digits.push(ch);
-        } else if ch == '$' {
-            continue;
-        } else {
+    let mut chars = input.chars().peekable();
+
+    if matches!(chars.peek(), Some('$')) {
+        chars.next();
+    }
+
+    while let Some(&ch) = chars.peek() {
+        if !ch.is_ascii_alphabetic() {
             break;
         }
+        letters.push(ch);
+        chars.next();
     }
+
+    if matches!(chars.peek(), Some('$')) {
+        chars.next();
+    }
+
+    while let Some(&ch) = chars.peek() {
+        if !ch.is_ascii_digit() {
+            break;
+        }
+        digits.push(ch);
+        chars.next();
+    }
+
     if letters.is_empty() || digits.is_empty() {
         return None;
     }
+    if chars.next().is_some() {
+        return None;
+    }
+
     let col = column_name_to_index(&letters)?;
-    let row = digits.parse::<u32>().ok()?.saturating_sub(1);
+    let row_number = match digits.parse::<u32>() {
+        Ok(value) if value > 0 => value,
+        _ => return None,
+    };
     Some(CellRef {
         sheet: None,
-        row,
+        row: row_number - 1,
         col,
     })
 }
@@ -188,9 +210,10 @@ fn column_name_to_index(name: &str) -> Option<u32> {
         if !ch.is_ascii_alphabetic() {
             return None;
         }
-        index = index * 26 + (ch.to_ascii_uppercase() as u32 - 'A' as u32 + 1);
+        let digit = ch.to_ascii_uppercase() as u32 - 'A' as u32 + 1;
+        index = index.checked_mul(26)?.checked_add(digit)?;
     }
-    Some(index.saturating_sub(1))
+    index.checked_sub(1)
 }
 
 pub(super) fn cell_value_to_number(value: &CellValue) -> Option<f64> {

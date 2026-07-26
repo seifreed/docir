@@ -434,4 +434,13 @@ mod tests {
 
         assert_eq!(number_from_cell(&store, a1_id), Some(7.0));
     }
+
+    #[test]
+    fn tokenize_formula_rejects_malformed_cell_references() {
+        for formula in ["A0", "A1B2"] {
+            let tokens = tokenize_formula(formula);
+
+            assert!(matches!(tokens.first(), Some(FormulaToken::Ident(value)) if value == formula));
+        }
+    }
 }
