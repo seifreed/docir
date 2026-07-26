@@ -225,7 +225,12 @@ fn append_text_control(text: &mut String, e: &BytesStart<'_>) -> Result<(), Pars
     match local_name(e.name().as_ref()) {
         b"s" => {
             let count = try_attr_value_by_suffix(e, &[b":c"], ODF_CONTENT_XML)?
-                .and_then(|v| v.parse::<usize>().ok())
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|err| xml_error(ODF_CONTENT_XML, err))
+                })
+                .transpose()?
                 .unwrap_or(1);
             text.extend(std::iter::repeat_n(' ', count));
         }

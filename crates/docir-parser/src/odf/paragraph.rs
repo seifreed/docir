@@ -58,7 +58,12 @@ fn handle_inline_event(
     match local_name(event.name().as_ref()) {
         b"s" => {
             let count = try_attr_value_by_suffix(event, &[b":c"], "content.xml")?
-                .and_then(|v| v.parse::<usize>().ok())
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|err| xml_error("content.xml", err))
+                })
+                .transpose()?
                 .unwrap_or(1);
             text.extend(std::iter::repeat_n(' ', count));
         }
