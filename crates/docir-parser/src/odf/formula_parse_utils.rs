@@ -88,8 +88,9 @@ fn consume_number_token(
             break;
         }
     }
-    if let Ok(value) = num.parse::<f64>() {
-        tokens.push(FormulaToken::Number(value));
+    match num.parse::<f64>() {
+        Ok(value) => tokens.push(FormulaToken::Number(value)),
+        Err(_) => tokens.push(FormulaToken::Ident(num)),
     }
 }
 
@@ -135,7 +136,7 @@ fn parse_simple_reference(input: &str) -> Option<CellRef> {
 }
 
 fn parse_sheeted_cell(input: &str) -> Option<CellRef> {
-    let trimmed = input.trim().trim_start_matches('.');
+    let trimmed = input.trim().strip_prefix('.').unwrap_or(input.trim());
     let mut sheet: Option<String> = None;
     let mut cell_part = trimmed;
     if let Some((sheet_part, cell)) = trimmed.rsplit_once('.')

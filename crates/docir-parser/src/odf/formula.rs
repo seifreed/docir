@@ -442,5 +442,8 @@ mod tests {
 
             assert!(matches!(tokens.first(), Some(FormulaToken::Ident(value)) if value == formula));
         }
+
+        let tokens = tokenize_formula("..A1");
+        assert!(matches!(tokens.first(), Some(FormulaToken::Ident(value)) if value == ".."));
     }
 }
