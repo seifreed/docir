@@ -213,7 +213,10 @@ pub fn parse_cell_reference(reference: &str) -> Option<(u32, u32)> {
         return None;
     }
 
-    let row: u32 = row_str.parse().ok()?;
+    let row: u32 = match row_str.parse() {
+        Ok(row) => row,
+        Err(_) => return None,
+    };
     if row == 0 {
         return None;
     }
