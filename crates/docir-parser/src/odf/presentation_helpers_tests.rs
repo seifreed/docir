@@ -336,6 +336,21 @@ fn parse_odp_transition_supports_fallback_keys_and_ignores_advance_only() {
 }
 
 #[test]
+fn parse_odp_transition_reports_malformed_numeric_attributes() {
+    for attr in ["presentation:transition-duration", "presentation:duration"] {
+        let mut start = BytesStart::new("draw:page");
+        start.push_attribute(("presentation:transition-type", "fade"));
+        start.push_attribute((attr, "bad"));
+
+        let err = parse_odp_transition(&start).expect_err("malformed transition number must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn parse_duration_and_media_classification_cover_helper_paths() {
     assert_eq!(parse_duration_ms("250ms"), Some(250));
     assert_eq!(parse_duration_ms("1.25s"), Some(1250));

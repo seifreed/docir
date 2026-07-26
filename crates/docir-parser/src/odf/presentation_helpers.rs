@@ -256,10 +256,8 @@ pub(super) fn parse_odp_transition(
 ) -> Result<Option<SlideTransition>, ParseError> {
     let transition_type = try_attr_value_by_suffix(start, &[b":transition-type"], "content.xml")?;
     let speed = try_attr_value_by_suffix(start, &[b":transition-speed"], "content.xml")?;
-    let duration_ms = try_attr_value_by_suffix(start, &[b":transition-duration"], "content.xml")?
-        .and_then(|v| v.parse::<u32>().ok());
-    let advance_after_ms = try_attr_value_by_suffix(start, &[b":duration"], "content.xml")?
-        .and_then(|v| v.parse::<u32>().ok());
+    let duration_ms = parse_optional_u32_attr(start, &[b":transition-duration"])?;
+    let advance_after_ms = parse_optional_u32_attr(start, &[b":duration"])?;
     let advance_on_click =
         try_attr_value_by_suffix(start, &[b":animation"], "content.xml")?.map(|v| v == "click");
     if transition_type.is_some() || speed.is_some() || duration_ms.is_some() {
@@ -273,6 +271,19 @@ pub(super) fn parse_odp_transition(
     } else {
         Ok(None)
     }
+}
+
+fn parse_optional_u32_attr(
+    start: &BytesStart<'_>,
+    names: &[&[u8]],
+) -> Result<Option<u32>, ParseError> {
+    try_attr_value_by_suffix(start, names, "content.xml")?
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .map_err(|err| xml_error("content.xml", err))
+        })
+        .transpose()
 }
 
 pub(super) fn parse_odf_chart(
