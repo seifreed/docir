@@ -31,11 +31,20 @@ fn filtered_evidence(evidence: &[String], prefix: &str) -> Vec<String> {
 }
 
 pub(super) fn collect_cfb_structural_indicators(source_bytes: &[u8]) -> Vec<DocumentIndicator> {
-    let structural = summary::structural_cfb_summary(source_bytes);
-    let structural_evidence = structural
-        .as_ref()
-        .map(|summary| summary.all_evidence.clone())
-        .unwrap_or_default();
+    let structural = match summary::structural_cfb_summary(source_bytes) {
+        Ok(summary) => summary,
+        Err(err) => {
+            return vec![boolean_or_count_indicator(
+                "cfb-structural-anomalies",
+                1,
+                ThreatLevel::High,
+                "Low-level CFB structural inspection failed",
+                "No low-level CFB structural anomalies detected",
+                vec![format!("inspection-error:{err}")],
+            )];
+        }
+    };
+    let structural_evidence = structural.all_evidence.clone();
     let mut indicators = Vec::new();
     indicators.push(boolean_or_count_indicator(
         "cfb-structural-anomalies",
@@ -45,12 +54,9 @@ pub(super) fn collect_cfb_structural_indicators(source_bytes: &[u8]) -> Vec<Docu
         "No low-level CFB structural anomalies detected",
         structural_evidence,
     ));
-    let Some(summary) = structural else {
-        return indicators;
-    };
-    indicators.append(&mut summary_evidence_indicators(&summary));
-    indicators.append(&mut summary_score_indicators(&summary));
-    indicators.append(&mut summary_corruption_indicators(&summary));
+    indicators.append(&mut summary_evidence_indicators(&structural));
+    indicators.append(&mut summary_score_indicators(&structural));
+    indicators.append(&mut summary_corruption_indicators(&structural));
     indicators
 }
 

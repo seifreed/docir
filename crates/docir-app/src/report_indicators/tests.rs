@@ -174,6 +174,38 @@ fn report_indicators_includes_cfb_structural_anomalies_when_source_bytes_provide
 }
 
 #[test]
+fn report_indicators_surfaces_cfb_structural_inspection_errors() {
+    let mut store = IrStore::new();
+    let doc = Document::new(DocumentFormat::WordProcessing);
+    let root_id = doc.id;
+    store.insert(IRNode::Document(doc));
+    let parsed = ParsedDocument::new(docir_parser::parser::ParsedDocument {
+        root_id,
+        format: DocumentFormat::WordProcessing,
+        store,
+        metrics: None,
+    });
+
+    let truncated_cfb = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+    let report = IndicatorReport::from_parsed_with_bytes(&parsed, Some(&truncated_cfb));
+    let structural = report
+        .indicators
+        .iter()
+        .find(|indicator| indicator.key == "cfb-structural-anomalies")
+        .expect("structural indicator");
+
+    assert_eq!(structural.value, "1");
+    assert_eq!(structural.risk, ThreatLevel::High);
+    assert!(structural.reason.contains("inspection failed"));
+    assert!(
+        structural
+            .evidence
+            .iter()
+            .any(|value| value.starts_with("inspection-error:"))
+    );
+}
+
+#[test]
 fn report_indicators_surface_specific_structural_classes() {
     let mut store = IrStore::new();
     let doc = Document::new(DocumentFormat::WordProcessing);

@@ -1,4 +1,4 @@
-use crate::{inspect_directory_bytes, inspect_sectors_bytes};
+use crate::{AppResult, inspect_directory_bytes, inspect_sectors_bytes};
 
 pub(super) struct StructuralCfbSummary {
     pub(super) all_evidence: Vec<String>,
@@ -17,9 +17,9 @@ pub(super) struct StructuralCfbSummary {
     pub(super) main_stream_corruption_evidence: Vec<String>,
 }
 
-pub(super) fn structural_cfb_summary(source_bytes: &[u8]) -> Option<StructuralCfbSummary> {
-    let directory = inspect_directory_bytes(source_bytes).ok()?;
-    let sectors = inspect_sectors_bytes(source_bytes).ok()?;
+pub(super) fn structural_cfb_summary(source_bytes: &[u8]) -> AppResult<StructuralCfbSummary> {
+    let directory = inspect_directory_bytes(source_bytes)?;
+    let sectors = inspect_sectors_bytes(source_bytes)?;
 
     let shared_sector_evidence = collect_shared_sector_evidence(&sectors);
     let live_unreachable_evidence = collect_live_unreachable_evidence(&directory);
@@ -51,7 +51,7 @@ pub(super) fn structural_cfb_summary(source_bytes: &[u8]) -> Option<StructuralCf
         &all_evidence,
     );
 
-    Some(StructuralCfbSummary {
+    Ok(StructuralCfbSummary {
         all_evidence,
         shared_sector_evidence,
         live_unreachable_evidence,
