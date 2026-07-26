@@ -89,10 +89,10 @@ fn apply_section_page_size(
     e: &BytesStart<'_>,
     properties: &mut SectionProperties,
 ) -> Result<(), ParseError> {
-    if let Some(val) = try_attr_value(e, b"w:w", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:w")? {
         properties.page_width = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:h", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:h")? {
         properties.page_height = Some(val);
     }
     if let Some(val) = try_attr_value(e, b"w:orient", DOC_PATH)? {
@@ -118,25 +118,25 @@ fn apply_section_margins(
         footer: None,
         gutter: None,
     });
-    if let Some(val) = try_attr_value(e, b"w:top", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:top")? {
         margins.top = val;
     }
-    if let Some(val) = try_attr_value(e, b"w:bottom", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:bottom")? {
         margins.bottom = val;
     }
-    if let Some(val) = try_attr_value(e, b"w:left", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:left")? {
         margins.left = val;
     }
-    if let Some(val) = try_attr_value(e, b"w:right", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:right")? {
         margins.right = val;
     }
-    if let Some(val) = try_attr_value(e, b"w:header", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:header")? {
         margins.header = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:footer", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:footer")? {
         margins.footer = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:gutter", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:gutter")? {
         margins.gutter = Some(val);
     }
     properties.margins = Some(margins);
@@ -147,10 +147,10 @@ fn apply_section_columns(
     e: &BytesStart<'_>,
     properties: &mut SectionProperties,
 ) -> Result<(), ParseError> {
-    if let Some(val) = try_attr_value(e, b"w:num", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:num")? {
         properties.columns = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:space", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:space")? {
         properties.column_spacing = Some(val);
     }
     if let Some(val) = try_attr_value(e, b"w:sep", DOC_PATH)? {
@@ -189,7 +189,7 @@ fn apply_section_page_numbering(
     properties: &mut SectionProperties,
 ) -> Result<(), ParseError> {
     let mut numbering = properties.page_numbering.take().unwrap_or_default();
-    if let Some(val) = try_attr_value(e, b"w:start", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:start")? {
         numbering.start = Some(val);
     }
     if let Some(val) = try_attr_value(e, b"w:fmt", DOC_PATH)? {
@@ -204,13 +204,13 @@ fn apply_section_line_numbering(
     properties: &mut SectionProperties,
 ) -> Result<(), ParseError> {
     let mut numbering = properties.line_numbering.take().unwrap_or_default();
-    if let Some(val) = try_attr_value(e, b"w:start", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:start")? {
         numbering.start = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:countBy", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:countBy")? {
         numbering.count_by = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:distance", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u32_attr(e, b"w:distance")? {
         numbering.distance = Some(val);
     }
     if let Some(val) = try_attr_value(e, b"w:restart", DOC_PATH)? {
@@ -223,6 +223,12 @@ fn apply_section_line_numbering(
     }
     properties.line_numbering = Some(numbering);
     Ok(())
+}
+
+fn u32_attr(e: &BytesStart<'_>, name: &[u8]) -> Result<Option<u32>, ParseError> {
+    try_attr_value(e, name, DOC_PATH)?
+        .map(|value| value.parse::<u32>().map_err(|err| xml_error(DOC_PATH, err)))
+        .transpose()
 }
 
 fn apply_section_page_borders(
