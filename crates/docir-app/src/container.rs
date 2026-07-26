@@ -84,18 +84,21 @@ fn build_zip_entries(
     let mut zip = SecureZipReader::new(Cursor::new(input_bytes), zip_config.clone())?;
     let mut names: Vec<String> = zip.file_names().map(str::to_string).collect();
     names.sort();
-    Ok(names
+    names
         .into_iter()
-        .map(|path| ContainerEntry {
-            kind: ContainerEntryKind::ZipEntry,
-            size_bytes: zip.file_size(&path).ok(),
-            start_sector: None,
-            created_filetime: None,
-            modified_filetime: None,
-            path,
-            details: None,
+        .map(|path| {
+            let size_bytes = zip.file_size(&path)?;
+            Ok(ContainerEntry {
+                kind: ContainerEntryKind::ZipEntry,
+                size_bytes: Some(size_bytes),
+                start_sector: None,
+                created_filetime: None,
+                modified_filetime: None,
+                path,
+                details: None,
+            })
         })
-        .collect())
+        .collect()
 }
 
 fn build_cfb_entries(input_bytes: &[u8]) -> Result<Vec<ContainerEntry>, AppError> {
@@ -249,6 +252,11 @@ mod tests {
             dump.entries
                 .iter()
                 .any(|entry| entry.path == "word/document.xml")
+        );
+        assert!(
+            dump.entries
+                .iter()
+                .any(|entry| entry.path == "word/document.xml" && entry.size_bytes.is_some())
         );
     }
 
