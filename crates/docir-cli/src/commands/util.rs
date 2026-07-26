@@ -175,7 +175,7 @@ where
     F: FnOnce(&T) -> String,
 {
     if json {
-        let wrapped = wrap_json(json_key, result);
+        let wrapped = wrap_json(json_key, result)?;
         write_json_output(&wrapped, pretty, output)
     } else {
         let text = format_text(result);
@@ -205,13 +205,10 @@ where
     run_dual_output(&result, json_key, json, pretty, output, format_text)
 }
 
-fn wrap_json<T: Serialize>(key: &str, value: &T) -> serde_json::Value {
+fn wrap_json<T: Serialize>(key: &str, value: &T) -> Result<serde_json::Value> {
     let mut map = serde_json::Map::new();
-    map.insert(
-        key.to_string(),
-        serde_json::to_value(value).unwrap_or(serde_json::Value::Null),
-    );
-    serde_json::Value::Object(map)
+    map.insert(key.to_string(), serde_json::to_value(value)?);
+    Ok(serde_json::Value::Object(map))
 }
 
 pub(crate) fn push_labeled_line(
@@ -273,11 +270,11 @@ pub(crate) fn source_format_label(input: &Path, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_node_id, push_bullet_line, push_count_section, push_labeled_line, write_json_output,
-        write_text_output,
+        parse_node_id, push_bullet_line, push_count_section, push_labeled_line, wrap_json,
+        write_json_output, write_text_output,
     };
     use crate::test_support;
-    use serde::Serialize;
+    use serde::{Serialize, Serializer};
     use std::fs;
 
     #[test]
@@ -315,6 +312,23 @@ mod tests {
         let written = fs::read_to_string(&path).expect("read json");
         assert!(written.contains("\"ok\": true"));
         let _ = fs::remove_file(path);
+    }
+
+    struct FailingJson;
+
+    impl Serialize for FailingJson {
+        fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            Err(serde::ser::Error::custom("json failed"))
+        }
+    }
+
+    #[test]
+    fn wrap_json_reports_serialization_errors() {
+        let err = wrap_json("probe", &FailingJson).expect_err("serialization failure must fail");
+        assert!(err.to_string().contains("json failed"));
     }
 
     #[test]
