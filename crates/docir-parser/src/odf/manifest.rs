@@ -138,8 +138,7 @@ fn apply_encryption_data_attrs(
     e: &quick_xml::events::BytesStart<'_>,
 ) -> Result<(), ParseError> {
     enc.checksum_type = try_attr_value_by_suffix(e, &[b":checksum-type"], "META-INF/manifest.xml")?;
-    enc.checksum = try_attr_value_by_suffix(e, &[b":checksum"], "META-INF/manifest.xml")?
-        .and_then(|v| decode_base64_bytes(&v));
+    enc.checksum = decode_optional_base64_attr(e, &[b":checksum"])?;
     Ok(())
 }
 
@@ -149,9 +148,7 @@ fn apply_algorithm_attrs(
 ) -> Result<(), ParseError> {
     enc.algorithm_name =
         try_attr_value_by_suffix(e, &[b":algorithm-name"], "META-INF/manifest.xml")?;
-    enc.init_vector =
-        try_attr_value_by_suffix(e, &[b":initialisation-vector"], "META-INF/manifest.xml")?
-            .and_then(|v| decode_base64_bytes(&v));
+    enc.init_vector = decode_optional_base64_attr(e, &[b":initialisation-vector"])?;
     enc.key_size = parse_optional_u32_attr(e, &[b":key-size"])?;
     Ok(())
 }
@@ -162,8 +159,7 @@ fn apply_key_derivation_attrs(
 ) -> Result<(), ParseError> {
     enc.key_derivation_name =
         try_attr_value_by_suffix(e, &[b":key-derivation-name"], "META-INF/manifest.xml")?;
-    enc.salt = try_attr_value_by_suffix(e, &[b":salt"], "META-INF/manifest.xml")?
-        .and_then(|v| decode_base64_bytes(&v));
+    enc.salt = decode_optional_base64_attr(e, &[b":salt"])?;
     enc.iteration_count = parse_optional_u32_attr(e, &[b":iteration-count"])?;
     Ok(())
 }
@@ -232,8 +228,17 @@ pub fn format_odf_encryption_metadata(entry: &OdfManifestEntry) -> Option<String
     ))
 }
 
-fn decode_base64_bytes(value: &str) -> Option<Vec<u8>> {
-    STANDARD.decode(value.as_bytes()).ok()
+fn decode_optional_base64_attr(
+    e: &quick_xml::events::BytesStart<'_>,
+    names: &[&[u8]],
+) -> Result<Option<Vec<u8>>, ParseError> {
+    try_attr_value_by_suffix(e, names, "META-INF/manifest.xml")?
+        .map(|value| {
+            STANDARD
+                .decode(value.as_bytes())
+                .map_err(|err| xml_error("META-INF/manifest.xml", err))
+        })
+        .transpose()
 }
 
 #[cfg(test)]
@@ -306,6 +311,45 @@ mod tests {
         "#,
         ] {
             let err = parse_manifest(xml).expect_err("malformed manifest number must fail");
+            match err {
+                crate::error::ParseError::Xml { file, .. } => {
+                    assert_eq!(file, "META-INF/manifest.xml");
+                }
+                other => panic!("unexpected error: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn parse_manifest_reports_malformed_encryption_base64_attributes() {
+        for xml in [
+            r#"
+            <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <manifest:file-entry manifest:full-path="content.xml">
+                <manifest:encryption-data manifest:checksum="%%%"/>
+              </manifest:file-entry>
+            </manifest:manifest>
+        "#,
+            r#"
+            <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <manifest:file-entry manifest:full-path="content.xml">
+                <manifest:encryption-data>
+                  <manifest:algorithm manifest:initialisation-vector="%%%"/>
+                </manifest:encryption-data>
+              </manifest:file-entry>
+            </manifest:manifest>
+        "#,
+            r#"
+            <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <manifest:file-entry manifest:full-path="content.xml">
+                <manifest:encryption-data>
+                  <manifest:key-derivation manifest:salt="%%%"/>
+                </manifest:encryption-data>
+              </manifest:file-entry>
+            </manifest:manifest>
+        "#,
+        ] {
+            let err = parse_manifest(xml).expect_err("malformed manifest base64 must fail");
             match err {
                 crate::error::ParseError::Xml { file, .. } => {
                     assert_eq!(file, "META-INF/manifest.xml");
