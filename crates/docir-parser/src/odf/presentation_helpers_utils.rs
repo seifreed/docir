@@ -15,7 +15,7 @@ pub(super) fn parse_duration_ms(value: &str) -> Option<u32> {
             .map(|v| (v * 1000.0).round() as u32);
     }
     if trimmed.starts_with("PT") && trimmed.ends_with('S') {
-        let inner = trimmed.trim_start_matches("PT").trim_end_matches('S');
+        let inner = trimmed.strip_prefix("PT")?.strip_suffix('S')?;
         return inner
             .parse::<f32>()
             .ok()
