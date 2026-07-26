@@ -373,21 +373,40 @@ pub(super) fn parse_column(
     let mut width = None;
     let mut hidden = false;
     let mut custom_width = false;
+    let mut numeric_error = None;
 
     visit_attributes(element, sheet_path, |attr| match attr.key.as_ref() {
-        b"min" => min = lossy_attr_value(attr).parse::<u32>().ok(),
-        b"max" => max = lossy_attr_value(attr).parse::<u32>().ok(),
-        b"width" => width = lossy_attr_value(attr).parse::<f64>().ok(),
+        b"min" => match parse_u32_attr(&lossy_attr_value(attr), sheet_path) {
+            Ok(parsed) => min = Some(parsed),
+            Err(err) => numeric_error = Some(err),
+        },
+        b"max" => match parse_u32_attr(&lossy_attr_value(attr), sheet_path) {
+            Ok(parsed) => max = Some(parsed),
+            Err(err) => numeric_error = Some(err),
+        },
+        b"width" => match lossy_attr_value(attr).parse::<f64>() {
+            Ok(parsed) => width = Some(parsed),
+            Err(err) => numeric_error = Some(xml_error(sheet_path, err)),
+        },
         b"hidden" => hidden = attr_bool_like(attr.value.as_ref()),
         b"customWidth" => custom_width = attr_bool_like(attr.value.as_ref()),
         _ => {}
     })?;
+    if let Some(err) = numeric_error {
+        return Err(err);
+    }
 
     let (Some(min), Some(max)) = (min, max) else {
         return Ok(());
     };
+    if min == 0 || max == 0 {
+        return Err(xml_error(sheet_path, "column indexes must be 1-based"));
+    }
+    if max < min {
+        return Err(xml_error(sheet_path, "column max is smaller than min"));
+    }
     for idx in min..=max {
-        let col_index = idx.saturating_sub(1);
+        let col_index = idx - 1;
         columns.insert(
             col_index,
             ColumnDefinition {

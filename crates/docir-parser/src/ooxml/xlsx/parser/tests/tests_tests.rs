@@ -96,6 +96,31 @@ fn parse_column_and_merge_helpers_report_malformed_attributes() {
         } if file == "xl/worksheets/sheet1.xml"
     ));
 
+    for xml in [
+        r#"<col min="bad" max="4"/>"#,
+        r#"<col min="0" max="4"/>"#,
+        r#"<col min="2" max="bad"/>"#,
+        r#"<col min="2" max="0"/>"#,
+        r#"<col min="4" max="2"/>"#,
+        r#"<col min="2" max="4" width="bad"/>"#,
+    ] {
+        let mut reader = Reader::from_str(xml);
+        buf.clear();
+        let col = match reader.read_event_into(&mut buf).expect("column") {
+            Event::Empty(e) => e.into_owned(),
+            other => panic!("unexpected event: {other:?}"),
+        };
+        let err = parse_column(&col, &mut columns, "xl/worksheets/sheet1.xml")
+            .expect_err("malformed column numeric attrs must fail");
+        assert!(matches!(
+            err,
+            ParseError::Xml {
+                ref file,
+                ..
+            } if file == "xl/worksheets/sheet1.xml"
+        ));
+    }
+
     let mut merge_reader = Reader::from_str(r#"<mergeCell ref="A1:B2" ref="C1:D2"/>"#);
     buf.clear();
     let merge = match merge_reader.read_event_into(&mut buf).expect("merge") {
