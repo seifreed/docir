@@ -1,5 +1,15 @@
 use super::*;
+use crate::test_support::build_test_cfb;
 use docir_core::ir::IRNode;
+
+fn patch_cfb_fat_entry(bytes: &[u8], fat_index: u32, value: u32) -> Vec<u8> {
+    let mut out = bytes.to_vec();
+    let sector_size = 1usize << u16::from_le_bytes([out[0x1E], out[0x1F]]);
+    let first_fat_sector = u32::from_le_bytes([out[0x4C], out[0x4D], out[0x4E], out[0x4F]]);
+    let fat_offset = sector_size + first_fat_sector as usize * sector_size + fat_index as usize * 4;
+    out[fat_offset..fat_offset + 4].copy_from_slice(&value.to_le_bytes());
+    out
+}
 
 fn make_record(tag_id: u16, payload: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
@@ -164,4 +174,29 @@ fn extract_urls_finds_multiple_schemes() {
     assert_eq!(urls[0], "https://a.test/x?q=1");
     assert_eq!(urls[1], "file://tmp/a.bin");
     assert_eq!(urls[2], "mailto:foo@example.test");
+}
+
+#[test]
+fn external_ref_scan_reports_corrupt_section_stream_read() {
+    let section = vec![b'A'; 5000];
+    let base = build_test_cfb(&[("Section0", &section)]);
+    let bytes = patch_cfb_fat_entry(&base, 0, 99);
+    let cfb = Cfb::parse(bytes).expect("cfb");
+    let header_ctx = super::super::builder::HwpHeaderContext {
+        compressed: false,
+        encrypted: false,
+        force_parse: false,
+        hwp_password: None,
+        try_raw_encrypted: false,
+        allow_parse: true,
+    };
+    let mut diagnostics = Diagnostics::new();
+    let mut refs = Vec::new();
+
+    collect_external_refs_from_stream(&cfb, "Section0", &header_ctx, &mut diagnostics, &mut refs);
+
+    assert!(refs.is_empty());
+    assert!(diagnostics.entries.iter().any(|e| {
+        e.code == "HWP_STREAM_READ_FAIL" && e.message.contains("OLE sector out of bounds")
+    }));
 }

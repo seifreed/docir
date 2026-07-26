@@ -348,8 +348,18 @@ fn collect_external_refs_from_stream(
     diagnostics: &mut Diagnostics,
     refs: &mut Vec<ExternalReference>,
 ) {
-    let Some(data) = cfb.read_stream(path) else {
-        return;
+    let data = match cfb.try_read_stream(path) {
+        Ok(Some(data)) => data,
+        Ok(None) => return,
+        Err(err) => {
+            push_warning(
+                diagnostics,
+                "HWP_STREAM_READ_FAIL",
+                err.to_string(),
+                Some(path),
+            );
+            return;
+        }
     };
     let Some(prepared) = prepare_hwp_stream_data(
         &data,
