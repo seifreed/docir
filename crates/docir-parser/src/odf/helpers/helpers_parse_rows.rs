@@ -5,7 +5,7 @@ use crate::odf::{
 };
 use crate::xml_utils::{
     XmlScanControl, is_end_event_local, local_name, scan_xml_events_until_end,
-    try_attr_value_by_suffix,
+    try_attr_value_by_suffix, xml_error,
 };
 use docir_core::ir::{CellFormula, CellValue, MergedCellRange};
 use docir_core::visitor::IrStore;
@@ -162,12 +162,15 @@ pub(crate) fn parse_ods_covered_cell_empty(
 fn covered_cell_from_start(start: &BytesStart<'_>) -> Result<OdsCellData, ParseError> {
     let col_repeat =
         try_attr_value_by_suffix(start, &[b":number-columns-repeated"], "content.xml")?
-            .and_then(|v| v.parse::<u32>().ok())
+            .map(|v| parse_u32_attr(&v))
+            .transpose()?
             .unwrap_or(1);
     let col_span = try_attr_value_by_suffix(start, &[b":number-columns-spanned"], "content.xml")?
-        .and_then(|v| v.parse::<u32>().ok());
+        .map(|v| parse_u32_attr(&v))
+        .transpose()?;
     let row_span = try_attr_value_by_suffix(start, &[b":number-rows-spanned"], "content.xml")?
-        .and_then(|v| v.parse::<u32>().ok());
+        .map(|v| parse_u32_attr(&v))
+        .transpose()?;
     Ok(OdsCellData {
         value: CellValue::Empty,
         formula: None,
@@ -178,6 +181,10 @@ fn covered_cell_from_start(start: &BytesStart<'_>) -> Result<OdsCellData, ParseE
         row_span,
         is_covered: true,
     })
+}
+
+fn parse_u32_attr(value: &str) -> Result<u32, ParseError> {
+    value.parse().map_err(|err| xml_error("content.xml", err))
 }
 
 pub(crate) fn column_index_to_name(mut index: u32) -> String {
@@ -230,6 +237,30 @@ mod tests {
         match err {
             ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
             other => panic!("expected xml error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn covered_cell_empty_reports_malformed_numeric_attributes() {
+        for xml in [
+            r#"<table:covered-table-cell table:number-columns-repeated="bad" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"/>"#,
+            r#"<table:covered-table-cell table:number-columns-spanned="bad" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"/>"#,
+            r#"<table:covered-table-cell table:number-rows-spanned="bad" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"/>"#,
+        ] {
+            let mut reader = quick_xml::Reader::from_str(xml);
+            reader.config_mut().trim_text(true);
+            let mut buf = Vec::new();
+            let start = match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(e)) => e.into_owned(),
+                _ => panic!("expected covered-table-cell"),
+            };
+
+            let err = parse_ods_covered_cell_empty(&start)
+                .expect_err("malformed covered cell numeric attributes must fail");
+            match err {
+                ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+                other => panic!("expected xml error, got {other:?}"),
+            }
         }
     }
 

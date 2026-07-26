@@ -15,7 +15,7 @@ use crate::odf::{
 };
 use crate::xml_utils::{
     XmlScanControl, dispatch_start_or_empty, is_end_event_local, local_name,
-    scan_xml_events_with_reader, try_attr_value_by_suffix,
+    scan_xml_events_with_reader, try_attr_value_by_suffix, xml_error,
 };
 use quick_xml::events::BytesStart;
 use std::collections::HashMap;
@@ -429,5 +429,7 @@ fn ods_cell_attr(start: &BytesStart<'_>, suffixes: &[&[u8]]) -> Result<Option<St
 }
 
 fn ods_cell_u32_attr(start: &BytesStart<'_>, suffix: &[u8]) -> Result<Option<u32>, ParseError> {
-    Ok(ods_cell_attr(start, &[suffix])?.and_then(|v| v.parse::<u32>().ok()))
+    ods_cell_attr(start, &[suffix])?
+        .map(|v| v.parse().map_err(|err| xml_error("content.xml", err)))
+        .transpose()
 }
