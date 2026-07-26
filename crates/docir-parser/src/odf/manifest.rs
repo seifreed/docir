@@ -1,7 +1,9 @@
 //! ODF manifest parsing helpers.
 
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, try_attr_value_by_suffix};
+use crate::xml_utils::{
+    XmlScanControl, local_name, scan_xml_events, try_attr_value_by_suffix, xml_error,
+};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use quick_xml::Reader;
@@ -150,8 +152,7 @@ fn apply_algorithm_attrs(
     enc.init_vector =
         try_attr_value_by_suffix(e, &[b":initialisation-vector"], "META-INF/manifest.xml")?
             .and_then(|v| decode_base64_bytes(&v));
-    enc.key_size = try_attr_value_by_suffix(e, &[b":key-size"], "META-INF/manifest.xml")?
-        .and_then(|v| v.parse::<u32>().ok());
+    enc.key_size = parse_optional_u32_attr(e, &[b":key-size"])?;
     Ok(())
 }
 
@@ -163,10 +164,21 @@ fn apply_key_derivation_attrs(
         try_attr_value_by_suffix(e, &[b":key-derivation-name"], "META-INF/manifest.xml")?;
     enc.salt = try_attr_value_by_suffix(e, &[b":salt"], "META-INF/manifest.xml")?
         .and_then(|v| decode_base64_bytes(&v));
-    enc.iteration_count =
-        try_attr_value_by_suffix(e, &[b":iteration-count"], "META-INF/manifest.xml")?
-            .and_then(|v| v.parse::<u32>().ok());
+    enc.iteration_count = parse_optional_u32_attr(e, &[b":iteration-count"])?;
     Ok(())
+}
+
+fn parse_optional_u32_attr(
+    e: &quick_xml::events::BytesStart<'_>,
+    names: &[&[u8]],
+) -> Result<Option<u32>, ParseError> {
+    try_attr_value_by_suffix(e, names, "META-INF/manifest.xml")?
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .map_err(|err| xml_error("META-INF/manifest.xml", err))
+        })
+        .transpose()
 }
 
 /// Public API entrypoint: is_manifest_entry_encrypted.
@@ -268,6 +280,38 @@ mod tests {
                 assert_eq!(file, "META-INF/manifest.xml");
             }
             other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_manifest_reports_malformed_encryption_number_attributes() {
+        for xml in [
+            r#"
+            <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <manifest:file-entry manifest:full-path="content.xml">
+                <manifest:encryption-data>
+                  <manifest:algorithm manifest:key-size="bad"/>
+                </manifest:encryption-data>
+              </manifest:file-entry>
+            </manifest:manifest>
+        "#,
+            r#"
+            <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <manifest:file-entry manifest:full-path="content.xml">
+                <manifest:encryption-data>
+                  <manifest:key-derivation manifest:iteration-count="bad"/>
+                </manifest:encryption-data>
+              </manifest:file-entry>
+            </manifest:manifest>
+        "#,
+        ] {
+            let err = parse_manifest(xml).expect_err("malformed manifest number must fail");
+            match err {
+                crate::error::ParseError::Xml { file, .. } => {
+                    assert_eq!(file, "META-INF/manifest.xml");
+                }
+                other => panic!("unexpected error: {other:?}"),
+            }
         }
     }
 }
