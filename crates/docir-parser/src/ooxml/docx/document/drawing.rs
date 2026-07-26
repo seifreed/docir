@@ -92,7 +92,7 @@ fn handle_drawing_start(
         }
         b"extent" | b"ext" => apply_extent(e, &mut state.transform)?,
         b"off" => apply_offset(e, &mut state.transform)?,
-        b"posOffset" => apply_position_offset(reader, e, state),
+        b"posOffset" => apply_position_offset(reader, e, state)?,
         b"txBody" => state.text = Some(parse_drawing_text_body(reader, DOC_PATH)?),
         b"chart" => state.chart_rel = try_attr_value_by_suffix(e, &[b":id"], DOC_PATH)?,
         b"relIds" => collect_diagram_relationships(e, &mut state.diagram_rel_ids)?,
@@ -152,17 +152,20 @@ fn apply_position_offset(
     reader: &mut Reader<&[u8]>,
     e: &BytesStart<'_>,
     state: &mut DocxDrawingState,
-) {
-    if let Ok(text) = reader.read_text(e.name())
-        && let Ok(val) = decoded_text_or_default(&text).parse::<i64>()
-    {
-        if state.next_pos_is_x {
-            state.transform.x = val;
-        } else {
-            state.transform.y = val;
-        }
-        state.next_pos_is_x = !state.next_pos_is_x;
+) -> Result<(), ParseError> {
+    let text = reader
+        .read_text(e.name())
+        .map_err(|err| xml_error(DOC_PATH, err))?;
+    let val = decoded_text_or_default(&text)
+        .parse::<i64>()
+        .map_err(|err| xml_error(DOC_PATH, err))?;
+    if state.next_pos_is_x {
+        state.transform.x = val;
+    } else {
+        state.transform.y = val;
     }
+    state.next_pos_is_x = !state.next_pos_is_x;
+    Ok(())
 }
 
 fn collect_diagram_relationships(
@@ -493,5 +496,30 @@ mod tests {
         assert_eq!(text.paragraphs[0].runs[0].text, "Line1");
         assert_eq!(text.paragraphs[0].runs[1].text, "\n");
         assert_eq!(text.paragraphs[0].runs[2].text, "Line2");
+    }
+
+    #[test]
+    fn apply_position_offset_reports_malformed_text() {
+        let xml = r#"<wp:posOffset>not-a-number</wp:posOffset>"#;
+        let mut reader = reader_from_str(xml);
+        let mut state = DocxDrawingState::new();
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"wp:posOffset" => {
+                    let err = apply_position_offset(&mut reader, &e, &mut state)
+                        .expect_err("invalid posOffset must fail");
+                    match err {
+                        ParseError::Xml { file, .. } => assert_eq!(file, DOC_PATH),
+                        other => panic!("unexpected error: {other:?}"),
+                    }
+                    break;
+                }
+                Ok(Event::Eof) => panic!("posOffset start not found"),
+                Ok(_) => {}
+                Err(err) => panic!("unexpected xml read error: {err}"),
+            }
+            buf.clear();
+        }
     }
 }
