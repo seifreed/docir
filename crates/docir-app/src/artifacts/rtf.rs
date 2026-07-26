@@ -1,4 +1,4 @@
-use docir_core::{ExtractedArtifact, ExtractedArtifactKind};
+use docir_core::{ExtractedArtifact, ExtractedArtifactKind, ExtractionWarning};
 use docir_parser::ole::is_ole_container;
 
 use super::{ArtifactExtractionBundle, ArtifactExtractionOptions, ExtractedPayload};
@@ -38,38 +38,49 @@ pub(super) fn extract_rtf_artifacts(
         });
         bundle.manifest.artifacts.push(artifact);
 
-        if let Some(payload) = extract_embedded_payload(&blob) {
-            payload_index += 1;
-            let mut payload_artifact = ExtractedArtifact::new(
-                format!("ole-native-payload-{}", payload_index),
-                ExtractedArtifactKind::OleNativePayload,
-            );
-            payload_artifact.source_path =
-                Some(format!("rtf:objdata#{}#{}", idx + 1, payload.stream_name));
-            payload_artifact.size_bytes = Some(payload.data.len() as u64);
-            assign_sha256(
-                &mut payload_artifact.sha256,
-                &payload.data,
-                options.compute_hashes,
-            );
-            let (inner_kind, inner_mime) =
-                classify_payload(&payload.data, payload.file_name.as_deref());
-            payload_artifact.mime_type = Some(inner_mime.to_string());
-            let inner_name = preferred_output_name(
-                payload.file_name.as_deref(),
-                payload_index,
-                inner_kind,
-                Some(inner_mime),
-            );
-            let inner_relative_path = format!("payloads/{}", inner_name);
-            payload_artifact.output_path = Some(inner_relative_path.clone());
-            payload_artifact.suggested_name = Some(inner_name);
-            bundle.payloads.push(ExtractedPayload {
-                artifact_id: payload_artifact.id.clone(),
-                relative_path: inner_relative_path,
-                data: payload.data,
-            });
-            bundle.manifest.artifacts.push(payload_artifact);
+        match extract_embedded_payload(&blob) {
+            Ok(Some(payload)) => {
+                payload_index += 1;
+                let mut payload_artifact = ExtractedArtifact::new(
+                    format!("ole-native-payload-{}", payload_index),
+                    ExtractedArtifactKind::OleNativePayload,
+                );
+                payload_artifact.source_path =
+                    Some(format!("rtf:objdata#{}#{}", idx + 1, payload.stream_name));
+                payload_artifact.size_bytes = Some(payload.data.len() as u64);
+                assign_sha256(
+                    &mut payload_artifact.sha256,
+                    &payload.data,
+                    options.compute_hashes,
+                );
+                let (inner_kind, inner_mime) =
+                    classify_payload(&payload.data, payload.file_name.as_deref());
+                payload_artifact.mime_type = Some(inner_mime.to_string());
+                let inner_name = preferred_output_name(
+                    payload.file_name.as_deref(),
+                    payload_index,
+                    inner_kind,
+                    Some(inner_mime),
+                );
+                let inner_relative_path = format!("payloads/{}", inner_name);
+                payload_artifact.output_path = Some(inner_relative_path.clone());
+                payload_artifact.suggested_name = Some(inner_name);
+                bundle.payloads.push(ExtractedPayload {
+                    artifact_id: payload_artifact.id.clone(),
+                    relative_path: inner_relative_path,
+                    data: payload.data,
+                });
+                bundle.manifest.artifacts.push(payload_artifact);
+            }
+            Ok(None) => {}
+            Err(err) => bundle.manifest.warnings.push(ExtractionWarning::new(
+                "OLE_EMBEDDED_OPEN_FAILED",
+                format!(
+                    "Unable to open embedded RTF OLE object {}: {}",
+                    idx + 1,
+                    err
+                ),
+            )),
         }
     }
 }

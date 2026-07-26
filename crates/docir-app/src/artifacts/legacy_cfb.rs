@@ -51,9 +51,23 @@ pub(super) fn extract_legacy_cfb_artifacts(
 
         bundle.manifest.artifacts.push(artifact);
 
-        if let Some(payload) = extract_legacy_payload(&upper, &path, data) {
-            payload_index += 1;
-            push_legacy_embedded_payload(&path, payload, metadata, payload_index, options, bundle);
+        match extract_legacy_payload(&upper, &path, data) {
+            Ok(Some(payload)) => {
+                payload_index += 1;
+                push_legacy_embedded_payload(
+                    &path,
+                    payload,
+                    metadata,
+                    payload_index,
+                    options,
+                    bundle,
+                );
+            }
+            Ok(None) => {}
+            Err(err) => bundle.manifest.warnings.push(ExtractionWarning::new(
+                "OLE_EMBEDDED_OPEN_FAILED",
+                format!("Unable to open embedded OLE artifact {}: {}", path, err),
+            )),
         }
     }
 }
@@ -142,27 +156,31 @@ fn push_legacy_raw_payload(
     });
 }
 
-fn extract_legacy_payload(upper_path: &str, path: &str, data: Vec<u8>) -> Option<EmbeddedPayload> {
+fn extract_legacy_payload(
+    upper_path: &str,
+    path: &str,
+    data: Vec<u8>,
+) -> Result<Option<EmbeddedPayload>, String> {
     if upper_path.starts_with("BINDATA/") {
-        return None;
+        return Ok(None);
     }
     if upper_path.ends_with("OLE10NATIVE") {
-        return parse_ole10_native(&data).map(|payload| EmbeddedPayload {
+        return Ok(parse_ole10_native(&data).map(|payload| EmbeddedPayload {
             stream_name: path.to_string(),
             file_name: payload.file_name,
             source_path: payload.source_path,
             temp_path: payload.temp_path,
             data: payload.data,
-        });
+        }));
     }
     if upper_path.ends_with("/PACKAGE") || upper_path == "PACKAGE" {
-        return Some(EmbeddedPayload {
+        return Ok(Some(EmbeddedPayload {
             stream_name: path.to_string(),
             file_name: None,
             source_path: None,
             temp_path: None,
             data,
-        });
+        }));
     }
     crate::artifacts::ole::extract_embedded_payload_from_cfb(&data)
 }

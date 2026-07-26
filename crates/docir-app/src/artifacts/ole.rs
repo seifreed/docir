@@ -11,41 +11,43 @@ pub(super) struct EmbeddedPayload {
     pub data: Vec<u8>,
 }
 
-pub(super) fn extract_embedded_payload(data: &[u8]) -> Option<EmbeddedPayload> {
+pub(super) fn extract_embedded_payload(data: &[u8]) -> Result<Option<EmbeddedPayload>, String> {
     if !is_ole_container(data) {
-        return None;
+        return Ok(None);
     }
-    let cfb = Cfb::parse(data.to_vec()).ok()?;
+    let cfb = Cfb::parse(data.to_vec()).map_err(|err| err.to_string())?;
     for stream_name in ["\u{0001}Ole10Native", "Ole10Native", "Package"] {
         let Some(stream) = cfb.read_stream(stream_name) else {
             continue;
         };
         if stream_name.contains("Ole10Native") {
             if let Some(payload) = parse_ole10_native(&stream) {
-                return Some(EmbeddedPayload {
+                return Ok(Some(EmbeddedPayload {
                     stream_name: stream_name.to_string(),
                     file_name: payload.file_name,
                     source_path: payload.source_path,
                     temp_path: payload.temp_path,
                     data: payload.data,
-                });
+                }));
             }
         } else {
-            return Some(EmbeddedPayload {
+            return Ok(Some(EmbeddedPayload {
                 stream_name: stream_name.to_string(),
                 file_name: None,
                 source_path: None,
                 temp_path: None,
                 data: stream,
-            });
+            }));
         }
     }
-    None
+    Ok(None)
 }
 
-pub(super) fn extract_embedded_payload_from_cfb(data: &[u8]) -> Option<EmbeddedPayload> {
+pub(super) fn extract_embedded_payload_from_cfb(
+    data: &[u8],
+) -> Result<Option<EmbeddedPayload>, String> {
     if !is_ole_container(data) {
-        return None;
+        return Ok(None);
     }
     extract_embedded_payload(data)
 }

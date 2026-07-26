@@ -246,6 +246,32 @@ fn extract_artifacts_finds_ooxml_embedding_and_payload() {
 }
 
 #[test]
+fn extract_artifacts_warns_for_corrupt_ooxml_ole_embedding() {
+    let bytes = build_minimal_docx(&[(
+        "word/embeddings/object1.bin",
+        b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1truncated",
+    )]);
+    let app = DocirApp::new(ParserConfig::default());
+    let parsed = app.parse_bytes(&bytes).expect("parse bytes");
+    let bundle = extract_artifacts_from_bytes(
+        &parsed,
+        &bytes,
+        Some("memory.docx".to_string()),
+        &ParserConfig::default().zip_config,
+        &ArtifactExtractionOptions::default(),
+    );
+
+    assert!(bundle.manifest.artifacts.iter().any(|artifact| {
+        artifact.kind == ExtractedArtifactKind::OleObject
+            && artifact.source_path.as_deref() == Some("word/embeddings/object1.bin")
+    }));
+    assert!(bundle.manifest.warnings.iter().any(|warning| {
+        warning.code == "OLE_EMBEDDED_OPEN_FAILED"
+            && warning.message.contains("word/embeddings/object1.bin")
+    }));
+}
+
+#[test]
 fn extract_artifacts_finds_legacy_cfb_payload() {
     let mut ole10 = Vec::new();
     ole10.extend_from_slice(&64u32.to_le_bytes());

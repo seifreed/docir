@@ -60,9 +60,16 @@ pub(super) fn extract_ooxml_artifacts(
 
         bundle.manifest.artifacts.push(artifact);
 
-        if let Some(payload) = extract_embedded_payload(&data) {
-            counters.payload += 1;
-            push_ooxml_embedded_payload(&path, payload, counters.payload, options, bundle);
+        match extract_embedded_payload(&data) {
+            Ok(Some(payload)) => {
+                counters.payload += 1;
+                push_ooxml_embedded_payload(&path, payload, counters.payload, options, bundle);
+            }
+            Ok(None) => {}
+            Err(err) => bundle.manifest.warnings.push(ExtractionWarning::new(
+                "OLE_EMBEDDED_OPEN_FAILED",
+                format!("Unable to open embedded OLE artifact {}: {}", path, err),
+            )),
         }
     }
 }

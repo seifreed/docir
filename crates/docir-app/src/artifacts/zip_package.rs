@@ -173,9 +173,19 @@ fn extract_zip_artifacts<R: std::io::Read + std::io::Seek>(
         }
         bundle.manifest.artifacts.push(artifact);
 
-        if let Some(payload) = extract_embedded_payload(&data) {
-            payload_index += 1;
-            push_embedded_payload(&candidate.path, payload, payload_index, options, bundle);
+        match extract_embedded_payload(&data) {
+            Ok(Some(payload)) => {
+                payload_index += 1;
+                push_embedded_payload(&candidate.path, payload, payload_index, options, bundle);
+            }
+            Ok(None) => {}
+            Err(err) => bundle.manifest.warnings.push(ExtractionWarning::new(
+                "OLE_EMBEDDED_OPEN_FAILED",
+                format!(
+                    "Unable to open embedded OLE artifact {}: {}",
+                    candidate.path, err
+                ),
+            )),
         }
     }
 }
