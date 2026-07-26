@@ -30,7 +30,7 @@ pub trait SecurityScanner {
         store: &mut IrStore,
         doc: &mut Document,
         diagnostics: &mut Diagnostics,
-    );
+    ) -> Result<(), ParseError>;
 }
 
 pub struct DefaultSecurityScanner;
@@ -54,7 +54,7 @@ impl SecurityScanner for DefaultSecurityScanner {
         store: &mut IrStore,
         doc: &mut Document,
         diagnostics: &mut Diagnostics,
-    ) {
-        scan_odf_security(xml, file_names, zip, store, doc, diagnostics);
+    ) -> Result<(), ParseError> {
+        scan_odf_security(xml, file_names, zip, store, doc, diagnostics)
     }
 }

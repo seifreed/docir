@@ -107,7 +107,7 @@ impl ParseStage for OdfParser {
             &mut store,
             &mut doc,
             &mut diagnostics,
-        );
+        )?;
 
         self.finalize_parsed_artifacts(
             &read_state,
@@ -155,7 +155,7 @@ impl OdfParser {
             content_state.content_xml.is_none(),
         );
         let manifest_index = collect_manifest_index(manifest_entries, diagnostics);
-        let file_names = collect_shared_parts(zip, &manifest_index, store, doc);
+        let file_names = collect_shared_parts(zip, &manifest_index, store, doc)?;
 
         Ok(OdfReadState {
             content_xml: content_state.content_xml,

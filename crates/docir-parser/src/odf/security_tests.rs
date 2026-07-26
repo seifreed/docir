@@ -1,5 +1,38 @@
-use super::{scan_external_links, scan_odf_filters, scan_odf_formula_security, scan_odf_objects};
+use super::{
+    scan_embedded_objects, scan_external_links, scan_odf_filters, scan_odf_formula_security,
+    scan_odf_objects,
+};
+use crate::error::ParseError;
+use crate::zip_handler::PackageReader;
 use docir_core::security::ExternalRefType;
+
+struct FailingSizeReader;
+
+impl PackageReader for FailingSizeReader {
+    fn contains(&self, _name: &str) -> bool {
+        false
+    }
+
+    fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError> {
+        Err(ParseError::MissingPart(name.to_string()))
+    }
+
+    fn file_size(&mut self, name: &str) -> Result<u64, ParseError> {
+        Err(ParseError::MissingPart(name.to_string()))
+    }
+
+    fn file_names(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn list_prefix(&self, _prefix: &str) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn list_suffix(&self, _suffix: &str) -> Vec<String> {
+        Vec::new()
+    }
+}
 
 #[test]
 fn scan_external_links_accepts_alternate_namespace_prefixes() {
@@ -62,6 +95,18 @@ fn scan_odf_object_internal_targets_are_not_external_ole_links() {
     assert_eq!(oles.len(), 1);
     assert!(!oles[0].is_linked);
     assert!(ole_refs.is_empty());
+}
+
+#[test]
+fn scan_embedded_objects_reports_size_errors() {
+    let mut reader = FailingSizeReader;
+    let err = scan_embedded_objects(&["Object 1".to_string()], &mut reader)
+        .expect_err("embedded object size failures must not be suppressed");
+
+    match err {
+        ParseError::MissingPart(path) => assert_eq!(path, "Object 1"),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]

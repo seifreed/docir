@@ -1,5 +1,6 @@
 use super::helpers::parse_odf_condition_operator;
 use crate::diagnostics::push_entry;
+use crate::error::ParseError;
 use crate::security_scan::OdfXmlInputs;
 use crate::security_utils::parse_dde_formula;
 use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events};
@@ -82,14 +83,14 @@ pub(crate) fn scan_odf_objects(xml: &str) -> (Vec<OleObject>, Vec<ExternalRefere
 pub(crate) fn scan_embedded_objects(
     file_names: &[String],
     zip: &mut impl PackageReader,
-) -> Vec<OleObject> {
+) -> Result<Vec<OleObject>, ParseError> {
     let mut oles = Vec::new();
     for path in file_names {
         if path.starts_with("Object ")
             || path.starts_with("ObjectReplacements/")
             || path.starts_with("Objects/")
         {
-            let size_bytes = zip.file_size(path).unwrap_or(0);
+            let size_bytes = zip.file_size(path)?;
             let mut ole = OleObject::new();
             ole.name = Some(path.clone());
             ole.size_bytes = size_bytes;
@@ -97,7 +98,7 @@ pub(crate) fn scan_embedded_objects(
             oles.push(ole);
         }
     }
-    oles
+    Ok(oles)
 }
 
 pub(crate) fn scan_odf_filters(xml: &str) -> Vec<String> {
@@ -245,7 +246,7 @@ pub(crate) fn scan_odf_security(
     store: &mut IrStore,
     doc: &mut Document,
     diagnostics: &mut Diagnostics,
-) {
+) -> Result<(), ParseError> {
     let mut formula_scan = OdfFormulaScan::default();
     if let Some(content_xml) = xml.content_xml {
         formula_scan = scan_odf_formula_security(content_xml);
@@ -274,7 +275,7 @@ pub(crate) fn scan_odf_security(
         ole_objects.extend(oles);
         external_refs.extend(ole_links);
     }
-    ole_objects.extend(scan_embedded_objects(file_names, zip));
+    ole_objects.extend(scan_embedded_objects(file_names, zip)?);
 
     for ext in external_refs {
         store.insert(IRNode::ExternalReference(ext));
@@ -283,6 +284,7 @@ pub(crate) fn scan_odf_security(
         store.insert(IRNode::OleObject(ole));
     }
     doc.security.dde_fields.append(&mut formula_scan.dde_fields);
+    Ok(())
 }
 
 pub(crate) fn scan_odf_protection(xml: &str) -> Vec<DiagnosticEntry> {

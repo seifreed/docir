@@ -141,12 +141,12 @@ fn test_odf_manifest_inventory_and_parts() {
     let parsed = parser.parse_reader(Cursor::new(zip_data)).unwrap();
 
     let mut part_paths = Vec::new();
-    let mut asset_paths = Vec::new();
+    let mut assets = Vec::new();
     let mut odf_parts = Vec::new();
     for node in parsed.store.values() {
         match node {
             IRNode::ExtensionPart(part) => part_paths.push(part.path.clone()),
-            IRNode::MediaAsset(asset) => asset_paths.push(asset.path.clone()),
+            IRNode::MediaAsset(asset) => assets.push((asset.path.clone(), asset.size_bytes)),
             IRNode::Diagnostics(diag) => {
                 for entry in &diag.entries {
                     if entry.code == "ODF_PART"
@@ -163,7 +163,7 @@ fn test_odf_manifest_inventory_and_parts() {
     assert!(part_paths.contains(&"content.xml".to_string()));
     assert!(part_paths.contains(&"styles.xml".to_string()));
     assert!(part_paths.contains(&"settings.xml".to_string()));
-    assert!(asset_paths.contains(&"Thumbnails/thumbnail.png".to_string()));
+    assert!(assets.contains(&("Thumbnails/thumbnail.png".to_string(), 7)));
     assert!(odf_parts.contains(&"content.xml".to_string()));
     assert!(odf_parts.contains(&"styles.xml".to_string()));
 }

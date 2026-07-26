@@ -1,5 +1,6 @@
 use super::{OdfManifestEntry, build_media_asset};
 use crate::diagnostics::push_info;
+use crate::error::ParseError;
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::{Document, ExtensionPart, ExtensionPartKind, IRNode};
 use docir_core::visitor::IrStore;
@@ -34,7 +35,7 @@ pub(super) fn collect_shared_parts<R: Read + Seek>(
     manifest_index: &HashMap<String, Option<String>>,
     store: &mut IrStore,
     doc: &mut Document,
-) -> Vec<String> {
+) -> Result<Vec<String>, ParseError> {
     let mut file_names: Vec<String> = zip.file_names().map(|name| name.to_string()).collect();
     file_names.sort();
     for path in &file_names {
@@ -42,7 +43,7 @@ pub(super) fn collect_shared_parts<R: Read + Seek>(
             continue;
         }
         let media_type = manifest_index.get(path.as_str()).cloned().unwrap_or(None);
-        let size_bytes = zip.file_size(path).unwrap_or(0);
+        let size_bytes = zip.file_size(path)?;
         let mut part = ExtensionPart::new(path.to_string(), size_bytes, ExtensionPartKind::Unknown);
         part.content_type = media_type.clone();
         let part_id = part.id;
@@ -57,5 +58,5 @@ pub(super) fn collect_shared_parts<R: Read + Seek>(
             doc.add_shared_part(asset_id);
         }
     }
-    file_names
+    Ok(file_names)
 }
