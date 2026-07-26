@@ -96,6 +96,28 @@ fn test_parse_custom_properties() {
 }
 
 #[test]
+fn test_parse_custom_properties_reports_malformed_pid() {
+    let xml = r#"
+        <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                    xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+          <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="bad" name="AuthorId">
+            <vt:i4>123</vt:i4>
+          </property>
+        </Properties>
+        "#;
+    let mut metadata = DocumentMetadata::new();
+    let parser = OoxmlParser::new();
+    let err = parser
+        .parse_custom_properties(xml, &mut metadata)
+        .expect_err("malformed custom property pid must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "docProps/custom.xml"),
+        other => panic!("expected custom property XML error, got {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_minimal_docx() {
     let path = create_minimal_docx(true);
     let parser = OoxmlParser::new();

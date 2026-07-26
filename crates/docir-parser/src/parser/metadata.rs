@@ -181,18 +181,25 @@ impl OoxmlParser {
                             format_id: None,
                             property_id: None,
                         };
+                        let mut pid_error = None;
                         visit_attributes(&e, "docProps/custom.xml", |attr| {
                             match attr.key.as_ref() {
                                 b"name" => prop.name = lossy_attr_value(attr).to_string(),
                                 b"fmtid" => {
                                     prop.format_id = Some(lossy_attr_value(attr).to_string())
                                 }
-                                b"pid" => {
-                                    prop.property_id = lossy_attr_value(attr).parse::<u32>().ok()
-                                }
+                                b"pid" => match lossy_attr_value(attr).parse::<u32>() {
+                                    Ok(pid) => prop.property_id = Some(pid),
+                                    Err(err) => {
+                                        pid_error = Some(xml_error("docProps/custom.xml", err))
+                                    }
+                                },
                                 _ => {}
                             }
                         })?;
+                        if let Some(err) = pid_error {
+                            return Err(err);
+                        }
                         current_prop = Some(prop);
                     } else if name.starts_with("vt:") || name.contains(':') {
                         current_value_tag = Some(name);
