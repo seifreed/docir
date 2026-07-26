@@ -29,17 +29,18 @@ impl OoxmlParser {
         let mut metadata = DocumentMetadata::new();
 
         // Parse core.xml (Dublin Core properties)
-        if let Ok(core_xml) = zip.read_file_string("docProps/core.xml") {
-            self.parse_core_properties(&core_xml, &mut metadata);
-        }
+        let core_xml = zip.read_file_string("docProps/core.xml")?;
+        self.parse_core_properties(&core_xml, &mut metadata);
 
         // Parse app.xml (application properties)
-        if let Ok(app_xml) = zip.read_file_string("docProps/app.xml") {
+        if zip.contains("docProps/app.xml") {
+            let app_xml = zip.read_file_string("docProps/app.xml")?;
             self.parse_app_properties(&app_xml, &mut metadata);
         }
 
         // Parse custom.xml (custom properties)
-        if let Ok(custom_xml) = zip.read_file_string("docProps/custom.xml") {
+        if zip.contains("docProps/custom.xml") {
+            let custom_xml = zip.read_file_string("docProps/custom.xml")?;
             self.parse_custom_properties(&custom_xml, &mut metadata)?;
         }
 
@@ -277,6 +278,7 @@ mod tests {
 
     struct TestPackageReader {
         files: HashMap<String, Vec<u8>>,
+        failing_reads: HashMap<String, ParseError>,
     }
 
     impl TestPackageReader {
@@ -285,7 +287,15 @@ mod tests {
                 .iter()
                 .map(|(path, body)| ((*path).to_string(), body.as_bytes().to_vec()))
                 .collect();
-            Self { files }
+            Self {
+                files,
+                failing_reads: HashMap::new(),
+            }
+        }
+
+        fn with_failing_read(mut self, path: &str, err: ParseError) -> Self {
+            self.failing_reads.insert(path.to_string(), err);
+            self
         }
     }
 
@@ -295,6 +305,9 @@ mod tests {
         }
 
         fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError> {
+            if let Some(err) = self.failing_reads.remove(name) {
+                return Err(err);
+            }
             self.files
                 .get(name)
                 .cloned()
@@ -450,6 +463,22 @@ mod tests {
 
         assert_core_and_app_metadata(&metadata);
         assert_custom_metadata_values(&metadata);
+    }
+
+    #[test]
+    fn build_metadata_reports_existing_core_part_read_errors() {
+        let parser = OoxmlParser::new();
+        let mut zip = TestPackageReader::new(&[("docProps/core.xml", core_properties_xml())])
+            .with_failing_read(
+                "docProps/core.xml",
+                ParseError::InvalidZip("bad core crc".to_string()),
+            );
+
+        let err = parser
+            .build_metadata(&mut zip)
+            .expect_err("existing core metadata read error must fail");
+
+        assert!(matches!(err, ParseError::InvalidZip(message) if message == "bad core crc"));
     }
 
     #[test]
