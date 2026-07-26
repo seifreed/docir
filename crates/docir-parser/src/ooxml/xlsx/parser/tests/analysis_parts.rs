@@ -113,10 +113,26 @@ fn test_parse_sheet_metadata_reports_malformed_attributes() {
         (
             r#"
             <metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <cellMetadata count="bad"/>
+            </metadata>
+            "#,
+            "xl/cell-metadata-count-broken.xml",
+        ),
+        (
+            r#"
+            <metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <valueMetadata count="2" count="3"/>
             </metadata>
             "#,
             "xl/value-metadata-broken.xml",
+        ),
+        (
+            r#"
+            <metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <valueMetadata count="bad"/>
+            </metadata>
+            "#,
+            "xl/value-metadata-count-broken.xml",
         ),
     ];
 

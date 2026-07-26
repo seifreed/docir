@@ -3,7 +3,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
-use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, visit_attributes};
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, visit_attributes, xml_error};
 use docir_core::ir::{SheetMetadata, SheetMetadataType};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -42,22 +42,40 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
                         metadata.metadata_types.push(mtype);
                     }
                     b"cellMetadata" => {
+                        let mut numeric_error = None;
                         visit_attributes(&e, path, |attr| {
+                            if numeric_error.is_some() {
+                                return;
+                            }
                             let key = local_name(attr.key.as_ref());
                             if key == b"count" {
-                                metadata.cell_metadata_count =
-                                    lossy_attr_value(attr).parse::<u32>().ok();
+                                match parse_u32_attr(&lossy_attr_value(attr), path) {
+                                    Ok(parsed) => metadata.cell_metadata_count = Some(parsed),
+                                    Err(err) => numeric_error = Some(err),
+                                }
                             }
                         })?;
+                        if let Some(err) = numeric_error {
+                            return Err(err);
+                        }
                     }
                     b"valueMetadata" => {
+                        let mut numeric_error = None;
                         visit_attributes(&e, path, |attr| {
+                            if numeric_error.is_some() {
+                                return;
+                            }
                             let key = local_name(attr.key.as_ref());
                             if key == b"count" {
-                                metadata.value_metadata_count =
-                                    lossy_attr_value(attr).parse::<u32>().ok();
+                                match parse_u32_attr(&lossy_attr_value(attr), path) {
+                                    Ok(parsed) => metadata.value_metadata_count = Some(parsed),
+                                    Err(err) => numeric_error = Some(err),
+                                }
                             }
                         })?;
+                        if let Some(err) = numeric_error {
+                            return Err(err);
+                        }
                     }
                     _ => {}
                 }
@@ -68,4 +86,8 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
     })?;
 
     Ok(metadata)
+}
+
+fn parse_u32_attr(value: &str, path: &str) -> Result<u32, ParseError> {
+    value.parse::<u32>().map_err(|err| xml_error(path, err))
 }
