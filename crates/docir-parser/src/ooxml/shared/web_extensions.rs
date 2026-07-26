@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{attr_each, local_name, read_event};
+use crate::xml_utils::{attr_each, local_name, read_event, xml_error};
 use docir_core::ir::{WebExtension, WebExtensionProperty, WebExtensionTaskpane};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -113,24 +113,33 @@ pub fn parse_web_extension_taskpanes(
 fn new_taskpane(path: &str, e: &BytesStart<'_>) -> Result<WebExtensionTaskpane, ParseError> {
     let mut pane = WebExtensionTaskpane::new();
     pane.span = Some(SourceSpan::new(path));
-    apply_taskpane_attrs(&mut pane, &collect_local_attrs(e, path)?);
+    apply_taskpane_attrs(&mut pane, &collect_local_attrs(e, path)?, path)?;
     Ok(pane)
 }
 
-fn apply_taskpane_attrs(pane: &mut WebExtensionTaskpane, attrs: &AttrList) {
+fn apply_taskpane_attrs(
+    pane: &mut WebExtensionTaskpane,
+    attrs: &AttrList,
+    path: &str,
+) -> Result<(), ParseError> {
     for (key, val) in attrs {
         match key.as_slice() {
             b"dockState" | b"dockstate" => pane.dock_state = Some(val.clone()),
             b"visibility" => {
                 pane.visibility = Some(val.as_bytes() == b"1" || val.eq_ignore_ascii_case("true"));
             }
-            b"width" => pane.width = val.parse::<u32>().ok(),
-            b"height" => pane.height = val.parse::<u32>().ok(),
-            b"row" => pane.row = val.parse::<u32>().ok(),
-            b"column" => pane.column = val.parse::<u32>().ok(),
+            b"width" => pane.width = Some(parse_u32_attr(val, path)?),
+            b"height" => pane.height = Some(parse_u32_attr(val, path)?),
+            b"row" => pane.row = Some(parse_u32_attr(val, path)?),
+            b"column" => pane.column = Some(parse_u32_attr(val, path)?),
             _ => {}
         }
     }
+    Ok(())
+}
+
+fn parse_u32_attr(value: &str, path: &str) -> Result<u32, ParseError> {
+    value.parse::<u32>().map_err(|err| xml_error(path, err))
 }
 
 fn apply_web_extension_store_reference(ext: &mut WebExtension, attrs: &AttrList) {

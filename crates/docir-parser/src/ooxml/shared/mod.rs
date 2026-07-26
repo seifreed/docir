@@ -268,6 +268,14 @@ mod tests {
             ),
             "word/webExtensions/taskpanes.xml",
         );
+
+        assert_shared_xml_error(
+            parse_web_extension_taskpanes(
+                r#"<wetp:taskpanes xmlns:wetp="x"><wetp:taskpane width="wide"/></wetp:taskpanes>"#,
+                "word/webExtensions/taskpanes.xml",
+            ),
+            "word/webExtensions/taskpanes.xml",
+        );
     }
 
     #[test]
