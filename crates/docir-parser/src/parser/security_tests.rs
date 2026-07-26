@@ -254,6 +254,34 @@ fn scan_zip_reports_malformed_activex_xml() {
 }
 
 #[test]
+fn scan_zip_reports_malformed_activex_relationships() {
+    let mut zip = TestPackageReader::new(&[
+        (
+            "word/activeX/activeX1.xml",
+            br#"<ocx name="Button1" clsid="{ABC}"/>"#,
+        ),
+        (
+            "word/activeX/_rels/activeX1.xml.rels",
+            br#"<Relationships><Relationship Id="rBin" Id="dup"/></Relationships>"#,
+        ),
+    ]);
+    let mut store = IrStore::new();
+    let config = ParserConfig::default();
+    let scanner = SecurityScanner::new(&config);
+
+    let err = scanner
+        .scan_zip(&mut zip, &mut store)
+        .expect_err("malformed ActiveX relationships must fail security scanning");
+
+    match err {
+        ParseError::Xml { file, .. } => {
+            assert_eq!(file, "word/activeX/_rels/activeX1.xml.rels")
+        }
+        other => panic!("expected XML error, got {other}"),
+    }
+}
+
+#[test]
 fn scan_zip_sets_ole_hash_when_compute_hashes_enabled() {
     let mut zip = TestPackageReader::new(&[("word/embeddings/object1.bin", b"OLE-HASH")]);
     let mut store = IrStore::new();

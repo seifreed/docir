@@ -42,13 +42,17 @@ pub struct Relationships {
 impl Relationships {
     /// Parses a .rels file.
     pub fn parse(xml: &str) -> Result<Self, ParseError> {
+        Self::parse_with_path(xml, ".rels")
+    }
+
+    pub(crate) fn parse_with_path(xml: &str, path: &str) -> Result<Self, ParseError> {
         let mut reader = reader_from_str(xml);
 
         let mut rels = Relationships::default();
         let mut buf = Vec::new();
 
         loop {
-            match read_event(&mut reader, &mut buf, ".rels")? {
+            match read_event(&mut reader, &mut buf, path)? {
                 Event::Empty(e) | Event::Start(e)
                     if local_name(e.name().as_ref()) == b"Relationship" =>
                 {
@@ -57,7 +61,7 @@ impl Relationships {
                     let mut target = None;
                     let mut target_mode = TargetMode::Internal;
 
-                    visit_attributes(&e, ".rels", |attr| match attr.key.as_ref() {
+                    visit_attributes(&e, path, |attr| match attr.key.as_ref() {
                         b"Id" => {
                             id = Some(unescaped_attr_value(attr, e.decoder()));
                         }
