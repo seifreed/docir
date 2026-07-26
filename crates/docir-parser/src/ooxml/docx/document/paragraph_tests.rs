@@ -226,6 +226,27 @@ fn parse_paragraph_properties_sets_spacing_line_rule_variants_and_paragraph_bord
 }
 
 #[test]
+fn parse_paragraph_properties_reports_malformed_border_width() {
+    let xml = r#"
+            <w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:pBdr>
+                <w:top w:val="single" w:sz="wide" w:color="00FF00"/>
+              </w:pBdr>
+            </w:pPr>
+        "#;
+
+    let mut reader = reader_from_str(xml);
+    let mut para = Paragraph::new();
+    let err = parse_paragraph_properties(&mut reader, &mut para, None)
+        .expect_err("malformed paragraph border width must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn update_field_from_run_stops_collecting_instruction_after_separate() {
     let mut state = FieldState::new();
     state.start();

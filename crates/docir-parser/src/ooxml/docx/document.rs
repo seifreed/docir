@@ -5,6 +5,7 @@ use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{
     XmlScanControl, local_name, reader_from_str, scan_xml_events_with_reader, try_attr_value,
+    xml_error,
 };
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
@@ -260,7 +261,9 @@ pub(super) fn parse_border(start: &BytesStart, file: &str) -> Result<Option<Bord
         Some("wave") => BorderStyle::Wave,
         _ => BorderStyle::Single,
     };
-    let width = try_attr_value(start, b"w:sz", file)?.and_then(|v| v.parse().ok());
+    let width = try_attr_value(start, b"w:sz", file)?
+        .map(|value| value.parse::<u32>().map_err(|err| xml_error(file, err)))
+        .transpose()?;
     let color =
         try_attr_value(start, b"w:color", file)?.filter(|v| !v.eq_ignore_ascii_case("auto"));
     Ok(Some(Border {
