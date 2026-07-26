@@ -202,8 +202,28 @@ fn parse_font_size(value: &str) -> Option<u32> {
     let trimmed = value.trim();
     for unit in ["pt", "px", "cm", "mm"] {
         if let Some(num) = trimmed.strip_suffix(unit) {
-            return num.parse::<f32>().ok().map(|v| v.round() as u32);
+            return parse_finite_font_size(num);
         }
     }
-    trimmed.parse::<f32>().ok().map(|v| v.round() as u32)
+    parse_finite_font_size(trimmed)
+}
+
+fn parse_finite_font_size(value: &str) -> Option<u32> {
+    let size = value.parse::<f32>().ok()?;
+    if size.is_finite() {
+        Some(size.round() as u32)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_font_size;
+
+    #[test]
+    fn parse_font_size_rejects_non_finite_values() {
+        assert_eq!(parse_font_size("NaNpt"), None);
+        assert_eq!(parse_font_size("inf"), None);
+    }
 }

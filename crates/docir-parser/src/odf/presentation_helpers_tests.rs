@@ -357,6 +357,8 @@ fn parse_duration_and_media_classification_cover_helper_paths() {
     assert_eq!(parse_duration_ms("PT3S"), Some(3000));
     assert_eq!(parse_duration_ms("PTPT3S"), None);
     assert_eq!(parse_duration_ms("PT3SS"), None);
+    assert_eq!(parse_duration_ms("NaNs"), None);
+    assert_eq!(parse_duration_ms("PTinfS"), None);
     assert_eq!(parse_duration_ms(""), None);
     assert_eq!(parse_duration_ms("invalid"), None);
 

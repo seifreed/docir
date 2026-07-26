@@ -379,6 +379,34 @@ mod tests {
     }
 
     #[test]
+    fn evaluate_ods_formulas_rejects_non_finite_source_values() {
+        let mut store = IrStore::new();
+        let mut cell_values: HashMap<(u32, u32), CellValue> = HashMap::new();
+        let mut formula_map: HashMap<(u32, u32), String> = HashMap::new();
+
+        let mut a1 = Cell::new("A1".to_string(), 0, 0);
+        a1.value = CellValue::String("NaN".to_string());
+        store.insert(IRNode::Cell(a1));
+        cell_values.insert((0, 0), CellValue::String("NaN".to_string()));
+
+        let b1 = Cell::new("B1".to_string(), 1, 0);
+        let b1_id = b1.id;
+        store.insert(IRNode::Cell(b1));
+        let formula = "A1 + 1".to_string();
+        formula_map.insert((0, 1), formula.clone());
+
+        evaluate_ods_formulas(
+            "Sheet1",
+            &[(b1_id, 0, 1, formula)],
+            &mut store,
+            &mut cell_values,
+            &formula_map,
+        );
+
+        assert!(number_from_cell(&store, b1_id).is_none());
+    }
+
+    #[test]
     fn evaluate_ods_formulas_handles_circular_references_as_empty() {
         let mut store = IrStore::new();
         let mut cell_values: HashMap<(u32, u32), CellValue> = HashMap::new();

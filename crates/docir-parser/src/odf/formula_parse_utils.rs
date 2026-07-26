@@ -218,11 +218,16 @@ fn column_name_to_index(name: &str) -> Option<u32> {
 }
 
 pub(super) fn cell_value_to_number(value: &CellValue) -> Option<f64> {
-    match value {
+    let number = match value {
         CellValue::Number(num) => Some(*num),
         CellValue::Boolean(v) => Some(if *v { 1.0 } else { 0.0 }),
         CellValue::String(s) => s.parse::<f64>().ok(),
         _ => None,
+    }?;
+    if number.is_finite() {
+        Some(number)
+    } else {
+        None
     }
 }
 

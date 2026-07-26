@@ -191,6 +191,59 @@ fn test_parse_vml_picture_shape_and_style_lengths() {
 }
 
 #[test]
+fn test_parse_vml_picture_rejects_non_finite_style_lengths() {
+    let xml = r#"
+        <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+             xmlns:v="urn:schemas-microsoft-com:vml"
+             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <w:pict>
+            <v:shape id="_x0000_s1026" name="BadVML"
+                     style="left:NaNpt;top:infmm;width:NaNcm;height:infinityin">
+              <v:imagedata r:id="rIdImg"></v:imagedata>
+            </v:shape>
+          </w:pict>
+        </w:r>
+        "#;
+    let rels_xml = r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rIdImg"
+            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+            Target="media/pict.png"/>
+        </Relationships>
+        "#;
+    let rels = Relationships::parse(rels_xml).expect("rels");
+
+    let mut reader = reader_from_str(xml);
+    let mut parser = DocxParser::new();
+    let mut run = None;
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:r" => {
+                run = Some(parse_run(&mut parser, &mut reader, &rels).expect("run"));
+                break;
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => panic!("xml error: {}", e),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    let run = run.expect("run parse");
+    assert_eq!(run.embedded.len(), 1);
+    let store = parser.into_store();
+    let bad_shape = match store.get(run.embedded[0]) {
+        Some(docir_core::ir::IRNode::Shape(s)) => s,
+        _ => panic!("missing bad shape"),
+    };
+    assert_eq!(bad_shape.transform.x, 0);
+    assert_eq!(bad_shape.transform.y, 0);
+    assert_eq!(bad_shape.transform.width, 0);
+    assert_eq!(bad_shape.transform.height, 0);
+}
+
+#[test]
 fn test_parse_vml_picture_reports_malformed_attributes() {
     let xml = r#"
         <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"

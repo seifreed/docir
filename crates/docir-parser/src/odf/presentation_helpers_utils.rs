@@ -9,19 +9,22 @@ pub(super) fn parse_duration_ms(value: &str) -> Option<u32> {
         return stripped.parse::<u32>().ok();
     }
     if let Some(stripped) = trimmed.strip_suffix('s') {
-        return stripped
-            .parse::<f32>()
-            .ok()
-            .map(|v| (v * 1000.0).round() as u32);
+        return parse_finite_seconds(stripped);
     }
     if trimmed.starts_with("PT") && trimmed.ends_with('S') {
         let inner = trimmed.strip_prefix("PT")?.strip_suffix('S')?;
-        return inner
-            .parse::<f32>()
-            .ok()
-            .map(|v| (v * 1000.0).round() as u32);
+        return parse_finite_seconds(inner);
     }
     None
+}
+
+fn parse_finite_seconds(value: &str) -> Option<u32> {
+    let seconds = value.parse::<f32>().ok()?;
+    if seconds.is_finite() {
+        Some((seconds * 1000.0).round() as u32)
+    } else {
+        None
+    }
 }
 
 pub(super) fn classify_media_type(path: &str, media: &str) -> Option<MediaType> {

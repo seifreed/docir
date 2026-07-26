@@ -129,6 +129,9 @@ fn parse_length_emu_str(value: &str) -> Option<f64> {
     }
     let (num, unit) = trimmed.split_at(unit_start);
     let magnitude = num.parse::<f64>().ok()?;
+    if !magnitude.is_finite() {
+        return None;
+    }
     let emu = match unit {
         "cm" => magnitude / 2.54 * 914_400.0,
         "mm" => magnitude / 25.4 * 914_400.0,
@@ -241,5 +244,11 @@ mod tests {
     fn parse_length_emu_str_rejects_digits_after_unit() {
         assert_eq!(parse_length_emu_str("1cm2"), None);
         assert_eq!(parse_length_emu_str("2pt3"), None);
+    }
+
+    #[test]
+    fn parse_length_emu_str_rejects_non_finite_values() {
+        assert_eq!(parse_length_emu_str("NaNcm"), None);
+        assert_eq!(parse_length_emu_str("infpt"), None);
     }
 }

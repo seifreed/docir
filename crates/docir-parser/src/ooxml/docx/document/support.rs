@@ -112,6 +112,9 @@ fn parse_vml_length(value: &str) -> Option<f64> {
         (trimmed, "")
     };
     let numeric_value = num_part.trim().parse::<f64>().ok()?;
+    if !numeric_value.is_finite() {
+        return None;
+    }
     let unit = unit.trim();
     let emus = match unit {
         "" => numeric_value,
