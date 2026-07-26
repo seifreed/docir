@@ -81,9 +81,7 @@ fn extract_flash_from_zip(data: &[u8], config: &ParserConfig) -> AppResult<Flash
     let mut objects = Vec::new();
     let file_names: Vec<String> = zip.file_names().map(|name| name.to_string()).collect();
     for path in file_names {
-        let Ok(bytes) = zip.read_file(&path) else {
-            continue;
-        };
+        let bytes = zip.read_file(&path)?;
         objects.extend(find_flash_objects_in_bytes(&bytes, &path));
     }
     Ok(FlashExtractionReport {
@@ -255,5 +253,30 @@ mod tests {
         assert_eq!(report.objects[0].signature, "CWS");
         assert!(report.objects[0].truncated);
         assert_eq!(report.objects[0].source_path, "ppt/media/flash.bin");
+    }
+
+    #[test]
+    fn extract_flash_bytes_rejects_corrupt_zip_entry() {
+        let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut cursor);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            zip.start_file("ppt/media/flash.bin", options)
+                .expect("start");
+            zip.write_all(&swf(b"FWS", 8, b"payload")).expect("write");
+            zip.finish().expect("finish");
+        }
+
+        let mut bytes = cursor.into_inner();
+        let payload_offset = bytes
+            .windows(b"payload".len())
+            .position(|window| window == b"payload")
+            .expect("payload bytes");
+        bytes[payload_offset] ^= 0xff;
+
+        let err = extract_flash_bytes(&bytes, &ParserConfig::default())
+            .expect_err("corrupt zip entry must not be skipped");
+        assert!(err.to_string().contains("Invalid"));
     }
 }
