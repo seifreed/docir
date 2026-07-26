@@ -57,7 +57,7 @@ impl HwpParser {
         header_ctx: &HwpHeaderContext<'_>,
         diagnostics: &mut Diagnostics,
     ) -> Result<Option<u32>, ParseError> {
-        let Some(data) = cfb.read_stream("DocInfo") else {
+        let Some(data) = cfb.try_read_stream("DocInfo")? else {
             return Ok(None);
         };
 
@@ -124,7 +124,7 @@ impl HwpParser {
                 continue;
             }
             let data = cfb
-                .read_stream(path)
+                .try_read_stream(path)?
                 .ok_or_else(|| ParseError::MissingPart(path.to_string()))?;
             let data = match prepare_hwp_stream_data(
                 &data,
@@ -223,7 +223,7 @@ impl HwpParser {
         diagnostics: &mut Diagnostics,
     ) -> Result<HwpHeaderContext<'a>, ParseError> {
         let header_data = cfb
-            .read_stream("FileHeader")
+            .try_read_stream("FileHeader")?
             .ok_or_else(|| ParseError::MissingPart("FileHeader".to_string()))?;
         let header = parse_file_header(&header_data)?;
         push_info(

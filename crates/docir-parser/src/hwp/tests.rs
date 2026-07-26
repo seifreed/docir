@@ -3,8 +3,10 @@ use super::helpers::{
     is_hwpx_section, media_type_from_path, parse_hwpx_paragraph_props, parse_hwpx_table_props,
     run_properties_from_attrs, style_run_props_from_run,
 };
-use super::{HwpxParser, is_hwpx_mimetype};
+use super::{HwpParser, HwpxParser, is_hwpx_mimetype};
+use crate::error::ParseError;
 use crate::parser::DocumentParser;
+use crate::test_support::build_test_cfb;
 use docir_core::ir::{DiagnosticSeverity, IRNode, ShapeType, TableAlignment, TableWidthType};
 use docir_core::types::DocumentFormat;
 use quick_xml::Reader;
@@ -15,6 +17,22 @@ use zip::write::FileOptions;
 
 fn build_hwpx_zip(section_xml: &str) -> Vec<u8> {
     build_hwpx_zip_with_parts(section_xml, None, Vec::new())
+}
+
+fn hwp_file_header_with_padding(size: usize) -> Vec<u8> {
+    let mut header = vec![0u8; size];
+    header[..17].copy_from_slice(b"HWP Document File");
+    header[32..36].copy_from_slice(&0x0500_0000u32.to_le_bytes());
+    header
+}
+
+fn patch_cfb_fat_entry(bytes: &[u8], fat_index: u32, value: u32) -> Vec<u8> {
+    let mut out = bytes.to_vec();
+    let sector_size = 1usize << u16::from_le_bytes([out[0x1E], out[0x1F]]);
+    let first_fat_sector = u32::from_le_bytes([out[0x4C], out[0x4D], out[0x4E], out[0x4F]]);
+    let fat_offset = sector_size + first_fat_sector as usize * sector_size + fat_index as usize * 4;
+    out[fat_offset..fat_offset + 4].copy_from_slice(&value.to_le_bytes());
+    out
 }
 
 fn build_hwpx_zip_with_parts(
@@ -201,6 +219,21 @@ fn test_build_hwp_diagnostics_records_parts_and_missing_patterns() {
     assert!(diagnostics.entries.iter().any(|e| {
         e.code == "COVERAGE_MISSING" && matches!(e.severity, DiagnosticSeverity::Warning)
     }));
+}
+
+#[test]
+fn test_hwp_parser_reports_corrupt_file_header_stream_read() {
+    let bytes = build_test_cfb(&[("FileHeader", &hwp_file_header_with_padding(5000))]);
+    let patched = patch_cfb_fat_entry(&bytes, 0, 99);
+
+    let err = HwpParser::new()
+        .parse_bytes(&patched)
+        .expect_err("corrupt FileHeader stream must fail");
+
+    assert!(
+        matches!(err, ParseError::InvalidStructure(_)),
+        "unexpected error: {err:?}"
+    );
 }
 
 #[test]
