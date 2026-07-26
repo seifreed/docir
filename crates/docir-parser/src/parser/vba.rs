@@ -20,14 +20,16 @@ pub(super) fn parse_vba_project_text(text: &str) -> VbaProjectTextParse {
         }
         if line.starts_with("Name=") {
             project_name = Some(
-                line.trim_start_matches("Name=")
+                line.strip_prefix("Name=")
+                    .unwrap_or(line)
                     .trim()
                     .trim_matches('"')
                     .to_string(),
             );
         } else if line.starts_with("Module=") {
             let name = line
-                .trim_start_matches("Module=")
+                .strip_prefix("Module=")
+                .unwrap_or(line)
                 .split('/')
                 .next()
                 .unwrap_or("")
@@ -37,7 +39,8 @@ pub(super) fn parse_vba_project_text(text: &str) -> VbaProjectTextParse {
             }
         } else if line.starts_with("Class=") {
             let name = line
-                .trim_start_matches("Class=")
+                .strip_prefix("Class=")
+                .unwrap_or(line)
                 .split('/')
                 .next()
                 .unwrap_or("")
@@ -47,7 +50,8 @@ pub(super) fn parse_vba_project_text(text: &str) -> VbaProjectTextParse {
             }
         } else if line.starts_with("Document=") {
             let name = line
-                .trim_start_matches("Document=")
+                .strip_prefix("Document=")
+                .unwrap_or(line)
                 .split('/')
                 .next()
                 .unwrap_or("")
@@ -195,6 +199,28 @@ mod tests {
         assert_eq!(refs.len(), 1);
         assert!(refs[0].name.starts_with("Reference="));
         assert!(protected);
+    }
+
+    #[test]
+    fn parse_vba_project_text_does_not_hide_repeated_field_prefixes() {
+        let project = r#"
+            Name=Name="Hidden"
+            Module=Module=Hidden/0
+            Class=Class=HiddenClass/0
+            Document=Document=HiddenDoc/0
+        "#;
+
+        let (name, modules, _, _) = parse_vba_project_text(project);
+
+        assert_eq!(name.as_deref(), Some(r#"Name="Hidden"#));
+        assert_eq!(
+            modules,
+            vec![
+                ("Module=Hidden".to_string(), MacroModuleType::Standard),
+                ("Class=HiddenClass".to_string(), MacroModuleType::Class),
+                ("Document=HiddenDoc".to_string(), MacroModuleType::Document),
+            ]
+        );
     }
 
     #[test]
