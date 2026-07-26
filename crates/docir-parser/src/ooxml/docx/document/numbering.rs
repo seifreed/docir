@@ -32,7 +32,22 @@ impl DocxParser {
                     &mut current_levels,
                     &mut current_level,
                 )?,
-                Ok(Event::Empty(e)) => handle_level_value_attrs(&e, current_level.as_mut())?,
+                Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                    b"lvl" => {
+                        handle_numbering_start(
+                            &mut reader,
+                            &e,
+                            &mut set,
+                            &mut current_abs,
+                            &mut current_levels,
+                            &mut current_level,
+                        )?;
+                        if let Some(level) = current_level.take() {
+                            current_levels.push(level);
+                        }
+                    }
+                    _ => handle_level_value_attrs(&e, current_level.as_mut())?,
+                },
                 Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
                     b"lvl" => {
                         if let Some(level) = current_level.take() {
@@ -74,14 +89,11 @@ fn handle_numbering_start(
 ) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
         b"abstractNum" => {
-            *current_abs = try_attr_value(event, b"w:abstractNumId", NUMBERING_PATH)?
-                .and_then(|v| v.parse().ok());
+            *current_abs = u32_attr(event, b"w:abstractNumId")?;
             current_levels.clear();
         }
         b"lvl" => {
-            let lvl = try_attr_value(event, b"w:ilvl", NUMBERING_PATH)?
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(0);
+            let lvl = u32_attr(event, b"w:ilvl")?.unwrap_or(0);
             *current_level = Some(NumberingLevel {
                 level: lvl,
                 format: None,
@@ -112,9 +124,7 @@ fn handle_numbering_start(
             }
         }
         b"num" => {
-            let num_id = try_attr_value(event, b"w:numId", NUMBERING_PATH)?
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(0);
+            let num_id = u32_attr(event, b"w:numId")?.unwrap_or(0);
             let abstract_id = super::parse_num_abstract_id(reader)?;
             set.nums.push(docir_core::ir::NumInstance {
                 num_id,
@@ -145,9 +155,7 @@ fn handle_level_value_attrs(
             }
         }
         b"start" => {
-            if let Some(val) =
-                try_attr_value(event, b"w:val", NUMBERING_PATH)?.and_then(|v| v.parse().ok())
-            {
+            if let Some(val) = u32_attr(event, b"w:val")? {
                 level.start = Some(val);
             }
         }
@@ -170,4 +178,14 @@ fn handle_level_value_attrs(
         _ => {}
     }
     Ok(())
+}
+
+fn u32_attr(event: &BytesStart<'_>, name: &[u8]) -> Result<Option<u32>, ParseError> {
+    try_attr_value(event, name, NUMBERING_PATH)?
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .map_err(|err| xml_error(NUMBERING_PATH, err))
+        })
+        .transpose()
 }

@@ -415,21 +415,69 @@ fn test_parse_numbering_level_props() {
 
 #[test]
 fn test_parse_numbering_reports_malformed_attributes() {
-    let xml = r#"
-        <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-          <w:abstractNum w:abstractNumId="1" w:abstractNumId="2">
-            <w:lvl w:ilvl="0"/>
-          </w:abstractNum>
-        </w:numbering>
-        "#;
-
-    let mut parser = DocxParser::new();
-    let err = parser
-        .parse_numbering(xml)
-        .expect_err("malformed numbering attributes must fail");
-    match err {
-        ParseError::Xml { file, .. } => assert_eq!(file, "word/numbering.xml"),
-        other => panic!("unexpected error: {other:?}"),
+    for (case, xml) in [
+        (
+            "duplicate abstractNumId",
+            r#"
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum w:abstractNumId="1" w:abstractNumId="2">
+                <w:lvl w:ilvl="0"/>
+              </w:abstractNum>
+            </w:numbering>
+            "#,
+        ),
+        (
+            "bad abstractNumId",
+            r#"
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum w:abstractNumId="bad">
+                <w:lvl w:ilvl="0"/>
+              </w:abstractNum>
+            </w:numbering>
+            "#,
+        ),
+        (
+            "bad ilvl",
+            r#"
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum w:abstractNumId="1">
+                <w:lvl w:ilvl="bad"/>
+              </w:abstractNum>
+            </w:numbering>
+            "#,
+        ),
+        (
+            "bad start",
+            r#"
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum w:abstractNumId="1">
+                <w:lvl w:ilvl="0">
+                  <w:start w:val="bad"/>
+                </w:lvl>
+              </w:abstractNum>
+            </w:numbering>
+            "#,
+        ),
+        (
+            "bad numId",
+            r#"
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:num w:numId="bad">
+                <w:abstractNumId w:val="1"/>
+              </w:num>
+            </w:numbering>
+            "#,
+        ),
+    ] {
+        let mut parser = DocxParser::new();
+        let err = match parser.parse_numbering(xml) {
+            Ok(_) => panic!("{case} must fail"),
+            Err(err) => err,
+        };
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "word/numbering.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }
 
