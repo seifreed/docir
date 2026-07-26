@@ -418,20 +418,33 @@ fn test_parse_calc_chain() {
 
 #[test]
 fn test_parse_calc_chain_reports_malformed_attributes() {
-    let xml = r#"
-        <calcChain>
-          <c r="A1" r="B1"/>
-        </calcChain>
-    "#;
-    let err = parse_calc_chain(xml, "xl/calcChain.xml")
-        .expect_err("duplicate calc chain attrs must fail");
-    assert!(matches!(
-        err,
-        ParseError::Xml {
-            ref file,
-            ..
-        } if file == "xl/calcChain.xml"
-    ));
+    for (xml, path) in [
+        (
+            r#"<calcChain><c r="A1" r="B1"/></calcChain>"#,
+            "xl/calcChain-duplicate-ref.xml",
+        ),
+        (
+            r#"<calcChain><c r="A1" i="bad"/></calcChain>"#,
+            "xl/calcChain-index-broken.xml",
+        ),
+        (
+            r#"<calcChain><c r="A1" l="bad"/></calcChain>"#,
+            "xl/calcChain-level-broken.xml",
+        ),
+        (
+            r#"<calcChain><c r="A1" si="bad"/></calcChain>"#,
+            "xl/calcChain-sheet-id-broken.xml",
+        ),
+    ] {
+        let err = parse_calc_chain(xml, path).expect_err("malformed calc chain attrs must fail");
+        assert!(matches!(
+            err,
+            ParseError::Xml {
+                ref file,
+                ..
+            } if file == path
+        ));
+    }
 }
 
 #[test]

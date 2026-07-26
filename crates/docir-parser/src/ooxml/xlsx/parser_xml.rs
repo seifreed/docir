@@ -36,16 +36,29 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
                 let mut index = None;
                 let mut level = None;
                 let mut new_value = None;
+                let mut numeric_error = None;
                 visit_attributes(&e, path, |attr| match attr.key.as_ref() {
                     b"r" => cell_ref = Some(lossy_attr_value(attr).to_string()),
-                    b"i" => index = lossy_attr_value(attr).parse::<u32>().ok(),
-                    b"l" => level = lossy_attr_value(attr).parse::<u32>().ok(),
+                    b"i" => match parse_u32_attr(&lossy_attr_value(attr), path) {
+                        Ok(parsed) => index = Some(parsed),
+                        Err(err) => numeric_error = Some(err),
+                    },
+                    b"l" => match parse_u32_attr(&lossy_attr_value(attr), path) {
+                        Ok(parsed) => level = Some(parsed),
+                        Err(err) => numeric_error = Some(err),
+                    },
                     b"s" => {
                         new_value = Some(attr_bool_like(attr.value.as_ref()));
                     }
-                    b"si" => sheet_id = lossy_attr_value(attr).parse::<u32>().ok(),
+                    b"si" => match parse_u32_attr(&lossy_attr_value(attr), path) {
+                        Ok(parsed) => sheet_id = Some(parsed),
+                        Err(err) => numeric_error = Some(err),
+                    },
                     _ => {}
                 })?;
+                if let Some(err) = numeric_error {
+                    return Err(err);
+                }
                 if let Some(cell_ref) = cell_ref {
                     chain.entries.push(CalcChainEntry {
                         cell_ref,
@@ -66,6 +79,10 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
     }
 
     Ok(chain)
+}
+
+fn parse_u32_attr(value: &str, path: &str) -> Result<u32, ParseError> {
+    value.parse::<u32>().map_err(|err| xml_error(path, err))
 }
 
 pub(super) fn map_cell_error(value: &str) -> CellError {
