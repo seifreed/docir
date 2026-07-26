@@ -7,6 +7,8 @@ use docir_core::types::NodeId;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::str::FromStr;
 
 const DOC_PATH: &str = "word/document.xml";
 
@@ -80,7 +82,7 @@ fn handle_paragraph_property_event(
             }
         }
         b"outlineLvl" => {
-            if let Some(val) = try_attr_value(e, b"w:val", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+            if let Some(val) = parsed_attr::<u8>(e, b"w:val")? {
                 para.properties.outline_level = Some(val);
             }
         }
@@ -100,16 +102,16 @@ fn apply_paragraph_alignment(e: &BytesStart<'_>, para: &mut Paragraph) -> Result
 
 fn apply_paragraph_indentation(e: &BytesStart<'_>, para: &mut Paragraph) -> Result<(), ParseError> {
     let mut indent = para.properties.indentation.clone().unwrap_or_default();
-    if let Some(val) = try_attr_value(e, b"w:left", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = parsed_attr::<i32>(e, b"w:left")? {
         indent.left = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:right", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = parsed_attr::<i32>(e, b"w:right")? {
         indent.right = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:firstLine", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = parsed_attr::<i32>(e, b"w:firstLine")? {
         indent.first_line = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:hanging", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = parsed_attr::<i32>(e, b"w:hanging")? {
         indent.hanging = Some(val);
     }
     para.properties.indentation = Some(indent);
@@ -118,13 +120,13 @@ fn apply_paragraph_indentation(e: &BytesStart<'_>, para: &mut Paragraph) -> Resu
 
 fn apply_paragraph_spacing(e: &BytesStart<'_>, para: &mut Paragraph) -> Result<(), ParseError> {
     let mut spacing = para.properties.spacing.clone().unwrap_or_default();
-    if let Some(val) = try_attr_value(e, b"w:before", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = parsed_attr::<u32>(e, b"w:before")? {
         spacing.before = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:after", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = parsed_attr::<u32>(e, b"w:after")? {
         spacing.after = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:line", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = parsed_attr::<u32>(e, b"w:line")? {
         spacing.line = Some(val);
     }
     if let Some(val) = try_attr_value(e, b"w:lineRule", DOC_PATH)? {
@@ -137,6 +139,16 @@ fn apply_paragraph_spacing(e: &BytesStart<'_>, para: &mut Paragraph) -> Result<(
     }
     para.properties.spacing = Some(spacing);
     Ok(())
+}
+
+fn parsed_attr<T>(e: &BytesStart<'_>, name: &[u8]) -> Result<Option<T>, ParseError>
+where
+    T: FromStr,
+    T::Err: Display,
+{
+    try_attr_value(e, name, DOC_PATH)?
+        .map(|value| value.parse::<T>().map_err(|err| xml_error(DOC_PATH, err)))
+        .transpose()
 }
 
 pub(crate) fn parse_paragraph_borders(

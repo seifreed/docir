@@ -166,6 +166,48 @@ fn parse_paragraph_properties_reports_malformed_bool_attributes() {
 }
 
 #[test]
+fn parse_paragraph_properties_reports_malformed_numeric_attributes() {
+    for (case, xml) in [
+        (
+            "bad outline level",
+            r#"
+            <w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:outlineLvl w:val="heading"/>
+            </w:pPr>
+            "#,
+        ),
+        (
+            "bad indentation",
+            r#"
+            <w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:ind w:left="wide"/>
+            </w:pPr>
+            "#,
+        ),
+        (
+            "bad spacing",
+            r#"
+            <w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:spacing w:before="soon"/>
+            </w:pPr>
+            "#,
+        ),
+    ] {
+        let mut reader = reader_from_str(xml);
+        let mut para = Paragraph::new();
+        let err = match parse_paragraph_properties(&mut reader, &mut para, None) {
+            Ok(_) => panic!("{case} must fail"),
+            Err(err) => err,
+        };
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn handle_field_char_end_with_blank_instruction_creates_field_without_instruction() {
     let mut parser = DocxParser::new();
     let mut para = Paragraph::new();
