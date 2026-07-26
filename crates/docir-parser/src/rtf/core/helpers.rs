@@ -203,12 +203,21 @@ fn parse_color_chunk(chunk: &str) -> Option<String> {
     let mut blue = None;
 
     for_each_control_token(chunk, |token| {
-        if token.starts_with('r') {
-            red = token.strip_prefix('r').and_then(|v| v.parse::<u8>().ok());
-        } else if token.starts_with('g') {
-            green = token.strip_prefix('g').and_then(|v| v.parse::<u8>().ok());
-        } else if token.starts_with('b') {
-            blue = token.strip_prefix('b').and_then(|v| v.parse::<u8>().ok());
+        if let Some(value) = token
+            .strip_prefix("red")
+            .or_else(|| token.strip_prefix('r'))
+        {
+            red = value.parse::<u8>().ok();
+        } else if let Some(value) = token
+            .strip_prefix("green")
+            .or_else(|| token.strip_prefix('g'))
+        {
+            green = value.parse::<u8>().ok();
+        } else if let Some(value) = token
+            .strip_prefix("blue")
+            .or_else(|| token.strip_prefix('b'))
+        {
+            blue = value.parse::<u8>().ok();
         }
     });
 
@@ -386,7 +395,7 @@ mod tests {
     #[test]
     fn parse_color_entries_records_rgb_triplets() {
         let mut ctx = ctx();
-        parse_color_entries(r"\r255\g0\b16;\r1\g2\b3;", &mut ctx);
+        parse_color_entries(r"\red255\green0\blue16;\r1\g2\b3;", &mut ctx);
 
         assert_eq!(ctx.color_table.colors.len(), 2);
         assert_eq!(ctx.color_table.colors[0].as_deref(), Some("FF0010"));
