@@ -356,10 +356,8 @@ fn insert_bookmark_start(
     if let Some(bm_id) = try_attr_value(element, b"w:id", "word/document.xml")? {
         let mut bm = docir_core::ir::BookmarkStart::new(bm_id);
         bm.name = try_attr_value(element, b"w:name", "word/document.xml")?;
-        bm.col_first = try_attr_value(element, b"w:colFirst", "word/document.xml")?
-            .and_then(|v| v.parse().ok());
-        bm.col_last = try_attr_value(element, b"w:colLast", "word/document.xml")?
-            .and_then(|v| v.parse().ok());
+        bm.col_first = bookmark_column_attr(element, b"w:colFirst")?;
+        bm.col_last = bookmark_column_attr(element, b"w:colLast")?;
         let bm_id = bm.id;
         parser
             .store
@@ -367,6 +365,16 @@ fn insert_bookmark_start(
         para.runs.push(bm_id);
     }
     Ok(())
+}
+
+fn bookmark_column_attr(element: &BytesStart<'_>, name: &[u8]) -> Result<Option<u32>, ParseError> {
+    try_attr_value(element, name, "word/document.xml")?
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .map_err(|err| xml_error("word/document.xml", err))
+        })
+        .transpose()
 }
 
 fn insert_bookmark_end(

@@ -306,6 +306,49 @@ fn test_parse_bookmark_columns() {
 }
 
 #[test]
+fn test_parse_bookmark_columns_reports_malformed_attributes() {
+    for (case, xml) in [
+        (
+            "bad first column",
+            r#"
+            <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:bookmarkStart w:id="5" w:name="BM1" w:colFirst="first"/>
+            </w:p>
+            "#,
+        ),
+        (
+            "bad last column",
+            r#"
+            <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:bookmarkStart w:id="5" w:name="BM1" w:colLast="last"/>
+            </w:p>
+            "#,
+        ),
+    ] {
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut reader = reader_from_str(xml);
+        let mut buf = Vec::new();
+        let err = loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"w:p" => {
+                    break parse_paragraph(&mut parser, &mut reader, &rels, None).err();
+                }
+                Ok(Event::Eof) => panic!("missing paragraph"),
+                Err(e) => panic!("xml error: {}", e),
+                _ => {}
+            }
+            buf.clear();
+        };
+
+        match err.unwrap_or_else(|| panic!("{case} must fail")) {
+            ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn test_parse_field_instruction_hyperlink() {
     let xml = r#"
         <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
