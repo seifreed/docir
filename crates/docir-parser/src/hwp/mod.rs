@@ -4,7 +4,7 @@ use crate::diagnostics::attach_diagnostics_if_any;
 use crate::error::ParseError;
 use crate::format::FormatParser;
 use crate::parser::{ParsedDocument, ParserConfig};
-use crate::xml_utils::local_name;
+use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::{IRNode, Shape, ShapeType, Table, TableCell, TableRow};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -20,6 +20,7 @@ mod styles;
 mod tests;
 use std::collections::HashMap;
 use std::io::{Read, Seek};
+use std::str::FromStr;
 
 pub mod part_registry;
 mod section;
@@ -144,23 +145,16 @@ fn parse_hwpx_shape(
     {
         shape.media_asset = Some(*id);
     }
-    if let Some(x) =
-        attr_any(e, &[b"x", b"posX", b"left"], source)?.and_then(|v| v.parse::<i64>().ok())
-    {
+    if let Some(x) = parse_hwpx_shape_attr(e, &[b"x", b"posX", b"left"], source)? {
         shape.transform.x = x;
     }
-    if let Some(y) =
-        attr_any(e, &[b"y", b"posY", b"top"], source)?.and_then(|v| v.parse::<i64>().ok())
-    {
+    if let Some(y) = parse_hwpx_shape_attr(e, &[b"y", b"posY", b"top"], source)? {
         shape.transform.y = y;
     }
-    if let Some(width) = attr_any(e, &[b"width", b"w"], source)?.and_then(|v| v.parse::<u64>().ok())
-    {
+    if let Some(width) = parse_hwpx_shape_attr(e, &[b"width", b"w"], source)? {
         shape.transform.width = width;
     }
-    if let Some(height) =
-        attr_any(e, &[b"height", b"h"], source)?.and_then(|v| v.parse::<u64>().ok())
-    {
+    if let Some(height) = parse_hwpx_shape_attr(e, &[b"height", b"h"], source)? {
         shape.transform.height = height;
     }
     shape.span = Some(SourceSpan::new(source));
@@ -168,6 +162,19 @@ fn parse_hwpx_shape(
     let shape_id = shape.id;
     store.insert(IRNode::Shape(shape));
     Ok(Some(shape_id))
+}
+
+fn parse_hwpx_shape_attr<T: FromStr>(
+    e: &BytesStart<'_>,
+    names: &[&[u8]],
+    source: &str,
+) -> Result<Option<T>, ParseError>
+where
+    T::Err: std::fmt::Display,
+{
+    attr_any(e, names, source)?
+        .map(|value| value.parse::<T>().map_err(|err| xml_error(source, err)))
+        .transpose()
 }
 
 fn finalize_cell_hwpx(
