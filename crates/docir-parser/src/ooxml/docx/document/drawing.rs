@@ -117,23 +117,35 @@ fn apply_graphic_data_type(
 }
 
 fn apply_extent(e: &BytesStart<'_>, transform: &mut ShapeTransform) -> Result<(), ParseError> {
-    if let Some(val) = try_attr_value(e, b"cx", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u64_attr(e, b"cx")? {
         transform.width = val;
     }
-    if let Some(val) = try_attr_value(e, b"cy", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = u64_attr(e, b"cy")? {
         transform.height = val;
     }
     Ok(())
 }
 
 fn apply_offset(e: &BytesStart<'_>, transform: &mut ShapeTransform) -> Result<(), ParseError> {
-    if let Some(val) = try_attr_value(e, b"x", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = i64_attr(e, b"x")? {
         transform.x = val;
     }
-    if let Some(val) = try_attr_value(e, b"y", DOC_PATH)?.and_then(|v| v.parse().ok()) {
+    if let Some(val) = i64_attr(e, b"y")? {
         transform.y = val;
     }
     Ok(())
+}
+
+fn u64_attr(e: &BytesStart<'_>, name: &[u8]) -> Result<Option<u64>, ParseError> {
+    try_attr_value(e, name, DOC_PATH)?
+        .map(|value| value.parse::<u64>().map_err(|err| xml_error(DOC_PATH, err)))
+        .transpose()
+}
+
+fn i64_attr(e: &BytesStart<'_>, name: &[u8]) -> Result<Option<i64>, ParseError> {
+    try_attr_value(e, name, DOC_PATH)?
+        .map(|value| value.parse::<i64>().map_err(|err| xml_error(DOC_PATH, err)))
+        .transpose()
 }
 
 fn apply_position_offset(
