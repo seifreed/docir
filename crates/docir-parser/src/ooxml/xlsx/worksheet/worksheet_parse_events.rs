@@ -6,7 +6,7 @@ use crate::ooxml::xlsx::{
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
     XmlScanControl, attr_bool_like, is_end_event_local, local_name, scan_xml_events_until_end,
-    try_attr_value, visit_attributes,
+    try_attr_value, visit_attributes, xml_error,
 };
 use docir_core::ir::ConditionalFormat;
 use docir_core::ir::{DataValidation, SheetPageMargins};
@@ -69,34 +69,52 @@ pub(crate) fn parse_page_margins(
         footer: None,
     };
     let mut found = false;
+    let mut numeric_error = None;
     visit_attributes(start, sheet_path, |attr| match attr.key.as_ref() {
         b"left" => {
-            margins.left = lossy_attr_value(attr).parse::<f64>().ok();
+            margins.left = parse_f64_attr(attr, sheet_path, &mut numeric_error);
             found = true;
         }
         b"right" => {
-            margins.right = lossy_attr_value(attr).parse::<f64>().ok();
+            margins.right = parse_f64_attr(attr, sheet_path, &mut numeric_error);
             found = true;
         }
         b"top" => {
-            margins.top = lossy_attr_value(attr).parse::<f64>().ok();
+            margins.top = parse_f64_attr(attr, sheet_path, &mut numeric_error);
             found = true;
         }
         b"bottom" => {
-            margins.bottom = lossy_attr_value(attr).parse::<f64>().ok();
+            margins.bottom = parse_f64_attr(attr, sheet_path, &mut numeric_error);
             found = true;
         }
         b"header" => {
-            margins.header = lossy_attr_value(attr).parse::<f64>().ok();
+            margins.header = parse_f64_attr(attr, sheet_path, &mut numeric_error);
             found = true;
         }
         b"footer" => {
-            margins.footer = lossy_attr_value(attr).parse::<f64>().ok();
+            margins.footer = parse_f64_attr(attr, sheet_path, &mut numeric_error);
             found = true;
         }
         _ => {}
     })?;
+    if let Some(err) = numeric_error {
+        return Err(err);
+    }
     Ok(if found { Some(margins) } else { None })
+}
+
+fn parse_f64_attr(
+    attr: &quick_xml::events::attributes::Attribute<'_>,
+    sheet_path: &str,
+    numeric_error: &mut Option<ParseError>,
+) -> Option<f64> {
+    match lossy_attr_value(attr).parse() {
+        Ok(value) => Some(value),
+        Err(err) => {
+            *numeric_error = Some(xml_error(sheet_path, err));
+            None
+        }
+    }
 }
 
 pub(crate) fn parse_conditional_formatting_empty(
@@ -342,6 +360,19 @@ mod tests {
         assert_eq!(margins.right, Some(0.5));
         assert_eq!(margins.top, Some(1.0));
         assert_eq!(margins.bottom, None);
+    }
+
+    #[test]
+    fn parse_page_margins_reports_malformed_numeric_attributes() {
+        let mut start = quick_xml::events::BytesStart::new("pageMargins");
+        start.push_attribute(("left", "bad"));
+
+        let err = parse_page_margins(&start, "xl/worksheets/sheet1.xml")
+            .expect_err("malformed margin attributes must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "xl/worksheets/sheet1.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]
