@@ -66,35 +66,44 @@ pub(super) fn dump_hwp_streams(
         let mut sha = Sha256::new();
         let mut hash_hex = "missing".to_string();
         let mut decompress_status = "skip".to_string();
-        if let Some(data) = cfb.read_stream(path) {
-            sha.update(&data);
-            let hash = sha.finalize();
-            let mut out = String::with_capacity(hash.len() * 2);
-            for byte in hash {
-                out.push_str(&format!("{:02x}", byte));
-            }
-            hash_hex = out;
+        match cfb.try_read_stream(path) {
+            Ok(Some(data)) => {
+                sha.update(&data);
+                let hash = sha.finalize();
+                let mut out = String::with_capacity(hash.len() * 2);
+                for byte in hash {
+                    out.push_str(&format!("{:02x}", byte));
+                }
+                hash_hex = out;
 
-            if header_ctx.compressed {
-                if let Some(bytes) = prepare_hwp_stream_data(
-                    &data,
-                    header_ctx.encrypted,
-                    header_ctx.hwp_password,
-                    header_ctx.force_parse,
-                    header_ctx.try_raw_encrypted,
-                    path,
-                    diagnostics,
-                ) {
-                    match super::maybe_decompress_stream(&bytes, header_ctx.compressed, path) {
-                        Ok(_) => decompress_status = "ok".to_string(),
-                        Err(err) => {
-                            decompress_status = format!("fail: {}", err);
+                if header_ctx.compressed {
+                    if let Some(bytes) = prepare_hwp_stream_data(
+                        &data,
+                        header_ctx.encrypted,
+                        header_ctx.hwp_password,
+                        header_ctx.force_parse,
+                        header_ctx.try_raw_encrypted,
+                        path,
+                        diagnostics,
+                    ) {
+                        match super::maybe_decompress_stream(&bytes, header_ctx.compressed, path) {
+                            Ok(_) => decompress_status = "ok".to_string(),
+                            Err(err) => {
+                                decompress_status = format!("fail: {}", err);
+                            }
                         }
+                    } else {
+                        decompress_status = "encrypted".to_string();
                     }
-                } else {
-                    decompress_status = "encrypted".to_string();
                 }
             }
+            Ok(None) => {}
+            Err(err) => push_warning(
+                diagnostics,
+                "HWP_STREAM_READ_FAIL",
+                err.to_string(),
+                Some(path),
+            ),
         }
         push_info(
             diagnostics,
@@ -165,6 +174,7 @@ fn decrypt_hwp_stream(data: &[u8], password: &str, source: &str) -> Result<Vec<u
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::build_test_cfb;
     use std::fs;
     use std::path::PathBuf;
 
@@ -173,6 +183,16 @@ mod tests {
         path.push("../../fixtures/hwp/minimal.hwp");
         let data = fs::read(&path).unwrap_or_else(|e| panic!("failed to read {path:?}: {e}"));
         Cfb::parse(data).expect("parse minimal.hwp as CFB")
+    }
+
+    fn patch_cfb_fat_entry(bytes: &[u8], fat_index: u32, value: u32) -> Vec<u8> {
+        let mut out = bytes.to_vec();
+        let sector_size = 1usize << u16::from_le_bytes([out[0x1E], out[0x1F]]);
+        let first_fat_sector = u32::from_le_bytes([out[0x4C], out[0x4D], out[0x4E], out[0x4F]]);
+        let fat_offset =
+            sector_size + first_fat_sector as usize * sector_size + fat_index as usize * 4;
+        out[fat_offset..fat_offset + 4].copy_from_slice(&value.to_le_bytes());
+        out
     }
 
     #[test]
@@ -325,6 +345,35 @@ mod tests {
         );
         assert!(dumps.iter().any(|e| e.message.contains("decompress=skip")));
         assert!(dumps.iter().any(|e| e.message.contains("sha256=missing")));
+    }
+
+    #[test]
+    fn dump_hwp_streams_reports_corrupt_stream_read() {
+        let mut header = vec![0u8; 5000];
+        header[..17].copy_from_slice(b"HWP Document File");
+        let base = build_test_cfb(&[("FileHeader", &header)]);
+        let bytes = patch_cfb_fat_entry(&base, 0, 99);
+        let cfb = Cfb::parse(bytes).expect("cfb");
+        let header_ctx = super::super::builder::HwpHeaderContext {
+            compressed: false,
+            encrypted: false,
+            force_parse: false,
+            hwp_password: None,
+            try_raw_encrypted: false,
+            allow_parse: true,
+        };
+        let mut diagnostics = Diagnostics::new();
+
+        dump_hwp_streams(
+            &cfb,
+            &["FileHeader".to_string()],
+            &header_ctx,
+            &mut diagnostics,
+        );
+
+        assert!(diagnostics.entries.iter().any(|e| {
+            e.code == "HWP_STREAM_READ_FAIL" && e.message.contains("OLE sector out of bounds")
+        }));
     }
 
     #[test]
