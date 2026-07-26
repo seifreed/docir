@@ -143,8 +143,7 @@ fn parse_text_paragraph(
     section: &mut Section,
     state: &mut OdfTextState,
 ) -> Result<(), ParseError> {
-    let outline_level = try_attr_value_by_suffix(e, &[b":outline-level"], "content.xml")?
-        .and_then(|v| v.parse::<u8>().ok());
+    let outline_level = parse_outline_level(e, "content.xml")?;
     let numbering = state.list_stack.last().map(|ctx| NumberingInfo {
         num_id: ctx.num_id,
         level: ctx.level,
@@ -162,6 +161,12 @@ fn parse_text_paragraph(
     section.content.append(&mut state.pending_inline_nodes);
     section.content.push(paragraph_id);
     Ok(())
+}
+
+fn parse_outline_level(e: &BytesStart<'_>, source: &str) -> Result<Option<u8>, ParseError> {
+    try_attr_value_by_suffix(e, &[b":outline-level"], source)?
+        .map(|value| value.parse::<u8>().map_err(|err| xml_error(source, err)))
+        .transpose()
 }
 
 fn parse_text_table(

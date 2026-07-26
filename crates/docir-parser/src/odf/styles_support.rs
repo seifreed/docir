@@ -88,7 +88,8 @@ mod tests {
 
     #[test]
     fn parse_odf_headers_footers_reports_malformed_outline_attributes() {
-        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        for xml in [
+            r#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
   xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
   xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
@@ -98,13 +99,27 @@ mod tests {
     </style:header>
   </style:master-page>
 </office:document-styles>
-"#;
-        let mut store = IrStore::new();
-        let err = parse_odf_headers_footers(xml, &mut store, &ParserConfig::default()).unwrap_err();
+"#,
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <style:master-page style:name="Standard">
+    <style:header>
+      <text:h text:outline-level="bad"/>
+    </style:header>
+  </style:master-page>
+</office:document-styles>
+"#,
+        ] {
+            let mut store = IrStore::new();
+            let err =
+                parse_odf_headers_footers(xml, &mut store, &ParserConfig::default()).unwrap_err();
 
-        match err {
-            ParseError::Xml { file, .. } => assert_eq!(file, "styles.xml"),
-            other => panic!("expected styles.xml parse error, got {:?}", other),
+            match err {
+                ParseError::Xml { file, .. } => assert_eq!(file, "styles.xml"),
+                other => panic!("expected styles.xml parse error, got {:?}", other),
+            }
         }
     }
 

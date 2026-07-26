@@ -192,8 +192,7 @@ fn handle_header_footer_empty(
 ) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"p" | b"h" => {
-            let outline_level = try_attr_value_by_suffix(e, &[b":outline-level"], "styles.xml")?
-                .and_then(|v| v.parse::<u8>().ok());
+            let outline_level = parse_outline_level(e)?;
             let numbering = list_stack.last().map(|ctx| NumberingInfo {
                 num_id: ctx.num_id,
                 level: ctx.level,
@@ -216,8 +215,7 @@ fn parse_header_footer_paragraph(
     list_stack: &[ListContext],
     pending_inline_nodes: &mut Vec<NodeId>,
 ) -> Result<NodeId, ParseError> {
-    let outline_level = try_attr_value_by_suffix(e, &[b":outline-level"], "styles.xml")?
-        .and_then(|v| v.parse::<u8>().ok());
+    let outline_level = parse_outline_level(e)?;
     let numbering = list_stack.last().map(|ctx| NumberingInfo {
         num_id: ctx.num_id,
         level: ctx.level,
@@ -232,4 +230,14 @@ fn parse_header_footer_paragraph(
         pending_inline_nodes,
         limits,
     )
+}
+
+fn parse_outline_level(e: &BytesStart<'_>) -> Result<Option<u8>, ParseError> {
+    try_attr_value_by_suffix(e, &[b":outline-level"], "styles.xml")?
+        .map(|value| {
+            value
+                .parse::<u8>()
+                .map_err(|err| xml_error("styles.xml", err))
+        })
+        .transpose()
 }
