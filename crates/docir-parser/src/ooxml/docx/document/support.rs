@@ -239,7 +239,12 @@ pub(super) fn parse_num_abstract_id(reader: &mut Reader<&[u8]>) -> Result<u32, P
             Ok(Event::Empty(e)) => {
                 if local_name(e.name().as_ref()) == b"abstractNumId"
                     && let Some(val) = try_attr_value(&e, b"w:val", "word/numbering.xml")?
-                        .and_then(|v| v.parse().ok())
+                        .map(|value| {
+                            value
+                                .parse::<u32>()
+                                .map_err(|err| xml_error("word/numbering.xml", err))
+                        })
+                        .transpose()?
                 {
                     abstract_id = val;
                 }
