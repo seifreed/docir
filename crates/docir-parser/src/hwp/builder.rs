@@ -120,7 +120,7 @@ impl ParseStage for HwpxParser {
         let mut file_names: Vec<String> = zip.file_names().map(|s| s.to_string()).collect();
         file_names.sort();
 
-        let part_data = self.collect_hwpx_parts(&mut zip, &file_names, &mut store);
+        let part_data = self.collect_hwpx_parts(&mut zip, &file_names, &mut store)?;
         doc.shared_parts = part_data.shared_parts;
         doc.shared_parts.extend(part_data.media_assets);
 

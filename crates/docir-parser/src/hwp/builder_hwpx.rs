@@ -19,12 +19,12 @@ impl HwpxParser {
         zip: &mut SecureZipReader<R>,
         file_names: &[String],
         store: &mut IrStore,
-    ) -> HwpxPartCollection {
+    ) -> Result<HwpxPartCollection, ParseError> {
         let mut shared_parts = Vec::new();
         let mut media_assets = Vec::new();
         let mut media_lookup: HashMap<String, NodeId> = HashMap::new();
         for path in file_names {
-            let size = zip.file_size(path).unwrap_or(0);
+            let size = zip.file_size(path)?;
             if path.starts_with("BinData/") {
                 let media_type = media_type_from_path(path);
                 let mut asset = MediaAsset::new(path, media_type, size);
@@ -40,11 +40,11 @@ impl HwpxParser {
             store.insert(IRNode::ExtensionPart(part));
             shared_parts.push(part_id);
         }
-        HwpxPartCollection {
+        Ok(HwpxPartCollection {
             shared_parts,
             media_assets,
             media_lookup,
-        }
+        })
     }
 
     pub(super) fn parse_hwpx_primary_sections<R: Read + Seek>(

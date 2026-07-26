@@ -289,9 +289,16 @@ fn test_hwpx_comments_revisions_images() {
 
     let mut has_revision = false;
     let mut has_image = false;
+    let mut has_sized_media = false;
     for node in parsed.store.values() {
         if let IRNode::Revision(_) = node {
             has_revision = true;
+        }
+        if let IRNode::MediaAsset(media) = node
+            && media.path == "BinData/image1.png"
+            && media.size_bytes == 3
+        {
+            has_sized_media = true;
         }
         if let IRNode::Shape(shape) = node
             && shape.shape_type == ShapeType::Picture
@@ -301,6 +308,7 @@ fn test_hwpx_comments_revisions_images() {
     }
     assert!(has_revision);
     assert!(has_image);
+    assert!(has_sized_media);
 }
 
 #[test]
