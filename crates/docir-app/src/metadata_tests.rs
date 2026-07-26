@@ -231,3 +231,13 @@ fn inspect_metadata_rejects_property_value_offset_outside_section() {
         .expect_err("property value outside section must fail");
     assert!(err.to_string().contains("property value offset"));
 }
+
+#[test]
+fn inspect_metadata_rejects_property_value_offset_inside_property_table() {
+    let mut summary = build_test_property_set_stream(&[(2, TestPropertyValue::Str("Specimen"))]);
+    summary[0x3c..0x40].copy_from_slice(&8u32.to_le_bytes());
+
+    let err = inspect_metadata_bytes(&build_test_cfb(&[(SUMMARY_INFO_STREAM, &summary)]))
+        .expect_err("property value inside property table must fail");
+    assert!(err.to_string().contains("property table"));
+}

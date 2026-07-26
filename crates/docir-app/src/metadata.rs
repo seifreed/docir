@@ -148,6 +148,11 @@ fn parse_section_entries(
                 "OLE property set property value offset overflow".to_string(),
             )
         })?;
+        if absolute_offset < property_table_end {
+            return Err(ParserParseError::InvalidStructure(
+                "OLE property set property value offset points into property table".to_string(),
+            ));
+        }
         let value_type_end = absolute_offset.checked_add(4).ok_or_else(|| {
             ParserParseError::InvalidStructure(
                 "OLE property set property value offset overflow".to_string(),
