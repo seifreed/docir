@@ -81,10 +81,10 @@ pub(super) fn run_properties_from_attrs(
                 props.underline = Some(docir_core::ir::UnderlineStyle::Single);
             }
             b"color" => {
-                props.color = Some(value.trim_start_matches('#').to_string());
+                props.color = Some(value.strip_prefix('#').unwrap_or(&value).to_string());
             }
             b"highlight" => {
-                props.highlight = Some(value.trim_start_matches('#').to_string());
+                props.highlight = Some(value.strip_prefix('#').unwrap_or(&value).to_string());
             }
             b"font" | b"fontName" => {
                 props.font_family = Some(value);

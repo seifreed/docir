@@ -147,6 +147,15 @@ fn test_run_and_style_property_helpers() {
 }
 
 #[test]
+fn test_run_properties_strip_only_one_color_prefix() {
+    let e = start_event(r###"<hp:r color="##AABBCC" highlight="##00FF00"/>"###);
+    let run = run_properties_from_attrs(&e, "test.xml").expect("run props");
+
+    assert_eq!(run.color.as_deref(), Some("#AABBCC"));
+    assert_eq!(run.highlight.as_deref(), Some("#00FF00"));
+}
+
+#[test]
 fn test_paragraph_and_table_property_helpers() {
     let para =
         start_event(r#"<hp:p align="center" indentLeft="10" indentRight="20" firstIndent="30"/>"#);
