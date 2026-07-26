@@ -152,7 +152,9 @@ impl Relationships {
         for component in normalized_target.split('/') {
             match component {
                 ".." => {
-                    parts.pop();
+                    if parts.pop().is_none() {
+                        parts.push("..");
+                    }
                 }
                 "." | "" => {}
                 other => {
@@ -264,6 +266,14 @@ mod tests {
         assert_eq!(
             Relationships::resolve_target("word/document.xml", r"\\server\share\doc.docx"),
             r"\\server\share\doc.docx"
+        );
+    }
+
+    #[test]
+    fn resolve_target_does_not_collapse_paths_above_package_root() {
+        assert_eq!(
+            Relationships::resolve_target("word/document.xml", "../../word/styles.xml"),
+            "../word/styles.xml"
         );
     }
 }
