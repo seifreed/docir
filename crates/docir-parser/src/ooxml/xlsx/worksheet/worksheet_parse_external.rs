@@ -387,6 +387,72 @@ mod tests {
     }
 
     #[test]
+    fn parse_external_links_reports_malformed_external_link_part() {
+        let mut parser = XlsxParser::new();
+        let mut zip = MockPackageReader::default();
+
+        zip.insert_str(
+            "xl/externalLinks/externalLink1.xml",
+            r#"<externalLink linkType="a" linkType="b"/>"#,
+        );
+        zip.insert_str(
+            "xl/externalLinks/_rels/externalLink1.xml.rels",
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>"#,
+        );
+
+        let mut workbook_rels = Relationships::default();
+        workbook_rels.by_id.insert(
+            "rIdExt1".to_string(),
+            crate::ooxml::relationships::Relationship {
+                id: "rIdExt1".to_string(),
+                rel_type: crate::ooxml::xlsx::rel_type::EXTERNAL_LINK.to_string(),
+                target: "externalLinks/externalLink1.xml".to_string(),
+                target_mode: crate::ooxml::relationships::TargetMode::Internal,
+            },
+        );
+        workbook_rels.by_type.insert(
+            crate::ooxml::xlsx::rel_type::EXTERNAL_LINK.to_string(),
+            vec!["rIdExt1".to_string()],
+        );
+
+        let err = parser
+            .parse_external_links_and_connections(&mut zip, "xl/workbook.xml", &workbook_rels)
+            .expect_err("malformed external link part must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => {
+                assert_eq!(file, "xl/externalLinks/externalLink1.xml");
+            }
+            other => panic!("expected XML error, got {other}"),
+        }
+    }
+
+    #[test]
+    fn parse_external_links_reports_malformed_connections_part() {
+        let mut parser = XlsxParser::new();
+        let mut zip = MockPackageReader::default();
+        zip.insert_str(
+            "xl/connections.xml",
+            r#"<connections><connection id="1" id="2"/></connections>"#,
+        );
+
+        let err = parser
+            .parse_external_links_and_connections(
+                &mut zip,
+                "xl/workbook.xml",
+                &Relationships::default(),
+            )
+            .expect_err("malformed connections part must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => {
+                assert_eq!(file, "xl/connections.xml");
+            }
+            other => panic!("expected XML error, got {other}"),
+        }
+    }
+
+    #[test]
     fn parse_chartsheet_returns_none_when_chart_file_is_missing() {
         let mut parser = XlsxParser::new();
         let mut zip = MockPackageReader::default();

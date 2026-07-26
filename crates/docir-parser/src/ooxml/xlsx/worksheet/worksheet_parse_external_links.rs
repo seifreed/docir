@@ -31,14 +31,12 @@ fn parse_external_link_parts(
         }
 
         let rels = read_relationships(zip, &external_path)?;
-        if let Ok(xml) = zip.read_file_string(&external_path)
-            && let Ok(mut part) = parse_external_link_part(&xml, &external_path, Some(&rels))
-        {
-            part.span = Some(SourceSpan::new(&external_path));
-            let part_id = part.id;
-            parser.store.insert(IRNode::ExternalLinkPart(part));
-            push_shared_part(parser, part_id);
-        }
+        let xml = zip.read_file_string(&external_path)?;
+        let mut part = parse_external_link_part(&xml, &external_path, Some(&rels))?;
+        part.span = Some(SourceSpan::new(&external_path));
+        let part_id = part.id;
+        parser.store.insert(IRNode::ExternalLinkPart(part));
+        push_shared_part(parser, part_id);
 
         for ext in rels.by_id.values() {
             let target = &ext.target;
@@ -64,16 +62,15 @@ fn parse_connections(
     }
 
     let xml = zip.read_file_string("xl/connections.xml")?;
-    if let Ok(mut part) = parse_connections_part(&xml, "xl/connections.xml") {
-        part.span = Some(SourceSpan::new("xl/connections.xml"));
-        let part_id = part.id;
-        let targets = connection_targets(&part);
-        parser.store.insert(IRNode::ConnectionPart(part));
-        push_shared_part(parser, part_id);
-        for target in targets {
-            let ext_ref = ExternalReference::new(ExternalRefType::DataConnection, target);
-            push_external_reference(parser, ext_ref);
-        }
+    let mut part = parse_connections_part(&xml, "xl/connections.xml")?;
+    part.span = Some(SourceSpan::new("xl/connections.xml"));
+    let part_id = part.id;
+    let targets = connection_targets(&part);
+    parser.store.insert(IRNode::ConnectionPart(part));
+    push_shared_part(parser, part_id);
+    for target in targets {
+        let ext_ref = ExternalReference::new(ExternalRefType::DataConnection, target);
+        push_external_reference(parser, ext_ref);
     }
     Ok(())
 }
