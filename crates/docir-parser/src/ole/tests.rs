@@ -403,6 +403,53 @@ fn cfb_path_normalization_and_read_file_string_error_paths() {
 }
 
 #[test]
+fn cfb_reader_reports_corrupt_stream_read_errors() {
+    let mut streams = HashMap::new();
+    streams.insert(
+        "Broken".to_string(),
+        DirEntry {
+            name: "Broken".to_string(),
+            name_len_raw: 14,
+            object_type: 2,
+            color_flag: 0,
+            left: FREE_SECT,
+            right: FREE_SECT,
+            child: FREE_SECT,
+            start_sector: 99,
+            size: 8,
+            created_filetime: None,
+            modified_filetime: None,
+        },
+    );
+
+    let cfb = Cfb {
+        sector_size: 512,
+        mini_sector_size: 64,
+        mini_cutoff: 0,
+        num_fat_sectors: 1,
+        first_dir_sector: 0,
+        first_mini_fat: END_OF_CHAIN,
+        num_mini_fat: 0,
+        first_difat: END_OF_CHAIN,
+        num_difat: 0,
+        difat_entry_count: 0,
+        fat: vec![END_OF_CHAIN],
+        mini_fat: Vec::new(),
+        root_stream: Vec::new(),
+        streams,
+        entries: HashMap::new(),
+        directory_slots: Vec::new(),
+        data: vec![0u8; 1024],
+    };
+    let mut reader = CfbReader::new(&cfb);
+
+    let err = reader
+        .read_file("Broken")
+        .expect_err("corrupt stream chain should fail");
+    assert!(matches!(err, ParseError::InvalidStructure(_)));
+}
+
+#[test]
 fn read_stream_from_mini_handles_out_of_bounds_and_chain_breaks() {
     let mini_stream = b"abcdEFGH".to_vec();
     let mini_fat = vec![END_OF_CHAIN];

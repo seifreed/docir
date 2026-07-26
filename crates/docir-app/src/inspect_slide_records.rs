@@ -59,7 +59,7 @@ pub fn inspect_slide_records_path<P: AsRef<Path>>(
 pub fn inspect_slide_records_bytes(data: &[u8]) -> AppResult<SlideRecordInspection> {
     let cfb = Cfb::parse(data.to_vec())?;
     let presentation_stream = "PowerPoint Document";
-    let stream_bytes = cfb.read_stream(presentation_stream).ok_or_else(|| {
+    let stream_bytes = cfb.try_read_stream(presentation_stream)?.ok_or_else(|| {
         ParserParseError::MissingPart(
             "legacy PPT presentation stream (PowerPoint Document)".to_string(),
         )

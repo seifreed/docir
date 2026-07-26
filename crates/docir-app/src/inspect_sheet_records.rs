@@ -66,7 +66,7 @@ pub fn inspect_sheet_records_bytes(data: &[u8]) -> AppResult<SheetRecordInspecti
         .into());
     };
 
-    let workbook_bytes = cfb.read_stream(workbook_stream).ok_or_else(|| {
+    let workbook_bytes = cfb.try_read_stream(workbook_stream)?.ok_or_else(|| {
         ParserParseError::InvalidStructure(format!(
             "failed to read workbook stream {workbook_stream}"
         ))

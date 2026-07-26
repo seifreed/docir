@@ -65,13 +65,13 @@ impl CfbStreamReaderPort for ParserCfbStreamReader {
         stream_names: &[&str],
     ) -> AppResult<Vec<(String, Vec<u8>)>> {
         let cfb = Cfb::parse(data.to_vec())?;
-        Ok(stream_names
-            .iter()
-            .filter_map(|name| {
-                cfb.read_stream(name)
-                    .map(|bytes| ((*name).to_string(), bytes))
-            })
-            .collect())
+        let mut streams = Vec::new();
+        for name in stream_names {
+            if let Some(bytes) = cfb.try_read_stream(name)? {
+                streams.push(((*name).to_string(), bytes));
+            }
+        }
+        Ok(streams)
     }
 }
 

@@ -99,25 +99,32 @@ impl Cfb {
 
     /// Public API entrypoint: read_stream.
     pub fn read_stream(&self, path: &str) -> Option<Vec<u8>> {
-        let entry = self.resolve_stream_entry(path)?;
+        self.try_read_stream(path).ok().flatten()
+    }
+
+    /// Public API entrypoint: try_read_stream.
+    pub fn try_read_stream(&self, path: &str) -> Result<Option<Vec<u8>>, ParseError> {
+        let Some(entry) = self.resolve_stream_entry(path) else {
+            return Ok(None);
+        };
         if entry.object_type != 2 {
-            return None;
+            return Ok(None);
         }
 
         if self.should_use_mini_stream(entry) {
-            return read_stream_from_mini(
+            return Ok(read_stream_from_mini(
                 &self.root_stream,
                 self.mini_sector_size,
                 &self.mini_fat,
                 entry.start_sector,
                 entry.size as usize,
-            );
+            ));
         }
 
-        let data = self.read_regular_stream(entry).ok()?;
+        let data = self.read_regular_stream(entry)?;
         let size = usize::try_from(entry.size).unwrap_or(usize::MAX);
         let len = data.len().min(size);
-        Some(data[..len].to_vec())
+        Ok(Some(data[..len].to_vec()))
     }
 
     /// Public API entrypoint: has_stream.
@@ -302,7 +309,7 @@ impl PackageReader for CfbReader<'_> {
 
     fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError> {
         self.cfb
-            .read_stream(name)
+            .try_read_stream(name)?
             .ok_or_else(|| ParseError::MissingPart(name.to_string()))
     }
 
