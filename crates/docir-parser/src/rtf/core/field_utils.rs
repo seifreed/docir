@@ -74,4 +74,12 @@ mod tests {
         assert_eq!(args, vec!["section1".to_string()]);
         assert_eq!(switches, vec!["l".to_string()]);
     }
+
+    #[test]
+    fn parse_field_instruction_strips_only_one_switch_prefix() {
+        let parsed = parse_field_instruction(r#"MERGEFIELD customer_name \\* MERGEFORMAT"#)
+            .expect("field instruction");
+
+        assert_eq!(parsed.switches, vec![r#"\*"#.to_string()]);
+    }
 }

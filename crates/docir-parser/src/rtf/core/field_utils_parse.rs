@@ -24,7 +24,7 @@ pub(super) fn parse_field_instruction(text: &str) -> Option<FieldInstruction> {
     let mut switches = Vec::new();
     for token in tokens.iter().skip(1) {
         if token.starts_with('\\') {
-            switches.push(token.trim_start_matches('\\').to_string());
+            switches.push(token.strip_prefix('\\').unwrap_or(token).to_string());
         } else {
             args.push(token.to_string());
         }
@@ -48,7 +48,7 @@ pub(super) fn parse_hyperlink_instruction(
     let mut switches = Vec::new();
     for token in tokens.into_iter().skip(1) {
         if token.starts_with('\\') {
-            switches.push(token.trim_start_matches('\\').to_string());
+            switches.push(token.strip_prefix('\\').unwrap_or(&token).to_string());
         } else if target.is_none() {
             target = Some(token);
         } else {
