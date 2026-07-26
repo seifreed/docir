@@ -124,10 +124,7 @@ pub(crate) fn parse_cell_value_with_text(
                 .map(CellValue::Number)
                 .unwrap_or_else(|| CellValue::String(text.to_string())))
         }
-        Some("boolean") => Ok({
-            let v = value_attr.unwrap_or(text);
-            CellValue::Boolean(v == "true" || v == "1")
-        }),
+        Some("boolean") => parse_boolean_value(Some(value_attr.unwrap_or(text))),
         Some("date") | Some("time") => {
             Ok(CellValue::String(value_attr.unwrap_or(text).to_string()))
         }
@@ -149,14 +146,7 @@ pub(crate) fn parse_cell_value_empty(
         Some("float") | Some("currency") | Some("percentage") => {
             Ok(parse_numeric_value(value_attr)?.map_or(CellValue::Empty, CellValue::Number))
         }
-        Some("boolean") => Ok({
-            let v = value_attr.unwrap_or_default();
-            if v.is_empty() {
-                CellValue::Empty
-            } else {
-                CellValue::Boolean(v == "true" || v == "1")
-            }
-        }),
+        Some("boolean") => parse_boolean_value(value_attr),
         Some("string") | Some("text") | Some("date") | Some("time") => Ok(value_attr
             .map_or(CellValue::Empty, |value| {
                 CellValue::String(value.to_string())
@@ -172,4 +162,16 @@ fn parse_numeric_value(value_attr: Option<&str>) -> Result<Option<f64>, ParseErr
                 .map_err(|err| xml_error("content.xml", err))
         })
         .transpose()
+}
+
+fn parse_boolean_value(value_attr: Option<&str>) -> Result<CellValue, ParseError> {
+    match value_attr.unwrap_or_default() {
+        "" => Ok(CellValue::Empty),
+        "true" | "1" => Ok(CellValue::Boolean(true)),
+        "false" | "0" => Ok(CellValue::Boolean(false)),
+        value => Err(xml_error(
+            "content.xml",
+            format!("invalid boolean cell value '{value}'"),
+        )),
+    }
 }

@@ -573,6 +573,54 @@ fn parse_ods_table_reports_malformed_empty_numeric_cell_value() {
 }
 
 #[test]
+fn parse_ods_table_reports_malformed_boolean_cell_value() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <table:table table:name="BadBoolean">
+    <table:table-row>
+      <table:table-cell table:cell-value-type="boolean" table:cell-value="maybe"/>
+    </table:table-row>
+  </table:table>
+</office:spreadsheet>
+"#;
+    let (mut reader, table_start) = parse_table_start(xml);
+    let mut store = IrStore::new();
+
+    let err = parse_ods_table(
+        &mut reader,
+        &table_start,
+        1,
+        &mut store,
+        &HashMap::new(),
+        &default_limits(),
+    )
+    .expect_err("malformed boolean value must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn parse_ods_cell_empty_reports_malformed_boolean_value() {
+    let mut cell = BytesStart::new("table:table-cell");
+    cell.push_attribute(("table:cell-value-type", "boolean"));
+    cell.push_attribute(("table:cell-value", "maybe"));
+    let mut style_map = HashMap::new();
+    let mut next_style_id = 1;
+
+    let err = parse_ods_cell_empty(&cell, &mut style_map, &mut next_style_id)
+        .expect_err("malformed boolean value must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn parse_ods_table_reports_malformed_xml_as_content_error() {
     let malformed: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
 <office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
