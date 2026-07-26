@@ -186,7 +186,7 @@ fn test_parse_table_properties_ignore_unknown_border_children_and_keep_margin_sh
               <w:between w:val="single" w:sz="4" w:color="AA00AA"/>
             </w:tblBorders>
             <w:tblCellMar>
-              <w:top w:w="bad"/>
+              <w:top w:w="120"/>
             </w:tblCellMar>
           </w:tblPr>
           <w:tr>
@@ -213,17 +213,17 @@ fn test_parse_table_properties_ignore_unknown_border_children_and_keep_margin_sh
         .cell_margins
         .as_ref()
         .expect("tblCellMar should be retained when recognized side tags exist");
-    assert_eq!(margins.top, None, "invalid numeric margin is ignored");
+    assert_eq!(margins.top, Some(120));
 }
 #[test]
-fn test_parse_table_cell_ignores_invalid_numeric_attrs_and_keeps_nil_border() {
+fn test_parse_table_cell_keeps_nil_border_and_unknown_merge_fallback() {
     let xml = r#"
         <w:tbl xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
           <w:tr>
             <w:tc>
               <w:tcPr>
-                <w:tcW w:w="oops" w:type="dxa"/>
-                <w:gridSpan w:val="oops"/>
+                <w:tcW w:w="100" w:type="dxa"/>
+                <w:gridSpan w:val="2"/>
                 <w:vMerge w:val="bogus"/>
                 <w:tcBorders>
                   <w:left w:val="nil" w:color="auto"/>
@@ -251,8 +251,11 @@ fn test_parse_table_cell_ignores_invalid_numeric_attrs_and_keeps_nil_border() {
         _ => panic!("missing cell"),
     };
 
-    assert!(cell.properties.width.is_none());
-    assert_eq!(cell.properties.grid_span, None);
+    assert_eq!(
+        cell.properties.width.as_ref().map(|width| width.value),
+        Some(100)
+    );
+    assert_eq!(cell.properties.grid_span, Some(2));
     assert!(matches!(
         cell.properties.vertical_merge,
         Some(docir_core::ir::MergeType::Continue)

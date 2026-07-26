@@ -9,6 +9,8 @@ use docir_core::ir::{
 use docir_core::types::NodeId;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
+use std::fmt::Display;
+use std::str::FromStr;
 
 const DOC_PATH: &str = "word/document.xml";
 
@@ -164,8 +166,7 @@ fn apply_table_cell_property_event(
 ) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
         b"tcW" => {
-            if let Some(val) = try_attr_value(event, b"w:w", DOC_PATH)?.and_then(|v| v.parse().ok())
-            {
+            if let Some(val) = parsed_attr::<u32>(event, b"w:w")? {
                 let width_type = match try_attr_value(event, b"w:type", DOC_PATH)?.as_deref() {
                     Some("dxa") => TableWidthType::Dxa,
                     Some("pct") => TableWidthType::Pct,
@@ -179,9 +180,7 @@ fn apply_table_cell_property_event(
             }
         }
         b"gridSpan" => {
-            if let Some(val) =
-                try_attr_value(event, b"w:val", DOC_PATH)?.and_then(|v| v.parse().ok())
-            {
+            if let Some(val) = parsed_attr::<u32>(event, b"w:val")? {
                 props.grid_span = Some(val);
             }
         }
@@ -263,8 +262,7 @@ fn apply_table_property_attrs(
 ) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
         b"tblW" => {
-            if let Some(val) = try_attr_value(event, b"w:w", DOC_PATH)?.and_then(|v| v.parse().ok())
-            {
+            if let Some(val) = parsed_attr::<u32>(event, b"w:w")? {
                 let width_type = match try_attr_value(event, b"w:type", DOC_PATH)?.as_deref() {
                     Some("dxa") => TableWidthType::Dxa,
                     Some("pct") => TableWidthType::Pct,
@@ -305,8 +303,7 @@ pub(crate) fn parse_table_grid(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 if local_name(e.name().as_ref()) == b"gridCol"
-                    && let Some(val) =
-                        try_attr_value(&e, b"w:w", DOC_PATH)?.and_then(|v| v.parse().ok())
+                    && let Some(val) = parsed_attr::<u32>(&e, b"w:w")?
                 {
                     grid.push(docir_core::ir::GridColumn { width: val });
                 }
@@ -334,9 +331,7 @@ pub(crate) fn parse_table_row_properties(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                 b"trHeight" => {
-                    if let Some(val) =
-                        try_attr_value(&e, b"w:val", DOC_PATH)?.and_then(|v| v.parse().ok())
-                    {
+                    if let Some(val) = parsed_attr::<u32>(&e, b"w:val")? {
                         let rule = match try_attr_value(&e, b"w:hRule", DOC_PATH)?.as_deref() {
                             Some("exact") => RowHeightRule::Exact,
                             Some("atLeast") => RowHeightRule::AtLeast,
@@ -373,6 +368,16 @@ pub(crate) fn parse_table_row_properties(
         buf.clear();
     }
     Ok(())
+}
+
+fn parsed_attr<T>(e: &BytesStart<'_>, name: &[u8]) -> Result<Option<T>, ParseError>
+where
+    T: FromStr,
+    T::Err: Display,
+{
+    try_attr_value(e, name, DOC_PATH)?
+        .map(|value| value.parse::<T>().map_err(|err| xml_error(DOC_PATH, err)))
+        .transpose()
 }
 
 fn parse_table_borders(
@@ -438,7 +443,7 @@ fn parse_cell_margins(reader: &mut Reader<&[u8]>) -> Result<Option<CellMargins>,
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                let val = try_attr_value(&e, b"w:w", DOC_PATH)?.and_then(|v| v.parse().ok());
+                let val = parsed_attr::<u32>(&e, b"w:w")?;
                 match local_name(e.name().as_ref()) {
                     b"top" => {
                         margins.top = val;

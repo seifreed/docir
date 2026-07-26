@@ -71,39 +71,65 @@ mod tests {
 
     #[test]
     fn parse_table_properties_reports_malformed_attributes() {
-        let xml = r#"
-            <w:tblPr>
-              <w:tblW w:w="7200" w:w="1440" w:type="dxa"/>
-            </w:tblPr>
-        "#;
-        let mut reader = reader_from(xml);
-        let mut props = TableProperties::default();
-        seek_start(&mut reader, b"w:tblPr");
+        for (case, xml) in [
+            (
+                "duplicate width",
+                r#"
+                <w:tblPr>
+                  <w:tblW w:w="7200" w:w="1440" w:type="dxa"/>
+                </w:tblPr>
+                "#,
+            ),
+            (
+                "bad width",
+                r#"
+                <w:tblPr>
+                  <w:tblW w:w="wide" w:type="dxa"/>
+                </w:tblPr>
+                "#,
+            ),
+            (
+                "bad cell margin",
+                r#"
+                <w:tblPr>
+                  <w:tblCellMar>
+                    <w:left w:w="wide"/>
+                  </w:tblCellMar>
+                </w:tblPr>
+                "#,
+            ),
+        ] {
+            let mut reader = reader_from(xml);
+            let mut props = TableProperties::default();
+            seek_start(&mut reader, b"w:tblPr");
 
-        let err = parse_table_properties(&mut reader, &mut props)
-            .expect_err("malformed table attributes must fail");
-        match err {
-            ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
-            other => panic!("unexpected error: {other:?}"),
+            let err = match parse_table_properties(&mut reader, &mut props) {
+                Ok(_) => panic!("{case} must fail"),
+                Err(err) => err,
+            };
+            match err {
+                ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+                other => panic!("unexpected error: {other:?}"),
+            }
         }
     }
 
     #[test]
-    fn parse_table_grid_reads_grid_columns_and_ignores_invalid_widths() {
+    fn parse_table_grid_reports_malformed_column_widths() {
         let xml = r#"
             <w:tblGrid>
               <w:gridCol w:w="1200"/>
               <w:gridCol w:w="bad"/>
-              <w:gridCol w:w="2400"/>
             </w:tblGrid>
         "#;
         let mut reader = reader_from(xml);
         seek_start(&mut reader, b"w:tblGrid");
 
-        let grid = parse_table_grid(&mut reader).expect("grid should parse");
-        assert_eq!(grid.len(), 2);
-        assert_eq!(grid[0].width, 1200);
-        assert_eq!(grid[1].width, 2400);
+        let err = parse_table_grid(&mut reader).expect_err("malformed grid width must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]
@@ -197,10 +223,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_table_cell_properties_defaults_merge_and_alignment_and_ignores_invalid_width() {
+    fn parse_table_cell_properties_defaults_merge_and_alignment() {
         let xml = r#"
             <w:tcPr>
-              <w:tcW w:w="bad" w:type="dxa"/>
+              <w:tcW w:w="120" w:type="dxa"/>
               <w:vMerge/>
               <w:vAlign w:val="unknown"/>
               <w:tcBorders>
@@ -214,12 +240,47 @@ mod tests {
         seek_start(&mut reader, b"w:tcPr");
 
         parse_table_cell_properties(&mut reader, &mut props).expect("cell props parse");
-        assert!(props.width.is_none(), "invalid width should be ignored");
+        assert_eq!(props.width.as_ref().map(|width| width.value), Some(120));
         assert_eq!(props.vertical_merge, Some(MergeType::Continue));
         assert_eq!(props.vertical_align, Some(CellVerticalAlignment::Top));
         let borders = props.borders.expect("borders");
         assert!(borders.inside_h.is_some());
         assert!(borders.inside_v.is_some());
+    }
+
+    #[test]
+    fn parse_table_cell_properties_reports_malformed_numeric_attributes() {
+        for (case, xml) in [
+            (
+                "bad cell width",
+                r#"
+                <w:tcPr>
+                  <w:tcW w:w="wide" w:type="dxa"/>
+                </w:tcPr>
+                "#,
+            ),
+            (
+                "bad grid span",
+                r#"
+                <w:tcPr>
+                  <w:gridSpan w:val="many"/>
+                </w:tcPr>
+                "#,
+            ),
+        ] {
+            let mut reader = reader_from(xml);
+            let mut props = TableCellProperties::default();
+            seek_start(&mut reader, b"w:tcPr");
+
+            let err = match parse_table_cell_properties(&mut reader, &mut props) {
+                Ok(_) => panic!("{case} must fail"),
+                Err(err) => err,
+            };
+            match err {
+                ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+                other => panic!("unexpected error: {other:?}"),
+            }
+        }
     }
 
     #[test]
@@ -288,6 +349,25 @@ mod tests {
         let height = props.height.expect("row height");
         assert_eq!(height.value, 180);
         assert_eq!(height.rule, RowHeightRule::Auto);
+    }
+
+    #[test]
+    fn parse_table_row_properties_reports_malformed_height() {
+        let xml = r#"
+            <w:trPr>
+              <w:trHeight w:val="tall"/>
+            </w:trPr>
+        "#;
+        let mut reader = reader_from(xml);
+        let mut props = TableRowProperties::default();
+        seek_start(&mut reader, b"w:trPr");
+
+        let err = parse_table_row_properties(&mut reader, &mut props)
+            .expect_err("malformed row height must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]
