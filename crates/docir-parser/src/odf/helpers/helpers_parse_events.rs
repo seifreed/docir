@@ -192,7 +192,13 @@ fn build_ods_conditional_rule(start: &BytesStart<'_>) -> Result<ConditionalRule,
         operator: None,
         formulae: Vec::new(),
     };
-    rule.priority = conditional_attr(start, &[b":priority"])?.and_then(|v| v.parse::<u32>().ok());
+    rule.priority = conditional_attr(start, &[b":priority"])?
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .map_err(|err| xml_error(ODF_CONTENT_XML, err))
+        })
+        .transpose()?;
     if let Some(condition) = conditional_attr(start, &[b":condition"])? {
         rule.operator = parse_odf_condition_operator(&condition);
         rule.formulae.push(condition);
