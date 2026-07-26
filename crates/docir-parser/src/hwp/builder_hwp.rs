@@ -168,15 +168,26 @@ impl HwpParser {
         store: &mut IrStore,
         diagnostics: &mut Diagnostics,
     ) {
-        if let Some(script_data) = cfb.read_stream("Scripts/DefaultJScript")
-            && let Err(err) = parse_default_jscript(&script_data, store, "Scripts/DefaultJScript")
-        {
-            push_warning(
+        match cfb.try_read_stream("Scripts/DefaultJScript") {
+            Ok(Some(script_data)) => {
+                if let Err(err) =
+                    parse_default_jscript(&script_data, store, "Scripts/DefaultJScript")
+                {
+                    push_warning(
+                        diagnostics,
+                        "HWP_SCRIPT_PARSE_FAILED",
+                        err.to_string(),
+                        Some("Scripts/DefaultJScript"),
+                    );
+                }
+            }
+            Ok(None) => {}
+            Err(err) => push_warning(
                 diagnostics,
-                "HWP_SCRIPT_PARSE_FAILED",
+                "HWP_STREAM_READ_FAIL",
                 err.to_string(),
                 Some("Scripts/DefaultJScript"),
-            );
+            ),
         }
     }
 

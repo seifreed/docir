@@ -1,6 +1,7 @@
 use super::*;
 use docir_core::ir::{Document, IRNode, Paragraph, Run};
 use docir_core::security::ThreatLevel;
+use docir_parser::ole::Cfb;
 use std::cell::{Cell, RefCell};
 use std::io::{Cursor, Read, Seek};
 use std::path::Path;
@@ -171,6 +172,39 @@ fn hwp_default_jscript_parse_failures_are_reported() {
         )
     });
     assert!(reported, "malformed HWP script stream must not be silent");
+}
+
+#[test]
+fn hwp_default_jscript_stream_read_failures_are_reported() {
+    let header = hwp_file_header();
+    let script = vec![b'A'; 5000];
+    let base = test_support::build_test_cfb(&[
+        ("FileHeader", &header),
+        ("Scripts/DefaultJScript", &script),
+    ]);
+    let cfb = Cfb::parse(base.clone()).expect("cfb");
+    let start_sector = cfb
+        .entry_metadata("Scripts/DefaultJScript")
+        .expect("script metadata")
+        .start_sector;
+    let bytes = test_support::patch_test_cfb_fat_entry(&base, start_sector, 99);
+    let app = DocirApp::new(ParserConfig::default());
+    let parsed = app.parse_bytes(&bytes).expect("hwp parse");
+
+    let reported = parsed.store().iter().any(|(_, node)| {
+        matches!(
+            node,
+            IRNode::Diagnostics(diag)
+                if diag.entries.iter().any(|entry| {
+                    entry.code == "HWP_STREAM_READ_FAIL"
+                        && entry.path.as_deref() == Some("Scripts/DefaultJScript")
+                })
+        )
+    });
+    assert!(
+        reported,
+        "corrupt HWP script stream read must not be silent"
+    );
 }
 
 #[test]
