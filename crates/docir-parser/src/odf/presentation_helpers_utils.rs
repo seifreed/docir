@@ -1,30 +1,49 @@
 use super::MediaType;
+use crate::error::ParseError;
 
-pub(super) fn parse_duration_ms(value: &str) -> Option<u32> {
+pub(super) fn parse_duration_ms(value: &str) -> Result<Option<u32>, ParseError> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        return None;
+        return Ok(None);
     }
     if let Some(stripped) = trimmed.strip_suffix("ms") {
-        return stripped.parse::<u32>().ok();
+        return stripped
+            .parse::<u32>()
+            .map(Some)
+            .map_err(|err| invalid_duration(trimmed, err));
     }
     if let Some(stripped) = trimmed.strip_suffix('s') {
         return parse_finite_seconds(stripped);
     }
     if trimmed.starts_with("PT") && trimmed.ends_with('S') {
-        let inner = trimmed.strip_prefix("PT")?.strip_suffix('S')?;
+        let inner = trimmed
+            .strip_prefix("PT")
+            .and_then(|value| value.strip_suffix('S'))
+            .ok_or_else(|| {
+                ParseError::InvalidStructure(format!("Invalid ODF duration '{trimmed}'"))
+            })?;
         return parse_finite_seconds(inner);
     }
-    None
+    Err(ParseError::InvalidStructure(format!(
+        "Invalid ODF duration '{trimmed}'"
+    )))
 }
 
-fn parse_finite_seconds(value: &str) -> Option<u32> {
-    let seconds = value.parse::<f32>().ok()?;
+fn parse_finite_seconds(value: &str) -> Result<Option<u32>, ParseError> {
+    let seconds = value
+        .parse::<f32>()
+        .map_err(|err| invalid_duration(value, err))?;
     if seconds.is_finite() && seconds >= 0.0 {
-        Some((seconds * 1000.0).round() as u32)
+        Ok(Some((seconds * 1000.0).round() as u32))
     } else {
-        None
+        Err(ParseError::InvalidStructure(format!(
+            "Invalid ODF duration '{value}'"
+        )))
     }
+}
+
+fn invalid_duration(value: &str, err: impl std::fmt::Display) -> ParseError {
+    ParseError::InvalidStructure(format!("Invalid ODF duration '{value}': {err}"))
 }
 
 pub(super) fn classify_media_type(path: &str, media: &str) -> Option<MediaType> {

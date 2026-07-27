@@ -261,6 +261,16 @@ fn parse_odf_animation_prefers_target_fallback_and_parses_iso_duration() {
 }
 
 #[test]
+fn parse_odf_animation_reports_malformed_duration() {
+    let mut start = BytesStart::new("anim:animate");
+    start.push_attribute(("smil:dur", "PTinfS"));
+
+    let err = parse_odf_animation(&start).expect_err("malformed animation duration must fail");
+
+    assert!(matches!(err, ParseError::InvalidStructure(_)));
+}
+
+#[test]
 fn parse_draw_page_rejects_malformed_animation_attributes() {
     let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
@@ -352,16 +362,19 @@ fn parse_odp_transition_reports_malformed_numeric_attributes() {
 
 #[test]
 fn parse_duration_and_media_classification_cover_helper_paths() {
-    assert_eq!(parse_duration_ms("250ms"), Some(250));
-    assert_eq!(parse_duration_ms("1.25s"), Some(1250));
-    assert_eq!(parse_duration_ms("PT3S"), Some(3000));
-    assert_eq!(parse_duration_ms("PTPT3S"), None);
-    assert_eq!(parse_duration_ms("PT3SS"), None);
-    assert_eq!(parse_duration_ms("NaNs"), None);
-    assert_eq!(parse_duration_ms("PTinfS"), None);
-    assert_eq!(parse_duration_ms("-1s"), None);
-    assert_eq!(parse_duration_ms(""), None);
-    assert_eq!(parse_duration_ms("invalid"), None);
+    assert_eq!(parse_duration_ms("250ms").expect("duration"), Some(250));
+    assert_eq!(parse_duration_ms("1.25s").expect("duration"), Some(1250));
+    assert_eq!(parse_duration_ms("PT3S").expect("duration"), Some(3000));
+    assert_eq!(parse_duration_ms("").expect("empty duration"), None);
+    for value in ["PTPT3S", "PT3SS", "NaNs", "PTinfS", "-1s", "invalid"] {
+        assert!(
+            matches!(
+                parse_duration_ms(value),
+                Err(ParseError::InvalidStructure(_))
+            ),
+            "{value} should fail"
+        );
+    }
 
     assert_eq!(
         classify_media_type("media/clip.oga", "application/ogg"),

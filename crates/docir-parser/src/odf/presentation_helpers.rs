@@ -341,7 +341,9 @@ pub(super) fn parse_odf_animation(
         animation_type: name,
         target: try_attr_value_by_suffix(start, &[b":targetElement"], "content.xml")?,
         duration_ms: try_attr_value_by_suffix(start, &[b":dur"], "content.xml")?
-            .and_then(|v| parse_duration_ms(&v)),
+            .map(|value| parse_duration_ms(&value))
+            .transpose()?
+            .flatten(),
         preset_id: try_attr_value_by_suffix(start, &[b":preset-id"], "content.xml")?,
         preset_class: try_attr_value_by_suffix(start, &[b":preset-class"], "content.xml")?,
         media_asset: None,
