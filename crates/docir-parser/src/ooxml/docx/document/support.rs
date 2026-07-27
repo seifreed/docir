@@ -67,36 +67,37 @@ pub(super) fn bool_from_val(start: &BytesStart, file: &str) -> Result<bool, Pars
     ))
 }
 
-pub(super) fn parse_vml_style_length(style: &str, key: &str) -> Option<i64> {
-    parse_vml_style_length_value(style, key).map(|val| val.round() as i64)
+pub(super) fn parse_vml_style_length(style: &str, key: &str) -> Result<Option<i64>, ParseError> {
+    Ok(parse_vml_style_length_value(style, key)?.map(|val| val.round() as i64))
 }
 
-fn parse_vml_style_length_u64(style: &str, key: &str) -> Option<u64> {
-    parse_vml_style_length_value(style, key).and_then(|val| {
-        if val >= 0.0 {
-            Some(val.round() as u64)
-        } else {
-            None
-        }
-    })
+fn parse_vml_style_length_u64(style: &str, key: &str) -> Result<Option<u64>, ParseError> {
+    Ok(parse_vml_style_length_value(style, key)?
+        .and_then(|val| (val >= 0.0).then(|| val.round() as u64)))
 }
 
-fn parse_vml_style_length_value(style: &str, key: &str) -> Option<f64> {
+fn parse_vml_style_length_value(style: &str, key: &str) -> Result<Option<f64>, ParseError> {
     for part in style.split(';') {
         let mut iter = part.splitn(2, ':');
-        let style_key = iter.next()?.trim();
-        let style_value = iter.next()?.trim();
+        let Some(style_key) = iter.next() else {
+            continue;
+        };
+        let Some(style_value) = iter.next() else {
+            continue;
+        };
+        let style_key = style_key.trim();
+        let style_value = style_value.trim();
         if style_key.eq_ignore_ascii_case(key) {
             return parse_vml_length(style_value);
         }
     }
-    None
+    Ok(None)
 }
 
-fn parse_vml_length(value: &str) -> Option<f64> {
+fn parse_vml_length(value: &str) -> Result<Option<f64>, ParseError> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        return None;
+        return Ok(None);
     }
     let mut split_idx = trimmed.len();
     for (idx, ch) in trimmed.char_indices().rev() {
@@ -111,9 +112,13 @@ fn parse_vml_length(value: &str) -> Option<f64> {
     } else {
         (trimmed, "")
     };
-    let numeric_value = num_part.trim().parse::<f64>().ok()?;
+    let numeric_value = num_part.trim().parse::<f64>().map_err(|err| {
+        ParseError::InvalidStructure(format!("Invalid VML length '{trimmed}': {err}"))
+    })?;
     if !numeric_value.is_finite() {
-        return None;
+        return Err(ParseError::InvalidStructure(format!(
+            "Invalid non-finite VML length '{trimmed}'"
+        )));
     }
     let unit = unit.trim();
     let emus = match unit {
@@ -122,9 +127,13 @@ fn parse_vml_length(value: &str) -> Option<f64> {
         "in" => numeric_value * 914400.0,
         "cm" => numeric_value * 360000.0,
         "mm" => numeric_value * 36000.0,
-        _ => return None,
+        _ => {
+            return Err(ParseError::InvalidStructure(format!(
+                "Invalid VML length unit '{unit}' in '{trimmed}'"
+            )));
+        }
     };
-    Some(emus)
+    Ok(Some(emus))
 }
 
 pub(super) fn parse_vml_pict(
@@ -152,16 +161,16 @@ pub(super) fn parse_vml_pict(
                     alt_text = try_attr_value(&e, b"o:title", "word/document.xml")?
                         .or(try_attr_value(&e, b"alt", "word/document.xml")?);
                     if let Some(style) = try_attr_value(&e, b"style", "word/document.xml")? {
-                        if let Some(val) = parse_vml_style_length(&style, "left") {
+                        if let Some(val) = parse_vml_style_length(&style, "left")? {
                             transform.x = val;
                         }
-                        if let Some(val) = parse_vml_style_length(&style, "top") {
+                        if let Some(val) = parse_vml_style_length(&style, "top")? {
                             transform.y = val;
                         }
-                        if let Some(val) = parse_vml_style_length_u64(&style, "width") {
+                        if let Some(val) = parse_vml_style_length_u64(&style, "width")? {
                             transform.width = val;
                         }
-                        if let Some(val) = parse_vml_style_length_u64(&style, "height") {
+                        if let Some(val) = parse_vml_style_length_u64(&style, "height")? {
                             transform.height = val;
                         }
                     }
