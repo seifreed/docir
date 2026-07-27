@@ -181,7 +181,7 @@ impl OdfParser {
         self.emit_encryption_diagnostics(manifest_entries, &mut diagnostics);
         attach_diagnostics_if_any(store, doc, diagnostics);
         self.add_filter_diagnostics(read_state.content_xml.as_deref(), store, doc);
-        self.add_defined_names(format, read_state.content_bytes.as_deref(), store, doc);
+        self.add_defined_names(format, read_state.content_bytes.as_deref(), store, doc)?;
         Ok(())
     }
 
@@ -323,18 +323,19 @@ impl OdfParser {
         content_bytes: Option<&[u8]>,
         store: &mut IrStore,
         doc: &mut Document,
-    ) {
+    ) -> Result<(), ParseError> {
         if format != DocumentFormat::OdfSpreadsheet {
-            return;
+            return Ok(());
         }
         let Some(bytes) = content_bytes else {
-            return;
+            return Ok(());
         };
-        for name in parse_ods_named_ranges(bytes) {
+        for name in parse_ods_named_ranges(bytes)? {
             let id = name.id;
             store.insert(IRNode::DefinedName(name));
             doc.defined_names.push(id);
         }
+        Ok(())
     }
 
     fn emit_fast_mode_diagnostics(

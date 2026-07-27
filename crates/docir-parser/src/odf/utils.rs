@@ -17,13 +17,13 @@ pub(super) fn strip_odf_formula_prefix(formula: &str) -> &str {
     }
 }
 
-pub(super) fn parse_ods_named_ranges(xml: &[u8]) -> Vec<DefinedName> {
+pub(super) fn parse_ods_named_ranges(xml: &[u8]) -> Result<Vec<DefinedName>, ParseError> {
     let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut out = Vec::new();
 
-    let _ = scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
+    scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
         match event {
             Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
                 b"named-range" => {
@@ -44,9 +44,9 @@ pub(super) fn parse_ods_named_ranges(xml: &[u8]) -> Vec<DefinedName> {
             _ => {}
         }
         Ok(XmlScanControl::Continue)
-    });
+    })?;
 
-    out
+    Ok(out)
 }
 
 enum NamedDefinitionSource {
@@ -176,7 +176,7 @@ mod tests {
             </office:document-content>
         "#;
 
-        let parsed = parse_ods_named_ranges(xml);
+        let parsed = parse_ods_named_ranges(xml).expect("named ranges");
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].name, "RangeOne");
         assert_eq!(parsed[0].value, "$Sheet1.$A$1:$A$4");
@@ -190,16 +190,18 @@ mod tests {
     }
 
     #[test]
-    fn parse_ods_named_ranges_returns_partial_results_on_xml_error() {
+    fn parse_ods_named_ranges_reports_xml_error() {
         let xml = br#"
             <office:document-content xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
               <table:named-range table:name="Good" table:cell-range-address="$Sheet1.$C$1"/>
               <table:named-expression table:name="Broken" table:expression="of:=1+1"
         "#;
 
-        let parsed = parse_ods_named_ranges(xml);
-        assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].name, "Good");
+        let err = parse_ods_named_ranges(xml).expect_err("malformed named range XML must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+            other => panic!("expected content.xml parse error, got {:?}", other),
+        }
     }
 
     #[test]
