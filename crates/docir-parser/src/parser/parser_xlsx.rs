@@ -43,15 +43,10 @@ impl OoxmlParser {
         let (mut store, mut document) = init_store_and_document(DocumentFormat::Spreadsheet);
         document.span = Some(SourceSpan::new("xl/workbook.bin"));
 
-        let mut sheet_index: u32 = 1;
-        for name in workbook.sheet_names().to_vec() {
-            let range = match workbook.worksheet_range(&name) {
-                Ok(r) => r,
-                Err(_) => {
-                    sheet_index += 1;
-                    continue;
-                }
-            };
+        for (sheet_index, name) in (1_u32..).zip(workbook.sheet_names().to_vec()) {
+            let range = workbook
+                .worksheet_range(&name)
+                .map_err(|err| xlsb_sheet_error(&name, err))?;
             let mut worksheet = Worksheet::new(name.clone(), sheet_index);
             worksheet.kind = SheetKind::Worksheet;
             worksheet.state = SheetState::Visible;
@@ -85,7 +80,6 @@ impl OoxmlParser {
             let sheet_id = worksheet.id;
             store.insert(IRNode::Worksheet(worksheet));
             document.content.push(sheet_id);
-            sheet_index += 1;
         }
 
         document.security = SecurityInfo::default();
@@ -95,5 +89,28 @@ impl OoxmlParser {
         self.finalize_ooxml_document(zip, content_types, &mut store, doc_id, metrics)?;
 
         Ok(self.build_parsed_document(doc_id, DocumentFormat::Spreadsheet, store))
+    }
+}
+
+fn xlsb_sheet_error(name: &str, err: calamine::XlsbError) -> ParseError {
+    ParseError::InvalidFormat(format!("XLSB sheet '{name}' parse error: {err}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::xlsb_sheet_error;
+    use crate::ParseError;
+
+    #[test]
+    fn xlsb_sheet_error_reports_sheet_name() {
+        let err = xlsb_sheet_error("Sheet1", calamine::XlsbError::FileNotFound("sheet".into()));
+
+        match err {
+            ParseError::InvalidFormat(message) => {
+                assert!(message.contains("Sheet1"));
+                assert!(message.contains("XLSB sheet"));
+            }
+            other => panic!("expected invalid XLSB sheet error, got {other:?}"),
+        }
     }
 }
