@@ -80,6 +80,17 @@ fn parse_table_borders_and_widths() {
 }
 
 #[test]
+fn parse_rtf_reports_invalid_color_table_components() {
+    let data = b"{\\rtf1\\ansi{\\colortbl;\\red999\\green0\\blue0;}Text}";
+    let parser = RtfParser::new();
+    let err = parser
+        .parse_bytes(data)
+        .expect_err("invalid RTF color components must fail");
+
+    assert!(matches!(err, ParseError::InvalidStructure(_)));
+}
+
+#[test]
 fn parse_paragraph_margins_and_borders() {
     let data = b"{\\rtf1\\ansi\\pard\\li720\\ri360\\fi180\\sb120\\sa240\\sl360\\slmult1\\brdrt\\brdrs\\brdrw15 Paragraph}";
     let parser = RtfParser::new();

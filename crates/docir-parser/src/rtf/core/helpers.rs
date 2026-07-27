@@ -185,45 +185,67 @@ pub(super) fn parse_font_entry(text: &str, ctx: &mut RtfParseContext) {
     }
 }
 
-pub(super) fn parse_color_entries(text: &str, ctx: &mut RtfParseContext) {
+pub(super) fn parse_color_entries(text: &str, ctx: &mut RtfParseContext) -> Result<(), ParseError> {
     let mut rest = text;
     while let Some((chunk, tail)) = rest.split_once(';') {
-        if let Some(color) = parse_color_chunk(chunk) {
+        if let Some(color) = parse_color_chunk(chunk)? {
             ctx.color_table.colors.push(Some(color));
         } else {
             ctx.color_table.colors.push(None);
         }
         rest = tail;
     }
+    Ok(())
 }
 
-fn parse_color_chunk(chunk: &str) -> Option<String> {
+fn parse_color_chunk(chunk: &str) -> Result<Option<String>, ParseError> {
     let mut red = None;
     let mut green = None;
     let mut blue = None;
+    let mut parse_error = None;
 
     for_each_control_token(chunk, |token| {
         if let Some(value) = token
             .strip_prefix("red")
             .or_else(|| token.strip_prefix('r'))
         {
-            red = value.parse::<u8>().ok();
+            red = parse_color_component(value, "red", &mut parse_error);
         } else if let Some(value) = token
             .strip_prefix("green")
             .or_else(|| token.strip_prefix('g'))
         {
-            green = value.parse::<u8>().ok();
+            green = parse_color_component(value, "green", &mut parse_error);
         } else if let Some(value) = token
             .strip_prefix("blue")
             .or_else(|| token.strip_prefix('b'))
         {
-            blue = value.parse::<u8>().ok();
+            blue = parse_color_component(value, "blue", &mut parse_error);
         }
     });
 
+    if let Some(message) = parse_error {
+        return Err(ParseError::InvalidStructure(message));
+    }
+
     match (red, green, blue) {
-        (Some(r), Some(g), Some(b)) => Some(format!("{:02X}{:02X}{:02X}", r, g, b)),
-        _ => None,
+        (Some(r), Some(g), Some(b)) => Ok(Some(format!("{:02X}{:02X}{:02X}", r, g, b))),
+        _ => Ok(None),
+    }
+}
+
+fn parse_color_component(
+    value: &str,
+    component: &str,
+    parse_error: &mut Option<String>,
+) -> Option<u8> {
+    match value.parse::<u8>() {
+        Ok(component_value) => Some(component_value),
+        Err(err) => {
+            *parse_error = Some(format!(
+                "Invalid RTF color {component} component '{value}': {err}"
+            ));
+            None
+        }
     }
 }
 
@@ -395,11 +417,21 @@ mod tests {
     #[test]
     fn parse_color_entries_records_rgb_triplets() {
         let mut ctx = ctx();
-        parse_color_entries(r"\red255\green0\blue16;\r1\g2\b3;", &mut ctx);
+        parse_color_entries(r"\red255\green0\blue16;\r1\g2\b3;", &mut ctx)
+            .expect("valid color table");
 
         assert_eq!(ctx.color_table.colors.len(), 2);
         assert_eq!(ctx.color_table.colors[0].as_deref(), Some("FF0010"));
         assert_eq!(ctx.color_table.colors[1].as_deref(), Some("010203"));
+    }
+
+    #[test]
+    fn parse_color_entries_reports_invalid_rgb_components() {
+        let mut ctx = ctx();
+        let err = parse_color_entries(r"\red999\green0\blue16;", &mut ctx)
+            .expect_err("invalid color components must fail");
+
+        assert!(matches!(err, ParseError::InvalidStructure(_)));
     }
 
     #[test]

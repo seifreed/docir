@@ -144,6 +144,9 @@ fn handle_control_word_with_guard(
     ctx: &mut RtfParseContext,
     store: &mut IrStore,
 ) -> Result<bool, ParseError> {
+    if handle_color_table_control(word, param, ctx)? {
+        return Ok(true);
+    }
     if handle_paragraph_controls(word, param, ctx, store)? {
         return Ok(true);
     }
@@ -166,6 +169,32 @@ fn handle_control_word_with_guard(
         return Ok(true);
     }
     Ok(false)
+}
+
+fn handle_color_table_control(
+    word: &str,
+    param: Option<i32>,
+    ctx: &mut RtfParseContext,
+) -> Result<bool, ParseError> {
+    if ctx.current_group_kind() != GroupKind::ColorTable
+        || !matches!(word, "red" | "green" | "blue")
+    {
+        return Ok(false);
+    }
+
+    let Some(value) = param else {
+        return Err(ParseError::InvalidStructure(format!(
+            "Missing RTF color {word} component"
+        )));
+    };
+    if !(0..=255).contains(&value) {
+        return Err(ParseError::InvalidStructure(format!(
+            "Invalid RTF color {word} component '{value}'"
+        )));
+    }
+
+    append_text(ctx, &format!("\\{word}{value}"));
+    Ok(true)
 }
 
 fn handle_field_controls(word: &str, ctx: &mut RtfParseContext) -> bool {
@@ -265,8 +294,7 @@ pub(crate) fn flush_text(
         return Ok(());
     }
     if ctx.current_group_kind() == GroupKind::ColorTable {
-        parse_color_entries(&text, ctx);
-        return Ok(());
+        return parse_color_entries(&text, ctx);
     }
     if matches!(
         ctx.current_group_kind(),
