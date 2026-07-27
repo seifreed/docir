@@ -98,8 +98,8 @@ impl Cfb {
     }
 
     /// Public API entrypoint: read_stream.
-    pub fn read_stream(&self, path: &str) -> Option<Vec<u8>> {
-        self.try_read_stream(path).ok().flatten()
+    pub fn read_stream(&self, path: &str) -> Result<Option<Vec<u8>>, ParseError> {
+        self.try_read_stream(path)
     }
 
     /// Public API entrypoint: try_read_stream.

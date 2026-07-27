@@ -443,6 +443,11 @@ fn cfb_reader_reports_corrupt_stream_read_errors() {
     };
     let mut reader = CfbReader::new(&cfb);
 
+    let err = cfb
+        .read_stream("Broken")
+        .expect_err("public stream read should report corrupt chains");
+    assert!(matches!(err, ParseError::InvalidStructure(_)));
+
     let err = reader
         .read_file("Broken")
         .expect_err("corrupt stream chain should fail");
