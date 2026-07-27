@@ -40,7 +40,7 @@ impl OdfParser {
         let mut styles_xml: Option<String> = None;
         if zip.contains("styles.xml") {
             let xml = zip.read_file_string("styles.xml")?;
-            if let Some(styles) = parse_styles(&xml) {
+            if let Some(styles) = parse_styles(&xml, "styles.xml")? {
                 let style_id = styles.id;
                 store.insert(IRNode::StyleSet(styles));
                 doc.styles = Some(style_id);

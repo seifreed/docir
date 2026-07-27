@@ -1,30 +1,37 @@
 use super::super::{Style, StyleSet, StyleType, parse_text_alignment};
+use crate::error::ParseError;
+use crate::xml_utils::xml_error;
 use crate::xml_utils::{attr_value_by_suffix, local_name};
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
-pub(crate) fn parse_styles(xml: &str) -> Option<StyleSet> {
+pub(crate) fn parse_styles(xml: &str, source: &str) -> Result<Option<StyleSet>, ParseError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut styles = StyleSet::new();
+    let mut depth = 0usize;
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                 b"style" => {
                     if let Some(mut style) = build_style_from_start(&e, false) {
-                        parse_style_properties(&mut reader, &mut style, e.name().as_ref());
+                        parse_style_properties(&mut reader, &mut style, e.name().as_ref(), source)?;
                         styles.styles.push(style);
+                    } else {
+                        skip_element(&mut reader, e.name().as_ref(), source)?;
                     }
                 }
                 b"default-style" => {
                     if let Some(mut style) = build_style_from_start(&e, true) {
-                        parse_style_properties(&mut reader, &mut style, e.name().as_ref());
+                        parse_style_properties(&mut reader, &mut style, e.name().as_ref(), source)?;
                         styles.styles.push(style);
+                    } else {
+                        skip_element(&mut reader, e.name().as_ref(), source)?;
                     }
                 }
-                _ => {}
+                _ => depth += 1,
             },
             Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
                 b"style" => {
@@ -39,17 +46,21 @@ pub(crate) fn parse_styles(xml: &str) -> Option<StyleSet> {
                 }
                 _ => {}
             },
-            Ok(Event::Eof) => break,
-            Err(_) => return None,
+            Ok(Event::End(_)) => depth = depth.saturating_sub(1),
+            Ok(Event::Eof) if depth == 0 => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(source, "Unexpected EOF while parsing ODF styles"));
+            }
+            Err(err) => return Err(xml_error(source, err)),
             _ => {}
         }
         buf.clear();
     }
 
     if styles.styles.is_empty() {
-        None
+        Ok(None)
     } else {
-        Some(styles)
+        Ok(Some(styles))
     }
 }
 
@@ -66,50 +77,52 @@ pub(crate) fn merge_styles(existing: &mut StyleSet, incoming: &mut StyleSet) {
     }
 }
 
-pub(crate) fn parse_master_pages(xml: &str) -> Vec<String> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    let mut buf = Vec::new();
-    let mut out = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"master-page"
-                    && let Some(name) = attr_value_by_suffix(&e, &[b":name"])
-                {
-                    out.push(name);
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
-        }
-        buf.clear();
-    }
-    out
+pub(crate) fn parse_master_pages(xml: &str, source: &str) -> Result<Vec<String>, ParseError> {
+    parse_named_elements(xml, source, b"master-page")
 }
 
-pub(crate) fn parse_page_layouts(xml: &str) -> Vec<String> {
+pub(crate) fn parse_page_layouts(xml: &str, source: &str) -> Result<Vec<String>, ParseError> {
+    parse_named_elements(xml, source, b"page-layout")
+}
+
+fn parse_named_elements(
+    xml: &str,
+    source: &str,
+    target_name: &[u8],
+) -> Result<Vec<String>, ParseError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut out = Vec::new();
+    let mut depth = 0usize;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                if local_name(e.name().as_ref()) == b"page-layout"
+            Ok(Event::Start(e)) => {
+                depth += 1;
+                if local_name(e.name().as_ref()) == target_name
                     && let Some(name) = attr_value_by_suffix(&e, &[b":name"])
                 {
                     out.push(name);
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
+            Ok(Event::Empty(e)) => {
+                if local_name(e.name().as_ref()) == target_name
+                    && let Some(name) = attr_value_by_suffix(&e, &[b":name"])
+                {
+                    out.push(name);
+                }
+            }
+            Ok(Event::End(_)) => depth = depth.saturating_sub(1),
+            Ok(Event::Eof) if depth == 0 => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(source, "Unexpected EOF while parsing ODF styles"));
+            }
+            Err(err) => return Err(xml_error(source, err)),
             _ => {}
         }
         buf.clear();
     }
-    out
+    Ok(out)
 }
 
 fn map_style_family(e: &BytesStart<'_>) -> StyleType {
@@ -148,7 +161,12 @@ fn build_style_from_start(start: &BytesStart<'_>, is_default: bool) -> Option<St
     Some(style)
 }
 
-fn parse_style_properties(reader: &mut Reader<&[u8]>, style: &mut Style, end_name: &[u8]) {
+fn parse_style_properties(
+    reader: &mut Reader<&[u8]>,
+    style: &mut Style,
+    end_name: &[u8],
+    source: &str,
+) -> Result<(), ParseError> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
@@ -190,12 +208,38 @@ fn parse_style_properties(reader: &mut Reader<&[u8]>, style: &mut Style, end_nam
             Ok(Event::End(e)) if e.name().as_ref() == end_name => {
                 break;
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(source, "Unexpected EOF while parsing ODF style"));
+            }
+            Err(err) => return Err(xml_error(source, err)),
             _ => {}
         }
         buf.clear();
     }
+    Ok(())
+}
+
+fn skip_element(
+    reader: &mut Reader<&[u8]>,
+    end_name: &[u8],
+    source: &str,
+) -> Result<(), ParseError> {
+    let mut buf = Vec::new();
+    let mut depth = 0usize;
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(_)) => depth += 1,
+            Ok(Event::End(e)) if depth == 0 && e.name().as_ref() == end_name => break,
+            Ok(Event::End(_)) => depth = depth.saturating_sub(1),
+            Ok(Event::Eof) => {
+                return Err(xml_error(source, "Unexpected EOF while parsing ODF style"));
+            }
+            Err(err) => return Err(xml_error(source, err)),
+            _ => {}
+        }
+        buf.clear();
+    }
+    Ok(())
 }
 
 fn parse_font_size(value: &str) -> Option<u32> {

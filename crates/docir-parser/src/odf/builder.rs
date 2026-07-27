@@ -380,7 +380,7 @@ impl OdfParser {
         diagnostics: &mut Diagnostics,
     ) -> Result<(), ParseError> {
         if let Some(xml) = inputs.styles_xml {
-            let masters = parse_master_pages(xml);
+            let masters = parse_master_pages(xml, "styles.xml")?;
             for name in masters {
                 push_info(
                     diagnostics,
@@ -389,7 +389,7 @@ impl OdfParser {
                     Some("styles.xml"),
                 );
             }
-            let layouts = parse_page_layouts(xml);
+            let layouts = parse_page_layouts(xml, "styles.xml")?;
             for name in layouts {
                 push_info(
                     diagnostics,
@@ -410,7 +410,7 @@ impl OdfParser {
         if !inputs.fast_mode
             && let Some(xml) = inputs.content_xml
         {
-            if let Some(mut styles) = parse_styles(xml) {
+            if let Some(mut styles) = parse_styles(xml, "content.xml")? {
                 if let Some(doc_styles_id) = doc.styles {
                     if let Some(IRNode::StyleSet(existing)) = store.get_mut(doc_styles_id) {
                         merge_styles(existing, &mut styles);
@@ -421,7 +421,7 @@ impl OdfParser {
                     doc.styles = Some(style_id);
                 }
             }
-            let masters = parse_master_pages(xml);
+            let masters = parse_master_pages(xml, "content.xml")?;
             for name in masters {
                 push_info(
                     diagnostics,
@@ -430,7 +430,7 @@ impl OdfParser {
                     Some("content.xml"),
                 );
             }
-            let layouts = parse_page_layouts(xml);
+            let layouts = parse_page_layouts(xml, "content.xml")?;
             for name in layouts {
                 push_info(
                     diagnostics,

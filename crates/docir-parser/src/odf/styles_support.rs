@@ -33,7 +33,9 @@ mod tests {
 </office:document-styles>
 "#;
 
-        let styles = parse_styles(xml).expect("expected style set");
+        let styles = parse_styles(xml, "styles.xml")
+            .expect("valid styles xml")
+            .expect("expected style set");
         assert_eq!(styles.styles.len(), 1);
 
         let style = &styles.styles[0];
@@ -59,9 +61,14 @@ mod tests {
     }
 
     #[test]
-    fn parse_styles_returns_none_for_malformed_xml() {
+    fn parse_styles_reports_malformed_xml() {
         let malformed = r#"<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><style:style xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0">"#;
-        assert!(parse_styles(malformed).is_none());
+        let err = parse_styles(malformed, "styles.xml").expect_err("malformed styles must fail");
+
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "styles.xml"),
+            other => panic!("expected styles.xml parse error, got {:?}", other),
+        }
     }
 
     #[test]
@@ -142,7 +149,9 @@ mod tests {
 </office:document-styles>
 "#;
 
-        let styles = parse_styles(xml).expect("expected styles");
+        let styles = parse_styles(xml, "styles.xml")
+            .expect("valid styles xml")
+            .expect("expected styles");
         assert_eq!(styles.styles.len(), 4);
 
         let list_style = styles
@@ -256,8 +265,14 @@ mod tests {
 </office:document-styles>
 "#;
 
-        assert_eq!(parse_master_pages(xml), vec!["Standard".to_string()]);
-        assert_eq!(parse_page_layouts(xml), vec!["pm1".to_string()]);
+        assert_eq!(
+            parse_master_pages(xml, "styles.xml").expect("master pages"),
+            vec!["Standard".to_string()]
+        );
+        assert_eq!(
+            parse_page_layouts(xml, "styles.xml").expect("page layouts"),
+            vec!["pm1".to_string()]
+        );
     }
 
     #[test]
@@ -366,7 +381,9 @@ mod tests {
 </pkg:document-styles>
 "#;
 
-        let styles = parse_styles(xml).expect("expected alternate-prefix styles");
+        let styles = parse_styles(xml, "styles.xml")
+            .expect("valid styles xml")
+            .expect("expected alternate-prefix styles");
         assert_eq!(styles.styles.len(), 1);
         let style = &styles.styles[0];
         assert_eq!(style.style_id, "default:paragraph");
@@ -386,7 +403,10 @@ mod tests {
                 .map(|alignment| format!("{alignment:?}")),
             Some("Right".to_string())
         );
-        assert_eq!(parse_master_pages(xml), vec!["Standard".to_string()]);
+        assert_eq!(
+            parse_master_pages(xml, "styles.xml").expect("master pages"),
+            vec!["Standard".to_string()]
+        );
 
         let mut store = IrStore::new();
         let (headers, footers) =
@@ -407,5 +427,20 @@ mod tests {
             panic!("expected list item paragraph");
         };
         assert!(list_item.properties.numbering.is_some());
+    }
+
+    #[test]
+    fn parse_layout_helpers_report_malformed_xml() {
+        let malformed = r#"<office:document-styles><style:master-page style:name="Standard">"#;
+
+        for err in [
+            parse_master_pages(malformed, "styles.xml").expect_err("master pages must fail"),
+            parse_page_layouts(malformed, "styles.xml").expect_err("page layouts must fail"),
+        ] {
+            match err {
+                ParseError::Xml { file, .. } => assert_eq!(file, "styles.xml"),
+                other => panic!("expected styles.xml parse error, got {:?}", other),
+            }
+        }
     }
 }
