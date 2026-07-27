@@ -19,11 +19,14 @@ pub(crate) struct OdfFormulaScan {
     pub(crate) diagnostics: Vec<DiagnosticEntry>,
 }
 
-fn visit_start_or_empty(xml: &str, mut on_element: impl FnMut(&BytesStart<'_>) -> bool) {
+fn visit_start_or_empty(
+    xml: &str,
+    mut on_element: impl FnMut(&BytesStart<'_>) -> bool,
+) -> Result<(), ParseError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
-    let _ = scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
+    scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
         match event {
             Event::Start(e) | Event::Empty(e) if on_element(&e) => {
                 return Ok(XmlScanControl::Break);
@@ -31,10 +34,13 @@ fn visit_start_or_empty(xml: &str, mut on_element: impl FnMut(&BytesStart<'_>) -
             _ => {}
         }
         Ok(XmlScanControl::Continue)
-    });
+    })
 }
 
-pub(crate) fn scan_external_links(xml: &str, location: &str) -> Vec<ExternalReference> {
+pub(crate) fn scan_external_links(
+    xml: &str,
+    location: &str,
+) -> Result<Vec<ExternalReference>, ParseError> {
     let mut refs = Vec::new();
     visit_start_or_empty(xml, |e| {
         if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
@@ -49,11 +55,13 @@ pub(crate) fn scan_external_links(xml: &str, location: &str) -> Vec<ExternalRefe
             refs.push(ext);
         }
         false
-    });
-    refs
+    })?;
+    Ok(refs)
 }
 
-pub(crate) fn scan_odf_objects(xml: &str) -> (Vec<OleObject>, Vec<ExternalReference>) {
+pub(crate) fn scan_odf_objects(
+    xml: &str,
+) -> Result<(Vec<OleObject>, Vec<ExternalReference>), ParseError> {
     let mut oles = Vec::new();
     let mut refs = Vec::new();
     visit_start_or_empty(xml, |e| {
@@ -76,8 +84,8 @@ pub(crate) fn scan_odf_objects(xml: &str) -> (Vec<OleObject>, Vec<ExternalRefere
             _ => {}
         }
         false
-    });
-    (oles, refs)
+    })?;
+    Ok((oles, refs))
 }
 
 pub(crate) fn scan_embedded_objects(
@@ -101,7 +109,7 @@ pub(crate) fn scan_embedded_objects(
     Ok(oles)
 }
 
-pub(crate) fn scan_odf_filters(xml: &str) -> Vec<String> {
+pub(crate) fn scan_odf_filters(xml: &str) -> Result<Vec<String>, ParseError> {
     let mut out = Vec::new();
     visit_start_or_empty(xml, |e| {
         if matches!(
@@ -114,18 +122,18 @@ pub(crate) fn scan_odf_filters(xml: &str) -> Vec<String> {
             out.push(target);
         }
         false
-    });
-    out
+    })?;
+    Ok(out)
 }
 
-pub(crate) fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
+pub(crate) fn scan_odf_formula_security(xml: &str) -> Result<OdfFormulaScan, ParseError> {
     let mut scan = OdfFormulaScan::default();
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut unsupported: Vec<String> = Vec::new();
     let mut has_array = false;
-    let _ = scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
+    scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
         match event {
             Event::Start(e) | Event::Empty(e) => {
                 if let Some(formula_attr) = attr_value_by_suffix(&e, &[b":formula"]) {
@@ -135,9 +143,9 @@ pub(crate) fn scan_odf_formula_security(xml: &str) -> OdfFormulaScan {
             _ => {}
         }
         Ok(XmlScanControl::Continue)
-    });
+    })?;
     push_formula_diagnostics(&mut scan.diagnostics, &unsupported, has_array);
-    scan
+    Ok(scan)
 }
 
 fn process_formula(
@@ -249,12 +257,14 @@ pub(crate) fn scan_odf_security(
 ) -> Result<(), ParseError> {
     let mut formula_scan = OdfFormulaScan::default();
     if let Some(content_xml) = xml.content_xml {
-        formula_scan = scan_odf_formula_security(content_xml);
+        formula_scan = scan_odf_formula_security(content_xml)?;
         diagnostics.entries.append(&mut formula_scan.diagnostics);
-        diagnostics.entries.extend(scan_odf_protection(content_xml));
         diagnostics
             .entries
-            .extend(scan_odf_advanced_features(content_xml));
+            .extend(scan_odf_protection(content_xml)?);
+        diagnostics
+            .entries
+            .extend(scan_odf_advanced_features(content_xml)?);
     }
 
     let mut external_refs = Vec::new();
@@ -264,14 +274,14 @@ pub(crate) fn scan_odf_security(
         (xml.settings_xml, "settings.xml"),
     ] {
         if let Some(xml) = xml {
-            external_refs.extend(scan_external_links(xml, location));
+            external_refs.extend(scan_external_links(xml, location)?);
         }
     }
     external_refs.append(&mut formula_scan.external_refs);
 
     let mut ole_objects = Vec::new();
     if let Some(content_xml) = xml.content_xml {
-        let (oles, ole_links) = scan_odf_objects(content_xml);
+        let (oles, ole_links) = scan_odf_objects(content_xml)?;
         ole_objects.extend(oles);
         external_refs.extend(ole_links);
     }
@@ -287,7 +297,7 @@ pub(crate) fn scan_odf_security(
     Ok(())
 }
 
-pub(crate) fn scan_odf_protection(xml: &str) -> Vec<DiagnosticEntry> {
+pub(crate) fn scan_odf_protection(xml: &str) -> Result<Vec<DiagnosticEntry>, ParseError> {
     let mut entries = Vec::new();
     let mut protected = false;
     visit_start_or_empty(xml, |e| {
@@ -298,7 +308,7 @@ pub(crate) fn scan_odf_protection(xml: &str) -> Vec<DiagnosticEntry> {
             return true;
         }
         false
-    });
+    })?;
     if protected {
         push_entry(
             &mut entries,
@@ -308,10 +318,10 @@ pub(crate) fn scan_odf_protection(xml: &str) -> Vec<DiagnosticEntry> {
             Some("content.xml"),
         );
     }
-    entries
+    Ok(entries)
 }
 
-pub(crate) fn scan_odf_advanced_features(xml: &str) -> Vec<DiagnosticEntry> {
+pub(crate) fn scan_odf_advanced_features(xml: &str) -> Result<Vec<DiagnosticEntry>, ParseError> {
     let mut entries = Vec::new();
     let mut conditional_advanced = false;
     let mut pivot_advanced = false;
@@ -334,7 +344,7 @@ pub(crate) fn scan_odf_advanced_features(xml: &str) -> Vec<DiagnosticEntry> {
             _ => {}
         }
         false
-    });
+    })?;
     if conditional_advanced {
         push_entry(
             &mut entries,
@@ -362,7 +372,7 @@ pub(crate) fn scan_odf_advanced_features(xml: &str) -> Vec<DiagnosticEntry> {
             Some("content.xml"),
         );
     }
-    entries
+    Ok(entries)
 }
 
 fn unescape_xml_value(value: &str) -> String {

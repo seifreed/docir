@@ -48,7 +48,7 @@ fn scan_external_links_accepts_alternate_namespace_prefixes() {
             </office:document-content>
         "#;
 
-    let refs = scan_external_links(xml, "content.xml");
+    let refs = scan_external_links(xml, "content.xml").expect("external links");
     let types: Vec<_> = refs.iter().map(|r| r.ref_type).collect();
 
     assert_eq!(refs.len(), 2);
@@ -67,7 +67,7 @@ fn scan_odf_objects_accepts_alternate_namespace_prefixes() {
             </office:document-content>
         "#;
 
-    let (oles, refs) = scan_odf_objects(xml);
+    let (oles, refs) = scan_odf_objects(xml).expect("odf objects");
     assert_eq!(oles.len(), 1);
     assert_eq!(
         oles[0].link_target.as_deref(),
@@ -88,8 +88,8 @@ fn scan_odf_object_internal_targets_are_not_external_ole_links() {
             </office:document-content>
         "#;
 
-    let refs = scan_external_links(xml, "content.xml");
-    let (oles, ole_refs) = scan_odf_objects(xml);
+    let refs = scan_external_links(xml, "content.xml").expect("external links");
+    let (oles, ole_refs) = scan_odf_objects(xml).expect("odf objects");
 
     assert!(refs.is_empty());
     assert_eq!(oles.len(), 1);
@@ -119,7 +119,7 @@ fn scan_odf_formula_security_accepts_alternate_formula_prefix() {
             </office:document-content>
         "#;
 
-    let scan = scan_odf_formula_security(xml);
+    let scan = scan_odf_formula_security(xml).expect("formula security");
     assert_eq!(scan.dde_fields.len(), 1);
     assert_eq!(scan.dde_fields[0].application, "cmd");
 }
@@ -136,10 +136,36 @@ fn scan_odf_filters_accepts_alternate_namespace_prefixes() {
         "#;
 
     assert_eq!(
-        scan_odf_filters(xml),
+        scan_odf_filters(xml).expect("odf filters"),
         vec![
             "Sheet1.A1:Sheet1.B2".to_string(),
             "cell-content()>0".to_string()
         ]
     );
+}
+
+#[test]
+fn scan_odf_security_helpers_report_malformed_xml() {
+    let malformed = r#"
+            <office:document-content
+              xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+              xmlns:tbl="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+              <tbl:table-cell tbl:formula='of:=SUM([.A1])'
+        "#;
+
+    let formula_err = match scan_odf_formula_security(malformed) {
+        Ok(_) => panic!("formula scan must fail"),
+        Err(err) => err,
+    };
+
+    for err in [
+        scan_external_links(malformed, "content.xml").expect_err("external links must fail"),
+        formula_err,
+        scan_odf_filters(malformed).expect_err("filter scan must fail"),
+    ] {
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+            other => panic!("expected content.xml parse error, got {:?}", other),
+        }
+    }
 }

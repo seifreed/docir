@@ -180,7 +180,7 @@ impl OdfParser {
         self.insert_signatures(read_state.signatures_xml.as_deref(), store, doc)?;
         self.emit_encryption_diagnostics(manifest_entries, &mut diagnostics);
         attach_diagnostics_if_any(store, doc, diagnostics);
-        self.add_filter_diagnostics(read_state.content_xml.as_deref(), store, doc);
+        self.add_filter_diagnostics(read_state.content_xml.as_deref(), store, doc)?;
         self.add_defined_names(format, read_state.content_bytes.as_deref(), store, doc)?;
         Ok(())
     }
@@ -298,11 +298,11 @@ impl OdfParser {
         content_xml: Option<&str>,
         store: &mut IrStore,
         doc: &mut Document,
-    ) {
+    ) -> Result<(), ParseError> {
         let Some(xml) = content_xml else {
-            return;
+            return Ok(());
         };
-        for filter in scan_odf_filters(xml) {
+        for filter in scan_odf_filters(xml)? {
             let mut diag = Diagnostics::new();
             push_entry(
                 &mut diag.entries,
@@ -315,6 +315,7 @@ impl OdfParser {
             store.insert(IRNode::Diagnostics(diag));
             doc.add_diagnostic(diag_id);
         }
+        Ok(())
     }
 
     fn add_defined_names(
