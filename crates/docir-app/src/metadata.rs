@@ -129,6 +129,24 @@ fn parse_section_entries(
         ));
     }
 
+    parse_property_entries(
+        name,
+        data,
+        section_offset,
+        section_end,
+        property_table_end,
+        property_count,
+    )
+}
+
+fn parse_property_entries(
+    name: &str,
+    data: &[u8],
+    section_offset: usize,
+    section_end: usize,
+    property_table_end: usize,
+    property_count: usize,
+) -> Result<Vec<MetadataProperty>, ParserParseError> {
     let mut entries = Vec::new();
     for index in 0..property_count {
         let entry_offset = match section_offset
