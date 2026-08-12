@@ -22,6 +22,16 @@ pub(crate) fn decoded_attr_value(attr: &Attribute<'_>, decoder: Decoder) -> Stri
         .unwrap_or_else(|_| String::from_utf8_lossy(attr.value.as_ref()).into_owned())
 }
 
+fn try_decoded_attr_value(
+    attr: &Attribute<'_>,
+    decoder: Decoder,
+    file: &str,
+) -> Result<String, ParseError> {
+    attr.decoded_and_normalized_value(XmlVersion::Implicit1_0, decoder)
+        .map(|value| value.into_owned())
+        .map_err(|err| xml_error(file, err))
+}
+
 pub(crate) fn decoded_text(e: &quick_xml::events::BytesText<'_>) -> Result<String, String> {
     let decoded = e.decode().map_err(|err| err.to_string())?;
     quick_xml::escape::unescape(&decoded)
@@ -177,7 +187,7 @@ pub(crate) fn try_attr_value_by_suffix(
         let key = attr.key.as_ref();
         for suffix in suffixes {
             if key.ends_with(suffix) {
-                value = Some(decoded_attr_value(&attr, e.decoder()));
+                value = Some(try_decoded_attr_value(&attr, e.decoder(), file)?);
             }
         }
     }

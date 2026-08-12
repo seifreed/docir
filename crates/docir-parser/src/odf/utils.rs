@@ -1,7 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{
-    XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events, try_attr_value_by_suffix,
-};
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, try_attr_value_by_suffix};
 use docir_core::ir::{DefinedName, ShapeTransform};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
@@ -27,14 +25,14 @@ pub(super) fn parse_ods_named_ranges(xml: &[u8]) -> Result<Vec<DefinedName>, Par
         match event {
             Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
                 b"named-range" => {
-                    if let Some(def) = parse_ods_named_definition(&e, NamedDefinitionSource::Range)
+                    if let Some(def) = parse_ods_named_definition(&e, NamedDefinitionSource::Range)?
                     {
                         out.push(def);
                     }
                 }
                 b"named-expression" => {
                     if let Some(def) =
-                        parse_ods_named_definition(&e, NamedDefinitionSource::Expression)
+                        parse_ods_named_definition(&e, NamedDefinitionSource::Expression)?
                     {
                         out.push(def);
                     }
@@ -57,11 +55,17 @@ enum NamedDefinitionSource {
 fn parse_ods_named_definition(
     element: &BytesStart<'_>,
     source: NamedDefinitionSource,
-) -> Option<DefinedName> {
-    let name = attr_value_by_suffix(element, &[b":name"])?;
+) -> Result<Option<DefinedName>, ParseError> {
+    let Some(name) = try_attr_value_by_suffix(element, &[b":name"], "content.xml")? else {
+        return Ok(None);
+    };
     let value = match source {
-        NamedDefinitionSource::Range => attr_value_by_suffix(element, &[b":cell-range-address"]),
-        NamedDefinitionSource::Expression => attr_value_by_suffix(element, &[b":expression"]),
+        NamedDefinitionSource::Range => {
+            try_attr_value_by_suffix(element, &[b":cell-range-address"], "content.xml")?
+        }
+        NamedDefinitionSource::Expression => {
+            try_attr_value_by_suffix(element, &[b":expression"], "content.xml")?
+        }
     }
     .unwrap_or_default();
 
@@ -71,14 +75,14 @@ fn parse_ods_named_definition(
         value,
         local_sheet_id: None,
         hidden: false,
-        comment: attr_value_by_suffix(element, &[b":comment"]),
+        comment: try_attr_value_by_suffix(element, &[b":comment"], "content.xml")?,
         span: Some(SourceSpan::new("content.xml")),
     };
 
-    if let Some(hidden) = attr_value_by_suffix(element, &[b":hidden"]) {
+    if let Some(hidden) = try_attr_value_by_suffix(element, &[b":hidden"], "content.xml")? {
         def.hidden = hidden == "true";
     }
-    Some(def)
+    Ok(Some(def))
 }
 
 pub(crate) fn parse_frame_transform(start: &BytesStart<'_>) -> Result<ShapeTransform, ParseError> {
@@ -198,6 +202,22 @@ mod tests {
         "#;
 
         let err = parse_ods_named_ranges(xml).expect_err("malformed named range XML must fail");
+        match err {
+            ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+            other => panic!("expected content.xml parse error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_ods_named_ranges_reports_invalid_attribute_entity() {
+        let xml = br#"
+            <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+                xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+              <table:named-range table:name="Broken &" table:cell-range-address="$Sheet1.$A$1"/>
+            </office:document-content>
+        "#;
+
+        let err = parse_ods_named_ranges(xml).expect_err("invalid attribute entity must fail");
         match err {
             ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
             other => panic!("expected content.xml parse error, got {:?}", other),
