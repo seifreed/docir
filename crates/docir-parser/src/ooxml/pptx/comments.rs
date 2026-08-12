@@ -98,10 +98,15 @@ pub(crate) fn parse_comments(
                 }
             }
             Ok(Event::Text(e)) if in_text => {
-                text_buf.push_str(&crate::xml_utils::decoded_text_or_default(&e));
+                text_buf.push_str(
+                    &crate::xml_utils::decoded_text(&e).map_err(|err| xml_error(path, err))?,
+                );
             }
             Ok(Event::GeneralRef(e)) if in_text => {
-                text_buf.push_str(&crate::xml_utils::decoded_general_ref_or_default(&e));
+                text_buf.push_str(
+                    &crate::xml_utils::decoded_general_ref(&e)
+                        .map_err(|err| xml_error(path, err))?,
+                );
             }
             Ok(Event::End(e)) => {
                 if local_name(e.name().as_ref()) == b"t" {

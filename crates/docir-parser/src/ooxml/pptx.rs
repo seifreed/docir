@@ -401,14 +401,16 @@ fn parse_notes_slide(
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Text(e)) => {
-                let value = crate::xml_utils::decoded_text_or_default(&e);
+                let value =
+                    crate::xml_utils::decoded_text(&e).map_err(|err| xml_error(path, err))?;
                 if !text.is_empty() {
                     text.push(' ');
                 }
                 text.push_str(&value);
             }
             Ok(Event::GeneralRef(e)) => {
-                let value = crate::xml_utils::decoded_general_ref_or_default(&e);
+                let value = crate::xml_utils::decoded_general_ref(&e)
+                    .map_err(|err| xml_error(path, err))?;
                 if !text.is_empty() {
                     text.push(' ');
                 }

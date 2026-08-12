@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::decoded_text_or_default;
+use crate::xml_utils::decoded_text;
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::visit_attributes;
@@ -49,7 +49,7 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
                 }
                 b"X509SubjectName" => {
                     let text = reader.read_text(e.name()).map_err(|e| xml_error(path, e))?;
-                    sig.signer = Some(decoded_text_or_default(&text));
+                    sig.signer = Some(decoded_text(&text).map_err(|err| xml_error(path, err))?);
                 }
                 _ => {}
             },

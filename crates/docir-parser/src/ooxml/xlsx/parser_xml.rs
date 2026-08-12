@@ -1,8 +1,6 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{
-    attr_bool_like, decoded_text_or_default, local_name, visit_attributes, xml_error,
-};
+use crate::xml_utils::{attr_bool_like, decoded_text, local_name, visit_attributes, xml_error};
 use docir_core::ir::{
     CalcChain, CalcChainEntry, CellError, CellFormula, ColumnDefinition, ConditionalFormat,
     ConditionalRule, FormulaType, MergedCellRange, parse_cell_reference,
@@ -123,10 +121,16 @@ pub(super) fn parse_conditional_formatting(
                 )?;
             }
             Ok(Event::Text(e)) if in_formula => {
-                formula_text.push_str(&crate::xml_utils::decoded_text_or_default(&e));
+                formula_text.push_str(
+                    &crate::xml_utils::decoded_text(&e)
+                        .map_err(|err| xml_error(sheet_path, err))?,
+                );
             }
             Ok(Event::GeneralRef(e)) if in_formula => {
-                formula_text.push_str(&crate::xml_utils::decoded_general_ref_or_default(&e));
+                formula_text.push_str(
+                    &crate::xml_utils::decoded_general_ref(&e)
+                        .map_err(|err| xml_error(sheet_path, err))?,
+                );
             }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"conditionalFormatting" => {
                 break;
@@ -250,7 +254,7 @@ pub(super) fn parse_formula(
         .map_err(|e| xml_error(sheet_path, e))?;
 
     Ok(CellFormula {
-        text: decoded_text_or_default(&text),
+        text: decoded_text(&text).map_err(|err| xml_error(sheet_path, err))?,
         formula_type,
         shared_index,
         shared_ref,

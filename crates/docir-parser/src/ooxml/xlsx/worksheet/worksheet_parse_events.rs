@@ -187,11 +187,13 @@ pub(crate) fn parse_data_validation(
                     formulas.track_start_with_context(e, &mut validation, sheet_path)?;
                 }
                 Event::Text(e) => {
-                    let text = crate::xml_utils::decoded_text_or_default(e);
+                    let text = crate::xml_utils::decoded_text(e)
+                        .map_err(|err| xml_error(sheet_path, err))?;
                     formulas.append_text(&text);
                 }
                 Event::GeneralRef(e) => {
-                    let text = crate::xml_utils::decoded_general_ref_or_default(e);
+                    let text = crate::xml_utils::decoded_general_ref(e)
+                        .map_err(|err| xml_error(sheet_path, err))?;
                     formulas.append_text(&text);
                 }
                 Event::End(e) => {

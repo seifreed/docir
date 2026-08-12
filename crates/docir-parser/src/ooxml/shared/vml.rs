@@ -94,7 +94,7 @@ fn handle_vml_element_start(
         }
         b"textbox" => {
             if let Some(shape) = current.as_mut() {
-                let text = read_textbox_text(reader)?;
+                let text = read_textbox_text(reader, path)?;
                 if !text.is_empty() {
                     shape.text = Some(text);
                 }
@@ -159,16 +159,21 @@ fn parse_image_rel_id(
     Ok(rel_id)
 }
 
-fn read_textbox_text(reader: &mut Reader<&[u8]>) -> Result<String, ParseError> {
+fn read_textbox_text(reader: &mut Reader<&[u8]>, path: &str) -> Result<String, ParseError> {
     let mut buf = Vec::new();
     let mut text = String::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Text(t)) => {
-                text.push_str(&crate::xml_utils::decoded_text_or_default(&t));
+                text.push_str(
+                    &crate::xml_utils::decoded_text(&t).map_err(|err| xml_error(path, err))?,
+                );
             }
             Ok(Event::GeneralRef(t)) => {
-                text.push_str(&crate::xml_utils::decoded_general_ref_or_default(&t));
+                text.push_str(
+                    &crate::xml_utils::decoded_general_ref(&t)
+                        .map_err(|err| xml_error(path, err))?,
+                );
             }
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
@@ -176,10 +181,16 @@ fn read_textbox_text(reader: &mut Reader<&[u8]>) -> Result<String, ParseError> {
                 if local == b"t" {
                     match reader.read_event_into(&mut buf) {
                         Ok(Event::Text(t)) => {
-                            text.push_str(&crate::xml_utils::decoded_text_or_default(&t));
+                            text.push_str(
+                                &crate::xml_utils::decoded_text(&t)
+                                    .map_err(|err| xml_error(path, err))?,
+                            );
                         }
                         Ok(Event::GeneralRef(t)) => {
-                            text.push_str(&crate::xml_utils::decoded_general_ref_or_default(&t));
+                            text.push_str(
+                                &crate::xml_utils::decoded_general_ref(&t)
+                                    .map_err(|err| xml_error(path, err))?,
+                            );
                         }
                         _ => {}
                     }

@@ -153,11 +153,13 @@ pub(super) fn parse_chart_data(
                 state.handle_end(local_name(&name_bytes));
             }
             Ok(Event::Text(e)) => {
-                let text = crate::xml_utils::decoded_text_or_default(&e);
+                let text =
+                    crate::xml_utils::decoded_text(&e).map_err(|err| xml_error(chart_path, err))?;
                 state.handle_text(&text);
             }
             Ok(Event::GeneralRef(e)) => {
-                let text = crate::xml_utils::decoded_general_ref_or_default(&e);
+                let text = crate::xml_utils::decoded_general_ref(&e)
+                    .map_err(|err| xml_error(chart_path, err))?;
                 state.handle_text(&text);
             }
             Ok(Event::Eof) => break,

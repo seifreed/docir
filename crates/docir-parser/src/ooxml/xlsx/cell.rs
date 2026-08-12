@@ -3,7 +3,7 @@ use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::visit_attributes;
 use crate::xml_utils::{
-    XmlScanControl, decoded_text_or_default, local_name, scan_xml_events_with_reader, xml_error,
+    XmlScanControl, decoded_text, local_name, scan_xml_events_with_reader, xml_error,
 };
 use docir_core::ir::{Cell, CellFormula, CellValue};
 use docir_core::types::SourceSpan;
@@ -127,7 +127,8 @@ impl CellContents {
                 let text = reader
                     .read_text(start.name())
                     .map_err(|e| xml_error(sheet_path, e))?;
-                self.value_text = Some(decoded_text_or_default(&text));
+                self.value_text =
+                    Some(decoded_text(&text).map_err(|err| xml_error(sheet_path, err))?);
             }
             b"f" => {
                 self.formula = Some(super::parse_formula(reader, start, sheet_path)?);

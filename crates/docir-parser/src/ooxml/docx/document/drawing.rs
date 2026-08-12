@@ -3,7 +3,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{
-    attr_bool_like, attr_u32_from_bytes, decoded_text_or_default, local_name, try_attr_value,
+    attr_bool_like, attr_u32_from_bytes, decoded_text, local_name, try_attr_value,
     try_attr_value_by_suffix, xml_error,
 };
 use docir_core::ir::{
@@ -156,7 +156,8 @@ fn apply_position_offset(
     let text = reader
         .read_text(e.name())
         .map_err(|err| xml_error(DOC_PATH, err))?;
-    let val = decoded_text_or_default(&text)
+    let val = decoded_text(&text)
+        .map_err(|err| xml_error(DOC_PATH, err))?
         .parse::<i64>()
         .map_err(|err| xml_error(DOC_PATH, err))?;
     if state.next_pos_is_x {
@@ -318,7 +319,7 @@ fn parse_drawing_text_run(
                     let t = reader
                         .read_text(e.name())
                         .map_err(|e| xml_error(doc_path, e))?;
-                    text.push_str(&decoded_text_or_default(&t));
+                    text.push_str(&decoded_text(&t).map_err(|err| xml_error(DOC_PATH, err))?);
                 }
                 b"rPr" => {
                     parse_run_style_attrs(&e, doc_path, &mut bold, &mut italic, &mut font_size)?;

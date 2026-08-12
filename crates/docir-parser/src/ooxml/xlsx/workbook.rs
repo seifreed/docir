@@ -4,7 +4,7 @@ use super::SheetState;
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
-    XmlScanControl, attr_bool_like, decoded_text_or_default, dispatch_start_or_empty, local_name,
+    XmlScanControl, attr_bool_like, decoded_text, dispatch_start_or_empty, local_name,
     reader_from_str, scan_xml_events_with_reader, xml_error,
 };
 use docir_core::ir::{DefinedName, WorkbookProperties};
@@ -194,11 +194,12 @@ fn parse_defined_name(
     let value = reader
         .read_text(start.name())
         .map_err(|e| xml_error("xl/workbook.xml", e))?;
+    let value = decoded_text(&value).map_err(|err| xml_error("xl/workbook.xml", err))?;
 
     Ok(name.map(|name| DefinedName {
         id: NodeId::new(),
         name,
-        value: decoded_text_or_default(&value),
+        value,
         local_sheet_id,
         hidden,
         comment,

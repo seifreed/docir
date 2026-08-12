@@ -67,7 +67,8 @@ impl OoxmlParser {
                     current_element = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 }
                 Event::Text(e) => {
-                    let text = crate::xml_utils::decoded_text_or_default(&e);
+                    let text = crate::xml_utils::decoded_text(&e)
+                        .map_err(|err| xml_error("docProps/core.xml", err))?;
                     match current_element.as_str() {
                         "dc:title" | "title" => metadata.title = Some(text),
                         "dc:subject" | "subject" => metadata.subject = Some(text),
@@ -88,7 +89,8 @@ impl OoxmlParser {
                     }
                 }
                 Event::GeneralRef(e) => {
-                    let text = crate::xml_utils::decoded_general_ref_or_default(&e);
+                    let text = crate::xml_utils::decoded_general_ref(&e)
+                        .map_err(|err| xml_error("docProps/core.xml", err))?;
                     match current_element.as_str() {
                         "dc:title" | "title" => metadata.title = Some(text),
                         "dc:subject" | "subject" => metadata.subject = Some(text),
@@ -137,7 +139,8 @@ impl OoxmlParser {
                     current_element = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 }
                 Event::Text(e) => {
-                    let text = crate::xml_utils::decoded_text_or_default(&e);
+                    let text = crate::xml_utils::decoded_text(&e)
+                        .map_err(|err| xml_error("docProps/app.xml", err))?;
                     match current_element.as_str() {
                         "Application" => metadata.application = Some(text),
                         "AppVersion" => metadata.app_version = Some(text),
@@ -147,7 +150,8 @@ impl OoxmlParser {
                     }
                 }
                 Event::GeneralRef(e) => {
-                    let text = crate::xml_utils::decoded_general_ref_or_default(&e);
+                    let text = crate::xml_utils::decoded_general_ref(&e)
+                        .map_err(|err| xml_error("docProps/app.xml", err))?;
                     match current_element.as_str() {
                         "Application" => metadata.application = Some(text),
                         "AppVersion" => metadata.app_version = Some(text),
@@ -219,7 +223,8 @@ impl OoxmlParser {
                     if let Some(tag) = &current_value_tag
                         && let Some(prop) = current_prop.as_mut()
                     {
-                        let text = crate::xml_utils::decoded_text_or_default(&e);
+                        let text = crate::xml_utils::decoded_text(&e)
+                            .map_err(|err| xml_error("docProps/custom.xml", err))?;
                         prop.value = custom_property_value(tag, text)?;
                     }
                 }
@@ -227,7 +232,8 @@ impl OoxmlParser {
                     if let Some(tag) = &current_value_tag
                         && let Some(prop) = current_prop.as_mut()
                     {
-                        let text = crate::xml_utils::decoded_general_ref_or_default(&e);
+                        let text = crate::xml_utils::decoded_general_ref(&e)
+                            .map_err(|err| xml_error("docProps/custom.xml", err))?;
                         prop.value = custom_property_value(tag, text)?;
                     }
                 }
@@ -579,5 +585,20 @@ mod tests {
             .expect_err("malformed app metadata must fail");
 
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "docProps/app.xml"));
+    }
+
+    #[test]
+    fn build_metadata_reports_invalid_core_text_entity() {
+        let parser = OoxmlParser::new();
+        let mut zip = TestPackageReader::new(&[(
+            "docProps/core.xml",
+            "<cp:coreProperties><dc:title>before &invalid; after</dc:title></cp:coreProperties>",
+        )]);
+
+        let err = parser
+            .build_metadata(&mut zip)
+            .expect_err("invalid core text entity must fail");
+
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "docProps/core.xml"));
     }
 }

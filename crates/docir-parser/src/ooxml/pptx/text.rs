@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{decoded_text_or_default, local_name, lossy_attr_value, xml_error};
+use crate::xml_utils::{decoded_text, local_name, lossy_attr_value, xml_error};
 use docir_core::ir::{ShapeText, ShapeTextParagraph, ShapeTextRun, TextAlignment};
 use quick_xml::Reader;
 use quick_xml::events::Event;
@@ -151,7 +151,7 @@ fn parse_text_run(
                     let value = reader
                         .read_text(e.name())
                         .map_err(|e| xml_error(slide_path, e))?;
-                    text.push_str(&decoded_text_or_default(&value));
+                    text.push_str(&decoded_text(&value).map_err(|err| xml_error(slide_path, err))?);
                 }
                 b"latin" => {
                     for attr in e.attributes() {

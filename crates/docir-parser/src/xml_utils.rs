@@ -29,19 +29,11 @@ pub(crate) fn decoded_text(e: &quick_xml::events::BytesText<'_>) -> Result<Strin
         .map_err(|err| err.to_string())
 }
 
-pub(crate) fn decoded_text_or_default(e: &quick_xml::events::BytesText<'_>) -> String {
-    decoded_text(e).unwrap_or_default()
-}
-
 pub(crate) fn decoded_general_ref(e: &quick_xml::events::BytesRef<'_>) -> Result<String, String> {
     let decoded = e.decode().map_err(|err| err.to_string())?;
     quick_xml::escape::unescape(&format!("&{decoded};"))
         .map(|value| value.into_owned())
         .map_err(|err| err.to_string())
-}
-
-pub(crate) fn decoded_general_ref_or_default(e: &quick_xml::events::BytesRef<'_>) -> String {
-    decoded_general_ref(e).unwrap_or_default()
 }
 
 pub(crate) fn try_attr_value(

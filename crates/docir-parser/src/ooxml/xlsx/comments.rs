@@ -24,7 +24,8 @@ pub(super) fn parse_sheet_comments_impl(
         match crate::xml_utils::read_event(&mut reader, &mut buf, path)? {
             Event::Start(e) => handle_comment_start(&e, path, &flavor, &mut state)?,
             Event::Text(e) => {
-                let text = crate::xml_utils::decoded_text_or_default(&e);
+                let text =
+                    crate::xml_utils::decoded_text(&e).map_err(|err| xml_error(path, err))?;
                 if state.in_author {
                     state.authors.push(text);
                 } else if state.in_text {
@@ -32,7 +33,8 @@ pub(super) fn parse_sheet_comments_impl(
                 }
             }
             Event::GeneralRef(e) => {
-                let text = crate::xml_utils::decoded_general_ref_or_default(&e);
+                let text = crate::xml_utils::decoded_general_ref(&e)
+                    .map_err(|err| xml_error(path, err))?;
                 if state.in_author {
                     state.authors.push(text);
                 } else if state.in_text {

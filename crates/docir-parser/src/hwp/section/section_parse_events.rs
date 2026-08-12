@@ -196,11 +196,13 @@ pub(super) fn handle_hwpx_text(
     source: &str,
     store: &mut IrStore,
     state: &mut HwpxSectionState,
-) {
+) -> Result<(), ParseError> {
     if state.in_text {
-        let text = crate::xml_utils::decoded_text_or_default(e);
+        let text = crate::xml_utils::decoded_text(e)
+            .map_err(|err| crate::xml_utils::xml_error(source, err))?;
         handle_hwpx_text_value(text, source, store, state);
     }
+    Ok(())
 }
 
 pub(super) fn handle_hwpx_general_ref(
@@ -208,11 +210,13 @@ pub(super) fn handle_hwpx_general_ref(
     source: &str,
     store: &mut IrStore,
     state: &mut HwpxSectionState,
-) {
+) -> Result<(), ParseError> {
     if state.in_text {
-        let text = crate::xml_utils::decoded_general_ref_or_default(e);
+        let text = crate::xml_utils::decoded_general_ref(e)
+            .map_err(|err| crate::xml_utils::xml_error(source, err))?;
         handle_hwpx_text_value(text, source, store, state);
     }
+    Ok(())
 }
 
 fn handle_hwpx_text_value(

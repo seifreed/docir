@@ -124,10 +124,10 @@ pub(crate) fn parse_hwpx_section(
                 handle_hwpx_end(&e, source, store, comments, footnotes, endnotes, &mut state);
             }
             Ok(Event::Text(e)) => {
-                handle_hwpx_text(&e, source, store, &mut state);
+                handle_hwpx_text(&e, source, store, &mut state)?;
             }
             Ok(Event::GeneralRef(e)) => {
-                section_parse_events::handle_hwpx_general_ref(&e, source, store, &mut state);
+                section_parse_events::handle_hwpx_general_ref(&e, source, store, &mut state)?;
             }
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -213,7 +213,7 @@ fn handle_hwpx_text(
     source: &str,
     store: &mut IrStore,
     state: &mut HwpxSectionState,
-) {
+) -> Result<(), ParseError> {
     section_parse_events::handle_hwpx_text(e, source, store, state)
 }
 
