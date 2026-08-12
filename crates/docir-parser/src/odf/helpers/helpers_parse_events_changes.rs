@@ -3,7 +3,7 @@ use super::{
     ParseError, Revision, RevisionType, scan_xml_events_until_end,
 };
 use crate::odf::paragraph::parse_paragraph;
-use crate::xml_utils::local_name;
+use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::Comment;
 use docir_core::visitor::IrStore;
 use quick_xml::events::BytesStart;
@@ -50,7 +50,8 @@ pub(super) fn parse_annotation(
                 },
                 Event::Text(e) => {
                     if let Some(field) = current {
-                        let value = crate::xml_utils::decoded_text_or_default(e);
+                        let value = crate::xml_utils::decoded_text(e)
+                            .map_err(|err| xml_error(ODF_CONTENT_XML, err))?;
                         match field {
                             AnnotationField::Creator => comment.author = Some(value),
                             AnnotationField::Date => comment.date = Some(value),
@@ -59,7 +60,8 @@ pub(super) fn parse_annotation(
                 }
                 Event::GeneralRef(e) => {
                     if let Some(field) = current {
-                        let value = crate::xml_utils::decoded_general_ref_or_default(e);
+                        let value = crate::xml_utils::decoded_general_ref(e)
+                            .map_err(|err| xml_error(ODF_CONTENT_XML, err))?;
                         match field {
                             AnnotationField::Creator => comment.author = Some(value),
                             AnnotationField::Date => comment.date = Some(value),
@@ -157,11 +159,13 @@ pub(super) fn parse_tracked_changes(
                     &mut current_field,
                 )?,
                 Event::Text(e) => {
-                    let value = crate::xml_utils::decoded_text_or_default(e);
+                    let value = crate::xml_utils::decoded_text(e)
+                        .map_err(|err| xml_error(ODF_CONTENT_XML, err))?;
                     apply_tracked_change_field(&mut current_revision, current_field, value);
                 }
                 Event::GeneralRef(e) => {
-                    let value = crate::xml_utils::decoded_general_ref_or_default(e);
+                    let value = crate::xml_utils::decoded_general_ref(e)
+                        .map_err(|err| xml_error(ODF_CONTENT_XML, err))?;
                     apply_tracked_change_field(&mut current_revision, current_field, value);
                 }
                 Event::End(e) => match local_name(e.name().as_ref()) {

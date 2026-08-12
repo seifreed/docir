@@ -28,11 +28,13 @@ pub(crate) fn read_ods_cell_text(reader: &mut OdfReader<'_>) -> Result<String, P
                 text.push_str(&para);
             }
             Ok(Event::Text(e)) => {
-                let chunk = crate::xml_utils::decoded_text_or_default(&e);
+                let chunk = crate::xml_utils::decoded_text(&e)
+                    .map_err(|err| xml_error("content.xml", err))?;
                 text.push_str(&chunk);
             }
             Ok(Event::GeneralRef(e)) => {
-                let chunk = crate::xml_utils::decoded_general_ref_or_default(&e);
+                let chunk = crate::xml_utils::decoded_general_ref(&e)
+                    .map_err(|err| xml_error("content.xml", err))?;
                 text.push_str(&chunk);
             }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"table-cell" => break,

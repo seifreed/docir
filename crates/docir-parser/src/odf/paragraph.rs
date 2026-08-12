@@ -24,11 +24,13 @@ pub(crate) fn parse_paragraph(
                 handle_inline_event(&e, &mut text, store, inline_nodes)?
             }
             Ok(Event::Text(e)) => {
-                let chunk = crate::xml_utils::decoded_text_or_default(&e);
+                let chunk = crate::xml_utils::decoded_text(&e)
+                    .map_err(|err| xml_error("content.xml", err))?;
                 text.push_str(&chunk);
             }
             Ok(Event::GeneralRef(e)) => {
-                let chunk = crate::xml_utils::decoded_general_ref_or_default(&e);
+                let chunk = crate::xml_utils::decoded_general_ref(&e)
+                    .map_err(|err| xml_error("content.xml", err))?;
                 text.push_str(&chunk);
             }
             Ok(Event::End(e)) if e.name().as_ref() == end_name => {

@@ -256,11 +256,13 @@ pub(crate) fn parse_text_element(
             match event {
                 Event::Start(e) | Event::Empty(e) => append_text_control(&mut text, e)?,
                 Event::Text(e) => {
-                    let chunk = crate::xml_utils::decoded_text_or_default(e);
+                    let chunk = crate::xml_utils::decoded_text(e)
+                        .map_err(|err| xml_error(ODF_CONTENT_XML, err))?;
                     text.push_str(&chunk);
                 }
                 Event::GeneralRef(e) => {
-                    let chunk = crate::xml_utils::decoded_general_ref_or_default(e);
+                    let chunk = crate::xml_utils::decoded_general_ref(e)
+                        .map_err(|err| xml_error(ODF_CONTENT_XML, err))?;
                     text.push_str(&chunk);
                 }
                 _ => {}

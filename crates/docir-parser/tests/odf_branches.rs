@@ -63,6 +63,29 @@ fn parse_odt_inline_events_populate_bookmarks_fields_and_paragraphs() {
 }
 
 #[test]
+fn parse_odt_reports_invalid_text_entity() {
+    let content_xml = br#"
+        <office:document-content xmlns:office="office" xmlns:text="text">
+          <office:body>
+            <office:text>
+              <text:p>before &invalid; after</text:p>
+            </office:text>
+          </office:body>
+        </office:document-content>
+    "#;
+    let zip_bytes = build_zip(&[
+        ("mimetype", b"application/vnd.oasis.opendocument.text"),
+        ("content.xml", content_xml),
+    ])
+    .expect("zip");
+
+    let err = OdfParser::new()
+        .parse_reader(Cursor::new(zip_bytes))
+        .expect_err("invalid entity must fail parsing");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+}
+
+#[test]
 fn parse_ods_fast_sampling_handles_sample_limits_and_repeated_cells() {
     let content_xml = br#"
         <office:document-content xmlns:office="office" xmlns:table="table" xmlns:text="text">

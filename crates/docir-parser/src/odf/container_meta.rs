@@ -6,8 +6,7 @@ use docir_core::ir::DocumentMetadata;
 
 use super::{Document, IRNode, IrStore, ParseError, SecureZipReader};
 use crate::xml_utils::{
-    XmlScanControl, decoded_general_ref_or_default, decoded_text_or_default, local_name,
-    scan_xml_events,
+    XmlScanControl, decoded_general_ref, decoded_text, local_name, scan_xml_events, xml_error,
 };
 
 #[derive(Clone, Copy)]
@@ -51,12 +50,15 @@ pub(super) fn parse_meta(xml: &str) -> Result<Option<DocumentMetadata>, ParseErr
             }
             Event::Text(e) => {
                 if let Some(field) = current {
-                    set_meta_field(&mut meta, field, decoded_text_or_default(&e));
+                    let value = decoded_text(&e).map_err(|err| xml_error("meta.xml", err))?;
+                    set_meta_field(&mut meta, field, value);
                 }
             }
             Event::GeneralRef(e) => {
                 if let Some(field) = current {
-                    set_meta_field(&mut meta, field, decoded_general_ref_or_default(&e));
+                    let value =
+                        decoded_general_ref(&e).map_err(|err| xml_error("meta.xml", err))?;
+                    set_meta_field(&mut meta, field, value);
                 }
             }
             Event::End(_) => {
