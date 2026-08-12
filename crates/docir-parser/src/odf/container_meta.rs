@@ -28,7 +28,7 @@ pub(super) fn load_meta<R: Read + Seek>(
 ) -> Result<(), ParseError> {
     if zip.contains("meta.xml") {
         let meta_xml = zip.read_file_string("meta.xml")?;
-        if let Some(meta) = parse_meta(&meta_xml) {
+        if let Some(meta) = parse_meta(&meta_xml)? {
             let meta_id = meta.id;
             store.insert(IRNode::Metadata(meta));
             doc.metadata = Some(meta_id);
@@ -37,14 +37,14 @@ pub(super) fn load_meta<R: Read + Seek>(
     Ok(())
 }
 
-pub(super) fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
+pub(super) fn parse_meta(xml: &str) -> Result<Option<DocumentMetadata>, ParseError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut meta = DocumentMetadata::new();
     let mut current = None;
 
-    if scan_xml_events(&mut reader, &mut buf, "meta.xml", |event| {
+    scan_xml_events(&mut reader, &mut buf, "meta.xml", |event| {
         match event {
             Event::Start(e) => {
                 current = meta_field_for_name(local_name(e.name().as_ref()));
@@ -65,16 +65,12 @@ pub(super) fn parse_meta(xml: &str) -> Option<DocumentMetadata> {
             _ => {}
         }
         Ok(XmlScanControl::Continue)
-    })
-    .is_err()
-    {
-        return None;
-    }
+    })?;
 
     if meta_has_any_field(&meta) {
-        Some(meta)
+        Ok(Some(meta))
     } else {
-        None
+        Ok(None)
     }
 }
 

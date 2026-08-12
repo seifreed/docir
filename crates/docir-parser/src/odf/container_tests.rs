@@ -49,6 +49,7 @@ fn parse_meta_extracts_known_fields_and_handles_empty_or_malformed_xml() {
             "#,
     )
     .expect("meta must parse");
+    let meta = meta.expect("metadata fields must be present");
     assert_eq!(meta.title.as_deref(), Some("Title"));
     assert_eq!(meta.subject.as_deref(), Some("Subject"));
     assert_eq!(meta.creator.as_deref(), Some("Alice"));
@@ -67,12 +68,18 @@ fn parse_meta_extracts_known_fields_and_handles_empty_or_malformed_xml() {
             "#,
     )
     .expect("alternate-prefix meta must parse");
+    let prefixed_meta = prefixed_meta.expect("metadata fields must be present");
     assert_eq!(prefixed_meta.title.as_deref(), Some("Alt Title"));
     assert_eq!(prefixed_meta.creator.as_deref(), Some("Bob"));
     assert_eq!(prefixed_meta.created.as_deref(), Some("2026-02-01"));
 
-    assert!(parse_meta("<office:meta/>").is_none());
-    assert!(parse_meta("<office:meta><dc:title>").is_none());
+    assert!(
+        parse_meta("<office:meta/>")
+            .expect("empty metadata must parse")
+            .is_none()
+    );
+    let err = parse_meta("<office:meta><dc:title>").expect_err("malformed metadata must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "meta.xml"));
 }
 
 #[test]
