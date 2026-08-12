@@ -3,6 +3,7 @@ use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
 use crate::xml_utils::visit_attributes;
 use crate::xml_utils::xml_error;
+use crate::xml_utils::{XmlScanControl, scan_xml_events};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{CustomProperty, DocumentMetadata, PropertyValue};
 use docir_core::types::NodeId;
@@ -30,12 +31,12 @@ impl OoxmlParser {
 
         // Parse core.xml (Dublin Core properties)
         let core_xml = zip.read_file_string("docProps/core.xml")?;
-        self.parse_core_properties(&core_xml, &mut metadata);
+        self.parse_core_properties(&core_xml, &mut metadata)?;
 
         // Parse app.xml (application properties)
         if zip.contains("docProps/app.xml") {
             let app_xml = zip.read_file_string("docProps/app.xml")?;
-            self.parse_app_properties(&app_xml, &mut metadata);
+            self.parse_app_properties(&app_xml, &mut metadata)?;
         }
 
         // Parse custom.xml (custom properties)
@@ -48,7 +49,11 @@ impl OoxmlParser {
     }
 
     /// Parse core.xml properties.
-    fn parse_core_properties(&self, xml: &str, metadata: &mut DocumentMetadata) {
+    fn parse_core_properties(
+        &self,
+        xml: &str,
+        metadata: &mut DocumentMetadata,
+    ) -> Result<(), ParseError> {
         use quick_xml::events::Event;
 
         let mut reader = reader_from_str(xml);
@@ -56,12 +61,12 @@ impl OoxmlParser {
         let mut buf = Vec::new();
         let mut current_element = String::new();
 
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => {
+        scan_xml_events(&mut reader, &mut buf, "docProps/core.xml", |event| {
+            match event {
+                Event::Start(e) => {
                     current_element = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 }
-                Ok(Event::Text(e)) => {
+                Event::Text(e) => {
                     let text = crate::xml_utils::decoded_text_or_default(&e);
                     match current_element.as_str() {
                         "dc:title" | "title" => metadata.title = Some(text),
@@ -82,7 +87,7 @@ impl OoxmlParser {
                         _ => {}
                     }
                 }
-                Ok(Event::GeneralRef(e)) => {
+                Event::GeneralRef(e) => {
                     let text = crate::xml_utils::decoded_general_ref_or_default(&e);
                     match current_element.as_str() {
                         "dc:title" | "title" => metadata.title = Some(text),
@@ -103,18 +108,22 @@ impl OoxmlParser {
                         _ => {}
                     }
                 }
-                Ok(Event::End(_)) => {
+                Event::End(_) => {
                     current_element.clear();
                 }
-                Ok(Event::Eof) => break,
                 _ => {}
             }
-            buf.clear();
-        }
+            Ok(XmlScanControl::Continue)
+        })?;
+        Ok(())
     }
 
     /// Parse app.xml properties.
-    fn parse_app_properties(&self, xml: &str, metadata: &mut DocumentMetadata) {
+    fn parse_app_properties(
+        &self,
+        xml: &str,
+        metadata: &mut DocumentMetadata,
+    ) -> Result<(), ParseError> {
         use quick_xml::events::Event;
 
         let mut reader = reader_from_str(xml);
@@ -122,12 +131,12 @@ impl OoxmlParser {
         let mut buf = Vec::new();
         let mut current_element = String::new();
 
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => {
+        scan_xml_events(&mut reader, &mut buf, "docProps/app.xml", |event| {
+            match event {
+                Event::Start(e) => {
                     current_element = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 }
-                Ok(Event::Text(e)) => {
+                Event::Text(e) => {
                     let text = crate::xml_utils::decoded_text_or_default(&e);
                     match current_element.as_str() {
                         "Application" => metadata.application = Some(text),
@@ -137,7 +146,7 @@ impl OoxmlParser {
                         _ => {}
                     }
                 }
-                Ok(Event::GeneralRef(e)) => {
+                Event::GeneralRef(e) => {
                     let text = crate::xml_utils::decoded_general_ref_or_default(&e);
                     match current_element.as_str() {
                         "Application" => metadata.application = Some(text),
@@ -147,14 +156,14 @@ impl OoxmlParser {
                         _ => {}
                     }
                 }
-                Ok(Event::End(_)) => {
+                Event::End(_) => {
                     current_element.clear();
                 }
-                Ok(Event::Eof) => break,
                 _ => {}
             }
-            buf.clear();
-        }
+            Ok(XmlScanControl::Continue)
+        })?;
+        Ok(())
     }
 
     /// Parse custom properties from custom.xml.
@@ -542,5 +551,33 @@ mod tests {
             other => panic!("unexpected error: {other:?}"),
         }
         assert!(metadata.custom_properties.is_empty());
+    }
+
+    #[test]
+    fn build_metadata_reports_malformed_core_xml() {
+        let parser = OoxmlParser::new();
+        let mut zip =
+            TestPackageReader::new(&[("docProps/core.xml", "<cp:coreProperties><dc:title>broken")]);
+
+        let err = parser
+            .build_metadata(&mut zip)
+            .expect_err("malformed core metadata must fail");
+
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "docProps/core.xml"));
+    }
+
+    #[test]
+    fn build_metadata_reports_malformed_app_xml() {
+        let parser = OoxmlParser::new();
+        let mut zip = TestPackageReader::new(&[
+            ("docProps/core.xml", core_properties_xml()),
+            ("docProps/app.xml", "<Properties><Application>broken"),
+        ]);
+
+        let err = parser
+            .build_metadata(&mut zip)
+            .expect_err("malformed app metadata must fail");
+
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "docProps/app.xml"));
     }
 }
