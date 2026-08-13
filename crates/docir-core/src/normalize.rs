@@ -15,7 +15,7 @@ fn normalize_document(store: &mut IrStore, root: NodeId) {
         return;
     };
 
-    let mut content = doc.content.clone();
+    let content = doc.content.clone();
     let mut shared_parts = doc.shared_parts.clone();
     let mut defined_names = doc.defined_names.clone();
     let mut pivot_caches = doc.pivot_caches.clone();
@@ -23,7 +23,6 @@ fn normalize_document(store: &mut IrStore, root: NodeId) {
 
     let _ = doc;
 
-    content.sort_by_key(|id| node_sort_key(store, *id));
     shared_parts.sort_by_key(|id| node_sort_key(store, *id));
     defined_names.sort_by_key(|id| defined_name_key(store, *id));
     pivot_caches.sort_by_key(|id| pivot_cache_key(store, *id));
@@ -160,7 +159,7 @@ mod tests {
     use crate::types::DocumentFormat;
 
     #[test]
-    fn normalize_store_sorts_document_collections_deterministically() {
+    fn normalize_store_sorts_unordered_collections_preserves_content_order() {
         let mut store = IrStore::new();
         let mut doc = Document::new(DocumentFormat::Spreadsheet);
 
@@ -224,7 +223,7 @@ mod tests {
         let IRNode::Document(doc) = store.get(root).expect("document present") else {
             panic!("expected document node");
         };
-        assert_eq!(doc.content, vec![section_a_id, section_b_id]);
+        assert_eq!(doc.content, vec![section_b_id, section_a_id]);
         assert_eq!(doc.shared_parts, vec![media_id, part_id]);
         assert_eq!(doc.defined_names, vec![dn_a_id, dn_b_id]);
         assert_eq!(doc.pivot_caches, vec![cache_1_id, cache_2_id]);
