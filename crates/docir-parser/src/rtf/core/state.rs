@@ -47,6 +47,8 @@ pub(super) struct RtfStyleState {
 pub(super) struct GroupState {
     pub(super) kind: GroupKind,
     pub(super) style: RtfStyleState,
+    pub(super) unicode_fallback_count: usize,
+    pub(super) unicode_skip: usize,
 }
 
 #[derive(Debug, Default)]
@@ -128,6 +130,8 @@ pub(crate) struct RtfParseContext {
     pub(super) current_props: RtfStyleState,
     pub(super) max_group_depth: usize,
     pub(super) max_object_hex_len: usize,
+    pub(super) unicode_fallback_count: usize,
+    pub(super) unicode_skip: usize,
 }
 
 impl RtfParseContext {
@@ -185,10 +189,14 @@ impl RtfParseContext {
             current_props: RtfStyleState::default(),
             max_group_depth,
             max_object_hex_len,
+            unicode_fallback_count: 1,
+            unicode_skip: 0,
         };
         ctx.group_stack.push(GroupState {
             kind: GroupKind::Normal,
             style: RtfStyleState::default(),
+            unicode_fallback_count: ctx.unicode_fallback_count,
+            unicode_skip: ctx.unicode_skip,
         });
         ctx
     }
@@ -209,7 +217,12 @@ impl RtfParseContext {
             )));
         }
         let style = self.current_props.clone();
-        self.group_stack.push(GroupState { kind, style });
+        self.group_stack.push(GroupState {
+            kind,
+            style,
+            unicode_fallback_count: self.unicode_fallback_count,
+            unicode_skip: self.unicode_skip,
+        });
         Ok(())
     }
 
@@ -225,6 +238,8 @@ impl RtfParseContext {
             ));
         };
         self.current_props = group.style;
+        self.unicode_fallback_count = group.unicode_fallback_count;
+        self.unicode_skip = group.unicode_skip;
         Ok(())
     }
 }

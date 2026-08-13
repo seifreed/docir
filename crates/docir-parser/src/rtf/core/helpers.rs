@@ -23,6 +23,22 @@ pub(super) fn handle_encoding_controls(
                 ctx.encoding = enc;
             }
         }
+        "uc" => {
+            if let Some(skip) = param
+                && skip >= 0
+            {
+                ctx.unicode_fallback_count = skip as usize;
+            }
+        }
+        "u" => {
+            if let Some(value) = param {
+                let code_unit = value.rem_euclid(0x1_0000) as u16;
+                if let Some(character) = char::from_u32(code_unit as u32) {
+                    append_text(ctx, &character.to_string());
+                }
+                ctx.unicode_skip = ctx.unicode_fallback_count;
+            }
+        }
         _ => return false,
     }
     true
@@ -546,6 +562,8 @@ mod tests {
         let _ = GroupState {
             kind: GroupKind::Normal,
             style: RtfStyleState::default(),
+            unicode_fallback_count: ctx.unicode_fallback_count,
+            unicode_skip: ctx.unicode_skip,
         };
     }
 }

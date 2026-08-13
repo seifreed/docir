@@ -289,6 +289,8 @@ mod tests {
         ctx.group_stack.push(crate::rtf::core::state::GroupState {
             kind: GroupKind::Normal,
             style: crate::rtf::core::state::RtfStyleState::default(),
+            unicode_fallback_count: ctx.unicode_fallback_count,
+            unicode_skip: ctx.unicode_skip,
         });
         ctx.current_paragraph = Some(Paragraph::new());
         assert!(handle_group_controls("ls", Some(5), &mut ctx).expect("ls pending"));

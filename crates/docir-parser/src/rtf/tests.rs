@@ -44,6 +44,42 @@ fn parse_object_tracks_security_ole_object() {
 }
 
 #[test]
+fn parse_unicode_control_emits_unicode_character() {
+    let parser = RtfParser::new();
+    let parsed = parser
+        .parse_bytes(br"{\rtf1\ansi Unicode: \u8364?}")
+        .expect("parse unicode RTF");
+    let text = parsed
+        .store
+        .values()
+        .filter_map(|node| match node {
+            IRNode::Run(run) => Some(run.text.as_str()),
+            _ => None,
+        })
+        .collect::<String>();
+
+    assert_eq!(text, "Unicode: €");
+}
+
+#[test]
+fn parse_unicode_control_skips_configured_escaped_fallback() {
+    let parser = RtfParser::new();
+    let parsed = parser
+        .parse_bytes(br"{\rtf1\ansi\uc2 Greek: \u937\'3f\'3f}")
+        .expect("parse unicode fallback");
+    let text = parsed
+        .store
+        .values()
+        .filter_map(|node| match node {
+            IRNode::Run(run) => Some(run.text.as_str()),
+            _ => None,
+        })
+        .collect::<String>();
+
+    assert_eq!(text, "Greek: Ω");
+}
+
+#[test]
 fn parse_styles_and_lists() {
     let data = b"{\\rtf1\\ansi{\\stylesheet{\\s1 Heading 1;}{\\cs2 Emphasis;}}\\pard\\ql\\s1\\ls1\\ilvl0 Item}";
     let parser = RtfParser::new();

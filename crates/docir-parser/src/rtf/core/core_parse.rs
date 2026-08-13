@@ -30,10 +30,16 @@ pub(crate) fn parse_rtf(
                 ctx.pop_group()?;
             }
             Some(b'\\') => {
+                if skip_unicode_fallback(cursor, ctx) {
+                    continue;
+                }
                 parse_control(cursor, ctx, store)?;
             }
             Some(b'\r') | Some(b'\n') => {
                 // ignore raw newlines
+            }
+            Some(_byte) if ctx.unicode_skip > 0 => {
+                ctx.unicode_skip -= 1;
             }
             Some(byte) => match ctx.current_group_kind() {
                 GroupKind::Normal | GroupKind::FieldResult | GroupKind::FieldInst => {
@@ -74,4 +80,39 @@ pub(crate) fn parse_rtf(
     finalize_paragraph(ctx, store);
     finalize_section(ctx, store);
     Ok(())
+}
+
+fn skip_unicode_fallback(cursor: &mut RtfCursor<'_>, ctx: &mut RtfParseContext) -> bool {
+    if ctx.unicode_skip == 0 {
+        return false;
+    }
+
+    let Some(next) = cursor.next() else {
+        ctx.unicode_skip = 0;
+        return true;
+    };
+    match next {
+        b'\'' => {
+            cursor.next();
+            cursor.next();
+        }
+        b'\\' | b'{' | b'}' | b'*' => {}
+        byte if byte.is_ascii_alphabetic() => {
+            while cursor.peek().is_some_and(|byte| byte.is_ascii_alphabetic()) {
+                cursor.next();
+            }
+            if cursor.peek() == Some(b'-') {
+                cursor.next();
+            }
+            while cursor.peek().is_some_and(|byte| byte.is_ascii_digit()) {
+                cursor.next();
+            }
+            if cursor.peek() == Some(b' ') {
+                cursor.next();
+            }
+        }
+        _ => {}
+    }
+    ctx.unicode_skip -= 1;
+    true
 }
