@@ -45,6 +45,17 @@ fn parse_header_rejects_invalid_signature() {
 }
 
 #[test]
+fn parse_header_rejects_nonstandard_mini_sector_shift() {
+    let mut header = valid_header_template();
+    header[0x20..0x22].copy_from_slice(&(7u16).to_le_bytes());
+
+    assert!(matches!(
+        parse_header(&header),
+        Err(ParseError::InvalidStructure(message)) if message.contains("mini sector shift")
+    ));
+}
+
+#[test]
 fn difat_chain_uses_header_entries() {
     let mut header = valid_header_template();
     header[0x4C..0x50].copy_from_slice(&(3u32).to_le_bytes());

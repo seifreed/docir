@@ -18,6 +18,7 @@ pub(crate) struct OleHeader {
 }
 
 const MAX_SECTOR_SHIFT: u32 = 12; // CFB spec: only 9 (512 bytes, v3) and 12 (4096 bytes, v4) are valid
+const MINI_SECTOR_SHIFT: u32 = 6; // CFB spec: mini-sectors are always 64 bytes
 const MAX_FAT_SECTORS: u32 = 1 << 20; // reasonable upper bound
 const MAX_DIFAT_CHAIN: u32 = 1 << 16; // reasonable upper bound for DIFAT chain iterations
 
@@ -45,9 +46,9 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<OleHeader, ParseError> {
             "OLE header sector shift {sector_shift} exceeds maximum ({MAX_SECTOR_SHIFT})"
         )));
     }
-    if mini_sector_shift < 6 {
+    if mini_sector_shift != MINI_SECTOR_SHIFT {
         return Err(ParseError::InvalidStructure(
-            "OLE header mini sector shift too small (minimum 6)".to_string(),
+            "OLE header mini sector shift must be 6".to_string(),
         ));
     }
     let num_fat_sectors = read_u32(data, 0x2C)?;
