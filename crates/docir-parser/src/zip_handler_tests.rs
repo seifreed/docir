@@ -72,6 +72,26 @@ fn make_zip64_duplicate_name_zip() -> Vec<u8> {
     out
 }
 
+fn make_underdeclared_stored_size_zip() -> Vec<u8> {
+    let mut bytes = make_zip(
+        &[("a.xml", b"1234"), ("b.xml", b"5678")],
+        CompressionMethod::Stored,
+    );
+    let mut offset = 0;
+    let mut central_headers = 0;
+    while let Some(relative) = bytes[offset..]
+        .windows(4)
+        .position(|window| window == b"PK\x01\x02")
+    {
+        let header = offset + relative;
+        bytes[header + 24..header + 28].copy_from_slice(&1u32.to_le_bytes());
+        offset = header + 46;
+        central_headers += 1;
+    }
+    assert_eq!(central_headers, 2);
+    bytes
+}
+
 fn push_u16(out: &mut Vec<u8>, value: u16) {
     out.extend_from_slice(&value.to_le_bytes());
 }
@@ -315,6 +335,25 @@ fn secure_zip_reader_rejects_suspicious_compression_ratio() {
     .err()
     .expect("compression ratio limit error");
     assert!(matches!(err, ParseError::ResourceLimit(_)));
+}
+
+#[test]
+fn secure_zip_reader_enforces_total_limit_on_actual_stored_bytes() {
+    let bytes = make_underdeclared_stored_size_zip();
+    let mut reader = SecureZipReader::new(
+        Cursor::new(bytes),
+        ZipConfig {
+            max_total_size: 2,
+            max_file_size: 4,
+            ..ZipConfig::default()
+        },
+    )
+    .expect("declared sizes remain within limits");
+
+    let err = reader.read_file("a.xml").unwrap_err();
+    assert!(
+        matches!(err, ParseError::ResourceLimit(message) if message.contains("Total uncompressed size"))
+    );
 }
 
 #[test]

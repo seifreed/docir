@@ -61,6 +61,8 @@ pub struct SecureZipReader<R: Read + Seek> {
     archive: ZipArchive<R>,
     config: ZipConfig,
     file_index: HashMap<String, usize>,
+    observed_file_sizes: HashMap<usize, u64>,
+    observed_total_uncompressed: u64,
 }
 
 impl<R: Read + Seek> SecureZipReader<R> {
@@ -111,6 +113,8 @@ impl<R: Read + Seek> SecureZipReader<R> {
             archive,
             config,
             file_index,
+            observed_file_sizes: HashMap::new(),
+            observed_total_uncompressed: total_uncompressed,
         })
     }
 
@@ -122,18 +126,18 @@ impl<R: Read + Seek> SecureZipReader<R> {
             .ok_or_else(|| ParseError::MissingPart(name.to_string()))?;
 
         let file = self.archive.by_index(*index)?;
+        let declared_size = file.size();
 
         // Double-check size before reading
-        if file.size() > self.config.max_file_size {
+        if declared_size > self.config.max_file_size {
             return Err(ParseError::ResourceLimit(format!(
                 "File too large: {} ({} bytes)",
-                name,
-                file.size()
+                name, declared_size
             )));
         }
 
         let read_limit = self.config.max_file_size.saturating_add(1);
-        let capacity = file.size().min(self.config.max_file_size) as usize;
+        let capacity = declared_size.min(self.config.max_file_size) as usize;
         let mut contents = Vec::with_capacity(capacity);
         file.take(read_limit).read_to_end(&mut contents)?;
         if contents.len() as u64 > self.config.max_file_size {
@@ -141,6 +145,24 @@ impl<R: Read + Seek> SecureZipReader<R> {
                 "File contents exceed limit: {} (max: {} bytes)",
                 name, self.config.max_file_size
             )));
+        }
+
+        let actual_size = contents.len() as u64;
+        let previous_size = self
+            .observed_file_sizes
+            .get(index)
+            .copied()
+            .unwrap_or(declared_size);
+        if actual_size > previous_size {
+            let increase = actual_size - previous_size;
+            self.observed_total_uncompressed = self
+                .observed_total_uncompressed
+                .checked_add(increase)
+                .ok_or_else(|| {
+                    ParseError::ResourceLimit("Total uncompressed size overflow".to_string())
+                })?;
+            self.observed_file_sizes.insert(*index, actual_size);
+            validate_total_size(self.observed_total_uncompressed, &self.config)?;
         }
 
         Ok(contents)
