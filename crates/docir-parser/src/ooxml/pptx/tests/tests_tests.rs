@@ -193,6 +193,54 @@ fn test_parse_pptx_table_rejects_invalid_column_width() {
 }
 
 #[test]
+fn test_parse_pptx_table_rejects_truncated_table_scope() {
+    let mut reader = quick_xml::Reader::from_str(
+        r#"<a:tbl xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:tr/>"#,
+    );
+    reader.config_mut().trim_text(true);
+    let mut parser = PptxParser::new();
+    let err = parser
+        .parse_pptx_table(&mut reader, "ppt/slides/slide1.xml")
+        .expect_err("truncated tbl must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/slide1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_pptx_table_rejects_truncated_row_scope() {
+    let mut reader = quick_xml::Reader::from_str(
+        r#"<a:tr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:tc/>"#,
+    );
+    reader.config_mut().trim_text(true);
+    let mut parser = PptxParser::new();
+    let err = parser
+        .parse_pptx_table_row(&mut reader, "ppt/slides/slide1.xml")
+        .expect_err("truncated tr must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/slide1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_pptx_table_rejects_truncated_cell_scope() {
+    let mut reader = quick_xml::Reader::from_str(
+        r#"<a:tc xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:txBody/>"#,
+    );
+    reader.config_mut().trim_text(true);
+    let mut parser = PptxParser::new();
+    let err = parser
+        .parse_pptx_table_cell(&mut reader, "ppt/slides/slide1.xml")
+        .expect_err("truncated tc must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "ppt/slides/slide1.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_presentation_info_rejects_invalid_size_values() {
     let xml = r#"
         <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">

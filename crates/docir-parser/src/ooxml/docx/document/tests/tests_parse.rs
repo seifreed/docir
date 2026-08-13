@@ -124,6 +124,52 @@ fn test_parse_section_properties_reports_malformed_title_page_attributes() {
 }
 
 #[test]
+fn test_parse_section_properties_rejects_truncated_scope() {
+    let mut reader = reader_from_str(
+        r#"<w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">"#,
+    );
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:sectPr" => break,
+            Ok(Event::Eof) => panic!("no sectPr"),
+            Err(e) => panic!("xml error: {e}"),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    let err = apply_section_refs(&mut reader, None).expect_err("truncated sectPr must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn test_parse_section_properties_rejects_truncated_page_borders() {
+    let mut reader = reader_from_str(
+        r#"<w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:pgBorders><w:top/>"#,
+    );
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:sectPr" => break,
+            Ok(Event::Eof) => panic!("no sectPr"),
+            Err(e) => panic!("xml error: {e}"),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    let err = apply_section_refs(&mut reader, None).expect_err("truncated pgBorders must fail");
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn test_parse_section_properties_extended() {
     let xml = r#"
         <w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

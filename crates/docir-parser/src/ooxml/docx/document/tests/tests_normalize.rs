@@ -299,6 +299,35 @@ fn test_parse_vml_picture_reports_malformed_attributes() {
 }
 
 #[test]
+fn test_parse_vml_picture_rejects_truncated_scope() {
+    let xml = r#"
+        <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:pict>
+            <v:shape xmlns:v="urn:schemas-microsoft-com:vml"/>
+    "#;
+    let mut reader = reader_from_str(xml);
+    let mut parser = DocxParser::new();
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:r" => {
+                let err = parse_run(&mut parser, &mut reader, &Relationships::default())
+                    .expect_err("truncated pict must fail");
+                match err {
+                    ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
+                    other => panic!("unexpected error: {other:?}"),
+                }
+                break;
+            }
+            Ok(Event::Eof) => panic!("missing run"),
+            Err(e) => panic!("xml error: {e}"),
+            _ => {}
+        }
+        buf.clear();
+    }
+}
+
+#[test]
 fn parse_run_reports_unclosed_text_node() {
     let xml = r#"
         <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

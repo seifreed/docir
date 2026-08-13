@@ -117,7 +117,9 @@ impl PptxParser {
                 Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tbl" => {
                     break;
                 }
-                Ok(Event::Eof) => break,
+                Ok(Event::Eof) => {
+                    return Err(xml_error(slide_path, "unexpected end of tbl"));
+                }
                 Err(e) => {
                     return Err(xml_error(slide_path, e));
                 }
@@ -149,7 +151,9 @@ impl PptxParser {
                 Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tr" => {
                     break;
                 }
-                Ok(Event::Eof) => break,
+                Ok(Event::Eof) => {
+                    return Err(xml_error(slide_path, "unexpected end of tr"));
+                }
                 Err(e) => {
                     return Err(xml_error(slide_path, e));
                 }
@@ -189,7 +193,9 @@ impl PptxParser {
                 Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tc" => {
                     break;
                 }
-                Ok(Event::Eof) => break,
+                Ok(Event::Eof) => {
+                    return Err(xml_error(slide_path, "unexpected end of tc"));
+                }
                 Err(e) => {
                     return Err(xml_error(slide_path, e));
                 }

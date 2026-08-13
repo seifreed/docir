@@ -49,7 +49,9 @@ pub(super) fn parse_page_borders(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pgBorders" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of pgBorders"));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }
@@ -179,7 +181,9 @@ pub(super) fn parse_vml_pict(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pict" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of pict"));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }

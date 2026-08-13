@@ -47,7 +47,9 @@ pub(super) fn apply_section_refs(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"sectPr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of sectPr"));
+            }
             Err(e) => {
                 return Err(xml_error(DOC_PATH, e));
             }
