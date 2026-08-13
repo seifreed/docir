@@ -145,6 +145,15 @@ fn test_media_type_and_attr_helpers() {
 }
 
 #[test]
+fn test_attr_helpers_report_invalid_attribute_entity() {
+    let e = start_event(r#"<hp:run name="Broken &"/>"#);
+
+    let err =
+        attr_any(&e, &[b"name"], "section.xml").expect_err("invalid attribute entity must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "section.xml"));
+}
+
+#[test]
 fn test_run_and_style_property_helpers() {
     let e = start_event(
         r##"<hp:r bold="1" italic="true" underline="single" color="#AABBCC" highlight="#00FF00" font="Malgun" size="12"/>"##,

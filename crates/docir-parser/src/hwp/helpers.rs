@@ -2,7 +2,7 @@ use super::part_registry;
 use crate::diagnostics::{push_info, push_warning};
 use crate::error::ParseError;
 use crate::text_utils::parse_text_alignment;
-use crate::xml_utils::{decoded_attr_value, visit_attributes};
+use crate::xml_utils::{try_decoded_attr_value, visit_attributes_result};
 use docir_core::ir::{
     Diagnostics, MediaType, RunProperties, StyleParagraphProperties, StyleRunProperties,
     TableAlignment, TableProperties, TableWidth, TableWidthType,
@@ -32,14 +32,15 @@ pub(super) fn attr_any(
     source: &str,
 ) -> Result<Option<String>, ParseError> {
     let mut value = None;
-    visit_attributes(e, source, |attr| {
+    visit_attributes_result(e, source, |attr| {
         if value.is_none()
             && names
                 .iter()
                 .any(|candidate| attr.key.as_ref() == *candidate)
         {
-            value = Some(decoded_attr_value(attr, e.decoder()));
+            value = Some(try_decoded_attr_value(attr, e.decoder(), source)?);
         }
+        Ok(())
     })?;
     Ok(value)
 }
@@ -50,14 +51,15 @@ pub(super) fn attr_any_by_suffix(
     source: &str,
 ) -> Result<Option<String>, ParseError> {
     let mut value = None;
-    visit_attributes(e, source, |attr| {
+    visit_attributes_result(e, source, |attr| {
         if value.is_none()
             && suffixes
                 .iter()
                 .any(|suffix| attr.key.as_ref().ends_with(suffix))
         {
-            value = Some(decoded_attr_value(attr, e.decoder()));
+            value = Some(try_decoded_attr_value(attr, e.decoder(), source)?);
         }
+        Ok(())
     })?;
     Ok(value)
 }
@@ -67,9 +69,9 @@ pub(super) fn run_properties_from_attrs(
     source: &str,
 ) -> Result<RunProperties, ParseError> {
     let mut props = RunProperties::default();
-    visit_attributes(e, source, |attr| {
+    visit_attributes_result(e, source, |attr| {
         let key = attr.key.as_ref();
-        let value = decoded_attr_value(attr, e.decoder());
+        let value = try_decoded_attr_value(attr, e.decoder(), source)?;
         match key {
             b"bold" | b"b" => {
                 props.bold = Some(value == "1" || value.eq_ignore_ascii_case("true"));
@@ -96,6 +98,7 @@ pub(super) fn run_properties_from_attrs(
             }
             _ => {}
         }
+        Ok(())
     })?;
     Ok(props)
 }

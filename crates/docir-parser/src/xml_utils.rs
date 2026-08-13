@@ -22,7 +22,7 @@ pub(crate) fn decoded_attr_value(attr: &Attribute<'_>, decoder: Decoder) -> Stri
         .unwrap_or_else(|_| String::from_utf8_lossy(attr.value.as_ref()).into_owned())
 }
 
-fn try_decoded_attr_value(
+pub(crate) fn try_decoded_attr_value(
     attr: &Attribute<'_>,
     decoder: Decoder,
     file: &str,
@@ -134,6 +134,21 @@ where
     for attr in element.attributes() {
         let attr = attr.map_err(|err| xml_error(file, err))?;
         visit(&attr);
+    }
+    Ok(())
+}
+
+pub(crate) fn visit_attributes_result<F>(
+    element: &BytesStart<'_>,
+    file: &str,
+    mut visit: F,
+) -> Result<(), ParseError>
+where
+    F: FnMut(&Attribute<'_>) -> Result<(), ParseError>,
+{
+    for attr in element.attributes() {
+        let attr = attr.map_err(|err| xml_error(file, err))?;
+        visit(&attr)?;
     }
     Ok(())
 }
