@@ -88,7 +88,9 @@ pub(crate) fn read_difat_chain(data: &[u8], header: &OleHeader) -> Result<Vec<u3
     let mut next_difat = header.first_difat;
     for _ in 0..header.num_difat {
         if next_difat == END_OF_CHAIN || next_difat == FREE_SECT {
-            break;
+            return Err(ParseError::InvalidStructure(
+                "OLE DIFAT chain ended before the declared sector count".to_string(),
+            ));
         }
         let sector = crate::ole::read_sector(data, header.sector_size, next_difat)?;
         let count = (header.sector_size / 4) as usize - 1;

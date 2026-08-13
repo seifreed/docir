@@ -56,6 +56,19 @@ fn difat_chain_uses_header_entries() {
 }
 
 #[test]
+fn difat_chain_rejects_premature_end_marker() {
+    let mut header = valid_header_template();
+    header[0x44..0x48].copy_from_slice(&END_OF_CHAIN.to_le_bytes());
+    header[0x48..0x4C].copy_from_slice(&(1u32).to_le_bytes());
+
+    let parsed = parse_header(&header).expect("header");
+    assert!(matches!(
+        read_difat_chain(&header, &parsed),
+        Err(ParseError::InvalidStructure(_))
+    ));
+}
+
+#[test]
 fn read_sector_and_stream_helpers_handle_bounds_and_chains() {
     let mut data = vec![0u8; 1536];
     data[512..1024].fill(1);
