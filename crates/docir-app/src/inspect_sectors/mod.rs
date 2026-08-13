@@ -70,6 +70,7 @@ fn analyze_cfb_sectors(cfb: &Cfb) -> SectorAnalysis {
     let role_counts = build_role_counts(&sector_overview);
     let shared_sector_claims = build_shared_sector_claims(&sector_overview);
     let shared_chain_overlaps = build_shared_chain_overlaps(&sector_overview);
+    sanitize_stream_chains(&mut streams, cfb.sector_count());
     let start_sector_reuse = build_start_sector_reuse(&streams);
     let truncated_chain_counts = build_truncated_chain_counts(&streams);
     apply_stream_health(
@@ -176,6 +177,7 @@ fn build_stream_maps(cfb: &Cfb, anomalies: &mut Vec<SectorAnomaly>) -> Vec<Strea
             } else {
                 size_bytes.div_ceil(unit_size) as usize
             };
+            let sector_count = cfb.sector_count();
             let sector_chain = cfb.stream_sector_chain(&path).unwrap_or_default();
             let chain_state = classify_chain_state(size_bytes, expected_chain_len, &sector_chain);
             if size_bytes > 0 && sector_chain.is_empty() {
@@ -210,10 +212,31 @@ fn build_stream_maps(cfb: &Cfb, anomalies: &mut Vec<SectorAnomaly>) -> Vec<Strea
                 chain_steps: build_chain_steps(&sector_chain, chain_terminal_raw),
                 sector_chain,
                 path,
-                sector_count: cfb.sector_count(),
+                sector_count,
             }
         })
         .collect::<Vec<_>>()
+}
+
+fn sanitize_stream_chains(streams: &mut [StreamSectorMap], sector_count: u32) {
+    for stream in streams {
+        let original_len = stream.sector_chain.len();
+        if let Some(invalid_index) = stream
+            .sector_chain
+            .iter()
+            .position(|sector| *sector >= sector_count)
+        {
+            stream.sector_chain.truncate(invalid_index);
+        }
+        if stream.sector_chain.len() != original_len {
+            stream.chain_state = if stream.size_bytes == 0 {
+                "empty".to_string()
+            } else {
+                "truncated".to_string()
+            };
+            stream.chain_steps = build_chain_steps(&stream.sector_chain, stream.chain_terminal_raw);
+        }
+    }
 }
 
 fn build_sector_owner_map(

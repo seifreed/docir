@@ -411,7 +411,7 @@ mod tests {
         let types = ContentTypes::parse(&xml).expect("content types");
 
         assert_eq!(
-            types.get_content_type("xl/workbook.bin"),
+            types.get_content_type("xl/workbook.xml"),
             Some(content_type::EXCEL_WORKBOOK)
         );
         assert_eq!(
