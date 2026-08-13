@@ -48,19 +48,19 @@ pub(super) fn decrypt_odf_part(
             iterations, MAX_ODF_PBKDF2_ITERATIONS
         ));
     }
-    let key_bits = encryption
-        .key_size
-        .or_else(|| {
-            if algorithm.contains("aes256") {
-                Some(256)
-            } else if algorithm.contains("aes128") {
-                Some(128)
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| "Unsupported encryption algorithm".to_string())?;
-    let key_len = (key_bits / 8) as usize;
+    let expected_key_len = if algorithm.contains("aes256") {
+        32
+    } else if algorithm.contains("aes128") {
+        16
+    } else {
+        return Err("Unsupported encryption algorithm".to_string());
+    };
+    if let Some(key_size) = encryption.key_size
+        && key_size != expected_key_len
+    {
+        return Err(format!("Unsupported key length: {key_size}"));
+    }
+    let key_len = expected_key_len as usize;
     if iv.len() != 16 {
         return Err(format!("Unsupported IV length: {}", iv.len()));
     }

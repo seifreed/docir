@@ -159,7 +159,6 @@ fn apply_algorithm_attrs(
     enc.algorithm_name =
         try_attr_value_by_suffix(e, &[b":algorithm-name"], "META-INF/manifest.xml")?;
     enc.init_vector = decode_optional_base64_attr(e, &[b":initialisation-vector"])?;
-    enc.key_size = parse_optional_u32_attr(e, &[b":key-size"])?;
     Ok(())
 }
 
@@ -170,6 +169,7 @@ fn apply_key_derivation_attrs(
     enc.key_derivation_name =
         try_attr_value_by_suffix(e, &[b":key-derivation-name"], "META-INF/manifest.xml")?;
     enc.salt = decode_optional_base64_attr(e, &[b":salt"])?;
+    enc.key_size = parse_optional_u32_attr(e, &[b":key-size"])?;
     enc.iteration_count = parse_optional_u32_attr(e, &[b":iteration-count"])?;
     Ok(())
 }
@@ -262,9 +262,9 @@ mod tests {
               <mf:file-entry mf:full-path="content.xml" mf:media-type="text/xml">
                 <mf:encryption-data mf:checksum-type="SHA1" mf:checksum="YWJjZA==">
                   <mf:algorithm mf:algorithm-name="http://www.w3.org/2001/04/xmlenc#aes256-cbc"
-                    mf:initialisation-vector="MTIzNDU2Nzg5MA==" mf:key-size="32"/>
+                    mf:initialisation-vector="MTIzNDU2Nzg5MA=="/>
                   <mf:key-derivation mf:key-derivation-name="PBKDF2"
-                    mf:salt="c2FsdA==" mf:iteration-count="2048"/>
+                    mf:salt="c2FsdA==" mf:key-size="32" mf:iteration-count="2048"/>
                 </mf:encryption-data>
               </mf:file-entry>
             </mf:manifest>
@@ -274,6 +274,13 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].path, "content.xml");
         assert_eq!(entries[0].media_type.as_deref(), Some("text/xml"));
+        assert_eq!(
+            entries[0]
+                .encryption
+                .as_ref()
+                .and_then(|encryption| encryption.key_size),
+            Some(32)
+        );
 
         let encryption = format_odf_encryption_metadata(&entries[0]).expect("encryption");
         assert!(encryption.contains("aes256-cbc"));
@@ -323,7 +330,8 @@ mod tests {
             <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
               <manifest:file-entry manifest:full-path="content.xml">
                 <manifest:encryption-data>
-                  <manifest:algorithm manifest:key-size="bad"/>
+                  <manifest:algorithm/>
+                  <manifest:key-derivation manifest:key-size="bad"/>
                 </manifest:encryption-data>
               </manifest:file-entry>
             </manifest:manifest>

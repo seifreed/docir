@@ -12,7 +12,7 @@ fn encryption_data() -> OdfEncryptionData {
         key_derivation_name: Some("PBKDF2".to_string()),
         salt: Some(vec![1_u8; 16]),
         iteration_count: Some(10),
-        key_size: Some(256),
+        key_size: Some(32),
     }
 }
 
@@ -124,9 +124,21 @@ fn decrypt_odf_part_rejects_unsupported_algorithm_or_key_length() {
     assert!(err.contains("Unsupported encryption algorithm"));
 
     let mut enc = encryption_data();
-    enc.key_size = Some(192);
+    enc.key_size = Some(24);
     let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("unsupported key size");
     assert!(err.contains("Unsupported key length: 24"));
+
+    let mut enc = encryption_data();
+    enc.algorithm_name = Some("urn:unknown".to_string());
+    let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw")
+        .expect_err("unknown algorithm must not be selected by key size");
+    assert!(err.contains("Unsupported encryption algorithm"));
+
+    let mut enc = encryption_data();
+    enc.key_size = Some(u32::MAX);
+    let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw")
+        .expect_err("unrepresentable key size must be rejected");
+    assert!(err.contains("Unsupported key length"));
 
     let mut enc = encryption_data();
     enc.key_derivation_name = Some("urn:unsupported:kdf".to_string());
