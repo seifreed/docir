@@ -183,6 +183,16 @@ fn test_parse_styles_reports_malformed_font_value_attributes() {
             other => panic!("unexpected error: {other:?}"),
         }
     }
+
+    let xml = r#"
+        <styleSheet>
+          <fonts count="1">
+            <font><sz val="NaN"/></font>
+          </fonts>
+        </styleSheet>
+        "#;
+    let err = parse_styles(xml, "xl/styles.xml").expect_err("non-finite font size must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "xl/styles.xml"));
 }
 
 #[test]

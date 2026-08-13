@@ -228,9 +228,13 @@ fn apply_font_node_attrs(
 fn font_size_attr(e: &BytesStart<'_>, styles_path: &str) -> Result<Option<f64>, ParseError> {
     try_attr_value(e, b"val", styles_path)?
         .map(|value| {
-            value
+            let size = value
                 .parse::<f64>()
-                .map_err(|err| xml_error(styles_path, err))
+                .map_err(|err| xml_error(styles_path, err))?;
+            if !size.is_finite() {
+                return Err(xml_error(styles_path, "font size must be finite"));
+            }
+            Ok(size)
         })
         .transpose()
 }
