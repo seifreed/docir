@@ -49,12 +49,17 @@ pub(crate) fn parse_dir_entries(data: &[u8]) -> Result<Vec<DirEntry>, ParseError
         let name_len = name_len_raw as usize;
         let name_raw = &chunk[..64];
         let object_type = chunk[66];
-        if matches!(object_type, 1 | 2)
-            && (!(2..=64).contains(&name_len) || !name_len.is_multiple_of(2))
-        {
-            return Err(ParseError::InvalidStructure(format!(
-                "OLE directory entry {object_type} has invalid name length {name_len_raw}"
-            )));
+        if matches!(object_type, 1 | 2) {
+            if !(4..=64).contains(&name_len) || !name_len.is_multiple_of(2) {
+                return Err(ParseError::InvalidStructure(format!(
+                    "OLE directory entry {object_type} has invalid name length {name_len_raw}"
+                )));
+            }
+            if name_raw[name_len - 2..name_len] != [0, 0] {
+                return Err(ParseError::InvalidStructure(format!(
+                    "OLE directory entry {object_type} name is missing its UTF-16 terminator"
+                )));
+            }
         }
         let name = if (2..=64).contains(&name_len) && name_len.is_multiple_of(2) {
             let bytes = &name_raw[..name_len - 2];

@@ -279,16 +279,38 @@ fn directory_parsing_rejects_truncated_entry() {
 
 #[test]
 fn directory_parsing_rejects_invalid_name_lengths_for_live_entries() {
-    for object_type in [1u8, 2] {
-        let mut data = vec![0u8; 128];
-        data[64..66].copy_from_slice(&1u16.to_le_bytes());
-        data[66] = object_type;
+    for name_len in [1u16, 2, 3, 66] {
+        for object_type in [1u8, 2] {
+            let mut data = vec![0u8; 128];
+            data[64..66].copy_from_slice(&name_len.to_le_bytes());
+            data[66] = object_type;
 
-        assert!(matches!(
-            directory::parse_dir_entries(&data),
-            Err(ParseError::InvalidStructure(message)) if message.contains("name length")
-        ));
+            assert!(matches!(
+                directory::parse_dir_entries(&data),
+                Err(ParseError::InvalidStructure(message)) if message.contains("name")
+            ));
+        }
     }
+
+    let mut missing_terminator = vec![0u8; 128];
+    missing_terminator[64..66].copy_from_slice(&4u16.to_le_bytes());
+    missing_terminator[66] = 2;
+    missing_terminator[..4].copy_from_slice(&[b'A', 0, b'B', 0]);
+    assert!(matches!(
+        directory::parse_dir_entries(&missing_terminator),
+        Err(ParseError::InvalidStructure(message)) if message.contains("terminator")
+    ));
+}
+
+#[test]
+fn directory_parsing_accepts_terminated_live_entry_names() {
+    let mut data = vec![0u8; 128];
+    data[64..66].copy_from_slice(&6u16.to_le_bytes());
+    data[66] = 2;
+    data[..6].copy_from_slice(&[b'A', 0, b'B', 0, 0, 0]);
+
+    let entries = directory::parse_dir_entries(&data).expect("terminated name");
+    assert_eq!(entries[0].name, "AB");
 }
 
 #[test]
