@@ -280,6 +280,51 @@ pub(crate) fn track_xml_document_event(
     Ok(false)
 }
 
+pub(crate) fn track_xml_root_event(
+    event: &Event<'_>,
+    root_name: &mut Option<Vec<u8>>,
+    root_closed: &mut bool,
+    file: &str,
+) -> Result<(), ParseError> {
+    match event {
+        Event::Start(start) => {
+            if *root_closed {
+                return Err(xml_error(file, "XML document contains multiple roots"));
+            }
+            if root_name.is_none() {
+                *root_name = Some(start.name().as_ref().to_vec());
+            }
+        }
+        Event::Empty(empty) => {
+            if *root_closed {
+                return Err(xml_error(file, "XML document contains multiple roots"));
+            }
+            if root_name.is_none() {
+                *root_name = Some(empty.name().as_ref().to_vec());
+                *root_closed = true;
+            }
+        }
+        Event::End(end) => {
+            if root_name.as_deref() == Some(end.name().as_ref()) {
+                *root_closed = true;
+            }
+        }
+        Event::Eof => {
+            if root_name.is_none() {
+                return Err(xml_error(file, "XML document has no root element"));
+            }
+            if !*root_closed {
+                return Err(xml_error(
+                    file,
+                    "XML document ends before its root is closed",
+                ));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum XmlScanControl {
     Continue,

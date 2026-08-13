@@ -4,8 +4,8 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{
-    XmlScanControl, local_name, reader_from_str, scan_xml_events_with_reader, try_attr_value,
-    xml_error,
+    XmlScanControl, local_name, reader_from_str, scan_xml_events_with_reader, track_xml_root_event,
+    try_attr_value, xml_error,
 };
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
@@ -96,12 +96,20 @@ impl DocxParser {
 
         let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
+        let mut root_name = None;
+        let mut root_closed = false;
 
         scan_xml_events_with_reader(
             &mut reader,
             &mut buf,
             "word/document.xml",
             |reader, event| {
+                track_xml_root_event(
+                    &event,
+                    &mut root_name,
+                    &mut root_closed,
+                    "word/document.xml",
+                )?;
                 if let Event::Start(e) = event
                     && local_name(e.name().as_ref()) == b"body"
                 {
@@ -132,12 +140,20 @@ impl DocxParser {
 
         let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
+        let mut root_name = None;
+        let mut root_closed = false;
 
         scan_xml_events_with_reader(
             &mut reader,
             &mut buf,
             "word/glossary/document.xml",
             |reader, event| {
+                track_xml_root_event(
+                    &event,
+                    &mut root_name,
+                    &mut root_closed,
+                    "word/glossary/document.xml",
+                )?;
                 if let Event::Start(e) = event
                     && local_name(e.name().as_ref()) == b"docPart"
                 {
