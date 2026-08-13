@@ -294,6 +294,17 @@ fn test_parse_inline_string_and_error_mapping() {
     let text = parse_inline_string(&mut reader, "xl/worksheets/sheet1.xml").expect("inline");
     assert_eq!(text, "Hello World");
 
+    let mut reader = Reader::from_str("<is><t>unterminated</is>");
+    let mut buf = Vec::new();
+    assert!(matches!(
+        reader.read_event_into(&mut buf),
+        Ok(Event::Start(_))
+    ));
+    assert!(matches!(
+        parse_inline_string(&mut reader, "xl/worksheets/sheet1.xml"),
+        Err(ParseError::Xml { .. })
+    ));
+
     assert_eq!(map_cell_error("#NULL!"), CellError::Null);
     assert_eq!(map_cell_error("#DIV/0!"), CellError::DivZero);
     assert_eq!(map_cell_error("#GETTING_DATA"), CellError::GettingData);

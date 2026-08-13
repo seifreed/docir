@@ -143,6 +143,19 @@ fn parse_column_and_merge_helpers_report_malformed_attributes() {
             ..
         } if file == "xl/worksheets/sheet1.xml"
     ));
+
+    let xml = r#"<conditionalFormatting sqref="A1"><cfRule type="cellIs" priority="1">"#;
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    buf.clear();
+    let start = match reader.read_event_into(&mut buf).expect("conditional start") {
+        Event::Start(e) => e.into_owned(),
+        other => panic!("unexpected event: {other:?}"),
+    };
+    assert!(matches!(
+        parse_conditional_formatting(&mut reader, &start, "xl/worksheets/sheet1.xml"),
+        Err(ParseError::Xml { .. })
+    ));
 }
 
 #[test]

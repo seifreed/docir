@@ -142,7 +142,12 @@ pub(super) fn parse_conditional_formatting(
                 &mut in_formula,
                 &formula_text,
             ),
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    sheet_path,
+                    "unexpected end of conditionalFormatting",
+                ));
+            }
             Err(e) => return Err(xml_error(sheet_path, e)),
             _ => {}
         }
@@ -378,7 +383,9 @@ pub(super) fn parse_inline_string(
                     break;
                 }
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(sheet_path, "unexpected end of inline string"));
+            }
             Err(e) => {
                 return Err(xml_error(sheet_path, e));
             }
