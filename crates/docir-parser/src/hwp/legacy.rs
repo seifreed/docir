@@ -29,13 +29,10 @@ pub(super) fn parse_file_header(data: &[u8]) -> Result<HwpHeader, ParseError> {
         ));
     }
     let signature = &data[..32];
-    let signature = String::from_utf8_lossy(signature)
-        .trim_matches('\0')
-        .to_string();
-    if !signature.contains("HWP Document File") {
+    if !signature.starts_with(b"HWP Document File") {
         return Err(ParseError::InvalidStructure(format!(
             "Invalid HWP signature: {}",
-            signature
+            String::from_utf8_lossy(signature).trim_matches('\0')
         )));
     }
     let version = read_u32_le(data, 32)

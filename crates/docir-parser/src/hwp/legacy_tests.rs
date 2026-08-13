@@ -54,6 +54,16 @@ fn parse_file_header_validates_signature_and_fields() {
 }
 
 #[test]
+fn parse_file_header_rejects_signature_with_invalid_prefix() {
+    let mut data = vec![0u8; 40];
+    data[..24].copy_from_slice(b"invalidHWP Document File");
+    data[32..36].copy_from_slice(&5u32.to_le_bytes());
+    data[36..40].copy_from_slice(&1u32.to_le_bytes());
+
+    assert!(parse_file_header(&data).is_err());
+}
+
+#[test]
 fn parse_docinfo_section_count_supports_normal_and_extended_records() {
     let section_payload = 3u16.to_le_bytes();
     let rec = make_record(HWPTAG_DOCUMENT_PROPERTIES, &section_payload);
