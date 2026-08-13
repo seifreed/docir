@@ -34,6 +34,15 @@ impl<'a, P: ParserPort, S: SecurityScannerPort> ParseDocumentUseCase<'a, P, S> {
         self.finalize_parsed(parsed, &data)
     }
 
+    pub(crate) fn parse_file_with_bytes<Pth: AsRef<Path>>(
+        &self,
+        path: Pth,
+    ) -> AppResult<(ParsedDocument, Vec<u8>)> {
+        let (parsed, data) = self.parser.parse_file_with_bytes(path)?;
+        let parsed = self.finalize_parsed(parsed, &data)?;
+        Ok((parsed, data))
+    }
+
     pub(crate) fn parse_bytes(&self, data: &[u8]) -> AppResult<ParsedDocument> {
         let parsed = self.parser.parse_bytes(data)?;
         self.finalize_parsed(parsed, data)
@@ -42,6 +51,15 @@ impl<'a, P: ParserPort, S: SecurityScannerPort> ParseDocumentUseCase<'a, P, S> {
     pub(crate) fn parse_reader<R: Read + Seek>(&self, reader: R) -> AppResult<ParsedDocument> {
         let (parsed, data) = self.parser.parse_reader_with_bytes(reader)?;
         self.finalize_parsed(parsed, &data)
+    }
+
+    pub(crate) fn parse_reader_with_bytes<R: Read + Seek>(
+        &self,
+        reader: R,
+    ) -> AppResult<(ParsedDocument, Vec<u8>)> {
+        let (parsed, data) = self.parser.parse_reader_with_bytes(reader)?;
+        let parsed = self.finalize_parsed(parsed, &data)?;
+        Ok((parsed, data))
     }
 
     fn finalize_parsed(

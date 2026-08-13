@@ -292,7 +292,7 @@ impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
         &self,
         path: Pth,
     ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        self.parser.parse_file_with_bytes(path)
+        self.parse_use_case().parse_file_with_bytes(path)
     }
 
     /// Parses from bytes.
@@ -310,7 +310,7 @@ impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
         &self,
         reader: R,
     ) -> AppResult<(ParsedDocument, Vec<u8>)> {
-        self.parser.parse_reader_with_bytes(reader)
+        self.parse_use_case().parse_reader_with_bytes(reader)
     }
 
     /// Serializes a parsed document to JSON.
