@@ -94,7 +94,10 @@ impl PptxParser {
         let tag_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("ppt/tags/") && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with("ppt/tags/") && lower.ends_with(".xml")
+            })
             .collect();
         for tag_path in tag_paths {
             let tag_xml = zip.read_file_string(&tag_path)?;
@@ -132,7 +135,10 @@ impl PptxParser {
         let diagram_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("ppt/diagrams/") && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with("ppt/diagrams/") && lower.ends_with(".xml")
+            })
             .collect();
         for path in diagram_paths {
             let xml = zip.read_file_string(&path)?;

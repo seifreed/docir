@@ -202,7 +202,10 @@ impl XlsxParser {
         let slicer_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("xl/slicers/") && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with("xl/slicers/") && lower.ends_with(".xml")
+            })
             .collect();
         for path in slicer_paths {
             if let Some(slicer) =
@@ -225,7 +228,10 @@ impl XlsxParser {
         let timeline_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("xl/timelines/") && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with("xl/timelines/") && lower.ends_with(".xml")
+            })
             .collect();
         for path in timeline_paths {
             if let Some(timeline) =
@@ -253,7 +259,10 @@ impl XlsxParser {
         let query_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("xl/queryTables/") && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with("xl/querytables/") && lower.ends_with(".xml")
+            })
             .collect();
         for path in query_paths {
             if let Some(query) =

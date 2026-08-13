@@ -27,7 +27,10 @@ impl PartSpec {
         {
             return false;
         }
-        matches_pattern(path, self.pattern)
+        matches_pattern(
+            &path.to_ascii_lowercase(),
+            &self.pattern.to_ascii_lowercase(),
+        )
     }
 }
 

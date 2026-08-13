@@ -62,7 +62,7 @@ pub struct SecureZipReader<R: Read + Seek> {
     config: ZipConfig,
     file_index: HashMap<String, usize>,
     normalized_file_index: HashMap<String, usize>,
-    canonical_file_names: Vec<String>,
+    file_names: Vec<String>,
     observed_file_sizes: HashMap<usize, u64>,
     observed_total_uncompressed: u64,
 }
@@ -119,15 +119,15 @@ impl<R: Read + Seek> SecureZipReader<R> {
         }
 
         validate_total_size(total_uncompressed, &config)?;
-        let mut canonical_file_names: Vec<String> = normalized_file_index.keys().cloned().collect();
-        canonical_file_names.sort_unstable();
+        let mut file_names: Vec<String> = file_index.keys().cloned().collect();
+        file_names.sort_unstable();
 
         Ok(Self {
             archive,
             config,
             file_index,
             normalized_file_index,
-            canonical_file_names,
+            file_names,
             observed_file_sizes: HashMap::new(),
             observed_total_uncompressed: total_uncompressed,
         })
@@ -205,7 +205,7 @@ impl<R: Read + Seek> SecureZipReader<R> {
 
     /// Returns all file names in the archive.
     pub fn file_names(&self) -> impl Iterator<Item = &str> {
-        self.canonical_file_names.iter().map(String::as_str)
+        self.file_names.iter().map(String::as_str)
     }
 
     /// Returns the number of files in the archive.
@@ -222,10 +222,10 @@ impl<R: Read + Seek> SecureZipReader<R> {
     pub fn list_prefix(&self, prefix: &str) -> Vec<&str> {
         let normalized_prefix = prefix.to_ascii_lowercase();
         let mut paths: Vec<&str> = self
-            .canonical_file_names
+            .file_names
             .iter()
             .map(String::as_str)
-            .filter(|name| name.starts_with(&normalized_prefix))
+            .filter(|name| name.to_ascii_lowercase().starts_with(&normalized_prefix))
             .collect();
         paths.sort_unstable();
         paths
@@ -235,10 +235,10 @@ impl<R: Read + Seek> SecureZipReader<R> {
     pub fn list_suffix(&self, suffix: &str) -> Vec<&str> {
         let normalized_suffix = suffix.to_ascii_lowercase();
         let mut paths: Vec<&str> = self
-            .canonical_file_names
+            .file_names
             .iter()
             .map(String::as_str)
-            .filter(|name| name.ends_with(&normalized_suffix))
+            .filter(|name| name.to_ascii_lowercase().ends_with(&normalized_suffix))
             .collect();
         paths.sort_unstable();
         paths

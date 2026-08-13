@@ -92,7 +92,10 @@ impl<'a> SecurityScanner<'a> {
         let rel_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("word/") && p.ends_with(".rels"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with("word/") && lower.ends_with(".rels")
+            })
             .collect();
         for rel_path in rel_paths {
             let rels_xml = zip.read_file_string(&rel_path)?;

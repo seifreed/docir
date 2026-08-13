@@ -51,7 +51,7 @@ impl OoxmlParser {
         let rel_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.ends_with(".rels"))
+            .filter(|p| p.to_ascii_lowercase().ends_with(".rels"))
             .collect();
         for rel_path in rel_paths {
             let rels_xml = zip.read_file_string(&rel_path)?;
@@ -76,7 +76,10 @@ impl OoxmlParser {
         let theme_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.contains("/theme/") && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.contains("/theme/") && lower.ends_with(".xml")
+            })
             .collect();
         for path in theme_paths {
             let theme_xml = zip.read_file_string(&path)?;
@@ -103,7 +106,7 @@ impl OoxmlParser {
         let media_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.contains("/media/"))
+            .filter(|p| p.to_ascii_lowercase().contains("/media/"))
             .collect();
         self.parse_media_paths(
             zip,
@@ -126,7 +129,7 @@ impl OoxmlParser {
         let thumbnail_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("docProps/thumbnail."))
+            .filter(|p| p.to_ascii_lowercase().starts_with("docprops/thumbnail."))
             .collect();
         self.parse_media_paths(
             zip,
@@ -182,10 +185,14 @@ impl OoxmlParser {
             DocumentFormat::Presentation => "ppt/charts/",
             _ => return Ok(()),
         };
+        let chart_prefix = chart_prefix.to_ascii_lowercase();
         let chart_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with(chart_prefix) && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with(&chart_prefix) && lower.ends_with(".xml")
+            })
             .collect();
         for path in chart_paths {
             let xml = zip.read_file_string(&path)?;
@@ -210,7 +217,10 @@ impl OoxmlParser {
         let diagram_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("word/diagrams/") && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with("word/diagrams/") && lower.ends_with(".xml")
+            })
             .collect();
         for path in diagram_paths {
             let xml = zip.read_file_string(&path)?;
@@ -257,11 +267,14 @@ impl OoxmlParser {
         let ext_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("word/webExtensions/") && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with("word/webextensions/") && lower.ends_with(".xml")
+            })
             .collect();
         for path in ext_paths {
             let xml = zip.read_file_string(&path)?;
-            if path.ends_with("/taskpanes.xml") {
+            if path.to_ascii_lowercase().ends_with("/taskpanes.xml") {
                 let panes = ooxml_shared::parse_web_extension_taskpanes(&xml, &path)?;
                 for pane in panes {
                     let id = pane.id;
@@ -289,7 +302,10 @@ impl OoxmlParser {
         let custom_xml_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("customXml/") && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with("customxml/") && lower.ends_with(".xml")
+            })
             .collect();
         for path in custom_xml_paths {
             let xml = zip.read_file_string(&path)?;
@@ -312,7 +328,10 @@ impl OoxmlParser {
         let sig_paths: Vec<String> = zip
             .file_names()
             .into_iter()
-            .filter(|p| p.starts_with("_xmlsignatures/") && p.ends_with(".xml"))
+            .filter(|p| {
+                let lower = p.to_ascii_lowercase();
+                lower.starts_with("_xmlsignatures/") && lower.ends_with(".xml")
+            })
             .collect();
         for path in sig_paths {
             let xml = zip.read_file_string(&path)?;

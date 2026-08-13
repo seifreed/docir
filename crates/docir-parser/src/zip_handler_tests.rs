@@ -219,8 +219,8 @@ fn secure_zip_reader_matches_part_names_case_insensitively() {
         b"<doc/>".to_vec()
     );
     assert_eq!(reader.file_size("word/document.xml").expect("size"), 6);
-    assert_eq!(reader.list_prefix("word/"), vec!["word/document.xml"]);
-    assert_eq!(reader.list_suffix(".xml"), vec!["word/document.xml"]);
+    assert_eq!(reader.list_prefix("word/"), vec!["WORD/DOCUMENT.XML"]);
+    assert_eq!(reader.list_suffix(".xml"), vec!["WORD/DOCUMENT.XML"]);
 }
 
 #[test]
