@@ -1,5 +1,6 @@
 use crate::ir::*;
 use crate::types::NodeId;
+use std::collections::HashSet;
 
 use super::{IrStore, IrVisitor, VisitControl, VisitorResult};
 
@@ -110,6 +111,7 @@ macro_rules! visit_node_variants {
 pub struct PreOrderWalker<'a> {
     store: &'a IrStore,
     stack: Vec<NodeId>,
+    visited: HashSet<NodeId>,
 }
 
 impl<'a> PreOrderWalker<'a> {
@@ -118,12 +120,16 @@ impl<'a> PreOrderWalker<'a> {
         Self {
             store,
             stack: vec![root],
+            visited: HashSet::new(),
         }
     }
 
     /// Walks the tree, calling the visitor for each node.
     pub fn walk<V: IrVisitor>(&mut self, visitor: &mut V) -> VisitorResult<()> {
         while let Some(node_id) = self.stack.pop() {
+            if !self.visited.insert(node_id) {
+                continue;
+            }
             let Some(node) = self.store.get(node_id) else {
                 continue;
             };
@@ -155,5 +161,31 @@ impl<'a> PreOrderWalker<'a> {
 
     fn get_children(&self, node: &IRNode) -> Vec<NodeId> {
         node.children()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PreOrderWalker;
+    use crate::ir::{Document, IRNode};
+    use crate::types::DocumentFormat;
+    use crate::visitor::{IrStore, NodeCounter};
+
+    #[test]
+    fn preorder_walker_terminates_on_cyclic_ir_references() {
+        let mut document = Document::new(DocumentFormat::WordProcessing);
+        let root_id = document.id;
+        document.content.push(root_id);
+
+        let mut store = IrStore::new();
+        store.insert(IRNode::Document(document));
+
+        let mut walker = PreOrderWalker::new(&store, root_id);
+        let mut counter = NodeCounter::new();
+        walker
+            .walk(&mut counter)
+            .expect("cyclic references must not fail traversal");
+
+        assert_eq!(counter.counts.get("Document"), Some(&1));
     }
 }
