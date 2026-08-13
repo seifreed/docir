@@ -104,8 +104,11 @@ fn decompression_handles_passthrough_and_invalid_payloads() {
     let passthrough = maybe_decompress_stream(b"abc", false, "s").expect("passthrough");
     assert_eq!(passthrough, b"abc");
 
-    let short = maybe_decompress_stream(&[1], true, "short").expect("short");
-    assert_eq!(short, vec![1]);
+    let err = maybe_decompress_stream(&[1], true, "short").expect_err("short compressed stream");
+    assert!(
+        err.to_string()
+            .contains("Compressed HWP stream short is too short")
+    );
 
     let err =
         maybe_decompress_stream(b"not-compressed", true, "bad").expect_err("invalid compressed");

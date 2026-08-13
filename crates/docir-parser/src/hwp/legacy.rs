@@ -199,7 +199,9 @@ pub(super) fn maybe_decompress_stream(
         return Ok(data.to_vec());
     }
     if data.len() < 2 {
-        return Ok(data.to_vec());
+        return Err(ParseError::InvalidStructure(format!(
+            "Compressed HWP stream {source} is too short"
+        )));
     }
     let mut out = Vec::new();
     let zlib_result = {
