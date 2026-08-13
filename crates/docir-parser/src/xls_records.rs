@@ -37,6 +37,8 @@ pub enum XlsSubstreamKind {
     WorkspaceFile,
 }
 
+const MAX_XLS_RECORDS: usize = 1_000_000;
+
 impl XlsSubstreamKind {
     /// Returns the stable display label for this BIFF substream kind.
     pub fn as_str(self) -> &'static str {
@@ -113,6 +115,11 @@ pub fn read_xls_records(data: &[u8]) -> Result<XlsRecordScan, ParseError> {
             current_substream = next_kind;
         }
 
+        if records.len() >= MAX_XLS_RECORDS {
+            return Err(ParseError::ResourceLimit(format!(
+                "XLS record count exceeds maximum ({MAX_XLS_RECORDS})"
+            )));
+        }
         records.push(XlsRecordHeader {
             offset,
             record_type,
@@ -223,7 +230,8 @@ const XLS_RECORD_NAMES: &[(u16, &str)] = &[
 
 #[cfg(test)]
 mod tests {
-    use super::{XlsSubstreamKind, read_xls_records};
+    use super::{MAX_XLS_RECORDS, XlsSubstreamKind, read_xls_records};
+    use crate::error::ParseError;
 
     fn record(record_type: u16, payload: &[u8]) -> Vec<u8> {
         let mut out = Vec::with_capacity(4 + payload.len());
@@ -274,6 +282,19 @@ mod tests {
         assert_eq!(scan.records.len(), 1);
         assert_eq!(scan.anomalies.len(), 1);
         assert_eq!(scan.anomalies[0].kind, "truncated-record");
+    }
+
+    #[test]
+    fn read_xls_records_rejects_excessive_record_count() {
+        let mut stream = Vec::with_capacity((MAX_XLS_RECORDS + 1) * 4);
+        for _ in 0..=MAX_XLS_RECORDS {
+            stream.extend_from_slice(&record(0x000A, &[]));
+        }
+
+        let error = read_xls_records(&stream).expect_err("record count must be bounded");
+        assert!(
+            matches!(error, ParseError::ResourceLimit(message) if message.contains("record count"))
+        );
     }
 
     #[test]

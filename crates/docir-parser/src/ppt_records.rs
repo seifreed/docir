@@ -31,12 +31,13 @@ pub struct PptRecordAnomaly {
 pub fn read_ppt_records(data: &[u8]) -> Result<PptRecordScan, ParseError> {
     let mut records = Vec::new();
     let mut anomalies = Vec::new();
-    scan_record_block(data, 0, 0, &mut records, &mut anomalies);
+    scan_record_block(data, 0, 0, &mut records, &mut anomalies)?;
 
     Ok(PptRecordScan { records, anomalies })
 }
 
 const MAX_PPT_DEPTH: usize = 100;
+const MAX_PPT_RECORDS: usize = 1_000_000;
 const PPT_RECORD_HEADER_LEN: usize = 8;
 const PPT_CONTAINER_VERSION: u8 = 0x0F;
 
@@ -52,10 +53,10 @@ fn scan_record_block(
     depth: usize,
     records: &mut Vec<PptRecordHeader>,
     anomalies: &mut Vec<PptRecordAnomaly>,
-) {
+) -> Result<(), ParseError> {
     if depth > MAX_PPT_DEPTH {
         push_max_depth_anomaly(anomalies, block_start, depth);
-        return;
+        return Ok(());
     }
 
     let mut cursor = 0usize;
@@ -69,6 +70,11 @@ fn scan_record_block(
         let offset = frame.header.offset;
         let is_container = frame.header.is_container;
         let length = frame.header.length;
+        if records.len() >= MAX_PPT_RECORDS {
+            return Err(ParseError::ResourceLimit(format!(
+                "PPT record count exceeds maximum ({MAX_PPT_RECORDS})"
+            )));
+        }
         records.push(frame.header);
 
         if is_container && length > 0 {
@@ -78,11 +84,12 @@ fn scan_record_block(
                 depth + 1,
                 records,
                 anomalies,
-            );
+            )?;
         }
 
         cursor = end;
     }
+    Ok(())
 }
 
 fn read_record_frame(
@@ -220,7 +227,8 @@ fn record_name(record_type: u16) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::read_ppt_records;
+    use super::{MAX_PPT_RECORDS, read_ppt_records};
+    use crate::error::ParseError;
 
     fn record(version: u8, instance: u16, record_type: u16, payload: &[u8]) -> Vec<u8> {
         let mut out = Vec::with_capacity(8 + payload.len());
@@ -256,6 +264,19 @@ mod tests {
         assert_eq!(scan.records[1].depth, 1);
         assert_eq!(scan.records[2].record_name, "TextHeaderAtom");
         assert_eq!(scan.records[2].depth, 2);
+    }
+
+    #[test]
+    fn read_ppt_records_rejects_excessive_record_count() {
+        let mut stream = Vec::with_capacity((MAX_PPT_RECORDS + 1) * 8);
+        for _ in 0..=MAX_PPT_RECORDS {
+            stream.extend_from_slice(&record(0, 0, 0x0001, &[]));
+        }
+
+        let error = read_ppt_records(&stream).expect_err("record count must be bounded");
+        assert!(
+            matches!(error, ParseError::ResourceLimit(message) if message.contains("record count"))
+        );
     }
 
     #[test]
