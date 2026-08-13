@@ -241,6 +241,18 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_custom_xml_part_rejects_mismatched_nested_end_tag() {
+        assert_shared_xml_error(
+            parse_custom_xml_part(
+                r#"<root><child></child2></root>"#,
+                "customXml/item1.xml",
+                32,
+            ),
+            "customXml/item1.xml",
+        );
+    }
+
+    #[test]
     fn test_parse_drawingml_part_rejects_truncated_root() {
         assert_shared_xml_error(
             parse_drawingml_part(
