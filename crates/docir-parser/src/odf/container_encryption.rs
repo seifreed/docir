@@ -14,7 +14,7 @@ pub(super) fn decrypt_odf_part(
     let algorithm = encryption
         .algorithm_name
         .as_deref()
-        .unwrap_or("http://www.w3.org/2001/04/xmlenc#aes256-cbc");
+        .ok_or_else(|| "Missing encryption algorithm".to_string())?;
     let salt = encryption
         .salt
         .as_ref()
@@ -23,7 +23,23 @@ pub(super) fn decrypt_odf_part(
         .init_vector
         .as_ref()
         .ok_or_else(|| "Missing encryption IV".to_string())?;
-    let iterations = encryption.iteration_count.unwrap_or(100_000);
+    let key_derivation = encryption
+        .key_derivation_name
+        .as_deref()
+        .ok_or_else(|| "Missing key derivation algorithm".to_string())?;
+    if key_derivation != "PBKDF2"
+        && key_derivation != "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0#pbkdf2"
+    {
+        return Err(format!(
+            "Unsupported key derivation algorithm: {key_derivation}"
+        ));
+    }
+    let iterations = encryption
+        .iteration_count
+        .ok_or_else(|| "Missing encryption iteration count".to_string())?;
+    if iterations == 0 {
+        return Err("Invalid encryption iteration count: 0".to_string());
+    }
     let key_bits = encryption
         .key_size
         .or_else(|| {

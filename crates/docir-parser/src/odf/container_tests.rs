@@ -9,7 +9,7 @@ fn encryption_data() -> OdfEncryptionData {
         checksum: None,
         algorithm_name: Some("http://www.w3.org/2001/04/xmlenc#aes256-cbc".to_string()),
         init_vector: Some(vec![0_u8; 16]),
-        key_derivation_name: None,
+        key_derivation_name: Some("PBKDF2".to_string()),
         salt: Some(vec![1_u8; 16]),
         iteration_count: Some(10),
         key_size: Some(256),
@@ -85,6 +85,21 @@ fn parse_meta_extracts_known_fields_and_handles_empty_or_malformed_xml() {
 #[test]
 fn decrypt_odf_part_validates_required_encryption_fields() {
     let mut enc = encryption_data();
+    enc.algorithm_name = None;
+    let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("missing algorithm");
+    assert!(err.contains("Missing encryption algorithm"));
+
+    let mut enc = encryption_data();
+    enc.key_derivation_name = None;
+    let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("missing key derivation");
+    assert!(err.contains("Missing key derivation algorithm"));
+
+    let mut enc = encryption_data();
+    enc.iteration_count = None;
+    let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("missing iterations");
+    assert!(err.contains("Missing encryption iteration count"));
+
+    let mut enc = encryption_data();
     enc.salt = None;
     let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("missing salt");
     assert!(err.contains("Missing encryption salt"));
@@ -112,4 +127,14 @@ fn decrypt_odf_part_rejects_unsupported_algorithm_or_key_length() {
     enc.key_size = Some(192);
     let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("unsupported key size");
     assert!(err.contains("Unsupported key length: 24"));
+
+    let mut enc = encryption_data();
+    enc.key_derivation_name = Some("urn:unsupported:kdf".to_string());
+    let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("unsupported kdf");
+    assert!(err.contains("Unsupported key derivation algorithm"));
+
+    let mut enc = encryption_data();
+    enc.iteration_count = Some(0);
+    let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("zero iterations");
+    assert!(err.contains("Invalid encryption iteration count: 0"));
 }
