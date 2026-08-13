@@ -794,3 +794,31 @@ fn parse_ods_table_fast_with_disabled_sampling_skips_row_content() {
     assert!(worksheet.cells.is_empty());
     assert!(worksheet.data_validations.is_empty());
 }
+
+#[test]
+fn parse_ods_table_rejects_zero_repeat_attributes() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <table:table table:name="Sheet1">
+    <table:table-row table:number-rows-repeated="0">
+      <table:table-cell table:number-columns-repeated="1" />
+    </table:table-row>
+  </table:table>
+</office:spreadsheet>
+"#;
+
+    let (mut reader, table_start) = parse_table_start(xml);
+    let mut store = IrStore::new();
+    let err = parse_ods_table(
+        &mut reader,
+        &table_start,
+        1,
+        &mut store,
+        &HashMap::new(),
+        &default_limits(),
+    )
+    .expect_err("zero row repeat must fail");
+
+    assert!(matches!(err, ParseError::Xml { .. }));
+}

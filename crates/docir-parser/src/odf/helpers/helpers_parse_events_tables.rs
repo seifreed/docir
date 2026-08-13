@@ -132,5 +132,14 @@ pub(super) fn parse_table_cell(
 }
 
 fn parse_u32_attr(value: &str) -> Result<u32, ParseError> {
-    value.parse().map_err(|err| xml_error(ODF_CONTENT_XML, err))
+    let parsed = value
+        .parse()
+        .map_err(|err| xml_error(ODF_CONTENT_XML, err))?;
+    if parsed == 0 {
+        return Err(xml_error(
+            ODF_CONTENT_XML,
+            "ODF cell span attributes must be positive",
+        ));
+    }
+    Ok(parsed)
 }

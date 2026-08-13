@@ -430,6 +430,15 @@ fn ods_cell_attr(start: &BytesStart<'_>, suffixes: &[&[u8]]) -> Result<Option<St
 
 fn ods_cell_u32_attr(start: &BytesStart<'_>, suffix: &[u8]) -> Result<Option<u32>, ParseError> {
     ods_cell_attr(start, &[suffix])?
-        .map(|v| v.parse().map_err(|err| xml_error("content.xml", err)))
+        .map(|v| {
+            let parsed = v.parse().map_err(|err| xml_error("content.xml", err))?;
+            if parsed == 0 {
+                return Err(xml_error(
+                    "content.xml",
+                    "ODF cell span/repeat attributes must be positive",
+                ));
+            }
+            Ok(parsed)
+        })
         .transpose()
 }

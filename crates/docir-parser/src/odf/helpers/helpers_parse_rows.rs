@@ -184,7 +184,14 @@ fn covered_cell_from_start(start: &BytesStart<'_>) -> Result<OdsCellData, ParseE
 }
 
 fn parse_u32_attr(value: &str) -> Result<u32, ParseError> {
-    value.parse().map_err(|err| xml_error("content.xml", err))
+    let parsed = value.parse().map_err(|err| xml_error("content.xml", err))?;
+    if parsed == 0 {
+        return Err(xml_error(
+            "content.xml",
+            "ODF cell span/repeat attributes must be positive",
+        ));
+    }
+    Ok(parsed)
 }
 
 pub(crate) fn column_index_to_name(mut index: u32) -> String {

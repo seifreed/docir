@@ -150,9 +150,16 @@ fn repeated_columns(e: &BytesStart<'_>) -> Result<u32, ParseError> {
     let value = try_attr_value_by_suffix(e, &[b":number-columns-repeated"], "content.xml")?;
     value
         .map(|value| {
-            value
+            let parsed = value
                 .parse::<u32>()
-                .map_err(|err| xml_error("content.xml", err))
+                .map_err(|err| xml_error("content.xml", err))?;
+            if parsed == 0 {
+                return Err(xml_error(
+                    "content.xml",
+                    "table:number-columns-repeated must be positive",
+                ));
+            }
+            Ok(parsed)
         })
         .transpose()
         .map(|value| value.unwrap_or(1))
