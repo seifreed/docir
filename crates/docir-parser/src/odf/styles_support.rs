@@ -72,6 +72,15 @@ mod tests {
     }
 
     #[test]
+    fn parse_styles_reports_mismatched_end_tag() {
+        let malformed = r#"<office:document-styles><style:style></style:default-style></office:document-styles>"#;
+        let err =
+            parse_styles(malformed, "styles.xml").expect_err("mismatched styles XML must fail");
+
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "styles.xml"));
+    }
+
+    #[test]
     fn parse_odf_headers_footers_reports_styles_xml_errors() {
         let malformed = r#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"

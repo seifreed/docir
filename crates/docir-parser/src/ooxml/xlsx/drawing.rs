@@ -33,7 +33,9 @@ impl XlsxParser {
         let mut state = XlsxDrawingState::new(drawing_path);
 
         let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let config = reader.config_mut();
+        config.trim_text(true);
+        config.check_end_names = true;
         let mut buf = Vec::new();
         let mut depth = 0usize;
 
@@ -465,6 +467,23 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, "xl/drawings/drawing1.xml"),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_drawing_reports_mismatched_xml() {
+        let mut parser = XlsxParser::new();
+        let rels = Relationships::parse(relationships_xml()).expect("relationships");
+        let mut zip = TestPackageReader::new(&[]);
+
+        let err = parser
+            .parse_drawing(
+                "<xdr:wsDr><xdr:pic></xdr:picx></xdr:wsDr>",
+                "xl/drawings/drawing1.xml",
+                &rels,
+                &mut zip,
+            )
+            .expect_err("mismatched drawing XML must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "xl/drawings/drawing1.xml"));
     }
 
     #[test]

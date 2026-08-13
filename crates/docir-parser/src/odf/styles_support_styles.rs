@@ -7,7 +7,9 @@ use quick_xml::events::{BytesStart, Event};
 
 pub(crate) fn parse_styles(xml: &str, source: &str) -> Result<Option<StyleSet>, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut styles = StyleSet::new();
     let mut depth = 0usize;
@@ -91,7 +93,9 @@ fn parse_named_elements(
     target_name: &[u8],
 ) -> Result<Vec<String>, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut out = Vec::new();
     let mut depth = 0usize;
