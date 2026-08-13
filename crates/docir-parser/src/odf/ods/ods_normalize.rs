@@ -46,7 +46,12 @@ pub(crate) fn read_ods_cell_text(reader: &mut OdfReader<'_>) -> Result<String, P
                 text.push_str(&chunk);
             }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"table-cell" => break,
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(crate::xml_utils::xml_error(
+                    "content.xml",
+                    "unexpected end of table cell",
+                ));
+            }
             Err(e) => return Err(crate::xml_utils::xml_error("content.xml", e)),
             _ => {}
         }
@@ -73,6 +78,27 @@ pub(crate) fn infer_cell_value_type_and_attr(
                 Some(text.to_string())
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quick_xml::Reader;
+    use std::io::Cursor;
+
+    #[test]
+    fn read_ods_cell_text_rejects_missing_end() {
+        let xml = r#"<table:table-cell xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><text:p>Broken</text:p>"#;
+        let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+
+        let err = read_ods_cell_text(&mut reader).expect_err("truncated table cell must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
     }
 }
 
