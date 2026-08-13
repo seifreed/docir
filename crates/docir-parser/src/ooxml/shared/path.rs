@@ -1,5 +1,6 @@
 pub(crate) fn normalize_docx_target(target: &str) -> String {
-    let parts: Vec<&str> = target.split('/').collect();
+    let normalized_target = target.replace('\\', "/");
+    let parts: Vec<&str> = normalized_target.split('/').collect();
     let mut resolved: Vec<&str> = Vec::new();
     for part in parts {
         match part {
@@ -15,5 +16,18 @@ pub(crate) fn normalize_docx_target(target: &str) -> String {
         t
     } else {
         format!("word/{}", t.trim_start_matches('/'))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_docx_target;
+
+    #[test]
+    fn test_normalize_docx_target_handles_backslash_separators() {
+        assert_eq!(
+            normalize_docx_target(r"..\media\image1.png"),
+            "word/media/image1.png"
+        );
     }
 }
