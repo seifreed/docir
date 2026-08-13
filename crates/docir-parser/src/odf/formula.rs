@@ -28,6 +28,7 @@ enum FormulaToken {
     Ident(String),
     Ref(CellRef),
     Range(CellRange),
+    Invalid,
     Plus,
     Minus,
     Star,
@@ -64,7 +65,11 @@ impl<'a> FormulaEvalContext<'a> {
     fn eval_formula(&mut self, formula: &str) -> Option<f64> {
         let tokens = tokenize_formula(formula);
         let mut parser = FormulaParser::new(tokens, self);
-        parser.parse_expression().filter(|value| value.is_finite())
+        let value = parser.parse_expression()?;
+        if !matches!(parser.peek(), FormulaToken::End) {
+            return None;
+        }
+        value.is_finite().then_some(value)
     }
 
     fn resolve_ref(&mut self, reference: &CellRef) -> Option<f64> {
@@ -535,5 +540,14 @@ mod tests {
         let mut ctx = FormulaEvalContext::new("Sheet1", HashMap::new(), &formulas);
 
         assert!(ctx.eval_formula("SUM([.A1:.A4294967295])").is_none());
+    }
+
+    #[test]
+    fn evaluate_ods_formulas_rejects_trailing_and_invalid_tokens() {
+        let formulas = HashMap::new();
+        let mut ctx = FormulaEvalContext::new("Sheet1", HashMap::new(), &formulas);
+
+        assert!(ctx.eval_formula("1 2").is_none());
+        assert!(ctx.eval_formula("1@").is_none());
     }
 }

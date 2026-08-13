@@ -40,14 +40,22 @@ pub(super) fn tokenize_formula(formula: &str) -> Vec<FormulaToken> {
             '[' => {
                 chars.next();
                 let mut buffer = String::new();
+                let mut closed = false;
                 for c in chars.by_ref() {
                     if c == ']' {
+                        closed = true;
                         break;
                     }
                     buffer.push(c);
                 }
-                if let Some(token) = parse_bracket_reference(&buffer) {
-                    tokens.push(token);
+                if closed {
+                    if let Some(token) = parse_bracket_reference(&buffer) {
+                        tokens.push(token);
+                    } else {
+                        tokens.push(FormulaToken::Invalid);
+                    }
+                } else {
+                    tokens.push(FormulaToken::Invalid);
                 }
             }
             _ => {
@@ -72,6 +80,7 @@ fn consume_numeric_or_identifier_token(
         consume_identifier_token(chars, tokens);
     } else {
         chars.next();
+        tokens.push(FormulaToken::Invalid);
     }
 }
 
