@@ -171,6 +171,10 @@ fn handle_sdt_content_inline_start(
     runs: &mut Vec<NodeId>,
 ) -> Result<(), ParseError> {
     match local_name(start.name().as_ref()) {
+        b"sdt" => {
+            let sdt_id = parse_sdt(parser, reader, rels, SdtMode::Inline)?;
+            runs.push(sdt_id);
+        }
         b"r" => {
             let run = parse_run(parser, reader, rels)?;
             runs.push(run.run_id);

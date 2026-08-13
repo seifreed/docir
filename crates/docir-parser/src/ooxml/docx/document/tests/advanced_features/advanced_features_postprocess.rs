@@ -203,6 +203,59 @@ fn test_parse_sdt_inline_fldsimple_without_instruction_keeps_field_unparsed() {
     assert!(field.instruction_parsed.is_none());
     assert_eq!(field.runs.len(), 1);
 }
+
+#[test]
+fn test_parse_sdt_inline_preserves_content_after_nested_sdt() {
+    let xml = r#"
+        <w:sdt xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:sdtContent>
+            <w:r><w:t>before</w:t></w:r>
+            <w:sdt>
+              <w:sdtContent><w:r><w:t>nested</w:t></w:r></w:sdtContent>
+            </w:sdt>
+            <w:r><w:t>after</w:t></w:r>
+          </w:sdtContent>
+        </w:sdt>
+    "#;
+
+    let mut parser = DocxParser::new();
+    let rels = Relationships::default();
+    let mut reader = reader_from_str(xml);
+    let mut buf = Vec::new();
+    let sdt_id = loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) if e.name().as_ref() == b"w:sdt" => {
+                break parse_sdt(&mut parser, &mut reader, &rels, SdtMode::Inline)
+                    .expect("parse inline sdt");
+            }
+            Ok(Event::Eof) => panic!("missing sdt"),
+            Err(e) => panic!("xml error: {e}"),
+            _ => {}
+        }
+        buf.clear();
+    };
+
+    let store = parser.into_store();
+    let control = match store.get(sdt_id) {
+        Some(docir_core::ir::IRNode::ContentControl(control)) => control,
+        _ => panic!("expected content control"),
+    };
+    assert_eq!(control.content.len(), 3);
+    assert!(matches!(
+        store.get(control.content[0]),
+        Some(docir_core::ir::IRNode::Run(_))
+    ));
+    let nested_id = control.content[1];
+    assert!(matches!(
+        store.get(nested_id),
+        Some(docir_core::ir::IRNode::ContentControl(_))
+    ));
+    assert!(matches!(
+        store.get(control.content[2]),
+        Some(docir_core::ir::IRNode::Run(_))
+    ));
+}
+
 #[test]
 fn test_parse_hyperlink_appends_anchor_for_external_relationship_target() {
     let mut rels = Relationships::default();
