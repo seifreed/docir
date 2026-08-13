@@ -129,40 +129,31 @@ fn parse_text_run(
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
-                b"rPr" => {
-                    for attr in e.attributes() {
-                        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
-                        match attr.key.as_ref() {
-                            b"b" => bold = Some(attr.value.as_ref() == b"1"),
-                            b"i" => italic = Some(attr.value.as_ref() == b"1"),
-                            b"sz" => {
-                                font_size = Some(
-                                    lossy_attr_value(&attr)
-                                        .parse::<u32>()
-                                        .map_err(|err| xml_error(slide_path, err))?,
-                                );
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                b"t" => {
+            Ok(Event::Start(e)) => {
+                if local_name(e.name().as_ref()) == b"t" {
                     let value = reader
                         .read_text(e.name())
                         .map_err(|e| xml_error(slide_path, e))?;
                     text.push_str(&decoded_text(&value).map_err(|err| xml_error(slide_path, err))?);
+                } else {
+                    apply_run_formatting(
+                        &e,
+                        slide_path,
+                        &mut bold,
+                        &mut italic,
+                        &mut font_size,
+                        &mut font_family,
+                    )?;
                 }
-                b"latin" => {
-                    for attr in e.attributes() {
-                        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
-                        if attr.key.as_ref() == b"typeface" {
-                            font_family = Some(lossy_attr_value(&attr).to_string());
-                        }
-                    }
-                }
-                _ => {}
-            },
+            }
+            Ok(Event::Empty(e)) => apply_run_formatting(
+                &e,
+                slide_path,
+                &mut bold,
+                &mut italic,
+                &mut font_size,
+                &mut font_family,
+            )?,
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"r" => {
                 break;
             }
@@ -184,6 +175,45 @@ fn parse_text_run(
         font_size,
         font_family,
     })
+}
+
+fn apply_run_formatting(
+    element: &quick_xml::events::BytesStart<'_>,
+    slide_path: &str,
+    bold: &mut Option<bool>,
+    italic: &mut Option<bool>,
+    font_size: &mut Option<u32>,
+    font_family: &mut Option<String>,
+) -> Result<(), ParseError> {
+    match local_name(element.name().as_ref()) {
+        b"rPr" => {
+            for attr in element.attributes() {
+                let attr = attr.map_err(|err| xml_error(slide_path, err))?;
+                match attr.key.as_ref() {
+                    b"b" => *bold = Some(attr.value.as_ref() == b"1"),
+                    b"i" => *italic = Some(attr.value.as_ref() == b"1"),
+                    b"sz" => {
+                        *font_size = Some(
+                            lossy_attr_value(&attr)
+                                .parse::<u32>()
+                                .map_err(|err| xml_error(slide_path, err))?,
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+        b"latin" => {
+            for attr in element.attributes() {
+                let attr = attr.map_err(|err| xml_error(slide_path, err))?;
+                if attr.key.as_ref() == b"typeface" {
+                    *font_family = Some(lossy_attr_value(&attr).to_string());
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn map_alignment(value: &str) -> Option<TextAlignment> {
@@ -328,6 +358,27 @@ mod tests {
         let mut reader = reader_after_start(xml, b"r");
 
         assert_xml_error(parse_text_run(&mut reader, "ppt/slides/broken-text.xml"));
+    }
+
+    #[test]
+    fn parse_text_run_preserves_empty_formatting_elements() {
+        let xml = r#"
+            <a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:rPr b="1" i="1" sz="1800"/>
+              <a:latin typeface="Calibri"/>
+              <a:t>text</a:t>
+            </a:r>
+        "#;
+        let mut reader = reader_after_start(xml, b"r");
+
+        let run = parse_text_run(&mut reader, "ppt/slides/empty-formatting.xml")
+            .expect("empty formatting elements should parse");
+
+        assert_eq!(run.text, "text");
+        assert_eq!(run.bold, Some(true));
+        assert_eq!(run.italic, Some(true));
+        assert_eq!(run.font_size, Some(1800));
+        assert_eq!(run.font_family.as_deref(), Some("Calibri"));
     }
 
     #[test]
