@@ -146,10 +146,16 @@ impl Relationships {
 
     /// Returns all external relationships.
     pub fn external_relationships(&self) -> Vec<&Relationship> {
-        self.by_id
-            .values()
+        self.relationships_in_id_order()
+            .into_iter()
             .filter(|rel| rel.target_mode == TargetMode::External)
             .collect()
+    }
+
+    pub(crate) fn relationships_in_id_order(&self) -> Vec<&Relationship> {
+        let mut relationships: Vec<&Relationship> = self.by_id.values().collect();
+        relationships.sort_unstable_by(|left, right| left.id.cmp(&right.id));
+        relationships
     }
 
     /// Resolves a relationship target relative to a base path.
@@ -334,6 +340,24 @@ mod tests {
         "#;
 
         assert!(Relationships::parse(xml).is_err());
+    }
+
+    #[test]
+    fn external_relationships_are_sorted_by_id() {
+        let xml = r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId2" Type="http://example.test/link" Target="https://two.test" TargetMode="External"/>
+              <Relationship Id="rId1" Type="http://example.test/link" Target="https://one.test" TargetMode="External"/>
+            </Relationships>
+        "#;
+
+        let rels = Relationships::parse(xml).expect("relationships parse");
+        let ids: Vec<&str> = rels
+            .external_relationships()
+            .into_iter()
+            .map(|rel| rel.id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["rId1", "rId2"]);
     }
 
     #[test]

@@ -97,7 +97,7 @@ impl<'a> SecurityScanner<'a> {
         for rel_path in rel_paths {
             let rels_xml = zip.read_file_string(&rel_path)?;
             let rels = Relationships::parse_with_path(&rels_xml, &rel_path)?;
-            for rel in rels.by_id.values() {
+            for rel in rels.relationships_in_id_order() {
                 if rel.target_mode == TargetMode::External {
                     self.insert_external_ref(store, &rel_path, rel);
                 }
@@ -121,7 +121,7 @@ impl<'a> SecurityScanner<'a> {
         let rels_xml = zip.read_file_string(&rels_path)?;
         let rels = Relationships::parse_with_path(&rels_xml, &rels_path)?;
 
-        for rel in rels.by_id.values() {
+        for rel in rels.relationships_in_id_order() {
             if !self.is_activex_binary_rel(rel) {
                 continue;
             }

@@ -38,7 +38,7 @@ fn parse_external_link_parts(
         parser.store.insert(IRNode::ExternalLinkPart(part));
         push_shared_part(parser, part_id);
 
-        for ext in rels.by_id.values() {
+        for ext in rels.relationships_in_id_order() {
             let target = &ext.target;
             let ext_ref = ExternalReference::new(ExternalRefType::DataConnection, target);
             let ext_ref = ExternalReference {

@@ -13,7 +13,7 @@ pub fn build_relationship_graph(
     // We still keep `graph.source` to point at the owning part (e.g. word/document.xml).
     graph.span = Some(SourceSpan::new(rels_path));
 
-    for rel in rels.by_id.values() {
+    for rel in rels.relationships_in_id_order() {
         let target_mode = match rel.target_mode {
             TargetMode::Internal => RelationshipTargetMode::Internal,
             TargetMode::External => RelationshipTargetMode::External,
