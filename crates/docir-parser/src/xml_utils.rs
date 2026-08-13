@@ -266,6 +266,24 @@ pub(crate) fn track_xml_document_event(
                 *root_closed = true;
             }
         }
+        Event::Text(text) if *depth == 0 && !is_xml_whitespace(text.as_ref()) => {
+            return Err(xml_error(
+                file,
+                "XML document contains non-whitespace text outside its root",
+            ));
+        }
+        Event::CData(_) if *depth == 0 => {
+            return Err(xml_error(
+                file,
+                "XML document contains CDATA outside its root",
+            ));
+        }
+        Event::GeneralRef(_) if *depth == 0 => {
+            return Err(xml_error(
+                file,
+                "XML document contains a reference outside its root",
+            ));
+        }
         Event::Eof => {
             if *root_closed {
                 return Ok(true);
@@ -324,6 +342,26 @@ pub(crate) fn track_xml_root_event(
                 }
             }
         }
+        Event::Text(text)
+            if (root_name.is_none() || *root_closed) && !is_xml_whitespace(text.as_ref()) =>
+        {
+            return Err(xml_error(
+                file,
+                "XML document contains non-whitespace text outside its root",
+            ));
+        }
+        Event::CData(_) if root_name.is_none() || *root_closed => {
+            return Err(xml_error(
+                file,
+                "XML document contains CDATA outside its root",
+            ));
+        }
+        Event::GeneralRef(_) if root_name.is_none() || *root_closed => {
+            return Err(xml_error(
+                file,
+                "XML document contains a reference outside its root",
+            ));
+        }
         Event::Eof => {
             if root_name.is_none() {
                 return Err(xml_error(file, "XML document has no root element"));
@@ -338,6 +376,12 @@ pub(crate) fn track_xml_root_event(
         _ => {}
     }
     Ok(())
+}
+
+fn is_xml_whitespace(bytes: &[u8]) -> bool {
+    bytes
+        .iter()
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -638,6 +682,43 @@ mod tests {
             Ok(XmlScanControl::Continue)
         })
         .expect_err("nested root with missing outer close must fail");
+
+        assert!(format!("{err}").contains("broken.xml"));
+    }
+
+    #[test]
+    fn track_xml_root_event_rejects_text_after_root() {
+        let mut reader = Reader::from_str("<root/>junk");
+        let mut buf = Vec::new();
+        let mut root_name = None;
+        let mut depth = 0;
+        let mut root_closed = false;
+        let err = scan_xml_events_with_reader(&mut reader, &mut buf, "broken.xml", |_, event| {
+            track_xml_root_event(
+                &event,
+                &mut root_name,
+                &mut depth,
+                &mut root_closed,
+                "broken.xml",
+            )?;
+            Ok(XmlScanControl::Continue)
+        })
+        .expect_err("text after the root must fail");
+
+        assert!(format!("{err}").contains("broken.xml"));
+    }
+
+    #[test]
+    fn track_xml_document_event_rejects_text_after_root() {
+        let mut reader = Reader::from_str("<root/>junk");
+        let mut buf = Vec::new();
+        let mut depth = 0;
+        let mut root_closed = false;
+        let err = scan_xml_events(&mut reader, &mut buf, "broken.xml", |event| {
+            track_xml_document_event(&event, &mut depth, &mut root_closed, "broken.xml")?;
+            Ok(XmlScanControl::Continue)
+        })
+        .expect_err("text after the root must fail");
 
         assert!(format!("{err}").contains("broken.xml"));
     }
