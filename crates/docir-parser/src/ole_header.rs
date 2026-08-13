@@ -181,8 +181,22 @@ pub(crate) fn read_mini_fat_table(
             "OLE mini-FAT is declared but has no starting sector".to_string(),
         ));
     }
-    let mini_fat_stream =
-        crate::ole::read_stream_from_fat(data, sector_size, fat, first_mini_fat, None)?;
+    let sector_count = usize::try_from(num_mini_fat).map_err(|_| {
+        ParseError::ResourceLimit("OLE mini-FAT sector count does not fit in usize".to_string())
+    })?;
+    let sector_size_usize = usize::try_from(sector_size).map_err(|_| {
+        ParseError::ResourceLimit("OLE sector size does not fit in usize".to_string())
+    })?;
+    let expected_size = sector_count.checked_mul(sector_size_usize).ok_or_else(|| {
+        ParseError::ResourceLimit("OLE mini-FAT size overflows usize".to_string())
+    })?;
+    let mini_fat_stream = crate::ole::read_stream_from_fat(
+        data,
+        sector_size,
+        fat,
+        first_mini_fat,
+        Some(expected_size),
+    )?;
     let mut mini_fat = Vec::new();
     for i in 0..(mini_fat_stream.len() / 4) {
         mini_fat.push(read_u32(&mini_fat_stream, i * 4)?);

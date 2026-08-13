@@ -195,6 +195,18 @@ fn root_stream_read_respects_declared_size() {
 }
 
 #[test]
+fn mini_fat_read_respects_declared_sector_count() {
+    let mut data = vec![0_u8; 1536];
+    data[512..1024].fill(1);
+    data[1024..1536].fill(2);
+    let fat = vec![1, END_OF_CHAIN];
+
+    let mini_fat = super::read_mini_fat_table(&data, 512, &fat, 0, 1).expect("mini-FAT");
+    assert_eq!(mini_fat.len(), 128);
+    assert_eq!(mini_fat[0], 0x0101_0101);
+}
+
+#[test]
 fn ole_scalar_readers_reject_overflowing_offsets() {
     assert!(super::stream::read_u64(&[], usize::MAX).is_err());
     assert!(crate::ole_header::read_u16(&[], usize::MAX).is_err());
