@@ -168,11 +168,7 @@ impl PptxParser {
         relationships: &Relationships,
         slide: &mut Slide,
     ) -> Result<(), ParseError> {
-        let Some(rel) = relationships
-            .by_id
-            .values()
-            .find(|r| r.rel_type.contains("comments"))
-        else {
+        let Some(rel) = relationships.get_first_by_type(rel_type::COMMENTS) else {
             return Ok(());
         };
 

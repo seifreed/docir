@@ -230,6 +230,44 @@ fn test_parse_slide_comments() {
 }
 
 #[test]
+fn test_parse_slide_ignores_threaded_comments_relationship() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:cSld><p:spTree/></p:cSld>
+        </p:sld>
+        "#;
+    let rels_xml = r#"
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rIdTC"
+            Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment"
+            Target="../threadedComments/threadedComment1.xml"/>
+        </Relationships>
+        "#;
+    let rels = Relationships::parse(rels_xml).expect("rels");
+    let mut zip = build_zip_with_entries(vec![(
+        "ppt/threadedComments/threadedComment1.xml",
+        "<threadedComment><broken>",
+    )]);
+    let mut parser = PptxParser::new();
+    let slide_id = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/slide1.xml",
+            &rels,
+            (None, None),
+        )
+        .expect("threaded comments are not the legacy comments contract");
+    let store = parser.into_store();
+    let slide = match store.get(slide_id) {
+        Some(IRNode::Slide(slide)) => slide,
+        _ => panic!("missing slide"),
+    };
+    assert!(slide.comments.is_empty());
+}
+
+#[test]
 fn test_parse_pic_with_missing_relationship_keeps_picture_without_target() {
     let slide_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
