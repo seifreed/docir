@@ -194,6 +194,14 @@ fn skip_markup_section(xml: &[u8], start: usize, end: usize) -> Option<usize> {
             .position(|window| window == b"-->")?;
         return Some(content_start + close + 3);
     }
+    if xml.get(start..)?.starts_with(b"<?") {
+        let content_start = start + b"<?".len();
+        let close = xml
+            .get(content_start..end)?
+            .windows(2)
+            .position(|window| window == b"?>")?;
+        return Some(content_start + close + 2);
+    }
     None
 }
 
@@ -348,6 +356,31 @@ mod tests {
                 .bytes
                 .windows(b"after-cdata".len())
                 .any(|window| { window == b"after-cdata" })
+        );
+    }
+
+    #[test]
+    fn extract_spreadsheet_table_chunks_ignores_markup_inside_processing_instruction() {
+        let xml = br#"<office:document-content>
+  <office:body>
+    <office:spreadsheet>
+      <?docir fake="<table:table></table:table>"?>
+      <table:table table:name="First">
+        <table:table-row table:style-name="after-pi"/>
+      </table:table>
+      <table:table table:name="Second"/>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let chunks = extract_spreadsheet_table_chunks(xml);
+
+        assert_eq!(chunks.len(), 2);
+        assert!(
+            chunks[0]
+                .bytes
+                .windows(b"after-pi".len())
+                .any(|window| { window == b"after-pi" })
         );
     }
 }
