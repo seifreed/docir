@@ -23,15 +23,15 @@ pub(super) fn extract_embedded_payload(data: &[u8]) -> Result<Option<EmbeddedPay
             Err(err) => return Err(err.to_string()),
         };
         if stream_name.contains("Ole10Native") {
-            if let Some(payload) = parse_ole10_native(&stream) {
-                return Ok(Some(EmbeddedPayload {
-                    stream_name: stream_name.to_string(),
-                    file_name: payload.file_name,
-                    source_path: payload.source_path,
-                    temp_path: payload.temp_path,
-                    data: payload.data,
-                }));
-            }
+            let payload = parse_ole10_native(&stream)
+                .ok_or_else(|| format!("Malformed Ole10Native stream: {stream_name}"))?;
+            return Ok(Some(EmbeddedPayload {
+                stream_name: stream_name.to_string(),
+                file_name: payload.file_name,
+                source_path: payload.source_path,
+                temp_path: payload.temp_path,
+                data: payload.data,
+            }));
         } else {
             return Ok(Some(EmbeddedPayload {
                 stream_name: stream_name.to_string(),

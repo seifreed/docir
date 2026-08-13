@@ -173,7 +173,9 @@ fn extract_legacy_payload(
         return Ok(None);
     }
     if upper_path.ends_with("OLE10NATIVE") {
-        return Ok(parse_ole10_native(&data).map(|payload| EmbeddedPayload {
+        let payload = parse_ole10_native(&data)
+            .ok_or_else(|| format!("Malformed Ole10Native stream: {path}"))?;
+        return Ok(Some(EmbeddedPayload {
             stream_name: path.to_string(),
             file_name: payload.file_name,
             source_path: payload.source_path,

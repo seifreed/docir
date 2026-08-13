@@ -378,6 +378,15 @@ fn extract_embedded_payload_rejects_corrupt_ole10native_stream() {
 }
 
 #[test]
+fn extract_embedded_payload_rejects_malformed_ole10native_stream() {
+    let bytes = build_test_cfb(&[("Ole10Native", b"malformed")]);
+
+    let err = super::ole::extract_embedded_payload(&bytes)
+        .expect_err("malformed Ole10Native stream must not be skipped");
+    assert!(err.contains("Malformed Ole10Native stream"));
+}
+
+#[test]
 fn extract_artifacts_finds_legacy_package_payload() {
     let bytes = build_test_cfb(&[("Workbook", b"wb"), ("Package", b"%PDF-1.7")]);
     let app = DocirApp::new(ParserConfig::default());
