@@ -5,7 +5,7 @@ use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
     XmlScanControl, attr_bool_like, decoded_text, dispatch_start_or_empty, local_name,
-    reader_from_str, scan_xml_events_with_reader, xml_error,
+    reader_from_str, scan_xml_events_with_reader, track_xml_root_event, xml_error,
 };
 use docir_core::ir::{DefinedName, WorkbookProperties};
 use docir_core::types::{NodeId, SourceSpan};
@@ -45,8 +45,11 @@ pub(crate) fn parse_workbook_info(xml: &str) -> Result<WorkbookInfo, ParseError>
     let mut defined_names: Vec<DefinedName> = Vec::new();
     let mut pivot_cache_refs: Vec<PivotCacheRef> = Vec::new();
     let mut workbook_properties: Option<WorkbookProperties> = None;
+    let mut root_name = None;
+    let mut root_closed = false;
 
     scan_xml_events_with_reader(&mut reader, &mut buf, "xl/workbook.xml", |reader, event| {
+        track_xml_root_event(&event, &mut root_name, &mut root_closed, "xl/workbook.xml")?;
         let _ = dispatch_start_or_empty(reader, &event, |reader, e, is_start| {
             handle_workbook_event(
                 reader,
@@ -371,4 +374,19 @@ where
     lossy_attr_value(attr)
         .parse::<T>()
         .map_err(|err| xml_error("xl/workbook.xml", err))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_workbook_info;
+
+    #[test]
+    fn parse_workbook_info_rejects_missing_root_end() {
+        let xml = r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">"#;
+        let err = parse_workbook_info(xml).expect_err("truncated workbook must fail");
+
+        assert!(
+            matches!(err, crate::error::ParseError::Xml { file, .. } if file == "xl/workbook.xml")
+        );
+    }
 }
