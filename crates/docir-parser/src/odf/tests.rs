@@ -432,6 +432,48 @@ fn test_parse_ods_minimal() {
 }
 
 #[test]
+fn test_parse_ods_keeps_rows_after_nested_table() {
+    let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:spreadsheet>
+      <table:table table:name="Sheet1">
+        <table:table-row><table:table-cell table:cell-value-type="string" table:cell-value="before"/></table:table-row>
+        <table:table><table:table-row><table:table-cell table:cell-value-type="string" table:cell-value="nested"/></table:table-row></table:table>
+        <table:table-row><table:table-cell table:cell-value-type="string" table:cell-value="after"/></table:table-row>
+      </table:table>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>
+"#;
+    for force_fast in [false, true] {
+        let zip_data = build_odf_zip(mimetype, content_xml, None);
+        let mut config = ParserConfig::default();
+        config.odf.force_fast = force_fast;
+        config.odf.fast_sample_rows = 3;
+        config.odf.fast_sample_cols = 1;
+        let parsed = DocumentParser::with_config(config)
+            .parse_reader(Cursor::new(zip_data))
+            .expect("nested table must not truncate the enclosing sheet");
+
+        let values: Vec<String> = parsed
+            .store
+            .values()
+            .filter_map(|node| match node {
+                IRNode::Cell(cell) => match &cell.value {
+                    docir_core::ir::CellValue::String(value) => Some(value.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        assert!(values.iter().any(|value| value == "before"));
+        assert!(values.iter().any(|value| value == "after"));
+    }
+}
+
+#[test]
 fn test_parse_ods_cells_and_validations() {
     let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>

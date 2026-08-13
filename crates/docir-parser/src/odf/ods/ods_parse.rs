@@ -74,12 +74,21 @@ pub(crate) fn parse_ods_table(
     let mut cell_values: HashMap<(u32, u32), CellValue> = HashMap::new();
     let mut formula_cells: Vec<(NodeId, u32, u32, String)> = Vec::new();
     let mut formula_map: HashMap<(u32, u32), String> = HashMap::new();
+    let mut nested_table_depth = 0usize;
     let mut reached_table_end = false;
 
     scan_xml_events_with_reader(reader, &mut buf, "content.xml", |reader, event| {
         if is_end_event_local(&event, b"table") {
-            reached_table_end = true;
-            return Ok(XmlScanControl::Break);
+            if nested_table_depth == 0 {
+                reached_table_end = true;
+                return Ok(XmlScanControl::Break);
+            }
+            nested_table_depth -= 1;
+        } else if matches!(&event, quick_xml::events::Event::Start(start) if local_name(start.name().as_ref()) == b"table")
+        {
+            nested_table_depth = nested_table_depth
+                .checked_add(1)
+                .ok_or_else(|| xml_error("content.xml", "ODF table nesting depth overflow"))?;
         }
         let _ = dispatch_start_or_empty(reader, &event, |reader, e, is_start| {
             if is_start {
@@ -156,12 +165,21 @@ pub(crate) fn parse_ods_table_fast(
     let sample_rows = limits.sample_rows();
     let sample_cols = limits.sample_cols();
     let sample_enabled = sample_rows > 0 && sample_cols > 0;
+    let mut nested_table_depth = 0usize;
     let mut reached_table_end = false;
 
     scan_xml_events_with_reader(reader, &mut buf, "content.xml", |reader, event| {
         if is_end_event_local(&event, b"table") {
-            reached_table_end = true;
-            return Ok(XmlScanControl::Break);
+            if nested_table_depth == 0 {
+                reached_table_end = true;
+                return Ok(XmlScanControl::Break);
+            }
+            nested_table_depth -= 1;
+        } else if matches!(&event, quick_xml::events::Event::Start(start) if local_name(start.name().as_ref()) == b"table")
+        {
+            nested_table_depth = nested_table_depth
+                .checked_add(1)
+                .ok_or_else(|| xml_error("content.xml", "ODF table nesting depth overflow"))?;
         }
         let _ = dispatch_start_or_empty(reader, &event, |reader, e, is_start| {
             if is_start {
