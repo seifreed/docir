@@ -3,6 +3,7 @@ use crate::test_support::build_test_cfb;
 use crate::{DocirApp, ParserConfig};
 use docir_core::DocumentFormat;
 use docir_core::ir::{Document, IRNode};
+use docir_core::types::NodeId;
 use docir_core::visitor::IrStore;
 
 mod status_reports;
@@ -23,6 +24,41 @@ fn report_marks_absent_when_no_projects_exist() {
     let report = VbaRecognitionReport::from_parsed(&parsed, false);
     assert_eq!(report.status, VbaRecognitionStatus::Absent);
     assert!(report.projects.is_empty());
+}
+
+#[test]
+fn report_orders_projects_by_stable_location() {
+    for _ in 0..8 {
+        let mut store = IrStore::new();
+        let document = Document::new(DocumentFormat::WordProcessing);
+        let root_id = document.id;
+
+        for index in (0..12).rev() {
+            let mut project = docir_core::security::MacroProject::new();
+            project.id = NodeId::from_raw((1000 + index) as u64);
+            project.container_path = Some(format!("word/{index:02}/vbaProject.bin"));
+            store.insert(IRNode::MacroProject(project));
+        }
+        store.insert(IRNode::Document(document));
+
+        let parsed = ParsedDocument::new(docir_parser::parser::ParsedDocument {
+            root_id,
+            format: DocumentFormat::WordProcessing,
+            store,
+            metrics: None,
+        });
+        let report = VbaRecognitionReport::from_parsed(&parsed, false);
+        let paths: Vec<_> = report
+            .projects
+            .iter()
+            .map(|project| project.container_path.clone().unwrap_or_default())
+            .collect();
+        let expected: Vec<_> = (0..12)
+            .map(|index| format!("word/{index:02}/vbaProject.bin"))
+            .collect();
+
+        assert_eq!(paths, expected);
+    }
 }
 
 #[test]

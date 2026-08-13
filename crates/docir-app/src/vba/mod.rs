@@ -87,6 +87,25 @@ impl VbaRecognitionReport {
                 include_source,
             ));
         }
+        projects.sort_by(|left, right| {
+            left.container_path
+                .as_deref()
+                .unwrap_or_default()
+                .cmp(right.container_path.as_deref().unwrap_or_default())
+                .then_with(|| {
+                    left.storage_root
+                        .as_deref()
+                        .unwrap_or_default()
+                        .cmp(right.storage_root.as_deref().unwrap_or_default())
+                })
+                .then_with(|| {
+                    left.project_name
+                        .as_deref()
+                        .unwrap_or_default()
+                        .cmp(right.project_name.as_deref().unwrap_or_default())
+                })
+                .then_with(|| left.node_id.cmp(&right.node_id))
+        });
 
         let status = aggregate_project_status(&projects);
         Self {
