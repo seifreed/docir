@@ -179,12 +179,14 @@ impl PptxParser {
                 Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"txBody" => {
                     let text = parse_text_body_table(reader, slide_path)?;
                     let plain = shape_text_to_plain(&text);
-                    if !plain.is_empty() {
+                    if !plain.is_empty() || !text.paragraphs.is_empty() {
                         let mut para = Paragraph::new();
-                        let run = Run::new(plain);
-                        let run_id = run.id;
-                        self.store.insert(IRNode::Run(run));
-                        para.runs.push(run_id);
+                        if !plain.is_empty() {
+                            let run = Run::new(plain);
+                            let run_id = run.id;
+                            self.store.insert(IRNode::Run(run));
+                            para.runs.push(run_id);
+                        }
                         let para_id = para.id;
                         self.store.insert(IRNode::Paragraph(para));
                         cell.content.push(para_id);

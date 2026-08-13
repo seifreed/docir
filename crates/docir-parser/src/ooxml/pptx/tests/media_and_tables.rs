@@ -289,7 +289,7 @@ fn test_parse_table_in_graphic_frame() {
                       </a:tblGrid>
                       <a:tr>
                         <a:tc><a:txBody><a:p><a:r><a:t>A</a:t></a:r></a:p></a:txBody></a:tc>
-                        <a:tc><a:txBody><a:p><a:r><a:t>B</a:t></a:r></a:p></a:txBody></a:tc>
+                        <a:tc><a:txBody><a:p/></a:txBody></a:tc>
                       </a:tr>
                     </a:tbl>
                   </a:graphicData>
@@ -328,4 +328,16 @@ fn test_parse_table_in_graphic_frame() {
     };
     assert_eq!(table.rows.len(), 1);
     assert_eq!(table.grid.len(), 2);
+    let row = match store.get(table.rows[0]) {
+        Some(IRNode::TableRow(row)) => row,
+        _ => panic!("missing table row"),
+    };
+    let cell = match store.get(row.cells[1]) {
+        Some(IRNode::TableCell(cell)) => cell,
+        _ => panic!("missing table cell"),
+    };
+    assert!(cell.content.iter().any(|id| matches!(
+        store.get(*id),
+        Some(IRNode::Paragraph(paragraph)) if paragraph.runs.is_empty()
+    )));
 }
