@@ -70,12 +70,36 @@ pub(super) fn bool_from_val(start: &BytesStart, file: &str) -> Result<bool, Pars
 }
 
 pub(super) fn parse_vml_style_length(style: &str, key: &str) -> Result<Option<i64>, ParseError> {
-    Ok(parse_vml_style_length_value(style, key)?.map(|val| val.round() as i64))
+    parse_vml_style_length_value(style, key)?
+        .map(|value| rounded_i64(value, style))
+        .transpose()
 }
 
 fn parse_vml_style_length_u64(style: &str, key: &str) -> Result<Option<u64>, ParseError> {
-    Ok(parse_vml_style_length_value(style, key)?
-        .and_then(|val| (val >= 0.0).then(|| val.round() as u64)))
+    parse_vml_style_length_value(style, key)?
+        .filter(|value| *value >= 0.0)
+        .map(|value| rounded_u64(value, style))
+        .transpose()
+}
+
+fn rounded_i64(value: f64, style: &str) -> Result<i64, ParseError> {
+    let rounded = value.round();
+    if rounded >= i64::MIN as f64 && rounded < i64::MAX as f64 {
+        return Ok(rounded as i64);
+    }
+    Err(ParseError::InvalidStructure(format!(
+        "VML length exceeds i64 range: '{style}'"
+    )))
+}
+
+fn rounded_u64(value: f64, style: &str) -> Result<u64, ParseError> {
+    let rounded = value.round();
+    if rounded < u64::MAX as f64 {
+        return Ok(rounded as u64);
+    }
+    Err(ParseError::InvalidStructure(format!(
+        "VML length exceeds u64 range: '{style}'"
+    )))
 }
 
 fn parse_vml_style_length_value(style: &str, key: &str) -> Result<Option<f64>, ParseError> {
@@ -135,6 +159,11 @@ fn parse_vml_length(value: &str) -> Result<Option<f64>, ParseError> {
             )));
         }
     };
+    if !emus.is_finite() {
+        return Err(ParseError::InvalidStructure(format!(
+            "VML length exceeds numeric range '{trimmed}'"
+        )));
+    }
     Ok(Some(emus))
 }
 

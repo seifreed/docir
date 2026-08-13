@@ -114,11 +114,13 @@ fn parse_length_emu_attr_u64(
 }
 
 fn parse_length_emu(value: String) -> Option<i64> {
-    parse_length_emu_str(&value).map(|v| v.round() as i64)
+    let rounded = parse_length_emu_str(&value)?.round();
+    (rounded >= i64::MIN as f64 && rounded < i64::MAX as f64).then_some(rounded as i64)
 }
 
 fn parse_length_emu_u64(value: String) -> Option<u64> {
-    parse_length_emu_str(&value).map(|v| v.max(0.0).round() as u64)
+    let rounded = parse_length_emu_str(&value)?.max(0.0).round();
+    (rounded < u64::MAX as f64).then_some(rounded as u64)
 }
 
 fn parse_length_emu_str(value: &str) -> Option<f64> {
@@ -146,7 +148,7 @@ fn parse_length_emu_str(value: &str) -> Option<f64> {
         "" => magnitude,
         _ => return None,
     };
-    Some(emu)
+    emu.is_finite().then_some(emu)
 }
 
 #[cfg(test)]
@@ -272,5 +274,17 @@ mod tests {
     fn parse_length_emu_str_rejects_non_finite_values() {
         assert_eq!(parse_length_emu_str("NaNcm"), None);
         assert_eq!(parse_length_emu_str("infpt"), None);
+    }
+
+    #[test]
+    fn parse_frame_transform_rejects_lengths_that_overflow_integer_fields() {
+        assert_eq!(
+            parse_length_emu("999999999999999999999999999999cm".to_string()),
+            None
+        );
+        assert_eq!(
+            parse_length_emu_u64("999999999999999999999999999999cm".to_string()),
+            None
+        );
     }
 }

@@ -303,6 +303,45 @@ fn test_parse_vml_picture_rejects_non_finite_style_lengths() {
 }
 
 #[test]
+fn test_parse_vml_picture_rejects_overflowing_style_lengths() {
+    let xml = r#"
+        <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+             xmlns:v="urn:schemas-microsoft-com:vml"
+             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <w:pict>
+            <v:shape id="_x0000_s1026" style="left:999999999999999999999999999999cm">
+              <v:imagedata r:id="rIdImg"></v:imagedata>
+            </v:shape>
+          </w:pict>
+        </w:r>
+        "#;
+    let rels = Relationships::parse(
+        r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>"#,
+    )
+    .expect("rels");
+
+    let mut reader = reader_from_str(xml);
+    let mut parser = DocxParser::new();
+    let mut buf = Vec::new();
+    while let Ok(event) = reader.read_event_into(&mut buf) {
+        match event {
+            Event::Start(e) if e.name().as_ref() == b"w:r" => {
+                match parse_run(&mut parser, &mut reader, &rels) {
+                    Err(ParseError::InvalidStructure(_)) => {}
+                    Err(err) => panic!("unexpected parse error: {err:?}"),
+                    Ok(_) => panic!("overflowing VML lengths must fail"),
+                }
+                return;
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    panic!("missing w:r element");
+}
+
+#[test]
 fn test_parse_vml_picture_reports_malformed_attributes() {
     let xml = r#"
         <w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
