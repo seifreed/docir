@@ -117,17 +117,14 @@ fn split_formula_args(args: &str) -> Vec<String> {
             continue;
         }
         if !in_quotes && (ch == ';' || ch == ',') {
-            let trimmed = current.trim();
-            if !trimmed.is_empty() {
-                out.push(trimmed.to_string());
-            }
+            out.push(current.trim().to_string());
             current.clear();
             continue;
         }
         current.push(ch);
     }
     let trimmed = current.trim();
-    if !trimmed.is_empty() {
+    if !trimmed.is_empty() || !out.is_empty() {
         out.push(trimmed.to_string());
     }
     out
@@ -180,6 +177,20 @@ mod tests {
 
         assert_eq!(dde.application, "soffice");
         assert_eq!(dde.topic.as_deref(), Some("file:///tmp/test.ods"));
+        assert_eq!(dde.item.as_deref(), Some("A1"));
+    }
+
+    #[test]
+    fn parse_dde_formula_preserves_empty_arguments() {
+        let dde = parse_dde_formula(
+            r#"DDE("";"/c calc";"A1")"#,
+            SourceSpan::new("content.xml"),
+            false,
+        )
+        .expect("DDE with an empty application");
+
+        assert_eq!(dde.application, "");
+        assert_eq!(dde.topic.as_deref(), Some("/c calc"));
         assert_eq!(dde.item.as_deref(), Some("A1"));
     }
 }
