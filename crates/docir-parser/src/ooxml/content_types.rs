@@ -40,7 +40,7 @@ impl ContentTypes {
                 Event::Empty(e) | Event::Start(e) => match local_name(e.name().as_ref()) {
                     b"Default" => {
                         let (ext, ct) = parse_default_entry(&e)?;
-                        content_types.defaults.insert(ext, ct);
+                        content_types.defaults.insert(ext.to_ascii_lowercase(), ct);
                     }
                     b"Override" => {
                         let (pn, ct) = parse_override_entry(&e)?;
@@ -65,10 +65,11 @@ impl ContentTypes {
             without_prefix
         } else {
             part_name
-        };
+        }
+        .to_ascii_lowercase();
 
         // Check overrides first
-        if let Some(ct) = self.overrides.get(normalized) {
+        if let Some(ct) = self.overrides.get(&normalized) {
             return Some(ct);
         }
 
@@ -174,7 +175,10 @@ fn required_content_type_attr(
 }
 
 fn normalize_part_name(part_name: &str) -> String {
-    part_name.strip_prefix('/').unwrap_or(part_name).to_string()
+    part_name
+        .strip_prefix('/')
+        .unwrap_or(part_name)
+        .to_ascii_lowercase()
 }
 
 /// Known OOXML content types.
@@ -377,6 +381,30 @@ mod tests {
 
         assert_eq!(types.detect_format(), Some(DocumentFormat::Spreadsheet));
         assert!(types.is_binary_workbook());
+    }
+
+    #[test]
+    fn content_types_match_part_names_and_extensions_case_insensitively() {
+        let xml = format!(
+            r#"
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="BIN" ContentType="{}"/>
+              <Override PartName="/XL/WORKBOOK.XML" ContentType="{}"/>
+            </Types>"#,
+            content_type::EXCEL_WORKBOOK_BIN,
+            content_type::EXCEL_WORKBOOK
+        );
+
+        let types = ContentTypes::parse(&xml).expect("content types");
+
+        assert_eq!(
+            types.get_content_type("xl/workbook.bin"),
+            Some(content_type::EXCEL_WORKBOOK)
+        );
+        assert_eq!(
+            types.get_content_type("XL/WORKBOOK.BIN"),
+            Some(content_type::EXCEL_WORKBOOK_BIN)
+        );
     }
 
     #[test]
