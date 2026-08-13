@@ -27,9 +27,12 @@ pub fn run(
 
     if let Some(out_dir) = out.as_ref() {
         prepare_output_dir(out_dir, overwrite)?;
+        let payload_dir = out_dir.join("payloads");
+        fs::create_dir_all(&payload_dir)
+            .with_context(|| format!("Failed to create {}", payload_dir.display()))?;
         for (index, object) in report.objects.iter_mut().enumerate() {
             let file_name = format!("flash_{}.swf", index + 1);
-            let path = out_dir.join(&file_name);
+            let path = payload_dir.join(&file_name);
             fs::write(&path, &object.data)
                 .with_context(|| format!("Failed to write {}", path.display()))?;
             object.output_path = Some(format!("payloads/{}", file_name));
@@ -146,7 +149,7 @@ mod tests {
         )
         .expect("extract-flash out");
 
-        let payload = out_dir.join("flash_1.swf");
+        let payload = out_dir.join("payloads/flash_1.swf");
         let bytes = fs::read(&payload).expect("payload");
         assert!(bytes.starts_with(b"CWS"));
     }
