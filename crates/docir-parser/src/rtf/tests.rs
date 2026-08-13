@@ -80,6 +80,24 @@ fn parse_unicode_control_skips_configured_escaped_fallback() {
 }
 
 #[test]
+fn parse_unicode_control_combines_surrogate_pair() {
+    let parser = RtfParser::new();
+    let parsed = parser
+        .parse_bytes(br"{\rtf1\ansi Emoji: \u55357?\u56832?}")
+        .expect("parse surrogate pair");
+    let text = parsed
+        .store
+        .values()
+        .filter_map(|node| match node {
+            IRNode::Run(run) => Some(run.text.as_str()),
+            _ => None,
+        })
+        .collect::<String>();
+
+    assert_eq!(text, "Emoji: 😀");
+}
+
+#[test]
 fn parse_styles_and_lists() {
     let data = b"{\\rtf1\\ansi{\\stylesheet{\\s1 Heading 1;}{\\cs2 Emphasis;}}\\pard\\ql\\s1\\ls1\\ilvl0 Item}";
     let parser = RtfParser::new();

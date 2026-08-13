@@ -282,6 +282,7 @@ pub(crate) fn flush_text(
     store: &mut IrStore,
     span: Option<SourceSpan>,
 ) -> Result<(), ParseError> {
+    flush_pending_unicode(ctx);
     if ctx.current_text.is_empty() {
         return Ok(());
     }
@@ -320,13 +321,21 @@ pub(crate) fn flush_text(
 }
 
 pub(crate) fn append_text(ctx: &mut RtfParseContext, text: &str) {
+    flush_pending_unicode(ctx);
     ctx.current_text.push_str(text);
 }
 
 pub(crate) fn append_text_byte(ctx: &mut RtfParseContext, byte: u8) {
+    flush_pending_unicode(ctx);
     let binding = [byte];
     let (text, _, _) = ctx.encoding.decode(&binding);
     ctx.current_text.push_str(&text);
+}
+
+fn flush_pending_unicode(ctx: &mut RtfParseContext) {
+    if ctx.unicode_high_surrogate.take().is_some() {
+        ctx.current_text.push('\u{FFFD}');
+    }
 }
 
 pub(crate) fn ensure_paragraph(ctx: &mut RtfParseContext, store: &mut IrStore) {

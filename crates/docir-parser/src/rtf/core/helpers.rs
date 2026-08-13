@@ -33,9 +33,7 @@ pub(super) fn handle_encoding_controls(
         "u" => {
             if let Some(value) = param {
                 let code_unit = value.rem_euclid(0x1_0000) as u16;
-                if let Some(character) = char::from_u32(code_unit as u32) {
-                    append_text(ctx, &character.to_string());
-                }
+                append_unicode_code_unit(ctx, code_unit);
                 ctx.unicode_skip = ctx.unicode_fallback_count;
             }
         }
@@ -394,6 +392,28 @@ fn encoding_for_codepage(cp: u32) -> Option<&'static Encoding> {
     }
 }
 
+fn append_unicode_code_unit(ctx: &mut RtfParseContext, code_unit: u16) {
+    if let Some(high) = ctx.unicode_high_surrogate.take() {
+        if (0xDC00..=0xDFFF).contains(&code_unit) {
+            let codepoint =
+                0x1_0000 + ((u32::from(high) - 0xD800) << 10) + u32::from(code_unit - 0xDC00);
+            if let Some(character) = char::from_u32(codepoint) {
+                ctx.current_text.push(character);
+            }
+            return;
+        }
+        ctx.current_text.push('\u{FFFD}');
+    }
+
+    if (0xD800..=0xDBFF).contains(&code_unit) {
+        ctx.unicode_high_surrogate = Some(code_unit);
+    } else if (0xDC00..=0xDFFF).contains(&code_unit) {
+        ctx.current_text.push('\u{FFFD}');
+    } else if let Some(character) = char::from_u32(u32::from(code_unit)) {
+        ctx.current_text.push(character);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -564,6 +584,7 @@ mod tests {
             style: RtfStyleState::default(),
             unicode_fallback_count: ctx.unicode_fallback_count,
             unicode_skip: ctx.unicode_skip,
+            unicode_high_surrogate: ctx.unicode_high_surrogate,
         };
     }
 }
