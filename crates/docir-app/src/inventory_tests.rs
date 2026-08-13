@@ -74,6 +74,48 @@ fn inventory_collects_macro_ole_and_dde_evidence() {
 }
 
 #[test]
+fn inventory_orders_ole_artifacts_by_path() {
+    for _ in 0..8 {
+        let mut store = IrStore::new();
+        let document = Document::new(DocumentFormat::WordProcessing);
+        let root_id = document.id;
+        for path in [
+            "word/embeddings/z.bin",
+            "word/embeddings/a.bin",
+            "word/embeddings/m.bin",
+        ] {
+            let mut ole = OleObject::new();
+            ole.source_path = Some(path.to_string());
+            store.insert(IRNode::OleObject(ole));
+        }
+        store.insert(IRNode::Document(document));
+
+        let parsed = ParsedDocument::new(docir_parser::parser::ParsedDocument {
+            root_id,
+            format: DocumentFormat::WordProcessing,
+            store,
+            metrics: None,
+        });
+        let inventory = ArtifactInventory::from_parsed(&parsed);
+        let paths: Vec<_> = inventory
+            .artifacts
+            .iter()
+            .filter(|artifact| artifact.kind == InventoryArtifactKind::OleObject)
+            .map(|artifact| artifact.path.clone().unwrap_or_default())
+            .collect();
+
+        assert_eq!(
+            paths,
+            vec![
+                "word/embeddings/a.bin",
+                "word/embeddings/m.bin",
+                "word/embeddings/z.bin"
+            ]
+        );
+    }
+}
+
+#[test]
 fn inventory_marks_legacy_office_document_as_cfb() {
     let mut store = IrStore::new();
     let mut doc = Document::new(DocumentFormat::WordProcessing);

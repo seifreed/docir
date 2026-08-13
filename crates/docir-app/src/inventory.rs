@@ -20,7 +20,7 @@ pub enum ContainerKind {
 }
 
 /// High-level artifact kinds represented in the inventory.
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum InventoryArtifactKind {
     ContainerEntry,
     RelationshipGraph,
@@ -110,6 +110,7 @@ impl ArtifactInventory {
             }
         }
 
+        inventory.sort_artifacts();
         inventory.artifact_count = inventory.artifacts.len();
         inventory
     }
@@ -151,9 +152,23 @@ impl ArtifactInventory {
             inventory
                 .artifacts
                 .extend(cfb_entries::build_cfb_container_entries(input_bytes));
+            inventory.sort_artifacts();
             inventory.artifact_count = inventory.artifacts.len();
         }
         inventory
+    }
+
+    fn sort_artifacts(&mut self) {
+        self.artifacts.sort_unstable_by(|left, right| {
+            left.path
+                .as_deref()
+                .unwrap_or_default()
+                .cmp(right.path.as_deref().unwrap_or_default())
+                .then_with(|| left.kind.cmp(&right.kind))
+                .then_with(|| left.node_id.cmp(&right.node_id))
+                .then_with(|| left.relationship_id.cmp(&right.relationship_id))
+                .then_with(|| left.details.cmp(&right.details))
+        });
     }
 
     fn push_node_artifact(
