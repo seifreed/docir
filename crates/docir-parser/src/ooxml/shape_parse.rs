@@ -3,7 +3,9 @@ use super::{
     TargetMode, classify_relationship, parse_shape_properties, parse_text_body, parse_transform,
     read_event,
 };
-use crate::xml_utils::{local_name, try_attr_value, try_attr_value_by_suffix, xml_error};
+use crate::xml_utils::{
+    local_name, track_xml_root_event, try_attr_value, try_attr_value_by_suffix, xml_error,
+};
 use docir_core::ir::IRNode;
 use docir_core::types::NodeId;
 use quick_xml::events::{BytesStart, Event};
@@ -22,40 +24,21 @@ impl PptxParser {
         config.check_end_names = true;
         let mut buf = Vec::new();
         let mut shapes = Vec::new();
-        let mut root_name: Option<Vec<u8>> = None;
+        let mut root_name = None;
+        let mut root_depth = 0;
         let mut root_closed = false;
 
         loop {
             let event = read_event(&mut reader, &mut buf, slide_path)?;
-            if root_closed && matches!(&event, Event::Start(_) | Event::Empty(_)) {
-                return Err(xml_error(
-                    slide_path,
-                    "XML document contains multiple roots",
-                ));
-            }
-            match &event {
-                Event::Start(e) if root_name.is_none() => {
-                    root_name = Some(e.name().as_ref().to_vec());
-                }
-                Event::Empty(e) if root_name.is_none() => {
-                    root_name = Some(e.name().as_ref().to_vec());
-                    root_closed = true;
-                }
-                Event::End(e)
-                    if root_name
-                        .as_deref()
-                        .is_some_and(|name| name == e.name().as_ref()) =>
-                {
-                    root_closed = true;
-                }
-                Event::Eof if root_closed => break,
-                Event::Eof => {
-                    return Err(xml_error(
-                        slide_path,
-                        "XML document ends before its root is closed",
-                    ));
-                }
-                _ => {}
+            track_xml_root_event(
+                &event,
+                &mut root_name,
+                &mut root_depth,
+                &mut root_closed,
+                slide_path,
+            )?;
+            if matches!(event, Event::Eof) {
+                break;
             }
             if let Event::Start(e) = event {
                 match local_name(e.name().as_ref()) {

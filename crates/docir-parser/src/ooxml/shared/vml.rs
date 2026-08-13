@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, visit_attributes, xml_error};
+use crate::xml_utils::{local_name, track_xml_root_event, visit_attributes, xml_error};
 use docir_core::ir::{VmlDrawing, VmlShape};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -24,38 +24,22 @@ pub fn parse_vml_drawing(
     let mut current: Option<VmlShape> = None;
 
     let mut buf = Vec::new();
-    let mut root_name: Option<Vec<u8>> = None;
+    let mut root_name = None;
+    let mut root_depth = 0;
     let mut root_closed = false;
     loop {
         let event = reader
             .read_event_into(&mut buf)
             .map_err(|err| xml_error(path, err))?;
-        if root_closed && matches!(&event, Event::Start(_) | Event::Empty(_)) {
-            return Err(xml_error(path, "XML document contains multiple roots"));
-        }
-        match &event {
-            Event::Start(e) if root_name.is_none() => {
-                root_name = Some(e.name().as_ref().to_vec());
-            }
-            Event::Empty(e) if root_name.is_none() => {
-                root_name = Some(e.name().as_ref().to_vec());
-                root_closed = true;
-            }
-            Event::End(e)
-                if root_name
-                    .as_deref()
-                    .is_some_and(|name| name == e.name().as_ref()) =>
-            {
-                root_closed = true;
-            }
-            Event::Eof if root_closed => break,
-            Event::Eof => {
-                return Err(xml_error(
-                    path,
-                    "XML document ends before its root is closed",
-                ));
-            }
-            _ => {}
+        track_xml_root_event(
+            &event,
+            &mut root_name,
+            &mut root_depth,
+            &mut root_closed,
+            path,
+        )?;
+        if matches!(event, Event::Eof) {
+            break;
         }
         match event {
             Event::Start(e) => {

@@ -559,6 +559,21 @@ fn test_parse_numbering_level_props() {
 }
 
 #[test]
+fn test_parse_numbering_rejects_truncated_nested_root() {
+    let xml = r#"
+        <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+            <w:numbering></w:numbering>
+    "#;
+    let mut parser = DocxParser::new();
+
+    let err = parser
+        .parse_numbering(xml)
+        .expect_err("truncated nested numbering root must fail");
+
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/numbering.xml"));
+}
+
+#[test]
 fn test_parse_numbering_reports_malformed_attributes() {
     for (case, xml) in [
         (

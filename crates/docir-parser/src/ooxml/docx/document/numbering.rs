@@ -1,6 +1,6 @@
 use super::DocxParser;
 use crate::error::ParseError;
-use crate::xml_utils::{local_name, try_attr_value, xml_error};
+use crate::xml_utils::{local_name, track_xml_root_event, try_attr_value, xml_error};
 use docir_core::ir::{NumberingLevel, NumberingSet, Paragraph, RunProperties, TextAlignment};
 use docir_core::types::NodeId;
 use quick_xml::Reader;
@@ -23,36 +23,23 @@ impl DocxParser {
         let mut current_abs: Option<u32> = None;
         let mut current_levels: Vec<NumberingLevel> = Vec::new();
         let mut current_level: Option<NumberingLevel> = None;
-        let mut root_seen = false;
+        let mut root_name = None;
+        let mut root_depth = 0;
         let mut root_closed = false;
 
         loop {
             let event = reader
                 .read_event_into(&mut buf)
                 .map_err(|err| xml_error(NUMBERING_PATH, err))?;
-            if !root_seen {
-                match &event {
-                    Event::Start(_) => root_seen = true,
-                    Event::Empty(_) => {
-                        root_seen = true;
-                        root_closed = true;
-                    }
-                    _ => {}
-                }
-            }
-            if let Event::End(e) = &event
-                && local_name(e.name().as_ref()) == b"numbering"
-            {
-                root_closed = true;
-            }
+            track_xml_root_event(
+                &event,
+                &mut root_name,
+                &mut root_depth,
+                &mut root_closed,
+                NUMBERING_PATH,
+            )?;
             if matches!(event, Event::Eof) {
-                if root_closed {
-                    break;
-                }
-                return Err(xml_error(
-                    NUMBERING_PATH,
-                    "numbering document ends before its root is closed",
-                ));
+                break;
             }
             match event {
                 Event::Start(e) => handle_numbering_start(

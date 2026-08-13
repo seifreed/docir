@@ -4,7 +4,7 @@ use super::{
     IRNode, IrStore, OdfContentResult, OdfLimitCounter, ParseError, Slide, parse_draw_page,
     parse_odp_transition,
 };
-use crate::xml_utils::{local_name, try_attr_value_by_suffix, xml_error};
+use crate::xml_utils::{local_name, track_xml_root_event, try_attr_value_by_suffix, xml_error};
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
@@ -21,42 +21,23 @@ pub(super) fn parse_content_presentation(
     let mut in_presentation = false;
     let mut slide_no = 1u32;
     let mut slides = Vec::new();
-    let mut root_name: Option<Vec<u8>> = None;
+    let mut root_name = None;
+    let mut root_depth = 0;
     let mut root_closed = false;
 
     loop {
         let event = reader
             .read_event_into(&mut buf)
             .map_err(|err| xml_error("content.xml", err))?;
-        if root_closed && matches!(&event, Event::Start(_) | Event::Empty(_)) {
-            return Err(xml_error(
-                "content.xml",
-                "XML document contains multiple roots",
-            ));
-        }
-        match &event {
-            Event::Start(e) if root_name.is_none() => {
-                root_name = Some(e.name().as_ref().to_vec());
-            }
-            Event::Empty(e) if root_name.is_none() => {
-                root_name = Some(e.name().as_ref().to_vec());
-                root_closed = true;
-            }
-            Event::End(e)
-                if root_name
-                    .as_deref()
-                    .is_some_and(|name| name == e.name().as_ref()) =>
-            {
-                root_closed = true;
-            }
-            Event::Eof if root_closed => break,
-            Event::Eof => {
-                return Err(xml_error(
-                    "content.xml",
-                    "XML document ends before its root is closed",
-                ));
-            }
-            _ => {}
+        track_xml_root_event(
+            &event,
+            &mut root_name,
+            &mut root_depth,
+            &mut root_closed,
+            "content.xml",
+        )?;
+        if matches!(event, Event::Eof) {
+            break;
         }
         match event {
             Event::Start(e) => match local_name(e.name().as_ref()) {
