@@ -198,6 +198,13 @@ fn default_jscript_rejects_malformed_len_strings() {
 }
 
 #[test]
+fn low_level_hwp_readers_reject_overflowing_offsets() {
+    assert!(read_len_string(&[], usize::MAX).is_none());
+    assert!(read_u16_le(&[], usize::MAX).is_none());
+    assert!(read_u32_le(&[], usize::MAX).is_none());
+}
+
+#[test]
 fn extract_urls_finds_multiple_schemes() {
     let text = "before https://a.test/x?q=1 and file://tmp/a.bin and mailto:foo@example.test end";
     let urls = extract_urls(text);

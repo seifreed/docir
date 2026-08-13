@@ -411,13 +411,14 @@ fn push_external_refs_from_text(path: &str, text: &str, refs: &mut Vec<ExternalR
 
 fn read_len_string(data: &[u8], offset: usize) -> Option<(String, usize)> {
     let len = read_u32_le(data, offset)? as usize;
-    let start = offset + 4;
-    if start + len > data.len() {
+    let start = offset.checked_add(4)?;
+    let end = start.checked_add(len)?;
+    if end > data.len() {
         return None;
     }
-    let bytes = &data[start..start + len];
+    let bytes = &data[start..end];
     let text = decode_string_bytes(bytes);
-    Some((text, 4 + len))
+    Some((text, end.checked_sub(offset)?))
 }
 
 fn decode_string_bytes(bytes: &[u8]) -> String {
@@ -430,14 +431,16 @@ fn decode_string_bytes(bytes: &[u8]) -> String {
 }
 
 fn read_u16_le(data: &[u8], offset: usize) -> Option<u16> {
-    if offset + 2 > data.len() {
+    let end = offset.checked_add(2)?;
+    if end > data.len() {
         return None;
     }
     Some(u16::from_le_bytes([data[offset], data[offset + 1]]))
 }
 
 fn read_u32_le(data: &[u8], offset: usize) -> Option<u32> {
-    if offset + 4 > data.len() {
+    let end = offset.checked_add(4)?;
+    if end > data.len() {
         return None;
     }
     Some(u32::from_le_bytes([
