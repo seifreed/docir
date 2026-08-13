@@ -6,6 +6,8 @@ use sha1::Sha1;
 
 use super::OdfEncryptionData;
 
+pub(super) const MAX_ODF_PBKDF2_ITERATIONS: u32 = 10_000_000;
+
 pub(super) fn decrypt_odf_part(
     encrypted: Vec<u8>,
     encryption: &OdfEncryptionData,
@@ -39,6 +41,12 @@ pub(super) fn decrypt_odf_part(
         .ok_or_else(|| "Missing encryption iteration count".to_string())?;
     if iterations == 0 {
         return Err("Invalid encryption iteration count: 0".to_string());
+    }
+    if iterations > MAX_ODF_PBKDF2_ITERATIONS {
+        return Err(format!(
+            "ODF encryption iteration count exceeds maximum: {} (max: {})",
+            iterations, MAX_ODF_PBKDF2_ITERATIONS
+        ));
     }
     let key_bits = encryption
         .key_size

@@ -138,3 +138,13 @@ fn decrypt_odf_part_rejects_unsupported_algorithm_or_key_length() {
     let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw").expect_err("zero iterations");
     assert!(err.contains("Invalid encryption iteration count: 0"));
 }
+
+#[test]
+fn decrypt_odf_part_rejects_excessive_iteration_count() {
+    let mut enc = encryption_data();
+    enc.iteration_count = Some(super::container_encryption::MAX_ODF_PBKDF2_ITERATIONS + 1);
+
+    let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw")
+        .expect_err("excessive PBKDF2 iterations must be rejected");
+    assert!(err.contains("iteration count exceeds maximum"));
+}
