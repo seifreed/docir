@@ -153,13 +153,12 @@ pub(crate) fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
 pub(crate) const MAX_HEX_BLOB_SIZE: usize = 100 * 1024 * 1024;
 
 pub(crate) fn decode_hex_blob(hex: &[u8]) -> Option<Vec<u8>> {
-    if hex.len() < 2 || hex.len() > MAX_HEX_BLOB_SIZE {
+    if hex.len() < 2 || hex.len() > MAX_HEX_BLOB_SIZE || !hex.len().is_multiple_of(2) {
         return None;
     }
-    let even_len = hex.len() - (hex.len() % 2);
-    let mut out = Vec::with_capacity(even_len / 2);
+    let mut out = Vec::with_capacity(hex.len() / 2);
     let mut index = 0usize;
-    while index + 1 < even_len {
+    while index + 1 < hex.len() {
         let hi = hex_val(hex[index])?;
         let lo = hex_val(hex[index + 1])?;
         out.push((hi << 4) | lo);

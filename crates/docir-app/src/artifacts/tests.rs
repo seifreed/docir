@@ -1,5 +1,6 @@
 use super::*;
 use crate::artifacts::ole::parse_ole10_native;
+use crate::artifacts::rtf::decode_hex_blob;
 use crate::{
     DocirApp, ParserConfig,
     test_support::{build_test_cfb, patch_test_cfb_fat_entry},
@@ -162,6 +163,11 @@ fn parse_ole10_native_rejects_truncated_payload_size() {
 fn scan_rtf_objdata_decodes_embedded_hex() {
     let blobs = scan_rtf_objdata(br"{\rtf1{\object{\objdata 4d5a9000}}}");
     assert_eq!(blobs, vec![vec![0x4d, 0x5a, 0x90, 0x00]]);
+}
+
+#[test]
+fn decode_hex_blob_rejects_incomplete_nibble() {
+    assert!(decode_hex_blob(b"4d5").is_none());
 }
 
 #[test]
