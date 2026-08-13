@@ -10,6 +10,7 @@ fn test_parse_sdt_block_collects_paragraph_table_and_nested_sdt() {
           </w:sdtPr>
           <w:sdtContent>
             <w:p><w:r><w:t>Top</w:t></w:r></w:p>
+            <w:p/>
             <w:tbl>
               <w:tr>
                 <w:tc><w:p><w:r><w:t>T1</w:t></w:r></w:p></w:tc>
@@ -49,17 +50,21 @@ fn test_parse_sdt_block_collects_paragraph_table_and_nested_sdt() {
     };
 
     assert_eq!(control.control_type.as_deref(), Some("dropDownList"));
-    assert_eq!(control.content.len(), 3);
+    assert_eq!(control.content.len(), 4);
     assert!(matches!(
         store.get(control.content[0]),
         Some(docir_core::ir::IRNode::Paragraph(_))
     ));
     assert!(matches!(
         store.get(control.content[1]),
+        Some(docir_core::ir::IRNode::Paragraph(_))
+    ));
+    assert!(matches!(
+        store.get(control.content[2]),
         Some(docir_core::ir::IRNode::Table(_))
     ));
 
-    let nested = match store.get(control.content[2]) {
+    let nested = match store.get(control.content[3]) {
         Some(docir_core::ir::IRNode::ContentControl(c)) => c,
         _ => panic!("expected nested content control"),
     };

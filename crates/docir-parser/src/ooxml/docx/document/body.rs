@@ -8,7 +8,7 @@ use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 use super::inline::{SdtMode, parse_revision_block, parse_sdt};
-use super::paragraph::{parse_paragraph, parse_paragraph_simple};
+use super::paragraph::{parse_empty_paragraph, parse_paragraph, parse_paragraph_simple};
 use super::table::parse_table;
 use super::{DocxParser, apply_section_refs};
 use docir_core::ir::RevisionType;
@@ -34,6 +34,9 @@ pub(crate) fn parse_body_sections(
                 &mut current,
                 &e,
             )?,
+            Event::Empty(e) if local_name(e.name().as_ref()) == b"p" => {
+                current.content.push(parse_empty_paragraph(parser, reader));
+            }
             Event::End(e) if local_name(e.name().as_ref()) == b"body" => {
                 break;
             }
@@ -154,6 +157,9 @@ pub(crate) fn parse_block_until(
                 }
                 _ => {}
             },
+            Event::Empty(e) if local_name(e.name().as_ref()) == b"p" => {
+                content.push(parse_empty_paragraph(parser, reader));
+            }
             Event::End(e) if local_name(e.name().as_ref()) == local_name(end_tag) => {
                 break;
             }
@@ -189,6 +195,24 @@ mod tests {
             .expect("empty body should parse");
         assert_eq!(sections.len(), 1);
         assert!(sections[0].content.is_empty());
+    }
+
+    #[test]
+    fn parse_body_sections_preserves_empty_paragraph() {
+        let xml = r#"<w:body xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p/></w:body>"#;
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let sections =
+            parse_body_sections(&mut parser, &mut reader, &Relationships::default(), None)
+                .expect("empty paragraph should parse");
+        let store = parser.into_store();
+
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].content.len(), 1);
+        assert!(matches!(
+            store.get(sections[0].content[0]),
+            Some(docir_core::ir::IRNode::Paragraph(_))
+        ));
     }
 
     #[test]

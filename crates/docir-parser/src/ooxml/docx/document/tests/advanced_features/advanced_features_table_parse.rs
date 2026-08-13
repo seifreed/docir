@@ -120,6 +120,7 @@ fn test_parse_table_cell_and_row_property_variants() {
                 </w:tcBorders>
                 <w:shd w:fill="CCCCCC"/>
               </w:tcPr>
+              <w:p/>
               <w:tbl>
                 <w:tblPr>
                   <w:tblW w:w="1200" w:type="dxa"/>
@@ -242,6 +243,12 @@ fn test_parse_table_cell_and_row_property_variants() {
             .content
             .iter()
             .any(|id| matches!(store.get(*id), Some(docir_core::ir::IRNode::Table(_))))
+    );
+    assert!(
+        cell_a
+            .content
+            .iter()
+            .any(|id| matches!(store.get(*id), Some(docir_core::ir::IRNode::Paragraph(_))))
     );
 
     let cell_b = match store.get(row.cells[1]) {

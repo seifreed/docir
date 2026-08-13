@@ -62,6 +62,16 @@ pub(super) fn parse_paragraph(
     })
 }
 
+pub(super) fn parse_empty_paragraph(parser: &mut DocxParser, reader: &Reader<&[u8]>) -> NodeId {
+    let mut paragraph = Paragraph::new();
+    paragraph.span = Some(span_from_reader(reader, "word/document.xml"));
+    let id = paragraph.id;
+    parser
+        .store
+        .insert(docir_core::ir::IRNode::Paragraph(paragraph));
+    id
+}
+
 pub(super) fn parse_paragraph_simple(
     parser: &mut DocxParser,
     reader: &mut Reader<&[u8]>,

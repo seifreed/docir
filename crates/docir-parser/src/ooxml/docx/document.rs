@@ -37,7 +37,7 @@ use inline::{SdtMode, parse_run, parse_sdt};
 use inline::{parse_field, parse_hyperlink, parse_numbering, parse_run_properties};
 #[cfg(test)]
 use paragraph::parse_paragraph;
-use paragraph::parse_paragraph_simple;
+use paragraph::{parse_empty_paragraph, parse_paragraph_simple};
 use sections::{SectionRef, apply_section_refs};
 
 #[derive(Debug, Clone, Copy)]

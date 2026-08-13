@@ -1,4 +1,6 @@
-use super::super::{DocxParser, parse_border, parse_paragraph_simple, span_from_reader};
+use super::super::{
+    DocxParser, parse_border, parse_empty_paragraph, parse_paragraph_simple, span_from_reader,
+};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::{local_name, try_attr_value, xml_error};
@@ -121,6 +123,9 @@ pub(crate) fn parse_table_cell(
                 }
                 _ => {}
             },
+            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"p" => {
+                cell.content.push(parse_empty_paragraph(parser, reader));
+            }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tc" => {
                 break;
             }

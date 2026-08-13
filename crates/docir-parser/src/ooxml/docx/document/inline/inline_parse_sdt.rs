@@ -1,4 +1,4 @@
-use super::super::super::{parse_paragraph_simple, table::parse_table};
+use super::super::super::{parse_empty_paragraph, parse_paragraph_simple, table::parse_table};
 use super::{parse_field, parse_hyperlink, parse_revision_inline, parse_run};
 use crate::error::ParseError;
 use crate::ooxml::docx::DocxParser;
@@ -116,29 +116,34 @@ fn parse_sdt_content_block(
 ) -> Result<Vec<NodeId>, ParseError> {
     let mut content = Vec::new();
     let mut buf = Vec::new();
-    super::scan_docx_xml_events_until_end_start_only(
+    super::scan_docx_xml_events_until_end(
         reader,
         &mut buf,
         |event| matches!(event, Event::End(e) if local_name(e.name().as_ref()) == b"sdtContent"),
-        |reader, start| {
-            match local_name(start.name().as_ref()) {
-                b"p" => {
-                    let para_id = parse_paragraph_simple(parser, reader, rels)?;
-                    content.push(para_id);
-                }
-                b"tbl" => {
-                    let table_id = parse_table(parser, reader, rels)?;
-                    content.push(table_id);
-                }
-                b"sdt" => {
-                    let sdt_id = parse_sdt(parser, reader, rels, SdtMode::Block)?;
-                    content.push(sdt_id);
+        |reader, event| {
+            match event {
+                Event::Start(start) => match local_name(start.name().as_ref()) {
+                    b"p" => {
+                        let para_id = parse_paragraph_simple(parser, reader, rels)?;
+                        content.push(para_id);
+                    }
+                    b"tbl" => {
+                        let table_id = parse_table(parser, reader, rels)?;
+                        content.push(table_id);
+                    }
+                    b"sdt" => {
+                        let sdt_id = parse_sdt(parser, reader, rels, SdtMode::Block)?;
+                        content.push(sdt_id);
+                    }
+                    _ => {}
+                },
+                Event::Empty(start) if local_name(start.name().as_ref()) == b"p" => {
+                    content.push(parse_empty_paragraph(parser, reader));
                 }
                 _ => {}
             }
-            Ok(())
+            Ok(XmlScanControl::Continue)
         },
-        |_reader, _event| Ok(()),
     )?;
     Ok(content)
 }
