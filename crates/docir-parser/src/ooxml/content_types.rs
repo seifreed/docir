@@ -40,12 +40,25 @@ impl ContentTypes {
                 Event::Empty(e) | Event::Start(e) => match local_name(e.name().as_ref()) {
                     b"Default" => {
                         let (ext, ct) = parse_default_entry(&e)?;
-                        content_types.defaults.insert(ext.to_ascii_lowercase(), ct);
+                        let key = ext.to_ascii_lowercase();
+                        if content_types.defaults.insert(key.clone(), ct).is_some() {
+                            return Err(ParseError::InvalidStructure(format!(
+                                "[Content_Types].xml contains duplicate Default extension: {key}"
+                            )));
+                        }
                     }
                     b"Override" => {
                         let (pn, ct) = parse_override_entry(&e)?;
                         let normalized = normalize_part_name(&pn);
-                        content_types.overrides.insert(normalized, ct);
+                        if content_types
+                            .overrides
+                            .insert(normalized.clone(), ct)
+                            .is_some()
+                        {
+                            return Err(ParseError::InvalidStructure(format!(
+                                "[Content_Types].xml contains duplicate Override part: {normalized}"
+                            )));
+                        }
                     }
                     _ => {}
                 },
@@ -441,6 +454,29 @@ mod tests {
         match err {
             ParseError::Xml { file, .. } => assert_eq!(file, "[Content_Types].xml"),
             other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_rejects_duplicate_content_type_entries() {
+        for xml in [
+            r#"
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="bin" ContentType="application/octet-stream"/>
+              <Default Extension="BIN" ContentType="application/octet-stream"/>
+            </Types>
+            "#,
+            r#"
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Override PartName="/word/document.xml" ContentType="application/xml"/>
+              <Override PartName="/WORD/DOCUMENT.XML" ContentType="application/xml"/>
+            </Types>
+            "#,
+        ] {
+            assert!(matches!(
+                ContentTypes::parse(xml),
+                Err(ParseError::InvalidStructure(message)) if message.contains("duplicate")
+            ));
         }
     }
 
