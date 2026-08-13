@@ -34,18 +34,33 @@ impl OdsCellData {
         !matches!(self.value, CellValue::Empty) || self.formula.is_some()
     }
 
-    pub(crate) fn merge_range(&self, row: u32, col: u32) -> Option<MergedCellRange> {
+    pub(crate) fn merge_range(
+        &self,
+        row: u32,
+        col: u32,
+    ) -> Result<Option<MergedCellRange>, ParseError> {
         let col_span = self.col_span.unwrap_or(1);
         let row_span = self.row_span.unwrap_or(1);
+        if col_span == 0 || row_span == 0 {
+            return Err(ParseError::InvalidStructure(
+                "ODF merged cell spans must be positive".to_string(),
+            ));
+        }
         if col_span > 1 || row_span > 1 {
-            Some(MergedCellRange {
+            let end_col = col.checked_add(col_span - 1).ok_or_else(|| {
+                ParseError::InvalidStructure("ODF merged cell column overflow".to_string())
+            })?;
+            let end_row = row.checked_add(row_span - 1).ok_or_else(|| {
+                ParseError::InvalidStructure("ODF merged cell row overflow".to_string())
+            })?;
+            Ok(Some(MergedCellRange {
                 start_col: col,
                 start_row: row,
-                end_col: col + col_span - 1,
-                end_row: row + row_span - 1,
-            })
+                end_col,
+                end_row,
+            }))
         } else {
-            None
+            Ok(None)
         }
     }
 }
@@ -194,15 +209,17 @@ fn parse_u32_attr(value: &str) -> Result<u32, ParseError> {
     Ok(parsed)
 }
 
-pub(crate) fn column_index_to_name(mut index: u32) -> String {
+pub(crate) fn column_index_to_name(mut index: u32) -> Result<String, ParseError> {
     let mut name = String::new();
-    index += 1;
+    index = index
+        .checked_add(1)
+        .ok_or_else(|| ParseError::InvalidStructure("ODF column index overflow".to_string()))?;
     while index > 0 {
         let rem = ((index - 1) % 26) as u8;
         name.push((b'A' + rem) as char);
         index = (index - 1) / 26;
     }
-    name.chars().rev().collect()
+    Ok(name.chars().rev().collect())
 }
 
 #[cfg(test)]
@@ -273,9 +290,9 @@ mod tests {
 
     #[test]
     fn column_index_to_name_handles_edges() {
-        assert_eq!(column_index_to_name(0), "A");
-        assert_eq!(column_index_to_name(25), "Z");
-        assert_eq!(column_index_to_name(26), "AA");
-        assert_eq!(column_index_to_name(701), "ZZ");
+        assert_eq!(column_index_to_name(0).expect("column name"), "A");
+        assert_eq!(column_index_to_name(25).expect("column name"), "Z");
+        assert_eq!(column_index_to_name(26).expect("column name"), "AA");
+        assert_eq!(column_index_to_name(701).expect("column name"), "ZZ");
     }
 }

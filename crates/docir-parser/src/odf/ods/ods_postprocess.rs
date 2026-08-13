@@ -101,11 +101,19 @@ pub(super) fn emit_full_row_cells(
             continue;
         }
         for _ in 0..cell_data.col_repeat {
-            if let Some(range) = cell_data.merge_range(row_idx, col_idx) {
+            if let Some(range) = cell_data.merge_range(row_idx, col_idx)? {
                 worksheet.merged_cells.push(range);
             }
             limits.bump_cells(1)?;
-            let reference = format!("{}{}", column_index_to_name(col_idx), row_idx + 1);
+            let reference = format!(
+                "{}{}",
+                column_index_to_name(col_idx)?,
+                row_idx
+                    .checked_add(1)
+                    .ok_or_else(|| ParseError::InvalidStructure(
+                        "ODF row index overflow".to_string()
+                    ))?
+            );
             let mut cell = Cell::new(reference.clone(), col_idx, row_idx);
             cell.value = cell_data.value.clone();
             cell.formula = cell_data.formula.clone();
@@ -156,12 +164,20 @@ pub(crate) fn emit_sampled_row_cells(
                 col_idx += 1;
                 continue;
             }
-            if let Some(range) = cell_data.merge_range(row_idx, col_idx) {
+            if let Some(range) = cell_data.merge_range(row_idx, col_idx)? {
                 worksheet.merged_cells.push(range);
             }
             if cell_data.should_emit() {
                 limits.bump_cells(1)?;
-                let reference = format!("{}{}", column_index_to_name(col_idx), row_idx + 1);
+                let reference = format!(
+                    "{}{}",
+                    column_index_to_name(col_idx)?,
+                    row_idx
+                        .checked_add(1)
+                        .ok_or_else(|| ParseError::InvalidStructure(
+                            "ODF row index overflow".to_string()
+                        ))?
+                );
                 let mut cell = Cell::new(reference.clone(), col_idx, row_idx);
                 cell.value = cell_data.value.clone();
                 cell.formula = cell_data.formula.clone();
