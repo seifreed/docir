@@ -245,7 +245,7 @@ pub(super) fn parse_settings_like(xml: &str) -> Result<WordSettings, ParseError>
 
 pub(super) fn parse_num_abstract_id(reader: &mut Reader<&[u8]>) -> Result<u32, ParseError> {
     let mut buf = Vec::new();
-    let mut abstract_id = 0u32;
+    let mut abstract_id = None;
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(e)) => {
@@ -258,13 +258,20 @@ pub(super) fn parse_num_abstract_id(reader: &mut Reader<&[u8]>) -> Result<u32, P
                         })
                         .transpose()?
                 {
-                    abstract_id = val;
+                    abstract_id = Some(val);
                 }
             }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"num" => {
-                break;
+                return abstract_id.ok_or_else(|| {
+                    xml_error("word/numbering.xml", "num is missing w:abstractNumId")
+                });
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    "word/numbering.xml",
+                    "unexpected end of numbering num",
+                ));
+            }
             Err(e) => {
                 return Err(xml_error("word/numbering.xml", e));
             }
@@ -272,7 +279,6 @@ pub(super) fn parse_num_abstract_id(reader: &mut Reader<&[u8]>) -> Result<u32, P
         }
         buf.clear();
     }
-    Ok(abstract_id)
 }
 
 pub(super) fn line_col(data: &[u8], pos: usize) -> Option<(u32, u32)> {

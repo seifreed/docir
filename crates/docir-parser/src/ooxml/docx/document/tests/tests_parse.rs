@@ -527,6 +527,36 @@ fn test_parse_numbering_reports_malformed_attributes() {
               <w:num w:numId="bad">
                 <w:abstractNumId w:val="1"/>
               </w:num>
+                </w:numbering>
+            "#,
+        ),
+        (
+            "missing abstractNumId",
+            r#"
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum>
+                <w:lvl w:ilvl="0"/>
+              </w:abstractNum>
+            </w:numbering>
+            "#,
+        ),
+        (
+            "missing ilvl",
+            r#"
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum w:abstractNumId="1">
+                <w:lvl/>
+              </w:abstractNum>
+            </w:numbering>
+            "#,
+        ),
+        (
+            "missing numId",
+            r#"
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:num>
+                <w:abstractNumId w:val="1"/>
+              </w:num>
             </w:numbering>
             "#,
         ),
@@ -563,6 +593,14 @@ fn test_parse_numbering_reports_malformed_num_abstract_id_attributes() {
               <w:num w:numId="10">
                 <w:abstractNumId w:val="bad"/>
               </w:num>
+                </w:numbering>
+            "#,
+        ),
+        (
+            "missing abstract num ref",
+            r#"
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:num w:numId="10"/>
             </w:numbering>
             "#,
         ),

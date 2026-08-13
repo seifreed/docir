@@ -46,6 +46,16 @@ impl DocxParser {
                             current_levels.push(level);
                         }
                     }
+                    b"abstractNum" => {
+                        set.abstract_nums.push(docir_core::ir::AbstractNum {
+                            abstract_id: required_u32_attr(&e, b"w:abstractNumId")?,
+                            levels: Vec::new(),
+                        });
+                    }
+                    b"num" => {
+                        let _ = required_u32_attr(&e, b"w:numId")?;
+                        return Err(xml_error(NUMBERING_PATH, "num is missing w:abstractNumId"));
+                    }
                     _ => handle_level_value_attrs(&e, current_level.as_mut())?,
                 },
                 Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
@@ -89,11 +99,11 @@ fn handle_numbering_start(
 ) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
         b"abstractNum" => {
-            *current_abs = u32_attr(event, b"w:abstractNumId")?;
+            *current_abs = Some(required_u32_attr(event, b"w:abstractNumId")?);
             current_levels.clear();
         }
         b"lvl" => {
-            let lvl = u32_attr(event, b"w:ilvl")?.unwrap_or(0);
+            let lvl = required_u32_attr(event, b"w:ilvl")?;
             *current_level = Some(NumberingLevel {
                 level: lvl,
                 format: None,
@@ -124,7 +134,7 @@ fn handle_numbering_start(
             }
         }
         b"num" => {
-            let num_id = u32_attr(event, b"w:numId")?.unwrap_or(0);
+            let num_id = required_u32_attr(event, b"w:numId")?;
             let abstract_id = super::parse_num_abstract_id(reader)?;
             set.nums.push(docir_core::ir::NumInstance {
                 num_id,
@@ -188,4 +198,16 @@ fn u32_attr(event: &BytesStart<'_>, name: &[u8]) -> Result<Option<u32>, ParseErr
                 .map_err(|err| xml_error(NUMBERING_PATH, err))
         })
         .transpose()
+}
+
+fn required_u32_attr(event: &BytesStart<'_>, name: &[u8]) -> Result<u32, ParseError> {
+    u32_attr(event, name)?.ok_or_else(|| {
+        xml_error(
+            NUMBERING_PATH,
+            format!(
+                "numbering element is missing {}",
+                String::from_utf8_lossy(name)
+            ),
+        )
+    })
 }
