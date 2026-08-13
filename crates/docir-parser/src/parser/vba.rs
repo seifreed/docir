@@ -87,15 +87,20 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
 
     let mut out = Vec::new();
     let mut pos = 1usize;
+    let mut saw_chunk = false;
     while pos + 2 <= data.len() {
         let header = u16::from_le_bytes([data[pos], data[pos + 1]]);
         pos += 2;
         let chunk_size = ((header & 0x0FFF) as usize) + 3;
         let compressed = (header & 0x8000) != 0;
         if pos + chunk_size > data.len() {
-            break;
+            return None;
         }
+        saw_chunk = true;
         if !compressed {
+            if out.len().saturating_add(chunk_size) > MAX_DECOMPRESSED_SIZE {
+                return None;
+            }
             out.extend_from_slice(&data[pos..pos + chunk_size]);
             pos += chunk_size;
             continue;
@@ -115,7 +120,7 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
                     pos += 1;
                 } else {
                     if pos + 2 > chunk_end {
-                        break;
+                        return None;
                     }
                     let token = u16::from_le_bytes([data[pos], data[pos + 1]]);
                     pos += 2;
@@ -125,7 +130,7 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
                         // offset > chunk_out.len() would cause index out of bounds
                         // decode_copy_token ensures offset >= 1, so this check is defensive
                         if offset == 0 || offset > chunk_out.len() {
-                            break;
+                            return None;
                         }
                         let b = chunk_out[chunk_out.len() - offset];
                         chunk_out.push(b);
@@ -139,6 +144,9 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
         out.extend_from_slice(&chunk_out);
     }
 
+    if !saw_chunk || pos != data.len() {
+        return None;
+    }
     Some(out)
 }
 
@@ -241,10 +249,23 @@ mod tests {
     }
 
     #[test]
-    fn vba_decompress_gracefully_handles_truncated_chunk() {
-        // Declares an uncompressed chunk larger than remaining bytes; parser should stop cleanly.
+    fn vba_decompress_rejects_truncated_chunk() {
+        // Declares an uncompressed chunk larger than remaining bytes.
         let encoded = [0x01, 0x10, 0x00, b'A', b'B'];
-        let out = vba_decompress(&encoded).expect("decompress should return partial output");
-        assert!(out.is_empty());
+        assert_eq!(vba_decompress(&encoded), None);
+    }
+
+    #[test]
+    fn vba_decompress_rejects_invalid_copy_token() {
+        // A copy token cannot reference bytes before the start of its chunk.
+        let encoded = [0x01, 0x03, 0x80, 0x01, 0x00, 0x00];
+        assert_eq!(vba_decompress(&encoded), None);
+    }
+
+    #[test]
+    fn vba_decompress_rejects_truncated_copy_token() {
+        // The flags byte requests a two-byte copy token, but only one byte remains.
+        let encoded = [0x01, 0x02, 0x80, 0x01, 0x00];
+        assert_eq!(vba_decompress(&encoded), None);
     }
 }
