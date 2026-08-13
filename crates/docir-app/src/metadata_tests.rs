@@ -250,3 +250,11 @@ fn parse_metadata_lpstr_rejects_overflowing_value_bounds() {
     let err = super::parse_property_value(&property, 30).expect_err("overflow must fail");
     assert!(err.to_string().contains("LPSTR value"));
 }
+
+#[test]
+fn format_filetime_utc_accepts_valid_dates_above_old_cutoff() {
+    let formatted = super::format_filetime_utc(600_000_000_000_000_000);
+
+    assert!(!formatted.starts_with("filetime-overflow("));
+    assert!(formatted.ends_with('Z'));
+}

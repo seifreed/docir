@@ -334,10 +334,6 @@ fn parse_property_value(
 
 fn format_filetime_utc(raw: u64) -> String {
     const WINDOWS_TO_UNIX_SECONDS: i128 = 11_644_473_600;
-    const MAX_VALID_FILETIME: u64 = 600_000_000_000_000_000;
-    if raw > MAX_VALID_FILETIME {
-        return format!("filetime-overflow({})", raw);
-    }
     let unix_seconds = (raw / 10_000_000) as i128 - WINDOWS_TO_UNIX_SECONDS;
     let days = unix_seconds.div_euclid(86_400);
     let secs_of_day = unix_seconds.rem_euclid(86_400);
