@@ -1,4 +1,10 @@
+use crate::ooxml::relationships::looks_like_external_target;
+
 pub(crate) fn normalize_docx_target(target: &str) -> String {
+    if looks_like_external_target(target) {
+        return target.to_string();
+    }
+
     let normalized_target = target.replace('\\', "/");
     let parts: Vec<&str> = normalized_target.split('/').collect();
     let mut resolved: Vec<&str> = Vec::new();
@@ -28,6 +34,14 @@ mod tests {
         assert_eq!(
             normalize_docx_target(r"..\media\image1.png"),
             "word/media/image1.png"
+        );
+    }
+
+    #[test]
+    fn test_normalize_docx_target_preserves_external_targets() {
+        assert_eq!(
+            normalize_docx_target("https://example.test/image.png"),
+            "https://example.test/image.png"
         );
     }
 }

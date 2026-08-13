@@ -196,7 +196,7 @@ impl Relationships {
     }
 }
 
-fn looks_like_external_target(target: &str) -> bool {
+pub(crate) fn looks_like_external_target(target: &str) -> bool {
     if target.starts_with("//") || target.starts_with("\\\\") {
         return true;
     }
