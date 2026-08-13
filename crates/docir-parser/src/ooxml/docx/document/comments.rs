@@ -36,9 +36,22 @@ impl DocxParser {
         let mut reader = Reader::from_str(xml);
         reader.config_mut().trim_text(true);
         let mut buf = Vec::new();
+        let mut depth = 0usize;
+        let mut root_closed = false;
 
         loop {
-            match reader.read_event_into(&mut buf) {
+            let event = reader
+                .read_event_into(&mut buf)
+                .map_err(|err| xml_error("word/commentsExtended.xml", err))?;
+            if crate::xml_utils::track_xml_document_event(
+                &event,
+                &mut depth,
+                &mut root_closed,
+                "word/commentsExtended.xml",
+            )? {
+                break;
+            }
+            match event {
                 Ok(Event::Empty(e)) | Ok(Event::Start(e))
                     if local_name(e.name().as_ref()) == b"commentExt" =>
                 {
@@ -57,10 +70,6 @@ impl DocxParser {
                     };
                     set.entries.push(entry);
                 }
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(xml_error("word/commentsExtended.xml", e));
-                }
                 _ => {}
             }
             buf.clear();
@@ -77,9 +86,22 @@ impl DocxParser {
         let mut reader = Reader::from_str(xml);
         reader.config_mut().trim_text(true);
         let mut buf = Vec::new();
+        let mut depth = 0usize;
+        let mut root_closed = false;
 
         loop {
-            match reader.read_event_into(&mut buf) {
+            let event = reader
+                .read_event_into(&mut buf)
+                .map_err(|err| xml_error("word/commentsIds.xml", err))?;
+            if crate::xml_utils::track_xml_document_event(
+                &event,
+                &mut depth,
+                &mut root_closed,
+                "word/commentsIds.xml",
+            )? {
+                break;
+            }
+            match event {
                 Ok(Event::Empty(e)) | Ok(Event::Start(e))
                     if local_name(e.name().as_ref()) == b"commentId" =>
                 {
@@ -93,10 +115,6 @@ impl DocxParser {
                         )?,
                     };
                     map.mappings.push(entry);
-                }
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(xml_error("word/commentsIds.xml", e));
                 }
                 _ => {}
             }
@@ -117,13 +135,41 @@ fn parse_comments_like(
 ) -> Result<Vec<NodeId>, ParseError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
-    reader.config_mut().check_end_names = false;
     let mut buf = Vec::new();
     let mut nodes = Vec::new();
+    let mut root_name: Option<Vec<u8>> = None;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error("word/comments.xml", err))?;
+        match &event {
+            Event::Start(e) if root_name.is_none() => {
+                root_name = Some(e.name().as_ref().to_vec());
+            }
+            Event::Empty(e) if root_name.is_none() => {
+                root_name = Some(e.name().as_ref().to_vec());
+                root_closed = true;
+            }
+            Event::End(e)
+                if root_name
+                    .as_deref()
+                    .is_some_and(|name| name == e.name().as_ref()) =>
+            {
+                root_closed = true;
+            }
+            Event::Eof if root_closed => break,
+            Event::Eof => {
+                return Err(xml_error(
+                    "word/comments.xml",
+                    "document ends before its root is closed",
+                ));
+            }
+            _ => {}
+        }
+        match event {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"comment" => {
                     let comment_id = required_comment_attr(&e, b"w:id", "word/comments.xml")?;
                     let mut comment = Comment::new(comment_id);
@@ -165,10 +211,6 @@ fn parse_comments_like(
                 }
                 _ => {}
             },
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error("word/comments.xml", e));
-            }
             _ => {}
         }
         buf.clear();

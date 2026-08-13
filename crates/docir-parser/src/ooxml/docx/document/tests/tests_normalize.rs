@@ -78,6 +78,28 @@ fn test_parse_comment_variants_reject_missing_ids() {
 }
 
 #[test]
+fn test_parse_comment_variants_reject_truncated_roots() {
+    let mut parser = DocxParser::new();
+    let comments = r#"<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:comment w:id="1"><w:p/></w:comment>"#;
+    let err = parser
+        .parse_comments(comments, &Relationships::default())
+        .expect_err("truncated comments root must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/comments.xml"));
+
+    let extended = r#"<w16cid:commentsEx xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid"><w16cid:commentExt w:id="1"/>"#;
+    let err = parser
+        .parse_comments_extended(extended)
+        .expect_err("truncated commentsEx root must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/commentsExtended.xml"));
+
+    let ids = r#"<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid"><w16cid:commentId w:id="1"/>"#;
+    let err = parser
+        .parse_comments_ids(ids)
+        .expect_err("truncated commentsIds root must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/commentsIds.xml"));
+}
+
+#[test]
 fn test_parse_notes_endnote_kind_filters_footnotes() {
     let notes_xml = r#"
         <w:endnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -160,6 +182,17 @@ fn test_parse_settings_entries_and_error_path() {
         ParseError::Xml { file, .. } => assert_eq!(file, "word/settings.xml"),
         other => panic!("unexpected error: {other:?}"),
     }
+}
+
+#[test]
+fn test_parse_settings_rejects_truncated_root() {
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_settings(
+            r#"<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:zoom/>"#,
+        )
+        .expect_err("truncated settings root must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/settings.xml"));
 }
 
 #[test]

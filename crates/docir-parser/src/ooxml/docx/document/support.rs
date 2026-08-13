@@ -215,10 +215,23 @@ pub(super) fn parse_settings_like(xml: &str) -> Result<WordSettings, ParseError>
     let mut settings = WordSettings::new();
     let mut reader = reader_from_str(xml);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error("word/settings.xml", err))?;
+        if crate::xml_utils::track_xml_document_event(
+            &event,
+            &mut depth,
+            &mut root_closed,
+            "word/settings.xml",
+        )? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
                 let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 let mut entry = docir_core::ir::SettingEntry {
                     name,
@@ -234,10 +247,6 @@ pub(super) fn parse_settings_like(xml: &str) -> Result<WordSettings, ParseError>
                     });
                 })?;
                 settings.entries.push(entry);
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error("word/settings.xml", e));
             }
             _ => {}
         }
