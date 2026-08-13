@@ -697,3 +697,21 @@ fn test_parse_styles_rejects_missing_style_id() {
 
     assert!(matches!(err, ParseError::InvalidStructure(_)));
 }
+
+#[test]
+fn test_parse_styles_keeps_empty_style() {
+    let styles_xml = r#"
+        <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:style w:type="paragraph" w:styleId="EmptyStyle"/>
+        </w:styles>
+    "#;
+    let mut parser = DocxParser::new();
+    let styles_id = parser.parse_styles(styles_xml).expect("empty style");
+    let store = parser.into_store();
+
+    let Some(docir_core::ir::IRNode::StyleSet(styles)) = store.get(styles_id) else {
+        panic!("missing style set");
+    };
+    assert_eq!(styles.styles.len(), 1);
+    assert_eq!(styles.styles[0].style_id, "EmptyStyle");
+}

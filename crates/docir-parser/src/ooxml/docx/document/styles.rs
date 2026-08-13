@@ -27,6 +27,9 @@ impl DocxParser {
                 Ok(Event::Start(e)) => {
                     handle_style_start(&mut reader, &e, &mut current, &mut in_name)?
                 }
+                Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"style" => {
+                    styles.styles.push(build_style(&e)?);
+                }
                 Ok(Event::Empty(e)) => handle_style_empty(&e, &mut current)?,
                 Ok(Event::Text(e)) => {
                     if in_name && let Some(style) = current.as_mut() {
