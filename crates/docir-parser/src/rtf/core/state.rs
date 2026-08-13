@@ -213,9 +213,18 @@ impl RtfParseContext {
         Ok(())
     }
 
-    pub(super) fn pop_group(&mut self) {
-        if let Some(group) = self.group_stack.pop() {
-            self.current_props = group.style;
+    pub(super) fn pop_group(&mut self) -> Result<(), ParseError> {
+        if self.group_stack.len() <= 1 {
+            return Err(ParseError::InvalidStructure(
+                "RTF has an unmatched closing group".to_string(),
+            ));
         }
+        let Some(group) = self.group_stack.pop() else {
+            return Err(ParseError::InvalidStructure(
+                "RTF group stack is empty".to_string(),
+            ));
+        };
+        self.current_props = group.style;
+        Ok(())
     }
 }

@@ -155,6 +155,28 @@ fn parse_reader_rejects_non_rtf_input() {
 }
 
 #[test]
+fn parse_rtf_rejects_unclosed_groups() {
+    let parser = RtfParser::new();
+    let err = parser
+        .parse_bytes(b"{\\rtf1\\ansi unterminated")
+        .expect_err("unclosed RTF groups must fail");
+
+    assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("unclosed")));
+}
+
+#[test]
+fn parse_rtf_rejects_unmatched_closing_groups() {
+    let parser = RtfParser::new();
+    let err = parser
+        .parse_bytes(b"{\\rtf1\\ansi extra}}")
+        .expect_err("unmatched RTF closing groups must fail");
+
+    assert!(
+        matches!(err, ParseError::InvalidStructure(message) if message.contains("unmatched closing"))
+    );
+}
+
+#[test]
 fn parse_reader_enforces_max_input_size_before_parse() {
     let config = ParserConfig {
         max_input_size: 8,

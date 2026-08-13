@@ -27,7 +27,7 @@ pub(crate) fn parse_rtf(
             Some(b'}') => {
                 flush_text(ctx, store, None)?;
                 handle_group_end(ctx, store);
-                ctx.pop_group();
+                ctx.pop_group()?;
             }
             Some(b'\\') => {
                 parse_control(cursor, ctx, store)?;
@@ -63,6 +63,11 @@ pub(crate) fn parse_rtf(
             },
             None => break,
         }
+    }
+    if ctx.group_stack.len() != 1 {
+        return Err(ParseError::InvalidStructure(
+            "RTF has unclosed groups".to_string(),
+        ));
     }
     flush_text(ctx, store, None)?;
     finalize_table_if_open(ctx, store);
