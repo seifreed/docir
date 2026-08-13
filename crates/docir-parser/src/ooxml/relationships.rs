@@ -102,6 +102,11 @@ impl Relationships {
                         target_mode,
                     };
 
+                    if rels.by_id.contains_key(&id) {
+                        return Err(ParseError::InvalidStructure(format!(
+                            "{path} contains duplicate relationship Id: {id}"
+                        )));
+                    }
                     rels.by_type.entry(rel_type).or_default().push(id.clone());
                     rels.by_id.insert(id, rel);
                 }
@@ -295,6 +300,18 @@ mod tests {
         ] {
             assert!(Relationships::parse(xml).is_err());
         }
+    }
+
+    #[test]
+    fn parse_rejects_duplicate_relationship_ids() {
+        let xml = r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://example.test/image" Target="image1.png"/>
+              <Relationship Id="rId1" Type="http://example.test/image" Target="image2.png"/>
+            </Relationships>
+        "#;
+
+        assert!(Relationships::parse(xml).is_err());
     }
 
     #[test]
