@@ -81,27 +81,6 @@ pub(crate) fn infer_cell_value_type_and_attr(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use quick_xml::Reader;
-    use std::io::Cursor;
-
-    #[test]
-    fn read_ods_cell_text_rejects_missing_end() {
-        let xml = r#"<table:table-cell xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><text:p>Broken</text:p>"#;
-        let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
-        let mut buf = Vec::new();
-        assert!(matches!(
-            reader.read_event_into(&mut buf),
-            Ok(Event::Start(_))
-        ));
-
-        let err = read_ods_cell_text(&mut reader).expect_err("truncated table cell must fail");
-        assert!(matches!(err, ParseError::Xml { .. }));
-    }
-}
-
 pub(crate) fn resolve_style_id(
     start: &BytesStart<'_>,
     style_map: &mut HashMap<String, u32>,
@@ -211,5 +190,26 @@ fn parse_boolean_value(value_attr: Option<&str>) -> Result<CellValue, ParseError
             "content.xml",
             format!("invalid boolean cell value '{value}'"),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quick_xml::Reader;
+    use std::io::Cursor;
+
+    #[test]
+    fn read_ods_cell_text_rejects_missing_end() {
+        let xml = r#"<table:table-cell xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><text:p>Broken</text:p>"#;
+        let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+
+        let err = read_ods_cell_text(&mut reader).expect_err("truncated table cell must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
     }
 }

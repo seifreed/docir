@@ -55,38 +55,6 @@ pub(super) fn parse_ods_row_sample(
     Ok(OdsRow { cells: state.cells })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use quick_xml::Reader;
-    use std::io::Cursor;
-
-    #[test]
-    fn parse_ods_row_sample_rejects_missing_end() {
-        let xml = r#"<table:table-row xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"><table:table-cell/>"#;
-        let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
-        let mut buf = Vec::new();
-        let start = match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => e.into_owned(),
-            other => panic!("unexpected row start: {other:?}"),
-        };
-        let mut store = IrStore::new();
-        let mut style_map = HashMap::new();
-        let mut next_style_id = 1;
-
-        let err = parse_ods_row_sample(
-            &mut reader,
-            &start,
-            &mut store,
-            &mut style_map,
-            &mut next_style_id,
-            1,
-        )
-        .expect_err("truncated table row must fail");
-        assert!(matches!(err, ParseError::Xml { .. }));
-    }
-}
-
 struct OdsSampleState {
     cells: Vec<OdsCellData>,
     col_idx: u32,
@@ -197,4 +165,36 @@ fn repeated_columns(e: &BytesStart<'_>) -> Result<u32, ParseError> {
         })
         .transpose()
         .map(|value| value.unwrap_or(1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quick_xml::Reader;
+    use std::io::Cursor;
+
+    #[test]
+    fn parse_ods_row_sample_rejects_missing_end() {
+        let xml = r#"<table:table-row xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"><table:table-cell/>"#;
+        let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+        let mut buf = Vec::new();
+        let start = match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) => e.into_owned(),
+            other => panic!("unexpected row start: {other:?}"),
+        };
+        let mut store = IrStore::new();
+        let mut style_map = HashMap::new();
+        let mut next_style_id = 1;
+
+        let err = parse_ods_row_sample(
+            &mut reader,
+            &start,
+            &mut store,
+            &mut style_map,
+            &mut next_style_id,
+            1,
+        )
+        .expect_err("truncated table row must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
 }
