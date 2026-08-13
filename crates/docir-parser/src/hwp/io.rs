@@ -151,18 +151,12 @@ fn decrypt_hwp_stream(data: &[u8], password: &str, source: &str) -> Result<Vec<u
     let cipher = Aes128::new_from_slice(&key).map_err(|e| {
         ParseError::InvalidStructure(format!("Failed to init HWP cipher for {}: {}", source, e))
     })?;
-    let mut padded = data.to_vec();
-    let remainder = padded.len() % 16;
-    if remainder != 0 {
-        padded.extend(std::iter::repeat_n((16 - remainder) as u8, 16 - remainder));
-    }
-
     let mut feedback = [0u8; 16];
-    let mut output = Vec::with_capacity(padded.len());
-    for block in padded.chunks_exact(16) {
+    let mut output = Vec::with_capacity(data.len());
+    for block in data.chunks(16) {
         let mut decrypted = [0u8; 16];
-        decrypted.copy_from_slice(block);
-        for bit_index in 0..128 {
+        decrypted[..block.len()].copy_from_slice(block);
+        for bit_index in 0..block.len() * 8 {
             let mut encrypted_feedback = GenericArray::clone_from_slice(&feedback);
             cipher.encrypt_block(&mut encrypted_feedback);
             let keystream_bit = encrypted_feedback[0] & 0x80;
@@ -183,7 +177,7 @@ fn decrypt_hwp_stream(data: &[u8], password: &str, source: &str) -> Result<Vec<u
             feedback[15] = feedback[15].wrapping_shl(1) | input_bit;
             decrypted[bit_index / 8] ^= keystream_bit >> (bit_index % 8);
         }
-        output.extend_from_slice(&decrypted);
+        output.extend_from_slice(&decrypted[..block.len()]);
     }
     Ok(output)
 }
@@ -239,6 +233,14 @@ mod tests {
             .expect("HWP vector must decrypt");
 
         assert_eq!(plaintext, b"0123456789ABCDEF");
+    }
+
+    #[test]
+    fn decrypt_hwp_stream_preserves_non_block_aligned_length() {
+        let plaintext = decrypt_hwp_stream(&[0], "secret", "BodyText/Section0")
+            .expect("partial CFB stream must decrypt");
+
+        assert_eq!(plaintext.len(), 1);
     }
 
     #[test]
