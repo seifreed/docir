@@ -418,6 +418,21 @@ fn test_parse_font_table_reports_malformed_attributes() {
 }
 
 #[test]
+fn test_parse_font_table_rejects_missing_font_name() {
+    let xml = r#"
+        <w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:font></w:font>
+        </w:fonts>
+    "#;
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_font_table(xml)
+        .expect_err("font without name must fail");
+
+    assert!(matches!(err, ParseError::InvalidStructure(_)));
+}
+
+#[test]
 fn test_parse_numbering_level_props() {
     let xml = r#"
         <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

@@ -22,7 +22,12 @@ impl DocxParser {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"font" => {
-                    let name = try_attr_value(&e, b"w:name", FONT_TABLE_PATH)?.unwrap_or_default();
+                    let name =
+                        try_attr_value(&e, b"w:name", FONT_TABLE_PATH)?.ok_or_else(|| {
+                            ParseError::InvalidStructure(
+                                "word/fontTable.xml font is missing w:name".to_string(),
+                            )
+                        })?;
                     current = Some(FontEntry {
                         name,
                         alt_name: None,
