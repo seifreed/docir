@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::visit_attributes;
 use crate::xml_utils::xml_error;
+use crate::xml_utils::{track_xml_document_event, visit_attributes};
 use docir_core::ir::CustomXmlPart;
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -22,10 +22,18 @@ pub fn parse_custom_xml_part(
 
     let mut buf = Vec::new();
     let mut namespaces: HashSet<String> = HashSet::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) if part.root_element.is_none() => {
                 part.root_element = Some(String::from_utf8_lossy(e.name().as_ref()).to_string());
                 visit_attributes(&e, path, |attr| {
                     let key = String::from_utf8_lossy(attr.key.as_ref());
@@ -33,11 +41,6 @@ pub fn parse_custom_xml_part(
                         namespaces.insert(lossy_attr_value(attr).to_string());
                     }
                 })?;
-                break;
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
             }
             _ => {}
         }

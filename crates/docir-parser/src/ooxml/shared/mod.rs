@@ -218,6 +218,41 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_people_part_rejects_truncated_root() {
+        assert_shared_xml_error(
+            parse_people_part(
+                r#"<ppl:people xmlns:ppl="x"><ppl:person ppl:id="p1"/>"#,
+                "word/people.xml",
+            ),
+            "word/people.xml",
+        );
+    }
+
+    #[test]
+    fn test_parse_custom_xml_part_rejects_truncated_root() {
+        assert_shared_xml_error(
+            parse_custom_xml_part(
+                r#"<root xmlns="urn:example"><child/>"#,
+                "customXml/item1.xml",
+                42,
+            ),
+            "customXml/item1.xml",
+        );
+    }
+
+    #[test]
+    fn test_parse_drawingml_part_rejects_truncated_root() {
+        assert_shared_xml_error(
+            parse_drawingml_part(
+                r#"<w:drawing xmlns:w="w"><w:anchor/>"#,
+                "word/drawings/drawing1.xml",
+                &Relationships::default(),
+            ),
+            "word/drawings/drawing1.xml",
+        );
+    }
+
+    #[test]
     fn test_shared_ooxml_parsers_report_malformed_attributes() {
         assert_shared_xml_error(
             parse_theme(

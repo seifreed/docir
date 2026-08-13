@@ -1,6 +1,6 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{read_event, reader_from_str, visit_attributes};
+use crate::xml_utils::{read_event, reader_from_str, track_xml_document_event, visit_attributes};
 use docir_core::ir::{PeoplePart, PersonEntry};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -17,8 +17,14 @@ fn parse_people_part_impl(xml: &str, path: &str) -> Result<PeoplePart, ParseErro
     people.span = Some(SourceSpan::new(path));
 
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match read_event(&mut reader, &mut buf, path)? {
+        let event = read_event(&mut reader, &mut buf, path)?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
             Event::Start(e) | Event::Empty(e) if e.name().as_ref().ends_with(b"person") => {
                 let mut entry = PersonEntry {
                     person_id: None,
@@ -49,7 +55,6 @@ fn parse_people_part_impl(xml: &str, path: &str) -> Result<PeoplePart, ParseErro
                     people.people.push(entry);
                 }
             }
-            Event::Eof => break,
             _ => {}
         }
         buf.clear();

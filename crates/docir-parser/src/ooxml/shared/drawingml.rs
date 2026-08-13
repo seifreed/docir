@@ -2,7 +2,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, visit_attributes, xml_error};
+use crate::xml_utils::{local_name, track_xml_document_event, visit_attributes, xml_error};
 use docir_core::ir::{DrawingPart, Shape, ShapeType};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -23,9 +23,17 @@ pub fn parse_drawingml_part(
 
     let mut buf = Vec::new();
     let mut current_name: Option<String> = None;
+    let mut depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
                 match local {
@@ -73,10 +81,6 @@ pub fn parse_drawingml_part(
                     }
                     _ => {}
                 }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
             }
             _ => {}
         }
