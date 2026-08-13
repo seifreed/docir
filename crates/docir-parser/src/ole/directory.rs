@@ -101,7 +101,8 @@ pub(crate) fn collect_entry_metadata(entries: &[DirEntry]) -> HashMap<String, Cf
             },
         );
         if root.child != FREE_SECT {
-            walk_entry_metadata(root.child, "", entries, &mut out, 0);
+            let mut visited = HashSet::new();
+            walk_entry_metadata(root.child, "", entries, &mut out, 0, &mut visited);
         }
     }
     out
@@ -113,8 +114,13 @@ fn walk_entry_metadata(
     entries: &[DirEntry],
     out: &mut HashMap<String, CfbEntryMetadata>,
     depth: u32,
+    visited: &mut HashSet<u32>,
 ) {
-    if idx == FREE_SECT || idx == END_OF_CHAIN || depth > MAX_RECURSION_DEPTH {
+    if idx == FREE_SECT
+        || idx == END_OF_CHAIN
+        || depth > MAX_RECURSION_DEPTH
+        || !visited.insert(idx)
+    {
         return;
     }
     let idx_usize = idx as usize;
@@ -122,7 +128,7 @@ fn walk_entry_metadata(
         return;
     }
     let entry = &entries[idx_usize];
-    walk_entry_metadata(entry.left, parent, entries, out, depth + 1);
+    walk_entry_metadata(entry.left, parent, entries, out, depth + 1, visited);
 
     let mut path = String::new();
     if !parent.is_empty() {
@@ -151,9 +157,9 @@ fn walk_entry_metadata(
     }
 
     if (entry.object_type == 1 || entry.object_type == 5) && entry.child != FREE_SECT {
-        walk_entry_metadata(entry.child, &path, entries, out, depth + 1);
+        walk_entry_metadata(entry.child, &path, entries, out, depth + 1, visited);
     }
-    walk_entry_metadata(entry.right, parent, entries, out, depth + 1);
+    walk_entry_metadata(entry.right, parent, entries, out, depth + 1, visited);
 }
 
 pub(crate) fn collect_directory_slots(entries: &[DirEntry]) -> Vec<CfbDirectorySlot> {
@@ -247,10 +253,11 @@ fn derive_entry_path(idx: u32, entries: &[DirEntry]) -> Option<String> {
         });
     }
     let mut out = None;
+    let mut visited = HashSet::new();
     if let Some(root) = entries.first()
         && root.child != FREE_SECT
     {
-        walk_find_path(root.child, "", idx, entries, &mut out, 0);
+        walk_find_path(root.child, "", idx, entries, &mut out, 0, &mut visited);
     }
     out
 }
@@ -262,11 +269,13 @@ fn walk_find_path(
     entries: &[DirEntry],
     out: &mut Option<String>,
     depth: u32,
+    visited: &mut HashSet<u32>,
 ) {
     if current == FREE_SECT
         || current == END_OF_CHAIN
         || out.is_some()
         || depth > MAX_RECURSION_DEPTH
+        || !visited.insert(current)
     {
         return;
     }
@@ -275,7 +284,7 @@ fn walk_find_path(
         return;
     }
     let entry = &entries[current_usize];
-    walk_find_path(entry.left, parent, target, entries, out, depth + 1);
+    walk_find_path(entry.left, parent, target, entries, out, depth + 1, visited);
     if out.is_some() {
         return;
     }
@@ -290,9 +299,17 @@ fn walk_find_path(
         return;
     }
     if (entry.object_type == 1 || entry.object_type == 5) && entry.child != FREE_SECT {
-        walk_find_path(entry.child, &path, target, entries, out, depth + 1);
+        walk_find_path(entry.child, &path, target, entries, out, depth + 1, visited);
     }
     if out.is_none() {
-        walk_find_path(entry.right, parent, target, entries, out, depth + 1);
+        walk_find_path(
+            entry.right,
+            parent,
+            target,
+            entries,
+            out,
+            depth + 1,
+            visited,
+        );
     }
 }

@@ -191,6 +191,44 @@ fn directory_parsing_and_tree_walk_collect_stream_paths() {
 }
 
 #[test]
+fn directory_metadata_walk_rejects_recursive_pointer_cycles() {
+    let entries = vec![
+        super::types::DirEntry {
+            name: "Root Entry".to_string(),
+            name_len_raw: 22,
+            object_type: 5,
+            color_flag: 1,
+            left: FREE_SECT,
+            right: FREE_SECT,
+            child: 1,
+            start_sector: END_OF_CHAIN,
+            size: 0,
+            created_filetime: None,
+            modified_filetime: None,
+        },
+        super::types::DirEntry {
+            name: "Loop".to_string(),
+            name_len_raw: 10,
+            object_type: 1,
+            color_flag: 1,
+            left: 1,
+            right: 1,
+            child: 1,
+            start_sector: END_OF_CHAIN,
+            size: 0,
+            created_filetime: None,
+            modified_filetime: None,
+        },
+    ];
+
+    let metadata = directory::collect_entry_metadata(&entries);
+    assert!(metadata.contains_key("Root Entry"));
+    assert!(metadata.contains_key("Loop"));
+    let slots = directory::collect_directory_slots(&entries);
+    assert_eq!(slots[1].path, "Loop");
+}
+
+#[test]
 fn collect_directory_slots_marks_normal_orphaned_and_free_entries() {
     let mut dir = vec![0u8; 128 * 4];
 
