@@ -181,6 +181,20 @@ fn read_sector_and_stream_helpers_handle_bounds_and_chains() {
 }
 
 #[test]
+fn root_stream_read_respects_declared_size() {
+    let mut data = crate::test_support::build_test_cfb(&[("Stream", &[1_u8; 512])]);
+    let sector_size = 1usize << u16::from_le_bytes([data[0x1E], data[0x1F]]);
+    let first_dir_sector =
+        u32::from_le_bytes([data[0x30], data[0x31], data[0x32], data[0x33]]) as usize;
+    let root_offset = sector_size + first_dir_sector * sector_size;
+    data[root_offset + 116..root_offset + 120].copy_from_slice(&0_u32.to_le_bytes());
+    data[root_offset + 120..root_offset + 128].copy_from_slice(&0_u64.to_le_bytes());
+
+    let cfb = Cfb::parse(data).expect("CFB");
+    assert!(cfb.root_stream.is_empty());
+}
+
+#[test]
 fn ole_scalar_readers_reject_overflowing_offsets() {
     assert!(super::stream::read_u64(&[], usize::MAX).is_err());
     assert!(crate::ole_header::read_u16(&[], usize::MAX).is_err());

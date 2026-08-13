@@ -24,7 +24,11 @@ pub(crate) fn read_directory_entries_and_root_stream(
     let root = entries
         .first()
         .ok_or_else(|| ParseError::InvalidStructure("Missing root entry".to_string()))?;
-    let root_stream = read_stream_from_fat(data, sector_size, fat, root.start_sector, None)?;
+    let root_size = usize::try_from(root.size).map_err(|_| {
+        ParseError::ResourceLimit("OLE root stream size does not fit in usize".to_string())
+    })?;
+    let root_stream =
+        read_stream_from_fat(data, sector_size, fat, root.start_sector, Some(root_size))?;
     Ok((entries, root_stream))
 }
 
