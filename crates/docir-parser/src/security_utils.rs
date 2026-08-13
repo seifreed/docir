@@ -70,44 +70,35 @@ fn is_formula_function_boundary(input: &str, start: usize) -> bool {
 }
 
 fn find_matching_paren(s: &str, open_pos: usize) -> Option<usize> {
-    let chars: Vec<char> = s.chars().collect();
-    if open_pos >= chars.len() || chars[open_pos] != '(' {
+    if s.get(open_pos..)?.chars().next()? != '(' {
         return None;
     }
     let mut depth = 1usize;
     let mut in_quotes = false;
     let mut quote_char = '\0';
-    let mut prev_ch = '\0';
-    for (i, &ch) in chars.iter().enumerate().skip(open_pos + 1) {
+    let mut chars = s[open_pos + 1..].char_indices().peekable();
+    while let Some((relative_index, ch)) = chars.next() {
+        let i = open_pos + 1 + relative_index;
         if !in_quotes {
-            if (ch == '"' || ch == '\'') && (quote_char == '\0' || ch == quote_char) {
+            if ch == '"' || ch == '\'' {
                 in_quotes = true;
                 quote_char = ch;
             } else if ch == '(' {
                 depth += 1;
             } else if ch == ')' {
-                depth -= 1;
+                depth = depth.checked_sub(1)?;
                 if depth == 0 {
                     return Some(i);
                 }
             }
         } else if ch == quote_char {
-            // Doubled quotes ("") inside a quoted string are escape sequences, not closers
-            if prev_ch == ch {
-                // Already handled: the previous char was the same quote, so this is a doubled quote
-                // that we already skipped. Do nothing.
+            if chars.peek().is_some_and(|(_, next)| *next == ch) {
+                chars.next();
             } else {
-                // Look ahead: if next char is same quote, it's a doubled quote (escaped)
-                let next_is_same = chars.get(i + 1) == Some(&ch);
-                if next_is_same {
-                    // This is the opening quote of a doubled pair; stay in quotes
-                } else {
-                    in_quotes = false;
-                    quote_char = '\0';
-                }
+                in_quotes = false;
+                quote_char = '\0';
             }
         }
-        prev_ch = ch;
     }
     None
 }
@@ -176,5 +167,19 @@ mod tests {
         .expect("nested DDE");
         assert_eq!(dde.field_type, DdeFieldType::Dde);
         assert_eq!(dde.application, "soffice");
+    }
+
+    #[test]
+    fn parse_dde_formula_handles_unicode_before_function() {
+        let dde = parse_dde_formula(
+            r#"é;DDE("soffice";"file:///tmp/test.ods";"A1")"#,
+            SourceSpan::new("content.xml"),
+            false,
+        )
+        .expect("unicode prefix must not corrupt byte offsets");
+
+        assert_eq!(dde.application, "soffice");
+        assert_eq!(dde.topic.as_deref(), Some("file:///tmp/test.ods"));
+        assert_eq!(dde.item.as_deref(), Some("A1"));
     }
 }
