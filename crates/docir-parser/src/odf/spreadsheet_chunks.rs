@@ -1,5 +1,6 @@
 use super::{Event, Reader};
-use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events};
+use crate::error::ParseError;
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, try_attr_value_by_suffix};
 
 #[derive(Clone)]
 pub(super) struct OdfTableChunk {
@@ -41,27 +42,23 @@ pub(super) fn extract_spreadsheet_table_chunks(xml: &[u8]) -> Vec<OdfTableChunk>
     chunks
 }
 
-pub(super) fn table_name_from_chunk(chunk: &[u8], sheet_id: u32) -> String {
+pub(super) fn table_name_from_chunk(chunk: &[u8], sheet_id: u32) -> Result<String, ParseError> {
     let mut reader = Reader::from_reader(std::io::Cursor::new(chunk));
     reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut table_name = None;
-    if scan_xml_events(&mut reader, &mut buf, "content.xml", |event| match event {
+    scan_xml_events(&mut reader, &mut buf, "content.xml", |event| match event {
         Event::Start(e) | Event::Empty(e) if local_name(e.name().as_ref()) == b"table" => {
             table_name = Some(
-                attr_value_by_suffix(&e, &[b":name"])
+                try_attr_value_by_suffix(&e, &[b":name"], "content.xml")?
                     .unwrap_or_else(|| format!("Sheet{}", sheet_id)),
             );
             Ok(XmlScanControl::Break)
         }
         _ => Ok(XmlScanControl::Continue),
-    })
-    .is_err()
-    {
-        return format!("Sheet{}", sheet_id);
-    }
+    })?;
 
-    table_name.unwrap_or_else(|| format!("Sheet{}", sheet_id))
+    Ok(table_name.unwrap_or_else(|| format!("Sheet{}", sheet_id)))
 }
 
 fn find_spreadsheet_range(xml: &[u8]) -> Option<(usize, usize)> {
@@ -224,6 +221,7 @@ fn is_self_closing_tag(xml: &[u8], start: usize, end: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{extract_spreadsheet_table_chunks, table_name_from_chunk};
+    use crate::error::ParseError;
 
     #[test]
     fn extract_spreadsheet_table_chunks_accepts_alternate_prefixes() {
@@ -241,8 +239,14 @@ mod tests {
         let chunks = extract_spreadsheet_table_chunks(xml);
 
         assert_eq!(chunks.len(), 2);
-        assert_eq!(table_name_from_chunk(&chunks[0].bytes, 1), "Alt1");
-        assert_eq!(table_name_from_chunk(&chunks[1].bytes, 2), "Alt2");
+        assert_eq!(
+            table_name_from_chunk(&chunks[0].bytes, 1).expect("table name"),
+            "Alt1"
+        );
+        assert_eq!(
+            table_name_from_chunk(&chunks[1].bytes, 2).expect("table name"),
+            "Alt2"
+        );
     }
 
     #[test]
@@ -266,13 +270,27 @@ mod tests {
         let chunks = extract_spreadsheet_table_chunks(xml);
 
         assert_eq!(chunks.len(), 2);
-        assert_eq!(table_name_from_chunk(&chunks[0].bytes, 1), "Outer");
+        assert_eq!(
+            table_name_from_chunk(&chunks[0].bytes, 1).expect("table name"),
+            "Outer"
+        );
         assert!(
             chunks[0]
                 .bytes
                 .windows(b"after-inner".len())
                 .any(|w| w == b"after-inner")
         );
-        assert_eq!(table_name_from_chunk(&chunks[1].bytes, 2), "Next");
+        assert_eq!(
+            table_name_from_chunk(&chunks[1].bytes, 2).expect("table name"),
+            "Next"
+        );
+    }
+
+    #[test]
+    fn table_name_from_chunk_reports_invalid_attribute_entity() {
+        let chunk = br#"<table:table table:name="Broken &"/>"#;
+
+        let err = table_name_from_chunk(chunk, 1).expect_err("invalid table name entity must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
     }
 }

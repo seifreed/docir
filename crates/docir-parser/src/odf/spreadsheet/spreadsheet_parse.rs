@@ -462,7 +462,7 @@ fn parse_ods_table_from_chunk(
         return Ok(parsed);
     }
 
-    let name = table_name_from_chunk(&chunk.bytes, sheet_id);
+    let name = table_name_from_chunk(&chunk.bytes, sheet_id)?;
     Ok(OdfSheetParseResult {
         worksheet: Worksheet::new(name, sheet_id),
         nodes: Vec::new(),

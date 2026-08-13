@@ -5,7 +5,7 @@ use super::super::super::{
     IRNode, IrStore, NodeId, OdfReader, ParseError, Shape, parse_frame_transform,
 };
 use crate::xml_utils::{
-    XmlScanControl, attr_value_by_suffix, is_end_event_local, scan_xml_events_until_end,
+    XmlScanControl, is_end_event_local, scan_xml_events_until_end, try_attr_value_by_suffix,
 };
 use quick_xml::events::{BytesStart, Event};
 
@@ -17,7 +17,7 @@ pub(crate) fn parse_draw_frame_spreadsheet(
     let transform = parse_frame_transform(start)?;
     let mut frame = FrameShapeState::new();
     let mut buf = Vec::new();
-    let mut name = attr_value_by_suffix(start, &[b":name"]);
+    let mut name = try_attr_value_by_suffix(start, &[b":name"], "content.xml")?;
 
     scan_xml_events_until_end(
         reader,

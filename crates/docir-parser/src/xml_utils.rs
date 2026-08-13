@@ -16,12 +16,6 @@ pub(crate) fn lossy_attr_value<'a>(
     String::from_utf8_lossy(&attr.value)
 }
 
-pub(crate) fn decoded_attr_value(attr: &Attribute<'_>, decoder: Decoder) -> String {
-    attr.decoded_and_normalized_value(XmlVersion::Implicit1_0, decoder)
-        .map(|value| value.into_owned())
-        .unwrap_or_else(|_| String::from_utf8_lossy(attr.value.as_ref()).into_owned())
-}
-
 pub(crate) fn try_decoded_attr_value(
     attr: &Attribute<'_>,
     decoder: Decoder,
@@ -177,18 +171,6 @@ where
         }
         _ => Ok(false),
     }
-}
-
-pub(crate) fn attr_value_by_suffix(e: &BytesStart<'_>, suffixes: &[&[u8]]) -> Option<String> {
-    for attr in e.attributes().flatten() {
-        let key = attr.key.as_ref();
-        for suffix in suffixes {
-            if key.ends_with(suffix) {
-                return Some(decoded_attr_value(&attr, e.decoder()));
-            }
-        }
-    }
-    None
 }
 
 pub(crate) fn try_attr_value_by_suffix(

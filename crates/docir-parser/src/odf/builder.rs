@@ -83,7 +83,7 @@ impl ParseStage for OdfParser {
             &mut store,
             &mut doc,
             &mut diagnostics,
-        );
+        )?;
 
         let mut macro_project = build_odf_macro_project(
             &manifest_entries,
@@ -193,17 +193,17 @@ impl OdfParser {
         store: &mut IrStore,
         doc: &mut Document,
         diagnostics: &mut Diagnostics,
-    ) {
+    ) -> Result<(), ParseError> {
         if !(fast_mode && format == DocumentFormat::OdfSpreadsheet) {
-            return;
+            return Ok(());
         }
         let Some(bytes) = content_bytes else {
-            return;
+            return Ok(());
         };
         let chunks = spreadsheet_chunks::extract_spreadsheet_table_chunks(bytes);
         for (idx, chunk) in chunks.iter().enumerate() {
             let sheet_name =
-                spreadsheet_chunks::table_name_from_chunk(&chunk.bytes, (idx + 1) as u32);
+                spreadsheet_chunks::table_name_from_chunk(&chunk.bytes, (idx + 1) as u32)?;
             let path = format!(
                 "content.xml#sheet:{}@{}-{}",
                 sheet_name, chunk.start, chunk.end
@@ -228,6 +228,7 @@ impl OdfParser {
                 Some("content.xml"),
             );
         }
+        Ok(())
     }
 
     fn insert_macro_project(
