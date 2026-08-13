@@ -2,6 +2,7 @@ use crate::error::ParseError;
 use crate::xml_utils::decoded_text;
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::track_xml_document_event;
 use crate::xml_utils::visit_attributes;
 use crate::xml_utils::xml_error;
 use docir_core::ir::DigitalSignature;
@@ -22,10 +23,18 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
     reader.config_mut().trim_text(true);
 
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"Signature" => {
                     visit_attributes(&e, path, |attr| {
                         if attr.key.as_ref() == b"Id" {
@@ -49,14 +58,11 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
                 }
                 b"X509SubjectName" => {
                     let text = reader.read_text(e.name()).map_err(|e| xml_error(path, e))?;
+                    depth -= 1;
                     sig.signer = Some(decoded_text(&text).map_err(|err| xml_error(path, err))?);
                 }
                 _ => {}
             },
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
             _ => {}
         }
         buf.clear();
@@ -119,10 +125,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_signature_is_tolerant_for_incomplete_xml() {
+    fn parse_signature_rejects_incomplete_xml() {
         let xml = "<ds:Signature><ds:SignatureMethod Algorithm=\"sha256\">";
-        let parsed = parse_signature(xml, "bad.xml").expect("parser is best-effort");
-        assert_eq!(parsed.signature_method.as_deref(), Some("sha256"));
+        let err = parse_signature(xml, "bad.xml").expect_err("truncated signature must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "bad.xml"));
     }
 
     #[test]
