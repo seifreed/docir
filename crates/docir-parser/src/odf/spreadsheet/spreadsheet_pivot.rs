@@ -26,6 +26,7 @@ pub(super) fn parse_ods_pivot_table_full(
     let (mut pivot, sheet_name, cache) = build_ods_pivot(start, cache_id)?;
     let mut field_count: u32 = 0;
     let mut buf = Vec::new();
+    let mut reached_pivot_end = false;
     scan_xml_events_with_reader(reader, &mut buf, "content.xml", |reader, event| {
         match event {
             Event::Start(e) if local_name(e.name().as_ref()) == b"data-pilot-field" => {
@@ -36,12 +37,19 @@ pub(super) fn parse_ods_pivot_table_full(
                 field_count = field_count.saturating_add(1);
             }
             Event::End(e) if local_name(e.name().as_ref()) == b"data-pilot-table" => {
+                reached_pivot_end = true;
                 return Ok(XmlScanControl::Break);
             }
             _ => {}
         }
         Ok(XmlScanControl::Continue)
     })?;
+    if !reached_pivot_end {
+        return Err(crate::xml_utils::xml_error(
+            "content.xml",
+            "unexpected end of XML before closing data-pilot-table",
+        ));
+    }
 
     let mut records: Option<PivotCacheRecords> = None;
     if let Some(cache) = cache.as_ref() {
@@ -224,4 +232,31 @@ pub(super) fn collect_validation_definitions(
     })?;
 
     Ok(validations)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quick_xml::events::Event;
+
+    #[test]
+    fn parse_ods_pivot_table_full_rejects_missing_end() {
+        let xml: &[u8] = br#"<table:data-pilot-table
+            xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+            table:name="TruncatedPivot">"#;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+        let mut buf = Vec::new();
+        let start = loop {
+            match reader.read_event_into(&mut buf).expect("pivot start") {
+                Event::Start(event) => break event.into_owned(),
+                Event::Eof => panic!("missing pivot start"),
+                _ => {}
+            }
+            buf.clear();
+        };
+
+        let err = parse_ods_pivot_table_full(&mut reader, &start, 1)
+            .expect_err("truncated pivot must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+    }
 }
