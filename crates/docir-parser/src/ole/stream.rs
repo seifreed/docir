@@ -25,7 +25,7 @@ pub(crate) fn read_stream_from_fat(
                 "OLE FAT chain exceeds the FAT table".to_string(),
             ));
         }
-        if out.len() >= MAX_STREAM_SIZE {
+        if out.len().saturating_add(sector_size as usize) > MAX_STREAM_SIZE {
             return Err(ParseError::ResourceLimit(
                 "OLE stream exceeds maximum size".to_string(),
             ));

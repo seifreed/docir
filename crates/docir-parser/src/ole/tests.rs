@@ -75,6 +75,15 @@ fn read_sector_and_stream_helpers_handle_bounds_and_chains() {
 
     let truncated_fat = vec![2];
     assert!(read_stream_from_fat(&data, 512, &truncated_fat, 0).is_err());
+    assert!(matches!(
+        read_stream_from_fat(
+            &[],
+            super::types::MAX_STREAM_SIZE as u32 + 1,
+            &[END_OF_CHAIN],
+            0
+        ),
+        Err(ParseError::ResourceLimit(_))
+    ));
 
     let mini_stream = b"abcdEFGHijklMNOP".to_vec();
     let mini_fat = vec![1, END_OF_CHAIN];
