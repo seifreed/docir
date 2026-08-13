@@ -58,6 +58,11 @@ pub(crate) fn read_stream_from_mini(
     start_sector: u32,
     size: usize,
 ) -> Result<Vec<u8>, ParseError> {
+    if size > MAX_STREAM_SIZE {
+        return Err(ParseError::ResourceLimit(
+            "OLE mini stream exceeds maximum size".to_string(),
+        ));
+    }
     if size == 0 {
         return Ok(Vec::new());
     }
@@ -172,4 +177,21 @@ pub(crate) fn utf16le_to_string(bytes: &[u8]) -> String {
         }
     }
     String::from_utf16_lossy(&u16s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_stream_from_mini;
+    use crate::error::ParseError;
+    use crate::ole::types::MAX_STREAM_SIZE;
+
+    #[test]
+    fn read_stream_from_mini_rejects_streams_over_maximum_size() {
+        let error = read_stream_from_mini(&[0; 64], 64, &[u32::MAX - 1], 0, MAX_STREAM_SIZE + 1)
+            .expect_err("mini streams must honor the global stream limit");
+
+        assert!(
+            matches!(error, ParseError::ResourceLimit(message) if message.contains("mini stream"))
+        );
+    }
 }
