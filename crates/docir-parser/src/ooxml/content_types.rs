@@ -85,9 +85,9 @@ impl ContentTypes {
 
     /// Checks if this is a macro-enabled document.
     pub fn is_macro_enabled(&self) -> bool {
-        self.overrides.values().any(|ct| {
+        self.main_content_type().is_some_and(|ct| {
             matches!(
-                ct.as_str(),
+                ct,
                 content_type::WORD_DOCUMENT_MACRO
                     | content_type::EXCEL_WORKBOOK_MACRO
                     | content_type::PPTX_PRESENTATION_MACRO
@@ -97,17 +97,15 @@ impl ContentTypes {
 
     /// Detects the document format from content types.
     pub fn detect_format(&self) -> Option<docir_core::DocumentFormat> {
-        [
-            docir_core::DocumentFormat::WordProcessing,
-            docir_core::DocumentFormat::Spreadsheet,
-            docir_core::DocumentFormat::Presentation,
-        ]
-        .into_iter()
-        .find(|format| {
-            self.overrides
-                .values()
-                .any(|content_type| format_for_main_content_type(content_type) == Some(*format))
-        })
+        self.main_content_type()
+            .and_then(format_for_main_content_type)
+    }
+
+    /// Checks if the package has an XLSB workbook as its main part.
+    pub fn is_binary_workbook(&self) -> bool {
+        self.overrides
+            .get("xl/workbook.bin")
+            .is_some_and(|ct| ct == content_type::EXCEL_WORKBOOK_BIN)
     }
 
     /// Returns true if the part is treated as a legacy/extension part.
@@ -116,6 +114,17 @@ impl ContentTypes {
             return content_type.contains("extension") && !content_type.contains("webextension");
         }
         false
+    }
+
+    fn main_content_type(&self) -> Option<&str> {
+        [
+            "word/document.xml",
+            "xl/workbook.xml",
+            "xl/workbook.bin",
+            "ppt/presentation.xml",
+        ]
+        .into_iter()
+        .find_map(|part_name| self.overrides.get(part_name).map(String::as_str))
     }
 }
 
@@ -359,9 +368,12 @@ mod tests {
             <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
               <Override PartName="/word/document.xml" ContentType="{}"/>
               <Override PartName="/word/embeddings/workbook.xlsx" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>
-              <Override PartName="/word/embeddings/workbook.xlsm" ContentType="application/vnd.ms-excel.sheet.macroEnabled"/>
+              <Override PartName="/word/embeddings/workbook.xlsm" ContentType="{}"/>
+              <Override PartName="/word/embeddings/workbook.xlsb" ContentType="{}"/>
             </Types>"#,
-            content_type::WORD_DOCUMENT
+            content_type::WORD_DOCUMENT,
+            content_type::EXCEL_WORKBOOK_MACRO,
+            content_type::EXCEL_WORKBOOK_BIN
         );
 
         let types = ContentTypes::parse(&xml).expect("content types");
