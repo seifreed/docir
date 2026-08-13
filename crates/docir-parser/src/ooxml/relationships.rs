@@ -2,9 +2,10 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::local_name;
-use crate::xml_utils::{read_event, reader_from_str, visit_attributes};
+use crate::xml_utils::{
+    read_event, reader_from_str, try_decoded_attr_value, visit_attributes_result,
+};
 use quick_xml::events::Event;
-use quick_xml::events::attributes::Attribute;
 use std::collections::HashMap;
 
 /// A single relationship entry.
@@ -61,23 +62,26 @@ impl Relationships {
                     let mut target = None;
                     let mut target_mode = TargetMode::Internal;
 
-                    visit_attributes(&e, path, |attr| match attr.key.as_ref() {
-                        b"Id" => {
-                            id = Some(unescaped_attr_value(attr, e.decoder()));
-                        }
-                        b"Type" => {
-                            rel_type = Some(unescaped_attr_value(attr, e.decoder()));
-                        }
-                        b"Target" => {
-                            target = Some(unescaped_attr_value(attr, e.decoder()));
-                        }
-                        b"TargetMode" => {
-                            let mode = unescaped_attr_value(attr, e.decoder());
-                            if mode.eq_ignore_ascii_case("External") {
-                                target_mode = TargetMode::External;
+                    visit_attributes_result(&e, path, |attr| {
+                        match attr.key.as_ref() {
+                            b"Id" => {
+                                id = Some(try_decoded_attr_value(attr, e.decoder(), path)?);
                             }
+                            b"Type" => {
+                                rel_type = Some(try_decoded_attr_value(attr, e.decoder(), path)?);
+                            }
+                            b"Target" => {
+                                target = Some(try_decoded_attr_value(attr, e.decoder(), path)?);
+                            }
+                            b"TargetMode" => {
+                                let mode = try_decoded_attr_value(attr, e.decoder(), path)?;
+                                if mode.eq_ignore_ascii_case("External") {
+                                    target_mode = TargetMode::External;
+                                }
+                            }
+                            _ => {}
                         }
-                        _ => {}
+                        Ok(())
                     })?;
 
                     if let (Some(id), Some(rel_type), Some(target)) = (id, rel_type, target) {
@@ -171,10 +175,6 @@ impl Relationships {
     }
 }
 
-fn unescaped_attr_value(attr: &Attribute<'_>, decoder: quick_xml::encoding::Decoder) -> String {
-    crate::xml_utils::decoded_attr_value(attr, decoder)
-}
-
 fn looks_like_external_target(target: &str) -> bool {
     if target.starts_with("//") || target.starts_with("\\\\") {
         return true;
@@ -244,6 +244,22 @@ mod tests {
         "#;
 
         match Relationships::parse(xml).expect_err("malformed relationship attribute must fail") {
+            ParseError::Xml { file, .. } => assert_eq!(file, ".rels"),
+            other => panic!("expected XML error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_reports_invalid_relationship_attribute_entity() {
+        let xml = r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1"
+                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                Target="media/&"/>
+            </Relationships>
+        "#;
+
+        match Relationships::parse(xml).expect_err("invalid relationship entity must fail") {
             ParseError::Xml { file, .. } => assert_eq!(file, ".rels"),
             other => panic!("expected XML error, got {other:?}"),
         }
