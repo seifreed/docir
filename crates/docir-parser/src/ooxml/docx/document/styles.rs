@@ -23,44 +23,14 @@ impl DocxParser {
         let mut in_name = false;
 
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => {
-                    handle_style_start(&mut reader, &e, &mut current, &mut in_name)?
-                }
-                Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"style" => {
-                    styles.styles.push(build_style(&e)?);
-                }
-                Ok(Event::Empty(e)) => handle_style_empty(&e, &mut current)?,
-                Ok(Event::Text(e)) => {
-                    if in_name && let Some(style) = current.as_mut() {
-                        style.name = Some(
-                            crate::xml_utils::decoded_text(&e)
-                                .map_err(|err| xml_error(STYLES_PATH, err))?,
-                        );
-                    }
-                }
-                Ok(Event::GeneralRef(e)) => {
-                    if in_name && let Some(style) = current.as_mut() {
-                        style.name = Some(
-                            crate::xml_utils::decoded_general_ref(&e)
-                                .map_err(|err| xml_error(STYLES_PATH, err))?,
-                        );
-                    }
-                }
-                Ok(Event::End(e)) => {
-                    if local_name(e.name().as_ref()) == b"name" {
-                        in_name = false;
-                    } else if local_name(e.name().as_ref()) == b"style"
-                        && let Some(style) = current.take()
-                    {
-                        styles.styles.push(style);
-                    }
-                }
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(xml_error(STYLES_PATH, e));
-                }
-                _ => {}
+            if !handle_style_event(
+                reader.read_event_into(&mut buf),
+                &mut reader,
+                &mut styles,
+                &mut current,
+                &mut in_name,
+            )? {
+                break;
             }
             buf.clear();
         }
@@ -77,6 +47,70 @@ impl DocxParser {
             set.with_effects = true;
         }
         Ok(id)
+    }
+}
+
+fn handle_style_event(
+    event: Result<Event<'_>, quick_xml::Error>,
+    reader: &mut Reader<&[u8]>,
+    styles: &mut StyleSet,
+    current: &mut Option<Style>,
+    in_name: &mut bool,
+) -> Result<bool, ParseError> {
+    match event {
+        Ok(Event::Start(e)) => handle_style_start(reader, &e, current, in_name)?,
+        Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"style" => {
+            styles.styles.push(build_style(&e)?);
+        }
+        Ok(Event::Empty(e)) => handle_style_empty(&e, current)?,
+        Ok(Event::Text(e)) => handle_style_text(&e, current, *in_name)?,
+        Ok(Event::GeneralRef(e)) => handle_style_general_ref(&e, current, *in_name)?,
+        Ok(Event::End(e)) => finish_style_event(&e, styles, current, in_name),
+        Ok(Event::Eof) => return Ok(false),
+        Err(e) => return Err(xml_error(STYLES_PATH, e)),
+        _ => {}
+    }
+    Ok(true)
+}
+
+fn handle_style_text(
+    event: &quick_xml::events::BytesText<'_>,
+    current: &mut Option<Style>,
+    in_name: bool,
+) -> Result<(), ParseError> {
+    if in_name && let Some(style) = current.as_mut() {
+        style.name =
+            Some(crate::xml_utils::decoded_text(event).map_err(|err| xml_error(STYLES_PATH, err))?);
+    }
+    Ok(())
+}
+
+fn handle_style_general_ref(
+    event: &quick_xml::events::BytesRef<'_>,
+    current: &mut Option<Style>,
+    in_name: bool,
+) -> Result<(), ParseError> {
+    if in_name && let Some(style) = current.as_mut() {
+        style.name = Some(
+            crate::xml_utils::decoded_general_ref(event)
+                .map_err(|err| xml_error(STYLES_PATH, err))?,
+        );
+    }
+    Ok(())
+}
+
+fn finish_style_event(
+    event: &quick_xml::events::BytesEnd<'_>,
+    styles: &mut StyleSet,
+    current: &mut Option<Style>,
+    in_name: &mut bool,
+) {
+    if local_name(event.name().as_ref()) == b"name" {
+        *in_name = false;
+    } else if local_name(event.name().as_ref()) == b"style"
+        && let Some(style) = current.take()
+    {
+        styles.styles.push(style);
     }
 }
 

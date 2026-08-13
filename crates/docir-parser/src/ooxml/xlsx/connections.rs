@@ -427,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn connection_parsers_report_malformed_attributes() {
+    fn connection_parsers_report_malformed_connection_attributes() {
         let connection_cases: [(&str, &str); 8] = [
             (
                 r#"<connections><connection id="1" id="2"/></connections>"#,
@@ -466,7 +466,10 @@ mod tests {
         for (xml, path) in connection_cases {
             assert_xml_file(parse_connections_part(xml, path), path);
         }
+    }
 
+    #[test]
+    fn connection_parsers_report_malformed_external_link_attributes() {
         let external_link_cases: [(&str, &str); 3] = [
             (
                 r#"<externalLink linkType="a" linkType="b"/>"#,
@@ -485,7 +488,10 @@ mod tests {
         for (xml, path) in external_link_cases {
             assert_xml_file(parse_external_link_part(xml, path, None), path);
         }
+    }
 
+    #[test]
+    fn connection_parsers_report_malformed_slicer_and_timeline_attributes() {
         assert_xml_file(
             parse_slicer_part(r#"<slicer name="a" name="b"/>"#, "xl/slicer-broken.xml"),
             "xl/slicer-broken.xml",
@@ -494,7 +500,10 @@ mod tests {
             parse_timeline_part(r#"<timeline name="a" name="b"/>"#, "xl/timeline-broken.xml"),
             "xl/timeline-broken.xml",
         );
+    }
 
+    #[test]
+    fn connection_parsers_report_malformed_query_table_attributes() {
         let query_cases: [(&str, &str); 3] = [
             (
                 r#"<queryTable name="a" name="b"/>"#,
