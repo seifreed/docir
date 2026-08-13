@@ -6,6 +6,7 @@ pub(crate) fn normalize_docx_target(target: &str) -> String {
     }
 
     let normalized_target = target.replace('\\', "/");
+    let package_absolute = normalized_target.starts_with('/');
     let parts: Vec<&str> = normalized_target.split('/').collect();
     let mut resolved: Vec<&str> = Vec::new();
     for part in parts {
@@ -18,7 +19,7 @@ pub(crate) fn normalize_docx_target(target: &str) -> String {
         }
     }
     let t = resolved.join("/");
-    if t.starts_with("word/") {
+    if package_absolute || t.starts_with("word/") {
         t
     } else {
         format!("word/{}", t.trim_start_matches('/'))
@@ -42,6 +43,14 @@ mod tests {
         assert_eq!(
             normalize_docx_target("https://example.test/image.png"),
             "https://example.test/image.png"
+        );
+    }
+
+    #[test]
+    fn test_normalize_docx_target_preserves_package_absolute_targets() {
+        assert_eq!(
+            normalize_docx_target("/media/image1.png"),
+            "media/image1.png"
         );
     }
 }
