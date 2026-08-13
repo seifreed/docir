@@ -377,27 +377,25 @@ pub(crate) fn parse_content_spreadsheet_parallel(
     while batch_start < total {
         let batch_end = (batch_start + max_threads).min(total);
         let (tx, rx) = std::sync::mpsc::channel();
+        let mut workers = Vec::new();
         for (offset, chunk) in chunks[batch_start..batch_end].iter().cloned().enumerate() {
             let idx = batch_start + offset;
             let tx = tx.clone();
             let validations: Arc<HashMap<String, ValidationDef>> = Arc::clone(&validations);
             let limits = Arc::clone(limits);
             let sheet_id = (idx + 1) as u32;
-            thread::spawn(move || {
+            workers.push(thread::spawn(move || {
                 let result = parse_ods_table_from_chunk(
                     &chunk,
                     sheet_id,
                     validations.as_ref(),
                     limits.as_ref(),
                 );
-                let _ = tx.send((idx, result));
-            });
+                tx.send((idx, result)).map_err(|_| ())
+            }));
         }
-        for _ in batch_start..batch_end {
-            if let Ok((i, res)) = rx.recv() {
-                results[i] = Some(res);
-            }
-        }
+        drop(tx);
+        collect_parallel_sheet_results(rx, workers, batch_end - batch_start, &mut results)?;
         batch_start = batch_end;
     }
 
@@ -425,6 +423,45 @@ pub(crate) fn parse_content_spreadsheet_parallel(
         pivot_caches,
         ..OdfContentResult::default()
     })
+}
+
+fn collect_parallel_sheet_results(
+    rx: std::sync::mpsc::Receiver<(usize, Result<OdfSheetParseResult, ParseError>)>,
+    workers: Vec<thread::JoinHandle<Result<(), ()>>>,
+    expected: usize,
+    results: &mut [Option<Result<OdfSheetParseResult, ParseError>>],
+) -> Result<(), ParseError> {
+    let mut receive_error = None;
+    for _ in 0..expected {
+        match rx.recv() {
+            Ok((index, result)) => results[index] = Some(result),
+            Err(_) => {
+                receive_error = Some(ParseError::InvalidStructure(
+                    "ODF parallel sheet worker terminated before sending its result".to_string(),
+                ));
+                break;
+            }
+        }
+    }
+
+    let mut worker_error = None;
+    for worker in workers {
+        match worker.join() {
+            Ok(Ok(())) => {}
+            Ok(Err(())) => {
+                worker_error = Some(ParseError::InvalidStructure(
+                    "ODF parallel sheet worker could not send its result".to_string(),
+                ));
+            }
+            Err(_) => {
+                worker_error = Some(ParseError::InvalidStructure(
+                    "ODF parallel sheet worker panicked".to_string(),
+                ));
+            }
+        }
+    }
+
+    receive_error.or(worker_error).map_or(Ok(()), Err)
 }
 
 struct OdfSheetParseResult {
@@ -488,4 +525,29 @@ pub(crate) fn skip_element(reader: &mut OdfReader<'_>, end: &[u8]) -> Result<(),
         Ok(XmlScanControl::Continue)
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::collect_parallel_sheet_results;
+    use crate::error::ParseError;
+    use std::sync::mpsc;
+    use std::thread;
+
+    #[test]
+    fn collect_parallel_sheet_results_reports_worker_termination() {
+        let (tx, rx) = mpsc::channel();
+        let worker = thread::spawn(|| -> Result<(), ()> {
+            panic!("synthetic worker failure");
+        });
+        drop(tx);
+
+        let mut results = vec![None];
+        let err = collect_parallel_sheet_results(rx, vec![worker], 1, &mut results)
+            .expect_err("worker termination must fail the parse");
+
+        assert!(
+            matches!(err, ParseError::InvalidStructure(message) if message.contains("terminated"))
+        );
+    }
 }
