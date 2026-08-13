@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
+use crate::xml_utils::{local_name, lossy_attr_value, track_xml_root_event, xml_error};
 use docir_core::ir::{PptxComment, PptxCommentAuthor};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
@@ -16,20 +16,24 @@ pub(crate) fn parse_comment_authors(
     config.trim_text(true);
     config.check_end_names = true;
     let mut buf = Vec::new();
+    let mut root_name = None;
+    let mut root_depth = 0;
     let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"cmAuthorLst" => {}
-            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"cmAuthorLst" => {
-                root_closed = true;
-            }
-            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"cmAuthorLst" => {
-                root_closed = true;
-            }
-            Ok(Event::Start(e)) | Ok(Event::Empty(e))
-                if local_name(e.name().as_ref()) == b"cmAuthor" =>
-            {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        track_xml_root_event(
+            &event,
+            &mut root_name,
+            &mut root_depth,
+            &mut root_closed,
+            path,
+        )?;
+        match event {
+            Event::Start(e) if local_name(e.name().as_ref()) == b"cmAuthorLst" => {}
+            Event::Start(e) | Event::Empty(e) if local_name(e.name().as_ref()) == b"cmAuthor" => {
                 let mut author_id = None;
                 let mut name = None;
                 let mut initials = None;
@@ -58,13 +62,7 @@ pub(crate) fn parse_comment_authors(
                     });
                 }
             }
-            Ok(Event::Eof) if root_closed => break,
-            Ok(Event::Eof) => {
-                return Err(xml_error(path, "unexpected EOF in comment authors XML"));
-            }
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
@@ -88,11 +86,23 @@ pub(crate) fn parse_comments(
     let mut current: Option<PptxComment> = None;
     let mut in_text = false;
     let mut text_buf = String::new();
+    let mut root_name = None;
+    let mut root_depth = 0;
     let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        track_xml_root_event(
+            &event,
+            &mut root_name,
+            &mut root_depth,
+            &mut root_closed,
+            path,
+        )?;
+        match event {
+            Event::Start(e) => {
                 if local_name(e.name().as_ref()) == b"cmLst" {
                 } else if local_name(e.name().as_ref()) == b"cm" {
                     current = Some(comment_from_start(&e, path)?);
@@ -101,34 +111,26 @@ pub(crate) fn parse_comments(
                     in_text = true;
                 }
             }
-            Ok(Event::Text(e)) if in_text => {
+            Event::Text(e) if in_text => {
                 text_buf.push_str(
                     &crate::xml_utils::decoded_text(&e).map_err(|err| xml_error(path, err))?,
                 );
             }
-            Ok(Event::GeneralRef(e)) if in_text => {
+            Event::GeneralRef(e) if in_text => {
                 text_buf.push_str(
                     &crate::xml_utils::decoded_general_ref(&e)
                         .map_err(|err| xml_error(path, err))?,
                 );
             }
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 if local_name(e.name().as_ref()) == b"t" {
                     in_text = false;
                     flush_comment_text(&mut current, &mut text_buf);
                 } else if local_name(e.name().as_ref()) == b"cm" {
                     finish_comment(&mut current, authors, &mut comments);
-                } else if local_name(e.name().as_ref()) == b"cmLst" {
-                    root_closed = true;
                 }
             }
-            Ok(Event::Eof) if root_closed && current.is_none() && !in_text => break,
-            Ok(Event::Eof) => {
-                return Err(xml_error(path, "unexpected EOF in comments XML"));
-            }
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
+            Event::Eof => break,
             _ => {}
         }
         buf.clear();
@@ -259,6 +261,21 @@ mod tests {
 
         assert_xml_error(
             parse_comments(xml, "ppt/comments/comment1.xml", &authors),
+            "ppt/comments/comment1.xml",
+        );
+    }
+
+    #[test]
+    fn parse_pptx_comments_rejects_truncated_nested_root() {
+        let authors_xml = r#"<p:cmAuthorLst><p:cmAuthorLst></p:cmAuthorLst>"#;
+        assert_xml_error(
+            parse_comment_authors(authors_xml, "ppt/commentAuthors.xml"),
+            "ppt/commentAuthors.xml",
+        );
+
+        let comments_xml = r#"<p:cmLst><p:cmLst></p:cmLst>"#;
+        assert_xml_error(
+            parse_comments(comments_xml, "ppt/comments/comment1.xml", &HashMap::new()),
             "ppt/comments/comment1.xml",
         );
     }
