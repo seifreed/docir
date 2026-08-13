@@ -85,28 +85,29 @@ impl ContentTypes {
 
     /// Checks if this is a macro-enabled document.
     pub fn is_macro_enabled(&self) -> bool {
-        self.overrides
-            .values()
-            .any(|ct| ct.contains("macroEnabled"))
+        self.overrides.values().any(|ct| {
+            matches!(
+                ct.as_str(),
+                content_type::WORD_DOCUMENT_MACRO
+                    | content_type::EXCEL_WORKBOOK_MACRO
+                    | content_type::PPTX_PRESENTATION_MACRO
+            )
+        })
     }
 
     /// Detects the document format from content types.
     pub fn detect_format(&self) -> Option<docir_core::DocumentFormat> {
-        for ct in self.overrides.values() {
-            if ct.contains("wordprocessingml") {
-                return Some(docir_core::DocumentFormat::WordProcessing);
-            }
-            if ct.contains("spreadsheetml") {
-                return Some(docir_core::DocumentFormat::Spreadsheet);
-            }
-            if ct.contains("sheet.binary") {
-                return Some(docir_core::DocumentFormat::Spreadsheet);
-            }
-            if ct.contains("presentationml") {
-                return Some(docir_core::DocumentFormat::Presentation);
-            }
-        }
-        None
+        [
+            docir_core::DocumentFormat::WordProcessing,
+            docir_core::DocumentFormat::Spreadsheet,
+            docir_core::DocumentFormat::Presentation,
+        ]
+        .into_iter()
+        .find(|format| {
+            self.overrides
+                .values()
+                .any(|content_type| format_for_main_content_type(content_type) == Some(*format))
+        })
     }
 
     /// Returns true if the part is treated as a legacy/extension part.
@@ -115,6 +116,21 @@ impl ContentTypes {
             return content_type.contains("extension") && !content_type.contains("webextension");
         }
         false
+    }
+}
+
+fn format_for_main_content_type(content_type: &str) -> Option<docir_core::DocumentFormat> {
+    match content_type {
+        content_type::WORD_DOCUMENT | content_type::WORD_DOCUMENT_MACRO => {
+            Some(docir_core::DocumentFormat::WordProcessing)
+        }
+        content_type::EXCEL_WORKBOOK
+        | content_type::EXCEL_WORKBOOK_MACRO
+        | content_type::EXCEL_WORKBOOK_BIN => Some(docir_core::DocumentFormat::Spreadsheet),
+        content_type::PPTX_PRESENTATION | content_type::PPTX_PRESENTATION_MACRO => {
+            Some(docir_core::DocumentFormat::Presentation)
+        }
+        _ => None,
     }
 }
 
@@ -334,6 +350,24 @@ mod tests {
             Some(content_type::RELATIONSHIPS)
         );
         assert_eq!(types.detect_format(), Some(DocumentFormat::Spreadsheet));
+    }
+
+    #[test]
+    fn detect_format_ignores_embedded_ooxml_content_types() {
+        let xml = format!(
+            r#"
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Override PartName="/word/document.xml" ContentType="{}"/>
+              <Override PartName="/word/embeddings/workbook.xlsx" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>
+              <Override PartName="/word/embeddings/workbook.xlsm" ContentType="application/vnd.ms-excel.sheet.macroEnabled"/>
+            </Types>"#,
+            content_type::WORD_DOCUMENT
+        );
+
+        let types = ContentTypes::parse(&xml).expect("content types");
+
+        assert_eq!(types.detect_format(), Some(DocumentFormat::WordProcessing));
+        assert!(!types.is_macro_enabled());
     }
 
     #[test]

@@ -3,7 +3,7 @@ use crate::{AppResult, ParserConfig};
 use docir_parser::hwp::is_hwpx_mimetype;
 use docir_parser::legacy_office::probe_legacy_office_format;
 use docir_parser::ole::{Cfb, is_ole_container};
-use docir_parser::ooxml::content_types::ContentTypes;
+use docir_parser::ooxml::content_types::{ContentTypes, content_type};
 use docir_parser::zip_handler::SecureZipReader;
 use serde::Serialize;
 use std::io::Cursor;
@@ -303,7 +303,7 @@ fn probe_ooxml_content_types(
     let binary_workbook = content_types
         .overrides
         .values()
-        .any(|ct| ct.contains("sheet.binary"));
+        .any(|ct| ct == content_type::EXCEL_WORKBOOK_BIN);
     if macro_enabled {
         signals.push("ooxml:macro-enabled".to_string());
     }
@@ -413,6 +413,10 @@ mod tests {
               <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
               <Override PartName="/word/document.xml"
                 ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+              <Override PartName="/word/embeddings/workbook.xlsx"
+                ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>
+              <Override PartName="/word/embeddings/workbook.xlsm"
+                ContentType="application/vnd.ms-excel.sheet.macroEnabled"/>
             </Types>"#;
         zip.start_file("[Content_Types].xml", options).unwrap();
         zip.write_all(content_types.trim().as_bytes()).unwrap();
