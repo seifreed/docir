@@ -212,6 +212,10 @@ fn handle_table_start_full(
             let row_repeat = row_repeat_from(start)?;
             limits.bump_rows(row_repeat as u64)?;
             let row_cells = parse_ods_row(reader, start, store, style_map, next_style_id)?;
+            if row_cells.cells.is_empty() {
+                advance_row_index(row_idx, row_repeat)?;
+                return Ok(());
+            }
             for _ in 0..row_repeat {
                 let mut row_state = RowBuildState {
                     validation_ranges,
