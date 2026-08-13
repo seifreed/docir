@@ -6,6 +6,8 @@ use std::collections::HashMap;
 mod formula_parse_utils;
 use formula_parse_utils::*;
 
+const MAX_FORMULA_EVALUATION_DEPTH: usize = 256;
+
 #[derive(Debug, Clone)]
 struct CellRef {
     sheet: Option<String>,
@@ -85,6 +87,9 @@ impl<'a> FormulaEvalContext<'a> {
             return Some(number);
         }
         let formula_text = self.formulas.get(&key)?.clone();
+        if self.stack.len() >= MAX_FORMULA_EVALUATION_DEPTH {
+            return None;
+        }
         self.stack.push(key);
         let result = self.eval_formula(&formula_text);
         self.stack.pop();
@@ -506,5 +511,16 @@ mod tests {
 
         let tokens = tokenize_formula("..A1");
         assert!(matches!(tokens.first(), Some(FormulaToken::Ident(value)) if value == ".."));
+    }
+
+    #[test]
+    fn evaluate_ods_formulas_rejects_excessive_reference_depth() {
+        let mut formulas = HashMap::new();
+        for row in 0..=MAX_FORMULA_EVALUATION_DEPTH as u32 {
+            formulas.insert((row, 0), format!("A{}", row + 2));
+        }
+        let mut ctx = FormulaEvalContext::new("Sheet1", HashMap::new(), &formulas);
+
+        assert!(ctx.eval_formula("A1").is_none());
     }
 }
