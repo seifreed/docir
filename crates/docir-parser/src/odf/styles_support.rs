@@ -131,6 +131,24 @@ mod tests {
     }
 
     #[test]
+    fn parse_styles_reports_invalid_attribute_entity() {
+        let malformed = r#"
+            <office:document-styles
+                xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+                xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0">
+              <style:style style:name="Broken &" style:family="paragraph"/>
+            </office:document-styles>
+        "#;
+
+        match parse_styles(malformed, "styles.xml")
+            .expect_err("invalid style attribute entity must fail")
+        {
+            ParseError::Xml { file, .. } => assert_eq!(file, "styles.xml"),
+            other => panic!("expected styles.xml parse error, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn parse_styles_handles_family_mapping_defaults_and_font_units() {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
