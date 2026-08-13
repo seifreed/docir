@@ -19,12 +19,12 @@ pub(crate) fn read_directory_entries_and_root_stream(
     fat: &[u32],
     first_dir_sector: u32,
 ) -> Result<(Vec<DirEntry>, Vec<u8>), ParseError> {
-    let dir_stream = read_stream_from_fat(data, sector_size, fat, first_dir_sector)?;
+    let dir_stream = read_stream_from_fat(data, sector_size, fat, first_dir_sector, None)?;
     let entries = parse_dir_entries(&dir_stream)?;
     let root = entries
         .first()
         .ok_or_else(|| ParseError::InvalidStructure("Missing root entry".to_string()))?;
-    let root_stream = read_stream_from_fat(data, sector_size, fat, root.start_sector)?;
+    let root_stream = read_stream_from_fat(data, sector_size, fat, root.start_sector, None)?;
     Ok((entries, root_stream))
 }
 

@@ -144,7 +144,8 @@ pub(crate) fn read_mini_fat_table(
     if num_mini_fat == 0 || first_mini_fat == END_OF_CHAIN {
         return Ok(Vec::new());
     }
-    let mini_fat_stream = crate::ole::read_stream_from_fat(data, sector_size, fat, first_mini_fat)?;
+    let mini_fat_stream =
+        crate::ole::read_stream_from_fat(data, sector_size, fat, first_mini_fat, None)?;
     let mut mini_fat = Vec::new();
     for i in 0..(mini_fat_stream.len() / 4) {
         mini_fat.push(read_u32(&mini_fat_stream, i * 4)?);

@@ -121,8 +121,10 @@ impl Cfb {
             )?));
         }
 
-        let data = self.read_regular_stream(entry)?;
-        let size = usize::try_from(entry.size).unwrap_or(usize::MAX);
+        let size = usize::try_from(entry.size).map_err(|_| {
+            ParseError::ResourceLimit("OLE stream size does not fit in usize".to_string())
+        })?;
+        let data = self.read_regular_stream(entry, size)?;
         let len = data.len().min(size);
         Ok(Some(data[..len].to_vec()))
     }
@@ -297,8 +299,14 @@ impl Cfb {
         entry.size < self.mini_cutoff as u64 && !self.root_stream.is_empty()
     }
 
-    fn read_regular_stream(&self, entry: &DirEntry) -> Result<Vec<u8>, ParseError> {
-        read_stream_from_fat(&self.data, self.sector_size, &self.fat, entry.start_sector)
+    fn read_regular_stream(&self, entry: &DirEntry, size: usize) -> Result<Vec<u8>, ParseError> {
+        read_stream_from_fat(
+            &self.data,
+            self.sector_size,
+            &self.fat,
+            entry.start_sector,
+            Some(size),
+        )
     }
 }
 

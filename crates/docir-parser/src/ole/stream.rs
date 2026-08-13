@@ -10,6 +10,7 @@ pub(crate) fn read_stream_from_fat(
     sector_size: u32,
     fat: &[u32],
     start_sector: u32,
+    expected_size: Option<usize>,
 ) -> Result<Vec<u8>, ParseError> {
     let mut out = Vec::new();
     let mut sector = start_sector;
@@ -37,6 +38,13 @@ pub(crate) fn read_stream_from_fat(
         })?;
         sector = next;
         guard += 1;
+    }
+    if let Some(expected_size) = expected_size
+        && out.len() < expected_size
+    {
+        return Err(ParseError::InvalidStructure(
+            "OLE FAT chain ended before the stream size".to_string(),
+        ));
     }
     Ok(out)
 }

@@ -94,19 +94,21 @@ fn read_sector_and_stream_helpers_handle_bounds_and_chains() {
     assert!(read_sector(&data, 512, 99).is_err());
 
     let fat = vec![1, END_OF_CHAIN];
-    let stream = read_stream_from_fat(&data, 512, &fat, 0).expect("fat stream");
+    let stream = read_stream_from_fat(&data, 512, &fat, 0, None).expect("fat stream");
     assert_eq!(stream.len(), 1024);
     assert_eq!(stream[0], 1);
     assert_eq!(stream[512], 2);
 
     let truncated_fat = vec![2];
-    assert!(read_stream_from_fat(&data, 512, &truncated_fat, 0).is_err());
+    assert!(read_stream_from_fat(&data, 512, &truncated_fat, 0, None).is_err());
+    assert!(read_stream_from_fat(&data, 512, &fat, 0, Some(1025)).is_err());
     assert!(matches!(
         read_stream_from_fat(
             &[],
             super::types::MAX_STREAM_SIZE as u32 + 1,
             &[END_OF_CHAIN],
-            0
+            0,
+            None
         ),
         Err(ParseError::ResourceLimit(_))
     ));
