@@ -285,23 +285,6 @@ pub(super) fn parse_formula(
     })
 }
 
-pub(super) fn extract_formula_function(formula_upper: &str) -> Option<String> {
-    let trimmed = formula_upper.trim();
-    let trimmed = trimmed.strip_prefix('=').unwrap_or(trimmed);
-    let idx = trimmed.find('(')?;
-    Some(trimmed[..idx].trim().to_string())
-}
-
-pub(super) fn parse_formula_args_text(formula: &str) -> Option<String> {
-    let start = formula.find('(')?;
-    let end = formula.rfind(')')?;
-    if end > start + 1 {
-        Some(formula[start + 1..end].to_string())
-    } else {
-        None
-    }
-}
-
 pub(super) fn parse_formula_empty(
     start: &BytesStart,
     sheet_path: &str,

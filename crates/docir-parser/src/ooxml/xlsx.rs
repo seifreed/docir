@@ -52,9 +52,9 @@ pub(crate) use connections::{
 };
 pub(crate) use metadata::parse_sheet_metadata;
 pub(crate) use parser::{
-    extract_formula_function, map_cell_error, parse_calc_chain, parse_column,
-    parse_conditional_formatting, parse_formula, parse_formula_args_text, parse_formula_empty,
-    parse_inline_string, parse_merge_cell, parse_sheet_comments, parse_threaded_comments,
+    map_cell_error, parse_calc_chain, parse_column, parse_conditional_formatting, parse_formula,
+    parse_formula_empty, parse_inline_string, parse_merge_cell, parse_sheet_comments,
+    parse_threaded_comments,
 };
 pub(crate) use styles::{parse_color_attr, parse_styles};
 pub(crate) use tables::{

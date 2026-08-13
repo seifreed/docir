@@ -68,19 +68,80 @@ impl XlsxParser {
             xlm.has_auto_open = true;
         }
 
-        let direct_function = super::extract_formula_function(upper_text);
         for func in contains_dangerous_xlm(formula_text) {
-            let args = direct_function
-                .as_deref()
-                .filter(|direct| *direct == func)
-                .and_then(|_| super::parse_formula_args_text(formula_text));
             xlm.dangerous_functions.push(XlmFunction {
+                arguments: parse_formula_args_for_function(formula_text, &func),
                 name: func,
-                arguments: args,
                 cell_ref: cell_ref.to_string(),
             });
         }
 
         let _ = sheet_path;
     }
+}
+
+fn parse_formula_args_for_function(formula: &str, function: &str) -> Option<String> {
+    let upper = formula.to_ascii_uppercase();
+    let function = function.to_ascii_uppercase();
+    let mut search_from = 0;
+
+    while let Some(relative_start) = upper[search_from..].find(&function) {
+        let start = search_from + relative_start;
+        let end = start + function.len();
+        let before_is_identifier =
+            start > 0 && is_formula_identifier_byte(upper.as_bytes()[start - 1]);
+        let after_is_identifier = upper
+            .as_bytes()
+            .get(end)
+            .is_some_and(|byte| is_formula_identifier_byte(*byte));
+        if before_is_identifier || after_is_identifier {
+            search_from = end;
+            continue;
+        }
+
+        let mut open = end;
+        while upper
+            .as_bytes()
+            .get(open)
+            .is_some_and(u8::is_ascii_whitespace)
+        {
+            open += 1;
+        }
+        if upper.as_bytes().get(open) != Some(&b'(') {
+            search_from = end;
+            continue;
+        }
+
+        let bytes = formula.as_bytes();
+        let mut depth = 0usize;
+        let mut in_string = false;
+        let mut index = open;
+        while index < bytes.len() {
+            match bytes[index] {
+                b'"' => {
+                    if in_string && bytes.get(index + 1) == Some(&b'"') {
+                        index += 2;
+                        continue;
+                    }
+                    in_string = !in_string;
+                }
+                b'(' if !in_string => depth += 1,
+                b')' if !in_string => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(formula[open + 1..index].to_string());
+                    }
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+        return None;
+    }
+
+    None
+}
+
+fn is_formula_identifier_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'$')
 }

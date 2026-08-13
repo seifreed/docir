@@ -295,14 +295,6 @@ pub(crate) fn parse_formula(
     parser_xml::parse_formula(reader, start, sheet_path)
 }
 
-pub(crate) fn extract_formula_function(formula_upper: &str) -> Option<String> {
-    parser_xml::extract_formula_function(formula_upper)
-}
-
-pub(crate) fn parse_formula_args_text(formula: &str) -> Option<String> {
-    parser_xml::parse_formula_args_text(formula)
-}
-
 pub(crate) fn parse_formula_empty(
     start: &BytesStart,
     sheet_path: &str,

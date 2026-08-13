@@ -1,8 +1,7 @@
 use super::{Relationships, build_zip_with_entries};
 use crate::error::ParseError;
 use crate::ooxml::xlsx::{
-    XlsxParser, extract_formula_function, map_cell_error, parse_formula, parse_formula_args_text,
-    parse_formula_empty, parse_inline_string,
+    XlsxParser, map_cell_error, parse_formula, parse_formula_empty, parse_inline_string,
 };
 use docir_core::ir::{CellError, FormulaType, IRNode};
 use quick_xml::Reader;
@@ -61,6 +60,14 @@ fn test_parse_xlm_macro_sheet() {
             .dangerous_functions
             .iter()
             .any(|function| function.name == "CALL" && function.cell_ref == "A2")
+    );
+    assert_eq!(
+        doc.security.xlm_macros[0]
+            .dangerous_functions
+            .iter()
+            .find(|function| function.name == "CALL")
+            .and_then(|function| function.arguments.as_deref()),
+        Some(r#"\"kernel32\",\"WinExec\""#)
     );
 }
 
@@ -275,26 +282,6 @@ fn test_parse_formula_reports_malformed_attributes() {
             ..
         } if file == "xl/worksheets/sheet1.xml"
     ));
-}
-
-#[test]
-fn test_parse_formula_text_helpers() {
-    assert_eq!(
-        extract_formula_function("=SUM(A1:A3)"),
-        Some("SUM".to_string())
-    );
-    assert_eq!(
-        extract_formula_function(" COUNTIF(A:A,\">0\") "),
-        Some("COUNTIF".to_string())
-    );
-    assert_eq!(extract_formula_function("A1+1"), None);
-
-    assert_eq!(
-        parse_formula_args_text("SUM(A1, B2)"),
-        Some("A1, B2".to_string())
-    );
-    assert_eq!(parse_formula_args_text("NOW()"), None);
-    assert_eq!(parse_formula_args_text("BROKEN("), None);
 }
 
 #[test]
