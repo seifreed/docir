@@ -27,21 +27,51 @@ impl PptxParser {
 
         let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
+        let mut root_name: Option<Vec<u8>> = None;
+        let mut root_closed = false;
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => self.handle_slide_start_event(
+            let event = reader
+                .read_event_into(&mut buf)
+                .map_err(|err| xml_error(slide_path, err))?;
+            if root_closed && matches!(&event, Event::Start(_) | Event::Empty(_)) {
+                return Err(xml_error(
+                    slide_path,
+                    "XML document contains multiple roots",
+                ));
+            }
+            match &event {
+                Event::Start(e) if root_name.is_none() => {
+                    root_name = Some(e.name().as_ref().to_vec());
+                }
+                Event::Empty(e) if root_name.is_none() => {
+                    root_name = Some(e.name().as_ref().to_vec());
+                    root_closed = true;
+                }
+                Event::End(e)
+                    if root_name
+                        .as_deref()
+                        .is_some_and(|name| name == e.name().as_ref()) =>
+                {
+                    root_closed = true;
+                }
+                Event::Eof if root_closed => break,
+                Event::Eof => {
+                    return Err(xml_error(
+                        slide_path,
+                        "XML document ends before its root is closed",
+                    ));
+                }
+                _ => {}
+            }
+            if let Event::Start(e) = event {
+                self.handle_slide_start_event(
                     &mut reader,
                     &e,
                     slide_path,
                     relationships,
                     zip,
                     &mut slide,
-                )?,
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(xml_error(slide_path, e));
-                }
-                _ => {}
+                )?;
             }
             buf.clear();
         }

@@ -30,6 +30,23 @@ fn test_parse_slide_returns_xml_error_for_malformed_slide_xml() {
 }
 
 #[test]
+fn test_parse_slide_rejects_truncated_document_root() {
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+    let err = parser
+        .parse_slide(
+            &mut zip,
+            "<p:sld xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">",
+            1,
+            "ppt/slides/truncated.xml",
+            &Relationships::default(),
+            (None, None),
+        )
+        .expect_err("truncated slide root must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "ppt/slides/truncated.xml"));
+}
+
+#[test]
 fn test_parse_slide_transition_reports_invalid_numeric_attrs() {
     for attr in ["advTm", "dur"] {
         let slide_xml = format!(

@@ -20,10 +20,43 @@ impl PptxParser {
         reader.config_mut().trim_text(true);
         let mut buf = Vec::new();
         let mut shapes = Vec::new();
+        let mut root_name: Option<Vec<u8>> = None;
+        let mut root_closed = false;
 
         loop {
-            match read_event(&mut reader, &mut buf, slide_path)? {
-                Event::Start(e) => match local_name(e.name().as_ref()) {
+            let event = read_event(&mut reader, &mut buf, slide_path)?;
+            if root_closed && matches!(&event, Event::Start(_) | Event::Empty(_)) {
+                return Err(xml_error(
+                    slide_path,
+                    "XML document contains multiple roots",
+                ));
+            }
+            match &event {
+                Event::Start(e) if root_name.is_none() => {
+                    root_name = Some(e.name().as_ref().to_vec());
+                }
+                Event::Empty(e) if root_name.is_none() => {
+                    root_name = Some(e.name().as_ref().to_vec());
+                    root_closed = true;
+                }
+                Event::End(e)
+                    if root_name
+                        .as_deref()
+                        .is_some_and(|name| name == e.name().as_ref()) =>
+                {
+                    root_closed = true;
+                }
+                Event::Eof if root_closed => break,
+                Event::Eof => {
+                    return Err(xml_error(
+                        slide_path,
+                        "XML document ends before its root is closed",
+                    ));
+                }
+                _ => {}
+            }
+            if let Event::Start(e) = event {
+                match local_name(e.name().as_ref()) {
                     b"sp" => {
                         let shape =
                             self.parse_shape_sp(&mut reader, &e, slide_path, relationships)?;
@@ -58,9 +91,7 @@ impl PptxParser {
                         shapes.push(id);
                     }
                     _ => {}
-                },
-                Event::Eof => break,
-                _ => {}
+                }
             }
             buf.clear();
         }

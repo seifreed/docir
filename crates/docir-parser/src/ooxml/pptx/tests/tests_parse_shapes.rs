@@ -103,6 +103,23 @@ fn test_parse_shape_reports_truncated_xml() {
 }
 
 #[test]
+fn test_parse_shapes_rejects_truncated_document_root() {
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+    let err = parser
+        .parse_shapes_from_xml(
+            "<p:sld xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">",
+            "ppt/slides/truncated-shapes.xml",
+            &Relationships::default(),
+            &mut zip,
+        )
+        .expect_err("truncated shapes document must fail");
+    assert!(
+        matches!(err, ParseError::Xml { file, .. } if file == "ppt/slides/truncated-shapes.xml")
+    );
+}
+
+#[test]
 fn test_parse_group_shape_reports_truncated_xml() {
     let slide_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
