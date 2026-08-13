@@ -1,8 +1,8 @@
 use crate::error::ParseError;
 use crate::ooxml::docx::DocxParser;
 use crate::ooxml::docx::document::table::table_parse::{
-    parse_table, parse_table_cell_properties, parse_table_grid, parse_table_properties,
-    parse_table_row, parse_table_row_properties,
+    parse_table, parse_table_cell, parse_table_cell_properties, parse_table_grid,
+    parse_table_properties, parse_table_row, parse_table_row_properties,
 };
 use crate::ooxml::relationships::Relationships;
 
@@ -525,5 +525,114 @@ mod tests {
             }
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_table_rejects_missing_end() {
+        let xml = r#"<w:tbl><w:tr><w:tc><w:p></w:p></w:tc></w:tr>"#;
+        let mut reader = reader_from(xml);
+        let rels = Relationships::default();
+        let mut parser = DocxParser::new();
+        seek_start(&mut reader, b"w:tbl");
+
+        let err =
+            parse_table(&mut parser, &mut reader, &rels).expect_err("truncated table must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_table_cell_properties_rejects_missing_end() {
+        let xml = r#"<w:tcPr><w:tcW w:w="100" w:type="dxa"/>"#;
+        let mut reader = reader_from(xml);
+        let mut props = TableCellProperties::default();
+        seek_start(&mut reader, b"w:tcPr");
+
+        let err = parse_table_cell_properties(&mut reader, &mut props)
+            .expect_err("truncated cell properties must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_table_grid_rejects_missing_end() {
+        let xml = r#"<w:tblGrid><w:gridCol w:w="100"/>"#;
+        let mut reader = reader_from(xml);
+        seek_start(&mut reader, b"w:tblGrid");
+
+        let err = parse_table_grid(&mut reader).expect_err("truncated table grid must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_table_row_rejects_missing_end() {
+        let xml = r#"<w:tr><w:tc/>"#;
+        let mut reader = reader_from(xml);
+        let rels = Relationships::default();
+        let mut parser = DocxParser::new();
+        seek_start(&mut reader, b"w:tr");
+
+        let err = parse_table_row(&mut parser, &mut reader, &rels)
+            .expect_err("truncated table row must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_table_cell_rejects_missing_end() {
+        let xml = r#"<w:tc><w:p/>"#;
+        let mut reader = reader_from(xml);
+        let rels = Relationships::default();
+        let mut parser = DocxParser::new();
+        seek_start(&mut reader, b"w:tc");
+
+        let err = parse_table_cell(&mut parser, &mut reader, &rels)
+            .expect_err("truncated table cell must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_table_properties_rejects_missing_end() {
+        let xml = r#"<w:tblPr><w:jc w:val="center"/>"#;
+        let mut reader = reader_from(xml);
+        let mut props = TableProperties::default();
+        seek_start(&mut reader, b"w:tblPr");
+
+        let err = parse_table_properties(&mut reader, &mut props)
+            .expect_err("truncated table properties must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_table_row_properties_rejects_missing_end() {
+        let xml = r#"<w:trPr><w:tblHeader/>"#;
+        let mut reader = reader_from(xml);
+        let mut props = TableRowProperties::default();
+        seek_start(&mut reader, b"w:trPr");
+
+        let err = parse_table_row_properties(&mut reader, &mut props)
+            .expect_err("truncated row properties must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_table_properties_rejects_missing_border_end() {
+        let xml = r#"<w:tblPr><w:tblBorders><w:top w:val="single"/>"#;
+        let mut reader = reader_from(xml);
+        let mut props = TableProperties::default();
+        seek_start(&mut reader, b"w:tblPr");
+
+        let err = parse_table_properties(&mut reader, &mut props)
+            .expect_err("truncated table borders must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_table_properties_rejects_missing_margin_end() {
+        let xml = r#"<w:tblPr><w:tblCellMar><w:left w:w="100"/>"#;
+        let mut reader = reader_from(xml);
+        let mut props = TableProperties::default();
+        seek_start(&mut reader, b"w:tblPr");
+
+        let err = parse_table_properties(&mut reader, &mut props)
+            .expect_err("truncated table margins must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
     }
 }

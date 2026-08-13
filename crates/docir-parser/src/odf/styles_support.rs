@@ -94,6 +94,21 @@ mod tests {
     }
 
     #[test]
+    fn parse_odf_headers_footers_rejects_truncated_block() {
+        let truncated = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <style:header><text:p>Header text</text:p>
+"#;
+        let mut store = IrStore::new();
+
+        let err = parse_odf_headers_footers(truncated, &mut store, &ParserConfig::default())
+            .expect_err("truncated header must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
     fn parse_odf_headers_footers_reports_malformed_outline_attributes() {
         for xml in [
             r#"<?xml version="1.0" encoding="UTF-8"?>

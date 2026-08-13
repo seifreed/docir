@@ -122,7 +122,12 @@ fn parse_odf_header_footer_block(
                 _ if e.name().as_ref() == end_name => break,
                 _ => {}
             },
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    "styles.xml",
+                    "unexpected end of header or footer block",
+                ));
+            }
             Err(e) => return Err(xml_error("styles.xml", e)),
             _ => {}
         }

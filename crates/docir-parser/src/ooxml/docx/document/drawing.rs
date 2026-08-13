@@ -31,7 +31,9 @@ pub(super) fn parse_drawing(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"drawing" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of drawing"));
+            }
             Err(e) => {
                 return Err(xml_error(DOC_PATH, e));
             }
@@ -245,7 +247,9 @@ fn parse_drawing_text_body(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"txBody" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(doc_path, "unexpected end of drawing text body"));
+            }
             Err(e) => {
                 return Err(xml_error(doc_path, e));
             }
@@ -289,7 +293,9 @@ fn parse_drawing_text_paragraph(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"p" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(doc_path, "unexpected end of drawing paragraph"));
+            }
             Err(e) => {
                 return Err(xml_error(doc_path, e));
             }
@@ -332,7 +338,9 @@ fn parse_drawing_text_run(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"r" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(doc_path, "unexpected end of drawing run"));
+            }
             Err(e) => {
                 return Err(xml_error(doc_path, e));
             }
@@ -497,6 +505,52 @@ mod tests {
         assert_eq!(text.paragraphs[0].runs[0].text, "Line1");
         assert_eq!(text.paragraphs[0].runs[1].text, "\n");
         assert_eq!(text.paragraphs[0].runs[2].text, "Line2");
+    }
+
+    #[test]
+    fn parse_drawing_text_run_rejects_missing_end() {
+        let xml = r#"<a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:t>Broken</a:t>"#;
+        let mut reader = reader_from_str(xml);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+
+        let err = parse_drawing_text_run(&mut reader, DOC_PATH)
+            .expect_err("truncated drawing run must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_drawing_text_body_rejects_missing_end() {
+        let xml = r#"<a:txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:p></a:p>"#;
+        let mut reader = reader_from_str(xml);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+
+        let err = parse_drawing_text_body(&mut reader, DOC_PATH)
+            .expect_err("truncated drawing text body must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_drawing_rejects_missing_end() {
+        let xml = r#"<wp:drawing xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:inline/>"#;
+        let mut reader = reader_from_str(xml);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+
+        let mut parser = DocxParser::new();
+        let err = parse_drawing(&mut parser, &mut reader, &Relationships::default())
+            .expect_err("truncated drawing must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
     }
 
     #[test]

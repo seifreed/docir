@@ -40,7 +40,9 @@ pub(crate) fn parse_table(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tbl" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of table"));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }
@@ -78,7 +80,9 @@ pub(crate) fn parse_table_row(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of table row"));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }
@@ -120,7 +124,9 @@ pub(crate) fn parse_table_cell(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tc" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of table cell"));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }
@@ -148,7 +154,12 @@ pub(crate) fn parse_table_cell_properties(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tcPr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    DOC_PATH,
+                    "unexpected end of table cell properties",
+                ));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }
@@ -245,7 +256,9 @@ pub(crate) fn parse_table_properties(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tblPr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of table properties"));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }
@@ -311,7 +324,9 @@ pub(crate) fn parse_table_grid(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tblGrid" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of table grid"));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }
@@ -359,7 +374,12 @@ pub(crate) fn parse_table_row_properties(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"trPr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    DOC_PATH,
+                    "unexpected end of table row properties",
+                ));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }
@@ -425,7 +445,9 @@ fn parse_table_borders(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == local_name(end_tag) => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of table borders"));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }
@@ -467,7 +489,9 @@ fn parse_cell_margins(reader: &mut Reader<&[u8]>) -> Result<Option<CellMargins>,
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tblCellMar" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of table cell margins"));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }

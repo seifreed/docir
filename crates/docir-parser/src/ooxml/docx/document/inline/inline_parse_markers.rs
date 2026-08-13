@@ -34,7 +34,12 @@ pub(crate) fn parse_numbering(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"numPr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    DOC_XML_PATH,
+                    "unexpected end of numbering properties",
+                ));
+            }
             Err(e) => {
                 return Err(xml_error(DOC_XML_PATH, e));
             }
@@ -122,7 +127,9 @@ pub(crate) fn parse_run_properties(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"rPr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_XML_PATH, "unexpected end of run properties"));
+            }
             Err(e) => {
                 return Err(xml_error(DOC_XML_PATH, e));
             }
@@ -219,4 +226,41 @@ pub(crate) fn parse_field(
     let id = field.id;
     parser.store.insert(docir_core::ir::IRNode::Field(field));
     Ok(id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_numbering_rejects_missing_end() {
+        let xml = r#"<w:numPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:numId w:val="1"/>"#;
+        let mut reader = Reader::from_str(xml);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+        let mut props = ParagraphProperties::default();
+
+        let err = parse_numbering(&mut reader, &mut props)
+            .expect_err("truncated numbering properties must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_run_properties_rejects_missing_end() {
+        let xml = r#"<w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:b/>"#;
+        let mut reader = Reader::from_str(xml);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+        let mut props = RunProperties::default();
+
+        let err = parse_run_properties(&mut reader, &mut props)
+            .expect_err("truncated run properties must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
 }
