@@ -16,20 +16,49 @@ impl DocxParser {
     pub fn parse_styles(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let mut styles = StyleSet::new();
         let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let config = reader.config_mut();
+        config.trim_text(true);
+        config.check_end_names = true;
         let mut buf = Vec::new();
 
         let mut current: Option<Style> = None;
         let mut in_name = false;
+        let mut root_name = None;
+        let mut root_closed = false;
 
         loop {
-            if !handle_style_event(
-                reader.read_event_into(&mut buf),
-                &mut reader,
-                &mut styles,
-                &mut current,
-                &mut in_name,
-            )? {
+            let event = reader.read_event_into(&mut buf);
+            match &event {
+                Ok(Event::Start(e)) if root_name.is_none() => {
+                    root_name = Some(e.name().as_ref().to_vec());
+                }
+                Ok(Event::Empty(e)) if root_name.is_none() => {
+                    root_name = Some(e.name().as_ref().to_vec());
+                    root_closed = true;
+                }
+                Ok(Event::Start(_) | Event::Empty(_)) if root_closed => {
+                    return Err(xml_error(
+                        STYLES_PATH,
+                        "XML document contains multiple roots",
+                    ));
+                }
+                Ok(Event::End(e))
+                    if root_name
+                        .as_deref()
+                        .is_some_and(|name| name == e.name().as_ref()) =>
+                {
+                    root_closed = true;
+                }
+                Ok(Event::Eof) if !root_closed => {
+                    return Err(xml_error(
+                        STYLES_PATH,
+                        "XML document ends before its root is closed",
+                    ));
+                }
+                _ => {}
+            }
+
+            if !handle_style_event(event, &mut reader, &mut styles, &mut current, &mut in_name)? {
                 break;
             }
             buf.clear();

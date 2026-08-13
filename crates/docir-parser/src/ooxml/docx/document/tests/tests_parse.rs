@@ -382,6 +382,19 @@ fn test_parse_styles_reports_malformed_attributes() {
 }
 
 #[test]
+fn test_parse_styles_rejects_truncated_root() {
+    let xml = r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:style w:type="paragraph" w:styleId="MyStyle"/>
+    "#;
+
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_styles(xml)
+        .expect_err("truncated styles XML must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/styles.xml"));
+}
+
+#[test]
 fn test_parse_font_table_collects_font_entries() {
     let xml = r#"
         <w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

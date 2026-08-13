@@ -12,7 +12,9 @@ pub(crate) fn parse_comment_authors(
 ) -> Result<Vec<PptxCommentAuthor>, ParseError> {
     let mut authors: Vec<PptxCommentAuthor> = Vec::new();
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut root_closed = false;
 
@@ -78,7 +80,9 @@ pub(crate) fn parse_comments(
 ) -> Result<Vec<PptxComment>, ParseError> {
     let mut comments: Vec<PptxComment> = Vec::new();
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
 
     let mut current: Option<PptxComment> = None;
@@ -240,6 +244,17 @@ mod tests {
               <p:cm authorId="1">
                 <p:text><p:t>Note</p:t></p:text>
         "#;
+        let authors = HashMap::new();
+
+        assert_xml_error(
+            parse_comments(xml, "ppt/comments/comment1.xml", &authors),
+            "ppt/comments/comment1.xml",
+        );
+    }
+
+    #[test]
+    fn parse_comments_rejects_mismatched_nested_end_tag() {
+        let xml = r#"<p:cmLst><p:cm></p:cmx></p:cmLst>"#;
         let authors = HashMap::new();
 
         assert_xml_error(
