@@ -449,21 +449,20 @@ pub(super) fn parse_merge_cell(
         }
     })?;
 
-    let Some(ref_attr) = ref_attr else {
-        return Ok(None);
-    };
+    let ref_attr = ref_attr.ok_or_else(|| xml_error(sheet_path, "mergeCell is missing ref"))?;
     let mut parts = ref_attr.split(':');
-    let Some(start) = parts.next() else {
-        return Ok(None);
-    };
+    let start = parts
+        .next()
+        .ok_or_else(|| xml_error(sheet_path, "mergeCell ref is empty"))?;
     let end = parts.next().unwrap_or(start);
+    if parts.next().is_some() {
+        return Err(xml_error(sheet_path, "mergeCell ref has too many ranges"));
+    }
 
-    let Some((start_col, start_row)) = parse_cell_reference(start) else {
-        return Ok(None);
-    };
-    let Some((end_col, end_row)) = parse_cell_reference(end) else {
-        return Ok(None);
-    };
+    let (start_col, start_row) = parse_cell_reference(start)
+        .ok_or_else(|| xml_error(sheet_path, format!("invalid mergeCell start ref: {start}")))?;
+    let (end_col, end_row) = parse_cell_reference(end)
+        .ok_or_else(|| xml_error(sheet_path, format!("invalid mergeCell end ref: {end}")))?;
 
     Ok(Some(MergedCellRange {
         start_col,

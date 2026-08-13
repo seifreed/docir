@@ -69,11 +69,18 @@ fn test_parse_column_and_merge_helpers() {
         Event::Empty(e) => e.into_owned(),
         other => panic!("unexpected event: {other:?}"),
     };
-    assert!(
-        parse_merge_cell(&bad, "xl/worksheets/sheet1.xml")
-            .expect("bad merge attrs")
-            .is_none()
-    );
+    assert!(parse_merge_cell(&bad, "xl/worksheets/sheet1.xml").is_err());
+
+    let mut missing_reader = Reader::from_str(r#"<mergeCell/>"#);
+    buf.clear();
+    let missing = match missing_reader
+        .read_event_into(&mut buf)
+        .expect("missing merge ref")
+    {
+        Event::Empty(e) => e.into_owned(),
+        other => panic!("unexpected event: {other:?}"),
+    };
+    assert!(parse_merge_cell(&missing, "xl/worksheets/sheet1.xml").is_err());
 }
 
 #[test]
