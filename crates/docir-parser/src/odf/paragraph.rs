@@ -36,7 +36,9 @@ pub(crate) fn parse_paragraph(
             Ok(Event::End(e)) if e.name().as_ref() == end_name => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error("content.xml", "unexpected end of paragraph"));
+            }
             Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
@@ -119,4 +121,42 @@ fn handle_inline_event(
 fn push_inline_node(store: &mut IrStore, inline_nodes: &mut Vec<NodeId>, id: NodeId, node: IRNode) {
     store.insert(node);
     inline_nodes.push(id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::limits::OdfLimits;
+    use super::*;
+    use crate::parser::ParserConfig;
+    use quick_xml::Reader;
+    use std::io::Cursor;
+
+    #[test]
+    fn parse_paragraph_rejects_missing_end() {
+        let xml = r#"<text:p xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">Broken"#;
+        let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+
+        let mut store = IrStore::new();
+        let mut inline_nodes = Vec::new();
+        let limits = OdfLimits::new(&ParserConfig::default(), false);
+        let err = match parse_paragraph(
+            &mut reader,
+            b"text:p",
+            None,
+            None,
+            &mut store,
+            &mut inline_nodes,
+            &limits,
+        ) {
+            Ok(_) => panic!("truncated paragraph must fail"),
+            Err(err) => err,
+        };
+
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
 }
