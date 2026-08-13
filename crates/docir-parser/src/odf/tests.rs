@@ -963,10 +963,12 @@ fn test_parse_odt_rich_content() {
         <dc:creator>Alice</dc:creator>
         <dc:date>2024-01-01</dc:date>
         <text:p>Comment body</text:p>
+        <text:p/>
       </office:annotation>
       <text:note text:note-class="footnote">
         <text:note-body>
           <text:p>Footnote body</text:p>
+          <text:p/>
         </text:note-body>
       </text:note>
       <text:bookmark-start text:name="bm1" />
@@ -983,6 +985,7 @@ fn test_parse_odt_rich_content() {
           </text:change-info>
           <text:insertion>
             <text:p>Inserted text</text:p>
+            <text:p/>
           </text:insertion>
         </text:changed-region>
       </text:tracked-changes>
@@ -1011,6 +1014,17 @@ fn test_parse_odt_rich_content() {
     assert_eq!(counts.shape, 1);
     assert_eq!(counts.revision, 1);
     assert_eq!(counts.styles, 1);
+    assert!(
+        parsed
+            .store
+            .values()
+            .filter(|node| matches!(
+                node,
+                IRNode::Paragraph(paragraph) if paragraph.runs.is_empty()
+            ))
+            .count()
+            >= 3
+    );
 }
 
 #[test]

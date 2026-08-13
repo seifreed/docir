@@ -3,6 +3,7 @@ use super::{
     ParseError, Revision, RevisionType, scan_xml_events_until_end,
 };
 use crate::odf::paragraph::parse_paragraph;
+use crate::odf::text::build_paragraph;
 use crate::xml_utils::{local_name, xml_error};
 use docir_core::ir::Comment;
 use docir_core::visitor::IrStore;
@@ -48,6 +49,10 @@ pub(super) fn parse_annotation(
                     }
                     _ => {}
                 },
+                Event::Empty(e) if local_name(e.name().as_ref()) == b"p" => {
+                    limits.bump_paragraphs(1)?;
+                    comment.content.push(build_paragraph(store, "", None, None));
+                }
                 Event::Text(e) => {
                     if let Some(field) = current {
                         let value = crate::xml_utils::decoded_text(e)
@@ -113,6 +118,11 @@ pub(super) fn parse_note(
                     limits,
                 )?;
                 content.push(paragraph_id);
+            } else if let Event::Empty(e) = event
+                && local_name(e.name().as_ref()) == b"p"
+            {
+                limits.bump_paragraphs(1)?;
+                content.push(build_paragraph(store, "", None, None));
             }
             Ok(super::XmlScanControl::Continue)
         },
@@ -167,6 +177,12 @@ pub(super) fn parse_tracked_changes(
                     let value = crate::xml_utils::decoded_general_ref(e)
                         .map_err(|err| xml_error(ODF_CONTENT_XML, err))?;
                     apply_tracked_change_field(&mut current_revision, current_field, value);
+                }
+                Event::Empty(e) if local_name(e.name().as_ref()) == b"p" => {
+                    if let Some(rev) = current_revision.as_mut() {
+                        limits.bump_paragraphs(1)?;
+                        rev.content.push(build_paragraph(store, "", None, None));
+                    }
                 }
                 Event::End(e) => match local_name(e.name().as_ref()) {
                     b"insertion" | b"deletion" => {
