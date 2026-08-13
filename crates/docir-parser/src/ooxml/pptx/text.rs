@@ -55,19 +55,6 @@ fn parse_text_body_with_end(
     Ok(ShapeText { paragraphs })
 }
 
-pub(super) fn shape_text_to_plain(text: &ShapeText) -> String {
-    let mut out = String::new();
-    for (p_idx, para) in text.paragraphs.iter().enumerate() {
-        if p_idx > 0 {
-            out.push('\n');
-        }
-        for run in &para.runs {
-            out.push_str(&run.text);
-        }
-    }
-    out
-}
-
 fn parse_text_paragraph(
     reader: &mut Reader<&[u8]>,
     slide_path: &str,

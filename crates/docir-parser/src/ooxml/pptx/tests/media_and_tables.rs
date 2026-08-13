@@ -288,7 +288,10 @@ fn test_parse_table_in_graphic_frame() {
                         <a:gridCol w="3000"/>
                       </a:tblGrid>
                       <a:tr>
-                        <a:tc><a:txBody><a:p><a:r><a:t>A</a:t></a:r></a:p></a:txBody></a:tc>
+                        <a:tc><a:txBody>
+                          <a:p><a:r><a:t>A</a:t></a:r></a:p>
+                          <a:p><a:r><a:t>B</a:t></a:r></a:p>
+                        </a:txBody></a:tc>
                         <a:tc><a:txBody><a:p/></a:txBody></a:tc>
                       </a:tr>
                     </a:tbl>
@@ -332,6 +335,22 @@ fn test_parse_table_in_graphic_frame() {
         Some(IRNode::TableRow(row)) => row,
         _ => panic!("missing table row"),
     };
+    let first_cell = match store.get(row.cells[0]) {
+        Some(IRNode::TableCell(cell)) => cell,
+        _ => panic!("missing first table cell"),
+    };
+    assert_eq!(first_cell.content.len(), 2);
+    assert_eq!(
+        first_cell
+            .content
+            .iter()
+            .map(|id| match store.get(*id) {
+                Some(IRNode::Paragraph(paragraph)) => paragraph.text_content(&store),
+                _ => String::new(),
+            })
+            .collect::<Vec<_>>(),
+        ["A", "B"]
+    );
     let cell = match store.get(row.cells[1]) {
         Some(IRNode::TableCell(cell)) => cell,
         _ => panic!("missing table cell"),

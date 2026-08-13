@@ -13,9 +13,9 @@ use crate::xml_utils::{
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
     Diagnostics, Document, GridColumn, IRNode, NotesSlide, Paragraph, PptxCommentAuthor,
-    PresentationInfo, PresentationProperties, PresentationTag, Run, Shape, ShapeTransform,
-    ShapeType, SlideSize, SmartArtPart, Table, TableCell, TableRow, TableStyle, TableStyleSet,
-    ViewProperties,
+    PresentationInfo, PresentationProperties, PresentationTag, Run, RunProperties, Shape,
+    ShapeTransform, ShapeType, SlideSize, SmartArtPart, Table, TableCell, TableRow, TableStyle,
+    TableStyleSet, ViewProperties,
 };
 use docir_core::security::{ExternalRefType, ExternalReference, SecurityInfo};
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
@@ -47,7 +47,7 @@ use metadata::{
 };
 use relationships::classify_relationship;
 use shapes::parse_shape_properties;
-use text::{parse_text_body, parse_text_body_table, shape_text_to_plain};
+use text::{parse_text_body, parse_text_body_table};
 use transform::parse_transform;
 
 /// PPTX parser for presentation.xml and slides.
@@ -178,11 +178,18 @@ impl PptxParser {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"txBody" => {
                     let text = parse_text_body_table(reader, slide_path)?;
-                    let plain = shape_text_to_plain(&text);
-                    if !plain.is_empty() || !text.paragraphs.is_empty() {
+                    for source_paragraph in text.paragraphs {
                         let mut para = Paragraph::new();
-                        if !plain.is_empty() {
-                            let run = Run::new(plain);
+                        para.properties.alignment = source_paragraph.alignment;
+                        for source_run in source_paragraph.runs {
+                            let properties = RunProperties {
+                                font_family: source_run.font_family,
+                                font_size: source_run.font_size,
+                                bold: source_run.bold,
+                                italic: source_run.italic,
+                                ..RunProperties::default()
+                            };
+                            let run = Run::with_properties(source_run.text, properties);
                             let run_id = run.id;
                             self.store.insert(IRNode::Run(run));
                             para.runs.push(run_id);

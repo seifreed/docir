@@ -301,7 +301,15 @@ fn test_parse_slide_text_alignment_and_runs() {
     assert_eq!(text.paragraphs[0].runs[0].bold, Some(true));
     assert_eq!(text.paragraphs[0].runs[0].italic, Some(true));
     assert_eq!(
-        shape_text_to_plain(text),
+        text.paragraphs
+            .iter()
+            .map(|paragraph| paragraph
+                .runs
+                .iter()
+                .map(|run| run.text.as_str())
+                .collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n"),
         "Left\nLine\nRight\nJustify\nDistribute\nUnknown"
     );
 }

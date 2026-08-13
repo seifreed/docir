@@ -339,7 +339,7 @@ fn test_parse_slide_accepts_alternate_namespace_prefixes() {
     assert_eq!(text_shape.transform.x, 100);
     assert_eq!(text_shape.transform.width, 300);
     assert_eq!(
-        shape_text_to_plain(text_shape.text.as_ref().expect("shape text")).as_str(),
+        text_shape.text.as_ref().expect("shape text").paragraphs[0].runs[0].text,
         "Hello"
     );
 
