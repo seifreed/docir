@@ -34,37 +34,48 @@ pub(super) fn build_shared_sector_claims(
 pub(super) fn build_shared_chain_overlaps(
     sector_overview: &[SectorOverviewEntry],
 ) -> Vec<SharedChainOverlap> {
-    let mut grouped = std::collections::BTreeMap::<Vec<String>, Vec<u32>>::new();
+    let mut grouped = std::collections::BTreeMap::<Vec<String>, Vec<(u32, Vec<usize>)>>::new();
     for entry in sector_overview
         .iter()
         .filter(|entry| entry.owners.len() > 1)
     {
-        let owners = entry
+        let mut owners = entry
             .owners
             .iter()
-            .map(|owner| owner.path.clone())
+            .map(|owner| (owner.path.clone(), owner.index_in_chain))
             .collect::<Vec<_>>();
-        grouped.entry(owners).or_default().push(entry.sector);
+        owners.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+        let paths = owners.iter().map(|(path, _)| path.clone()).collect();
+        let positions = owners.into_iter().map(|(_, index)| index).collect();
+        grouped
+            .entry(paths)
+            .or_default()
+            .push((entry.sector, positions));
     }
 
     let mut overlaps = Vec::new();
-    for (owners, mut sectors) in grouped {
-        sectors.sort_unstable();
+    for (owners, mut claims) in grouped {
+        claims.sort_unstable_by_key(|(_, positions)| positions[0]);
         let mut run = Vec::new();
-        for sector in sectors {
-            if run.last().is_none_or(|last| *last + 1 == sector) {
-                run.push(sector);
-            } else {
-                if run.len() >= 2 {
-                    overlaps.push(SharedChainOverlap {
-                        owners: owners.clone(),
-                        sectors: run.clone(),
-                        severity: shared_chain_severity(&owners, &run).to_string(),
-                    });
-                }
-                run.clear();
-                run.push(sector);
+        let mut previous_positions: Option<Vec<usize>> = None;
+        for (sector, positions) in claims {
+            let is_next = previous_positions.as_ref().is_some_and(|previous| {
+                positions
+                    .iter()
+                    .zip(previous)
+                    .all(|(current, previous)| *current == previous.saturating_add(1))
+            });
+            if !is_next && run.len() >= 2 {
+                let severity = shared_chain_severity(&owners, &run).to_string();
+                overlaps.push(SharedChainOverlap {
+                    owners: owners.clone(),
+                    sectors: run,
+                    severity,
+                });
+                run = Vec::new();
             }
+            run.push(sector);
+            previous_positions = Some(positions);
         }
         if run.len() >= 2 {
             overlaps.push(SharedChainOverlap {

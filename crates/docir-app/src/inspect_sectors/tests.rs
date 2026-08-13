@@ -144,6 +144,35 @@ fn inspect_sectors_detects_shared_chain_overlaps() {
 }
 
 #[test]
+fn inspect_sectors_detects_noncontiguous_shared_chain_overlaps() {
+    let base = build_test_cfb(&[
+        ("WordDocument", &[0u8; 1025]),
+        ("VBA/PROJECT", &[1u8; 1025]),
+    ]);
+    let inspection = inspect_directory_bytes(&base).expect("directory");
+    let vba_entry = inspection
+        .entries
+        .iter()
+        .find(|entry| entry.path == "VBA/PROJECT")
+        .expect("vba entry");
+    let patched = patch_test_cfb_directory_entry(
+        &patch_test_cfb_fat_entry(&patch_test_cfb_fat_entry(&base, 0, 2), 2, u32::MAX - 1),
+        vba_entry.entry_index,
+        TestCfbDirectoryPatch {
+            start_sector: Some(0),
+            ..Default::default()
+        },
+    );
+
+    let inspection = inspect_sectors_bytes(&patched).expect("inspection");
+    assert!(inspection.shared_chain_overlaps.iter().any(|overlap| {
+        overlap.sectors == [0, 2]
+            && overlap.owners.iter().any(|owner| owner == "WordDocument")
+            && overlap.owners.iter().any(|owner| owner == "VBA/PROJECT")
+    }));
+}
+
+#[test]
 fn inspect_sectors_summarizes_truncated_chains_by_logical_root() {
     let base = build_test_cfb(&[("WordDocument", &[0u8; 600]), ("VBA/PROJECT", b"meta")]);
     let patched = patch_test_cfb_fat_entry(&base, 0, u32::MAX - 1);
