@@ -310,6 +310,8 @@ fn inspect_sectors_assigns_high_risk_to_shared_and_invalid_start_streams() {
         .expect("vba stream");
     assert_eq!(word.stream_health, "invalid-start");
     assert_eq!(word.stream_risk, "high");
+    assert_eq!(word.chain_state, "truncated");
+    assert!(word.sector_chain.is_empty());
     assert_eq!(vba.stream_health, "shared");
     assert_eq!(vba.stream_risk, "high");
     assert!(inspection.shared_chain_overlaps.iter().any(|overlap| {

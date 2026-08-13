@@ -117,8 +117,11 @@ pub(crate) fn collect_chain_with_terminal(table: &[u32], start_sector: u32) -> (
         if guard >= table.len() {
             return (out, sector);
         }
+        let Some(next) = table.get(sector as usize).copied() else {
+            return (out, sector);
+        };
         out.push(sector);
-        sector = *table.get(sector as usize).unwrap_or(&END_OF_CHAIN);
+        sector = next;
         guard += 1;
     }
     (out, sector)
