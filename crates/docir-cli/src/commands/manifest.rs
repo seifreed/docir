@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use docir_app::{ExportDocumentRef, ParserConfig, Phase0ArtifactManifestExport};
-use std::fs;
 use std::path::PathBuf;
 
 use crate::cli::PrettyOutputOpts;
@@ -12,8 +11,7 @@ use crate::commands::util::{build_app, source_format_label, write_json_output};
 pub fn run(input: PathBuf, opts: PrettyOutputOpts, parser_config: &ParserConfig) -> Result<()> {
     let PrettyOutputOpts { pretty, output } = opts;
     let app = build_app(parser_config);
-    let source_bytes = fs::read(&input)?;
-    let parsed = app.parse_bytes(&source_bytes)?;
+    let (parsed, source_bytes) = app.parse_file_with_bytes(&input)?;
     let inventory = app.build_inventory_with_bytes(&parsed, &source_bytes);
     let export = Phase0ArtifactManifestExport::from_inventory(
         &inventory,
@@ -50,6 +48,24 @@ mod tests {
         assert!(text.contains("\"schema_version\""));
         assert!(text.contains("\"artifacts\""));
         let _ = fs::remove_file(output);
+    }
+
+    #[test]
+    fn manifest_run_rejects_input_above_configured_limit() {
+        let err = run(
+            test_support::fixture("minimal.docx"),
+            PrettyOutputOpts {
+                pretty: false,
+                output: None,
+            },
+            &ParserConfig {
+                max_input_size: 1,
+                ..ParserConfig::default()
+            },
+        )
+        .expect_err("manifest must enforce the parser input limit");
+
+        assert!(err.to_string().contains("Input too large"));
     }
 
     #[test]

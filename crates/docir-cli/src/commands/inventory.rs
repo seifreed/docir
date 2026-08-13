@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use docir_app::{ArtifactInventory, ParserConfig};
-use std::fs;
 use std::path::PathBuf;
 
 use crate::cli::JsonOutputOpts;
@@ -16,8 +15,7 @@ pub fn run(input: PathBuf, opts: JsonOutputOpts, parser_config: &ParserConfig) -
         output,
     } = opts;
     let app = build_app(parser_config);
-    let source_bytes = fs::read(&input)?;
-    let parsed = app.parse_bytes(&source_bytes)?;
+    let (parsed, source_bytes) = app.parse_file_with_bytes(&input)?;
     let inventory = app.build_inventory_with_bytes(&parsed, &source_bytes);
     run_dual_output(
         &inventory,
@@ -161,6 +159,25 @@ mod tests {
         assert!(text.contains("Format:"));
         assert!(text.contains("Evidence:"));
         let _ = fs::remove_file(output);
+    }
+
+    #[test]
+    fn inventory_run_rejects_input_above_configured_limit() {
+        let err = run(
+            test_support::fixture("minimal.docx"),
+            JsonOutputOpts {
+                json: true,
+                pretty: false,
+                output: None,
+            },
+            &ParserConfig {
+                max_input_size: 1,
+                ..ParserConfig::default()
+            },
+        )
+        .expect_err("inventory must enforce the parser input limit");
+
+        assert!(err.to_string().contains("Input too large"));
     }
 
     #[test]
