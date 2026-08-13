@@ -121,6 +121,11 @@ pub(super) fn parse_table_cell(
                     limits,
                 )?;
                 cell.content.push(paragraph_id);
+            } else if let Event::Start(e) = event
+                && local_name(e.name().as_ref()) == b"table"
+            {
+                let table_id = parse_table(reader, store, limits)?;
+                cell.content.push(table_id);
             }
             Ok(XmlScanControl::Continue)
         },

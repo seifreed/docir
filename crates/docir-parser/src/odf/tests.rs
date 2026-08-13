@@ -474,6 +474,57 @@ fn test_parse_ods_keeps_rows_after_nested_table() {
 }
 
 #[test]
+fn test_parse_odt_keeps_content_after_nested_table() {
+    let mimetype = "application/vnd.oasis.opendocument.text";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body>
+    <office:text>
+      <table:table table:name="Outer">
+        <table:table-row><table:table-cell><text:p>before</text:p></table:table-cell></table:table-row>
+        <table:table-row>
+          <table:table-cell>
+            <text:p>nested parent</text:p>
+            <table:table table:name="Nested">
+              <table:table-row><table:table-cell><text:p>nested</text:p></table:table-cell></table:table-row>
+            </table:table>
+          </table:table-cell>
+        </table:table-row>
+        <table:table-row><table:table-cell><text:p>after</text:p></table:table-cell></table:table-row>
+      </table:table>
+    </office:text>
+  </office:body>
+</office:document-content>
+"#;
+    let parsed = DocumentParser::new()
+        .parse_reader(Cursor::new(build_odf_zip(mimetype, content_xml, None)))
+        .expect("nested ODT table must not truncate the enclosing table");
+
+    let tables: Vec<&docir_core::ir::Table> = parsed
+        .store
+        .values()
+        .filter_map(|node| match node {
+            IRNode::Table(table) => Some(table),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tables.len(), 2);
+    assert!(tables.iter().any(|table| table.rows.len() == 3));
+    assert!(tables.iter().any(|table| table.rows.len() == 1));
+
+    let texts: Vec<String> = parsed
+        .store
+        .values()
+        .filter_map(|node| match node {
+            IRNode::Run(run) => Some(run.text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(texts.iter().any(|text| text == "before"));
+    assert!(texts.iter().any(|text| text == "after"));
+}
+
+#[test]
 fn test_parse_ods_cells_and_validations() {
     let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
