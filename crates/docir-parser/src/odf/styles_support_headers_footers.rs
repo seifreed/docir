@@ -1,4 +1,4 @@
-use super::super::helpers::parse_table;
+use super::super::helpers::{parse_empty_table, parse_table};
 use super::super::{
     Footer, Header, IRNode, IrStore, NodeId, NumberingInfo, OdfLimitCounter, OdfLimits, OdfReader,
     ParseError, ParserConfig, SourceSpan, parse_paragraph, text,
@@ -209,6 +209,10 @@ fn handle_header_footer_empty(
     pending_inline_nodes: &mut Vec<NodeId>,
 ) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
+        b"table" => {
+            content.append(pending_inline_nodes);
+            content.push(parse_empty_table(store));
+        }
         b"p" | b"h" => {
             let outline_level = parse_outline_level(e)?;
             let numbering = list_stack.last().map(|ctx| NumberingInfo {

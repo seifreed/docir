@@ -1,7 +1,8 @@
 //! ODF text parsing helpers.
 
 use super::helpers::{
-    ListContext, parse_annotation, parse_draw_frame, parse_note, parse_table, parse_tracked_changes,
+    ListContext, parse_annotation, parse_draw_frame, parse_empty_table, parse_note, parse_table,
+    parse_tracked_changes,
 };
 use super::spreadsheet::parse_content_spreadsheet_fast;
 use super::{
@@ -263,6 +264,9 @@ fn handle_text_empty(
     state: &mut OdfTextState,
 ) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
+        b"table" if state.in_text => {
+            section.content.push(parse_empty_table(store));
+        }
         b"bookmark-start" if state.in_text => {
             push_bookmark_start(e, store, section)?;
         }

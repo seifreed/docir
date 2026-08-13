@@ -317,6 +317,10 @@ pub(crate) fn parse_table(
     helpers_parse_events_tables::parse_table(reader, store, limits)
 }
 
+pub(crate) fn parse_empty_table(store: &mut IrStore) -> NodeId {
+    helpers_parse_events_tables::parse_empty_table(store)
+}
+
 pub(crate) fn parse_annotation(
     reader: &mut OdfReader<'_>,
     comment_id: &str,

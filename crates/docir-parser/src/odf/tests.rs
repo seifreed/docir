@@ -525,6 +525,28 @@ fn test_parse_odt_keeps_content_after_nested_table() {
 }
 
 #[test]
+fn test_parse_odt_preserves_empty_table() {
+    let mimetype = "application/vnd.oasis.opendocument.text";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body><office:text><table:table table:name="Empty"/></office:text></office:body>
+</office:document-content>
+"#;
+    let parsed = DocumentParser::new()
+        .parse_reader(Cursor::new(build_odf_zip(mimetype, content_xml, None)))
+        .expect("empty ODT table must parse");
+
+    assert_eq!(
+        parsed
+            .store
+            .values()
+            .filter(|node| matches!(node, IRNode::Table(_)))
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn test_parse_ods_cells_and_validations() {
     let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>

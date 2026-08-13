@@ -7,6 +7,13 @@ use crate::xml_utils::{is_end_event_local, local_name, try_attr_value_by_suffix,
 use docir_core::visitor::IrStore;
 use quick_xml::events::BytesStart;
 
+pub(super) fn parse_empty_table(store: &mut IrStore) -> NodeId {
+    let table = Table::new();
+    let table_id = table.id;
+    store.insert(IRNode::Table(table));
+    table_id
+}
+
 pub(super) fn parse_table(
     reader: &mut OdfReader<'_>,
     store: &mut IrStore,
@@ -126,6 +133,10 @@ pub(super) fn parse_table_cell(
             {
                 let table_id = parse_table(reader, store, limits)?;
                 cell.content.push(table_id);
+            } else if let Event::Empty(e) = event
+                && local_name(e.name().as_ref()) == b"table"
+            {
+                cell.content.push(parse_empty_table(store));
             }
             Ok(XmlScanControl::Continue)
         },
