@@ -103,8 +103,7 @@ impl ContentTypes {
 
     /// Checks if the package has an XLSB workbook as its main part.
     pub fn is_binary_workbook(&self) -> bool {
-        self.overrides
-            .get("xl/workbook.bin")
+        self.get_content_type("xl/workbook.bin")
             .is_some_and(|ct| ct == content_type::EXCEL_WORKBOOK_BIN)
     }
 
@@ -124,7 +123,10 @@ impl ContentTypes {
             "ppt/presentation.xml",
         ]
         .into_iter()
-        .find_map(|part_name| self.overrides.get(part_name).map(String::as_str))
+        .find_map(|part_name| {
+            self.get_content_type(part_name)
+                .filter(|content_type| format_for_main_content_type(content_type).is_some())
+        })
     }
 }
 
@@ -359,6 +361,22 @@ mod tests {
             Some(content_type::RELATIONSHIPS)
         );
         assert_eq!(types.detect_format(), Some(DocumentFormat::Spreadsheet));
+    }
+
+    #[test]
+    fn detect_format_uses_main_part_default_for_xlsb() {
+        let xml = format!(
+            r#"
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="bin" ContentType="{}"/>
+            </Types>"#,
+            content_type::EXCEL_WORKBOOK_BIN
+        );
+
+        let types = ContentTypes::parse(&xml).expect("content types");
+
+        assert_eq!(types.detect_format(), Some(DocumentFormat::Spreadsheet));
+        assert!(types.is_binary_workbook());
     }
 
     #[test]
