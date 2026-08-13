@@ -2,6 +2,12 @@ use super::container::detect_odf_format;
 use super::container_encryption::decrypt_odf_part;
 use super::container_meta::parse_meta;
 use super::*;
+use aes::Aes256;
+use cbc::Encryptor;
+use cbc::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
+use pbkdf2::pbkdf2_hmac;
+use sha1::Sha1;
+use sha2::{Digest, Sha256};
 
 fn encryption_data() -> OdfEncryptionData {
     OdfEncryptionData {
@@ -13,6 +19,8 @@ fn encryption_data() -> OdfEncryptionData {
         salt: Some(vec![1_u8; 16]),
         iteration_count: Some(10),
         key_size: Some(32),
+        start_key_generation_name: None,
+        start_key_size: None,
     }
 }
 
@@ -135,6 +143,12 @@ fn decrypt_odf_part_rejects_unsupported_algorithm_or_key_length() {
     assert!(err.contains("Unsupported encryption algorithm"));
 
     let mut enc = encryption_data();
+    enc.start_key_generation_name = Some("urn:unknown".to_string());
+    let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw")
+        .expect_err("unknown start-key algorithm must be rejected");
+    assert!(err.contains("Unsupported start key generation algorithm"));
+
+    let mut enc = encryption_data();
     enc.key_size = Some(u32::MAX);
     let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw")
         .expect_err("unrepresentable key size must be rejected");
@@ -159,4 +173,25 @@ fn decrypt_odf_part_rejects_excessive_iteration_count() {
     let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw")
         .expect_err("excessive PBKDF2 iterations must be rejected");
     assert!(err.contains("iteration count exceeds maximum"));
+}
+
+#[test]
+fn decrypt_odf_part_uses_sha256_start_key_generation() {
+    let mut enc = encryption_data();
+    enc.start_key_generation_name = Some("http://www.w3.org/2000/09/xmldsig#sha256".to_string());
+    enc.start_key_size = Some(32);
+    let start_key = Sha256::digest(b"pw");
+    let mut key = [0_u8; 32];
+    pbkdf2_hmac::<Sha1>(&start_key, &[1_u8; 16], 10, &mut key);
+    let plaintext = b"ODF encrypted content";
+    let mut encrypted = vec![0_u8; plaintext.len() + 16];
+    encrypted[..plaintext.len()].copy_from_slice(plaintext);
+    let encrypted = Encryptor::<Aes256>::new_from_slices(&key, &[0_u8; 16])
+        .expect("AES-256 parameters")
+        .encrypt_padded_mut::<Pkcs7>(&mut encrypted, plaintext.len())
+        .expect("PKCS#7 padding")
+        .to_vec();
+
+    let decrypted = decrypt_odf_part(encrypted, &enc, "pw").expect("ODF decrypt");
+    assert_eq!(decrypted, plaintext);
 }

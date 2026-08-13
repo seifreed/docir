@@ -2,7 +2,8 @@ use aes::{Aes128, Aes256};
 use cbc::Decryptor;
 use cbc::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
 use pbkdf2::pbkdf2_hmac;
-use sha1::Sha1;
+use sha1::{Digest as Sha1Digest, Sha1};
+use sha2::Sha256;
 
 use super::OdfEncryptionData;
 
@@ -48,6 +49,11 @@ pub(super) fn decrypt_odf_part(
             iterations, MAX_ODF_PBKDF2_ITERATIONS
         ));
     }
+    let start_key = derive_start_key(
+        password,
+        encryption.start_key_generation_name.as_deref(),
+        encryption.start_key_size,
+    )?;
     let expected_key_len = if algorithm.contains("aes256") {
         32
     } else if algorithm.contains("aes128") {
@@ -69,7 +75,7 @@ pub(super) fn decrypt_odf_part(
     // Security note: PBKDF2 with SHA-1 is required by the ODF specification
     // (OpenDocument 1.3, section 4.4). SHA-1 is deprecated for cryptographic
     // use but must be used here for spec compliance.
-    pbkdf2_hmac::<Sha1>(password.as_bytes(), salt, iterations, &mut key);
+    pbkdf2_hmac::<Sha1>(&start_key, salt, iterations, &mut key);
 
     let mut buffer = encrypted;
     if key_len == 32 {
@@ -89,4 +95,33 @@ pub(super) fn decrypt_odf_part(
     } else {
         Err(format!("Unsupported key length: {}", key_len))
     }
+}
+
+fn derive_start_key(
+    password: &str,
+    algorithm: Option<&str>,
+    key_size: Option<u32>,
+) -> Result<Vec<u8>, String> {
+    let algorithm = algorithm.unwrap_or("SHA1");
+    let (expected_size, key) = if algorithm.eq_ignore_ascii_case("SHA1")
+        || algorithm.eq_ignore_ascii_case("http://www.w3.org/2000/09/xmldsig#sha1")
+    {
+        (20, Sha1::digest(password.as_bytes()).to_vec())
+    } else if algorithm.eq_ignore_ascii_case("http://www.w3.org/2000/09/xmldsig#sha256")
+        || algorithm.eq_ignore_ascii_case("http://www.w3.org/2001/04/xmlenc#sha256")
+    {
+        (32, Sha256::digest(password.as_bytes()).to_vec())
+    } else {
+        return Err(format!(
+            "Unsupported start key generation algorithm: {algorithm}"
+        ));
+    };
+    if let Some(key_size) = key_size
+        && key_size != expected_size
+    {
+        return Err(format!(
+            "Unsupported start key length: {key_size} (expected {expected_size})"
+        ));
+    }
+    Ok(key)
 }

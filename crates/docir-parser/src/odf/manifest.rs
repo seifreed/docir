@@ -26,6 +26,8 @@ pub struct OdfEncryptionData {
     pub salt: Option<Vec<u8>>,
     pub iteration_count: Option<u32>,
     pub key_size: Option<u32>,
+    pub start_key_generation_name: Option<String>,
+    pub start_key_size: Option<u32>,
 }
 
 /// Public API entrypoint: parse_manifest.
@@ -68,6 +70,9 @@ fn handle_manifest_start_event(
         b"key-derivation" => {
             apply_entry_encryption_attrs(current_entry, e, apply_key_derivation_attrs)?;
         }
+        b"start-key-generation" => {
+            apply_entry_encryption_attrs(current_entry, e, apply_start_key_generation_attrs)?;
+        }
         _ => {}
     }
     Ok(())
@@ -86,6 +91,9 @@ fn handle_manifest_empty_event(
         b"algorithm" => apply_entry_encryption_attrs(current_entry, e, apply_algorithm_attrs)?,
         b"key-derivation" => {
             apply_entry_encryption_attrs(current_entry, e, apply_key_derivation_attrs)?;
+        }
+        b"start-key-generation" => {
+            apply_entry_encryption_attrs(current_entry, e, apply_start_key_generation_attrs)?;
         }
         _ => {}
     }
@@ -174,6 +182,16 @@ fn apply_key_derivation_attrs(
     Ok(())
 }
 
+fn apply_start_key_generation_attrs(
+    enc: &mut OdfEncryptionData,
+    e: &quick_xml::events::BytesStart<'_>,
+) -> Result<(), ParseError> {
+    enc.start_key_generation_name =
+        try_attr_value_by_suffix(e, &[b":start-key-generation-name"], "META-INF/manifest.xml")?;
+    enc.start_key_size = parse_optional_u32_attr(e, &[b":key-size"])?;
+    Ok(())
+}
+
 fn parse_optional_u32_attr(
     e: &quick_xml::events::BytesStart<'_>,
     names: &[&[u8]],
@@ -214,8 +232,13 @@ pub fn format_odf_encryption_metadata(entry: &OdfManifestEntry) -> Option<String
     let enc = entry.encryption.as_ref()?;
     let algorithm = enc.algorithm_name.as_deref().unwrap_or("unknown");
     let kdf = enc.key_derivation_name.as_deref().unwrap_or("unknown");
-    let key_bits = enc
+    let key_bytes = enc
         .key_size
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    let start_key_algorithm = enc.start_key_generation_name.as_deref().unwrap_or("SHA1");
+    let start_key_bytes = enc
+        .start_key_size
         .map(|v| v.to_string())
         .unwrap_or_else(|| "unknown".to_string());
     let iterations = enc
@@ -234,7 +257,7 @@ pub fn format_odf_encryption_metadata(entry: &OdfManifestEntry) -> Option<String
         .unwrap_or_else(|| "unknown".to_string());
     let checksum_type = enc.checksum_type.as_deref().unwrap_or("unknown");
     Some(format!(
-        "ODF encryption: algorithm={algorithm}, kdf={kdf}, key_bits={key_bits}, iterations={iterations}, iv={iv}, checksum={checksum} ({checksum_type})"
+        "ODF encryption: algorithm={algorithm}, kdf={kdf}, key_bytes={key_bytes}, start_key_algorithm={start_key_algorithm}, start_key_bytes={start_key_bytes}, iterations={iterations}, iv={iv}, checksum={checksum} ({checksum_type})"
     ))
 }
 
@@ -265,6 +288,9 @@ mod tests {
                     mf:initialisation-vector="MTIzNDU2Nzg5MA=="/>
                   <mf:key-derivation mf:key-derivation-name="PBKDF2"
                     mf:salt="c2FsdA==" mf:key-size="32" mf:iteration-count="2048"/>
+                  <mf:start-key-generation
+                    mf:start-key-generation-name="http://www.w3.org/2000/09/xmldsig#sha256"
+                    mf:key-size="32"/>
                 </mf:encryption-data>
               </mf:file-entry>
             </mf:manifest>
@@ -279,6 +305,20 @@ mod tests {
                 .encryption
                 .as_ref()
                 .and_then(|encryption| encryption.key_size),
+            Some(32)
+        );
+        assert_eq!(
+            entries[0]
+                .encryption
+                .as_ref()
+                .and_then(|encryption| encryption.start_key_generation_name.as_deref()),
+            Some("http://www.w3.org/2000/09/xmldsig#sha256")
+        );
+        assert_eq!(
+            entries[0]
+                .encryption
+                .as_ref()
+                .and_then(|encryption| encryption.start_key_size),
             Some(32)
         );
 
