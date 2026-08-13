@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, local_name};
+use crate::xml_utils::{XmlScanControl, local_name, track_xml_document_event};
 use crate::xml_utils::{lossy_attr_value, scan_xml_events, visit_attributes, xml_error};
 use docir_core::ir::{CellError, ChartData, ChartSeries, IRNode};
 use docir_core::types::{NodeId, SourceSpan};
@@ -73,9 +73,17 @@ pub(super) fn parse_smartart_part(
     let mut point_count: u32 = 0;
     let mut connection_count: u32 = 0;
     let mut rel_ids: Vec<String> = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
                 if root_element.is_none() {
                     root_element = Some(String::from_utf8_lossy(e.name().as_ref()).to_string());
                 }
@@ -98,10 +106,6 @@ pub(super) fn parse_smartart_part(
                         }
                     })?;
                 }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -141,30 +145,34 @@ pub(super) fn parse_chart_data(
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(chart_path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, chart_path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) => {
                 let name_bytes = e.name().as_ref().to_vec();
                 state.handle_start(local_name(&name_bytes));
             }
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 let name_bytes = e.name().as_ref().to_vec();
                 state.handle_end(local_name(&name_bytes));
             }
-            Ok(Event::Text(e)) => {
+            Event::Text(e) => {
                 let text =
                     crate::xml_utils::decoded_text(&e).map_err(|err| xml_error(chart_path, err))?;
                 state.handle_text(&text);
             }
-            Ok(Event::GeneralRef(e)) => {
+            Event::GeneralRef(e) => {
                 let text = crate::xml_utils::decoded_general_ref(&e)
                     .map_err(|err| xml_error(chart_path, err))?;
                 state.handle_text(&text);
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(chart_path, e));
             }
             _ => {}
         }
@@ -387,6 +395,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_smartart_part_rejects_truncated_root() {
+        let err = parse_smartart_part(
+            "<dgm:dataModel xmlns:dgm=\"urn:diagram\"><dgm:pt>",
+            "ppt/diagrams/truncated.xml",
+        )
+        .expect_err("truncated SmartArt must fail");
+        assert!(
+            matches!(err, ParseError::Xml { file, .. } if file == "ppt/diagrams/truncated.xml")
+        );
+    }
+
+    #[test]
     fn parse_chart_data_extracts_title_and_series_values() {
         let xml = r#"
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
@@ -445,5 +465,17 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, "xl/charts/bad.xml"),
             other => panic!("unexpected error variant: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_chart_data_rejects_truncated_root() {
+        let mut store = IrStore::new();
+        let err = parse_chart_data(
+            "<c:chartSpace xmlns:c=\"urn:chart\"><c:chart>",
+            "xl/charts/truncated.xml",
+            &mut store,
+        )
+        .expect_err("truncated chart must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "xl/charts/truncated.xml"));
     }
 }

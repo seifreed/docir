@@ -1,6 +1,7 @@
 use super::{OoxmlParser, ParseError};
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
+use crate::xml_utils::track_xml_document_event;
 use crate::xml_utils::visit_attributes;
 use crate::xml_utils::xml_error;
 use crate::xml_utils::{XmlScanControl, scan_xml_events};
@@ -183,10 +184,23 @@ impl OoxmlParser {
         let mut buf = Vec::new();
         let mut current_prop: Option<CustomProperty> = None;
         let mut current_value_tag: Option<String> = None;
+        let mut depth = 0usize;
+        let mut root_closed = false;
 
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => {
+            let event = reader
+                .read_event_into(&mut buf)
+                .map_err(|err| xml_error("docProps/custom.xml", err))?;
+            if track_xml_document_event(
+                &event,
+                &mut depth,
+                &mut root_closed,
+                "docProps/custom.xml",
+            )? {
+                break;
+            }
+            match event {
+                Event::Start(e) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     if name.ends_with("property") {
                         let mut prop = CustomProperty {
@@ -219,7 +233,7 @@ impl OoxmlParser {
                         current_value_tag = Some(name);
                     }
                 }
-                Ok(Event::Text(e)) => {
+                Event::Text(e) => {
                     if let Some(tag) = &current_value_tag
                         && let Some(prop) = current_prop.as_mut()
                     {
@@ -228,7 +242,7 @@ impl OoxmlParser {
                         prop.value = custom_property_value(tag, text)?;
                     }
                 }
-                Ok(Event::GeneralRef(e)) => {
+                Event::GeneralRef(e) => {
                     if let Some(tag) = &current_value_tag
                         && let Some(prop) = current_prop.as_mut()
                     {
@@ -237,7 +251,7 @@ impl OoxmlParser {
                         prop.value = custom_property_value(tag, text)?;
                     }
                 }
-                Ok(Event::End(e)) => {
+                Event::End(e) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     if name.ends_with("property") {
                         if let Some(prop) = current_prop.take() {
@@ -247,8 +261,6 @@ impl OoxmlParser {
                         current_value_tag = None;
                     }
                 }
-                Ok(Event::Eof) => break,
-                Err(e) => return Err(xml_error("docProps/custom.xml", e)),
                 _ => {}
             }
             buf.clear();
@@ -557,6 +569,18 @@ mod tests {
             other => panic!("unexpected error: {other:?}"),
         }
         assert!(metadata.custom_properties.is_empty());
+    }
+
+    #[test]
+    fn parse_custom_properties_rejects_truncated_root() {
+        let xml = r#"<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"><property pid="2" name="Build">"#;
+        let parser = OoxmlParser::new();
+        let mut metadata = DocumentMetadata::new();
+
+        let err = parser
+            .parse_custom_properties(xml, &mut metadata)
+            .expect_err("truncated custom properties must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "docProps/custom.xml"));
     }
 
     #[test]
