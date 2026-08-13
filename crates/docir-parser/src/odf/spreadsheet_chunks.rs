@@ -76,6 +76,10 @@ fn find_start_tag_by_local<'a>(
 ) -> Option<(usize, usize, &'a [u8])> {
     let mut i = start;
     while i < end {
+        if let Some(next) = skip_markup_section(xml, i, end) {
+            i = next;
+            continue;
+        }
         if xml[i] != b'<' || matches!(xml.get(i + 1), Some(b'/') | Some(b'!') | Some(b'?')) {
             i += 1;
             continue;
@@ -101,6 +105,10 @@ fn find_end_tag(
 ) -> Option<usize> {
     let mut i = start;
     while i < end {
+        if let Some(next) = skip_markup_section(xml, i, end) {
+            i = next;
+            continue;
+        }
         if xml.get(i..i + 2) != Some(b"</") {
             i += 1;
             continue;
@@ -126,6 +134,10 @@ fn find_matching_end_tag(
     let mut depth = 1usize;
     let mut i = start;
     while i < end {
+        if let Some(next) = skip_markup_section(xml, i, end) {
+            i = next;
+            continue;
+        }
         if xml[i] != b'<' {
             i += 1;
             continue;
@@ -161,6 +173,26 @@ fn find_matching_end_tag(
             None => return None,
         }
         i += 1;
+    }
+    None
+}
+
+fn skip_markup_section(xml: &[u8], start: usize, end: usize) -> Option<usize> {
+    if xml.get(start..)?.starts_with(b"<![CDATA[") {
+        let content_start = start + b"<![CDATA[".len();
+        let close = xml
+            .get(content_start..end)?
+            .windows(3)
+            .position(|window| window == b"]]>")?;
+        return Some(content_start + close + 3);
+    }
+    if xml.get(start..)?.starts_with(b"<!--") {
+        let content_start = start + b"<!--".len();
+        let close = xml
+            .get(content_start..end)?
+            .windows(3)
+            .position(|window| window == b"-->")?;
+        return Some(content_start + close + 3);
     }
     None
 }
@@ -292,5 +324,30 @@ mod tests {
 
         let err = table_name_from_chunk(chunk, 1).expect_err("invalid table name entity must fail");
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+    }
+
+    #[test]
+    fn extract_spreadsheet_table_chunks_ignores_markup_inside_cdata() {
+        let xml = br#"<office:document-content>
+  <office:body>
+    <office:spreadsheet>
+      <table:table table:name="First">
+        <table:table-cell><text:p><![CDATA[not markup </table:table>]]></text:p></table:table-cell>
+        <table:table-row table:style-name="after-cdata"/>
+      </table:table>
+      <table:table table:name="Second"/>
+    </office:spreadsheet>
+  </office:body>
+</office:document-content>"#;
+
+        let chunks = extract_spreadsheet_table_chunks(xml);
+
+        assert_eq!(chunks.len(), 2);
+        assert!(
+            chunks[0]
+                .bytes
+                .windows(b"after-cdata".len())
+                .any(|window| { window == b"after-cdata" })
+        );
     }
 }
