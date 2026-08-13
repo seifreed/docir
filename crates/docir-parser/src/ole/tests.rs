@@ -656,6 +656,10 @@ fn cfb_stream_lookup_is_case_insensitive_and_duplicate_names_fail() {
         cfb.read_stream("worddocument").expect("stream"),
         Some(b"document".to_vec())
     );
+    assert_eq!(
+        cfb.entry_metadata("worddocument").expect("metadata").path,
+        "WordDocument"
+    );
 
     let duplicate = crate::test_support::build_test_cfb(&[
         ("WordDocument", b"first"),

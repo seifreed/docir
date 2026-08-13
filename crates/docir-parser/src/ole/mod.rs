@@ -160,9 +160,16 @@ impl Cfb {
 
     /// Public API entrypoint: entry_metadata.
     pub fn entry_metadata(&self, path: &str) -> Option<&CfbEntryMetadata> {
+        let normalized = normalize_cfb_path(path);
         self.entries
             .get(path)
             .or_else(|| self.entries.get(&path.replace('\\', "/")))
+            .or_else(|| {
+                self.entries
+                    .iter()
+                    .find(|(candidate, _)| normalize_cfb_path(candidate) == normalized)
+                    .map(|(_, entry)| entry)
+            })
     }
 
     /// Public API entrypoint: sector_size.
