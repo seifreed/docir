@@ -45,15 +45,19 @@ impl PptxParser {
             if matches!(event, Event::Eof) {
                 break;
             }
-            if let Event::Start(e) = event {
-                self.handle_slide_start_event(
+            match event {
+                Event::Start(e) => self.handle_slide_start_event(
                     &mut reader,
                     &e,
                     slide_path,
                     relationships,
                     zip,
                     &mut slide,
-                )?;
+                )?,
+                Event::Empty(e) if local_name(e.name().as_ref()) == b"transition" => {
+                    slide.transition = Some(Self::parse_empty_slide_transition(&e, slide_path)?);
+                }
+                _ => {}
             }
             buf.clear();
         }
@@ -252,32 +256,7 @@ impl PptxParser {
         start: &BytesStart,
         slide_path: &str,
     ) -> Result<SlideTransition, ParseError> {
-        let mut transition = SlideTransition {
-            transition_type: None,
-            speed: None,
-            advance_on_click: None,
-            advance_after_ms: None,
-            duration_ms: None,
-        };
-
-        for attr in start.attributes() {
-            let attr = attr.map_err(|err| xml_error(slide_path, err))?;
-            match attr.key.as_ref() {
-                b"spd" => transition.speed = Some(lossy_attr_value(&attr).to_string()),
-                b"advClick" => {
-                    let value = lossy_attr_value(&attr);
-                    transition.advance_on_click =
-                        Some(value == "1" || value.eq_ignore_ascii_case("true"));
-                }
-                b"advTm" => {
-                    transition.advance_after_ms = Some(parse_u32_attr(&attr, slide_path)?);
-                }
-                b"dur" => {
-                    transition.duration_ms = Some(parse_u32_attr(&attr, slide_path)?);
-                }
-                _ => {}
-            }
-        }
+        let mut transition = parse_slide_transition_attributes(start, slide_path)?;
 
         let mut buf = Vec::new();
         loop {
@@ -306,6 +285,48 @@ impl PptxParser {
         Ok(transition)
     }
 
+    fn parse_empty_slide_transition(
+        start: &BytesStart,
+        slide_path: &str,
+    ) -> Result<SlideTransition, ParseError> {
+        parse_slide_transition_attributes(start, slide_path)
+    }
+}
+
+fn parse_slide_transition_attributes(
+    start: &BytesStart,
+    slide_path: &str,
+) -> Result<SlideTransition, ParseError> {
+    let mut transition = SlideTransition {
+        transition_type: None,
+        speed: None,
+        advance_on_click: None,
+        advance_after_ms: None,
+        duration_ms: None,
+    };
+
+    for attr in start.attributes() {
+        let attr = attr.map_err(|err| xml_error(slide_path, err))?;
+        match attr.key.as_ref() {
+            b"spd" => transition.speed = Some(lossy_attr_value(&attr).to_string()),
+            b"advClick" => {
+                let value = lossy_attr_value(&attr);
+                transition.advance_on_click =
+                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
+            }
+            b"advTm" => {
+                transition.advance_after_ms = Some(parse_u32_attr(&attr, slide_path)?);
+            }
+            b"dur" => {
+                transition.duration_ms = Some(parse_u32_attr(&attr, slide_path)?);
+            }
+            _ => {}
+        }
+    }
+    Ok(transition)
+}
+
+impl PptxParser {
     fn parse_slide_animations(
         reader: &mut Reader<&[u8]>,
         slide_path: &str,

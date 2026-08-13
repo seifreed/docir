@@ -344,6 +344,37 @@ fn test_parse_slide_transition_and_animation() {
 }
 
 #[test]
+fn test_parse_slide_preserves_empty_transition_attributes() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:cSld><p:spTree/></p:cSld>
+          <p:transition spd="fast" advClick="1" advTm="500"/>
+        </p:sld>
+        "#;
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+    let slide_id = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/empty-transition.xml",
+            &Relationships::default(),
+            (None, None),
+        )
+        .expect("empty transition should parse");
+    let store = parser.into_store();
+    let slide = match store.get(slide_id) {
+        Some(IRNode::Slide(slide)) => slide,
+        _ => panic!("missing slide"),
+    };
+    let transition = slide.transition.as_ref().expect("transition");
+    assert_eq!(transition.speed.as_deref(), Some("fast"));
+    assert_eq!(transition.advance_on_click, Some(true));
+    assert_eq!(transition.advance_after_ms, Some(500));
+}
+
+#[test]
 fn test_parse_slide_transition_reports_truncated_xml() {
     let slide_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
