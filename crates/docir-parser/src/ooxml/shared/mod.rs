@@ -253,6 +253,35 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_theme_rejects_truncated_root() {
+        assert_shared_xml_error(
+            parse_theme(
+                r#"<a:theme xmlns:a="x"><a:themeElements/>"#,
+                "theme/theme1.xml",
+            ),
+            "theme/theme1.xml",
+        );
+    }
+
+    #[test]
+    fn test_parse_web_extensions_rejects_truncated_roots() {
+        assert_shared_xml_error(
+            parse_web_extension(
+                r#"<we:webextension xmlns:we="x"><we:property name="x" value="y"/>"#,
+                "word/webExtensions/webExtension1.xml",
+            ),
+            "word/webExtensions/webExtension1.xml",
+        );
+        assert_shared_xml_error(
+            parse_web_extension_taskpanes(
+                r#"<wetp:taskpanes xmlns:wetp="x"><wetp:taskpane/>"#,
+                "word/webExtensions/taskpanes.xml",
+            ),
+            "word/webExtensions/taskpanes.xml",
+        );
+    }
+
+    #[test]
     fn test_shared_ooxml_parsers_report_malformed_attributes() {
         assert_shared_xml_error(
             parse_theme(

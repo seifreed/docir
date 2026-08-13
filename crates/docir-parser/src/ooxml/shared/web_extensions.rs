@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{attr_each, local_name, read_event, xml_error};
+use crate::xml_utils::{attr_each, local_name, read_event, track_xml_document_event, xml_error};
 use docir_core::ir::{WebExtension, WebExtensionProperty, WebExtensionTaskpane};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -20,8 +20,14 @@ fn parse_web_extension_impl(xml: &str, path: &str) -> Result<WebExtension, Parse
     ext.span = Some(SourceSpan::new(path));
 
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match read_event(&mut reader, &mut buf, path)? {
+        let event = read_event(&mut reader, &mut buf, path)?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
             Event::Start(e) | Event::Empty(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
@@ -47,7 +53,6 @@ fn parse_web_extension_impl(xml: &str, path: &str) -> Result<WebExtension, Parse
                     _ => {}
                 }
             }
-            Event::Eof => break,
             _ => {}
         }
         buf.clear();
@@ -68,8 +73,14 @@ pub fn parse_web_extension_taskpanes(
     let mut current: Option<WebExtensionTaskpane> = None;
 
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match read_event(&mut reader, &mut buf, path)? {
+        let event = read_event(&mut reader, &mut buf, path)?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
             Event::Start(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
@@ -101,7 +112,6 @@ pub fn parse_web_extension_taskpanes(
                     panes.push(pane);
                 }
             }
-            Event::Eof => break,
             _ => {}
         }
         buf.clear();

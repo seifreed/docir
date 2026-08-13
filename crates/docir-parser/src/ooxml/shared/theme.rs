@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{read_event, reader_from_str, visit_attributes};
+use crate::xml_utils::{read_event, reader_from_str, track_xml_document_event, visit_attributes};
 use docir_core::ir::{Theme, ThemeColor, ThemeFontScheme};
 use docir_core::types::SourceSpan;
 use quick_xml::events::{BytesStart, Event};
@@ -23,13 +23,18 @@ pub fn parse_theme(xml: &str, path: &str) -> Result<Theme, ParseError> {
     let mut reader = reader_from_str(xml);
     let mut buf = Vec::new();
     let mut state = ThemeParseState::default();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match read_event(&mut reader, &mut buf, path)? {
+        let event = read_event(&mut reader, &mut buf, path)?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
             Event::Start(e) => handle_start_event(&e, &mut theme, &mut state, path)?,
             Event::Empty(e) => handle_empty_event(&e, &mut theme, &mut state, path)?,
             Event::End(e) => handle_end_event(e.name().as_ref(), &mut state),
-            Event::Eof => break,
             _ => {}
         }
         buf.clear();
