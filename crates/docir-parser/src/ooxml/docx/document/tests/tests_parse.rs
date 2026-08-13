@@ -814,3 +814,37 @@ fn test_parse_styles_keeps_empty_style() {
     assert_eq!(styles.styles.len(), 1);
     assert_eq!(styles.styles[0].style_id, "EmptyStyle");
 }
+
+#[test]
+fn test_parse_font_table_rejects_truncated_root() {
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_font_table(
+            r#"<w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:font w:name="Broken"></w:font>"#,
+        )
+        .expect_err("truncated fontTable must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/fontTable.xml"));
+}
+
+#[test]
+fn test_parse_numbering_rejects_truncated_root() {
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_numbering(
+            r#"<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="1"/>"#,
+        )
+        .expect_err("truncated numbering must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/numbering.xml"));
+}
+
+#[test]
+fn test_parse_glossary_rejects_truncated_doc_part() {
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_glossary_document(
+            r#"<w:glossaryDocument xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docParts><w:docPart><w:docPartPr><w:name w:val="Broken"/></w:docPartPr>"#,
+            &Relationships::default(),
+        )
+        .expect_err("truncated glossary docPart must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/glossary/document.xml"));
+}

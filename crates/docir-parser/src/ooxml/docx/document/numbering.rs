@@ -21,10 +21,39 @@ impl DocxParser {
         let mut current_abs: Option<u32> = None;
         let mut current_levels: Vec<NumberingLevel> = Vec::new();
         let mut current_level: Option<NumberingLevel> = None;
+        let mut root_seen = false;
+        let mut root_closed = false;
 
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => handle_numbering_start(
+            let event = reader
+                .read_event_into(&mut buf)
+                .map_err(|err| xml_error(NUMBERING_PATH, err))?;
+            if !root_seen {
+                match &event {
+                    Event::Start(_) => root_seen = true,
+                    Event::Empty(_) => {
+                        root_seen = true;
+                        root_closed = true;
+                    }
+                    _ => {}
+                }
+            }
+            if let Event::End(e) = &event
+                && local_name(e.name().as_ref()) == b"numbering"
+            {
+                root_closed = true;
+            }
+            if matches!(event, Event::Eof) {
+                if root_closed {
+                    break;
+                }
+                return Err(xml_error(
+                    NUMBERING_PATH,
+                    "numbering document ends before its root is closed",
+                ));
+            }
+            match event {
+                Event::Start(e) => handle_numbering_start(
                     &mut reader,
                     &e,
                     &mut set,
@@ -32,7 +61,7 @@ impl DocxParser {
                     &mut current_levels,
                     &mut current_level,
                 )?,
-                Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                Event::Empty(e) => match local_name(e.name().as_ref()) {
                     b"lvl" => {
                         handle_numbering_start(
                             &mut reader,
@@ -58,7 +87,7 @@ impl DocxParser {
                     }
                     _ => handle_level_value_attrs(&e, current_level.as_mut())?,
                 },
-                Ok(Event::End(e)) => match local_name(e.name().as_ref()) {
+                Event::End(e) => match local_name(e.name().as_ref()) {
                     b"lvl" => {
                         if let Some(level) = current_level.take() {
                             current_levels.push(level);
@@ -74,10 +103,6 @@ impl DocxParser {
                     }
                     _ => {}
                 },
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(xml_error(NUMBERING_PATH, e));
-                }
                 _ => {}
             }
             buf.clear();

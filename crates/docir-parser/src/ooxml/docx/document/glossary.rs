@@ -1,7 +1,7 @@
 use super::{DocxParser, parse_block_until};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
-use crate::xml_utils::{local_name, read_event, try_attr_value};
+use crate::xml_utils::{local_name, read_event, try_attr_value, xml_error};
 use docir_core::ir::GlossaryEntry;
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -36,7 +36,9 @@ pub(super) fn parse_doc_part(
             Event::End(e) if local_name(e.name().as_ref()) == b"docPart" => {
                 break;
             }
-            Event::Eof => break,
+            Event::Eof => {
+                return Err(xml_error(GLOSSARY_PATH, "unexpected end of docPart"));
+            }
             _ => {}
         }
         buf.clear();
@@ -71,7 +73,9 @@ fn parse_doc_part_pr(
             Event::End(e) if local_name(e.name().as_ref()) == b"docPartPr" => {
                 break;
             }
-            Event::Eof => break,
+            Event::Eof => {
+                return Err(xml_error(GLOSSARY_PATH, "unexpected end of docPartPr"));
+            }
             _ => {}
         }
         buf.clear();

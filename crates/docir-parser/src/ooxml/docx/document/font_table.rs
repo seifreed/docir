@@ -1,6 +1,8 @@
 use crate::error::ParseError;
 use crate::ooxml::docx::document::DocxParser;
-use crate::xml_utils::{local_name, reader_from_str, try_attr_value, xml_error};
+use crate::xml_utils::{
+    local_name, reader_from_str, track_xml_document_event, try_attr_value, xml_error,
+};
 use docir_core::ir::{FontEntry, FontTable};
 use docir_core::types::NodeId;
 use quick_xml::events::Event;
@@ -18,10 +20,18 @@ impl DocxParser {
         let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut current: Option<FontEntry> = None;
+        let mut depth = 0usize;
+        let mut root_closed = false;
 
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"font" => {
+            let event = reader
+                .read_event_into(&mut buf)
+                .map_err(|err| xml_error(FONT_TABLE_PATH, err))?;
+            if track_xml_document_event(&event, &mut depth, &mut root_closed, FONT_TABLE_PATH)? {
+                break;
+            }
+            match event {
+                Event::Start(e) if local_name(e.name().as_ref()) == b"font" => {
                     let name =
                         try_attr_value(&e, b"w:name", FONT_TABLE_PATH)?.ok_or_else(|| {
                             ParseError::InvalidStructure(
@@ -36,7 +46,7 @@ impl DocxParser {
                         panose: None,
                     });
                 }
-                Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                Event::Empty(e) => match local_name(e.name().as_ref()) {
                     b"altName" => {
                         if let Some(val) = try_attr_value(&e, b"w:val", FONT_TABLE_PATH)?
                             && let Some(font) = current.as_mut()
@@ -67,16 +77,12 @@ impl DocxParser {
                     }
                     _ => {}
                 },
-                Ok(Event::End(e)) => {
+                Event::End(e) => {
                     if local_name(e.name().as_ref()) == b"font"
                         && let Some(font) = current.take()
                     {
                         table.fonts.push(font);
                     }
-                }
-                Ok(Event::Eof) => break,
-                Err(e) => {
-                    return Err(xml_error(FONT_TABLE_PATH, e));
                 }
                 _ => {}
             }
