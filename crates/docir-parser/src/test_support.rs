@@ -87,6 +87,8 @@ pub(crate) fn build_test_cfb(entries: &[(&str, &[u8])]) -> Vec<u8> {
 
     let mut full = vec![0u8; sector_size];
     full[..8].copy_from_slice(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
+    full[0x1A..0x1C].copy_from_slice(&(3u16).to_le_bytes());
+    full[0x1C..0x1E].copy_from_slice(&0xFFFEu16.to_le_bytes());
     full[0x1E..0x20].copy_from_slice(&(9u16).to_le_bytes());
     full[0x20..0x22].copy_from_slice(&(6u16).to_le_bytes());
     full[0x2C..0x30].copy_from_slice(&(1u32).to_le_bytes());

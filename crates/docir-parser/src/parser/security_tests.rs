@@ -68,6 +68,8 @@ fn minimal_valid_cfb() -> Vec<u8> {
 
     // Header signature.
     data[0..8].copy_from_slice(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
+    data[0x1A..0x1C].copy_from_slice(&(3u16).to_le_bytes());
+    data[0x1C..0x1E].copy_from_slice(&0xFFFEu16.to_le_bytes());
     // Sector shift (512-byte sectors), mini sector shift (64-byte sectors).
     data[0x1E..0x20].copy_from_slice(&(9u16).to_le_bytes());
     data[0x20..0x22].copy_from_slice(&(6u16).to_le_bytes());

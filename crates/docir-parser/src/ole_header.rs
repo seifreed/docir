@@ -4,6 +4,9 @@ pub(crate) const SIGNATURE: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A,
 pub(crate) const FREE_SECT: u32 = 0xFFFFFFFF;
 pub(crate) const END_OF_CHAIN: u32 = 0xFFFFFFFE;
 pub(crate) const FAT_SECT: u32 = 0xFFFFFFFD;
+const CFB_BYTE_ORDER_LITTLE_ENDIAN: u16 = 0xFFFE;
+const CFB_MAJOR_VERSION_3: u16 = 3;
+const CFB_MAJOR_VERSION_4: u16 = 4;
 
 pub(crate) struct OleHeader {
     pub(crate) sector_size: u32,
@@ -28,6 +31,17 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<OleHeader, ParseError> {
             "Invalid OLE header".to_string(),
         ));
     }
+    let major_version = read_u16(data, 0x1A)?;
+    if !matches!(major_version, CFB_MAJOR_VERSION_3 | CFB_MAJOR_VERSION_4) {
+        return Err(ParseError::InvalidStructure(
+            "Unsupported OLE major version".to_string(),
+        ));
+    }
+    if read_u16(data, 0x1C)? != CFB_BYTE_ORDER_LITTLE_ENDIAN {
+        return Err(ParseError::InvalidStructure(
+            "OLE header must use little-endian byte order".to_string(),
+        ));
+    }
     let sector_shift = read_u16(data, 0x1E)? as u32;
     let mini_sector_shift = read_u16(data, 0x20)? as u32;
     if sector_shift >= 32 || mini_sector_shift >= 32 {
@@ -44,6 +58,16 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<OleHeader, ParseError> {
     if sector_shift > MAX_SECTOR_SHIFT {
         return Err(ParseError::InvalidStructure(format!(
             "OLE header sector shift {sector_shift} exceeds maximum ({MAX_SECTOR_SHIFT})"
+        )));
+    }
+    let expected_sector_shift = if major_version == CFB_MAJOR_VERSION_3 {
+        9
+    } else {
+        12
+    };
+    if sector_shift != expected_sector_shift {
+        return Err(ParseError::InvalidStructure(format!(
+            "OLE sector shift {sector_shift} does not match major version {major_version}"
         )));
     }
     if mini_sector_shift != MINI_SECTOR_SHIFT {

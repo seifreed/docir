@@ -5,6 +5,8 @@ use std::collections::HashMap;
 fn valid_header_template() -> Vec<u8> {
     let mut data = vec![0u8; 512];
     data[..8].copy_from_slice(&SIGNATURE);
+    data[0x1A..0x1C].copy_from_slice(&(3u16).to_le_bytes());
+    data[0x1C..0x1E].copy_from_slice(&0xFFFEu16.to_le_bytes());
     data[0x1E..0x20].copy_from_slice(&(9u16).to_le_bytes());
     data[0x20..0x22].copy_from_slice(&(6u16).to_le_bytes());
     data[0x2C..0x30].copy_from_slice(&(1u32).to_le_bytes());
@@ -52,6 +54,28 @@ fn parse_header_rejects_nonstandard_mini_sector_shift() {
     assert!(matches!(
         parse_header(&header),
         Err(ParseError::InvalidStructure(message)) if message.contains("mini sector shift")
+    ));
+}
+
+#[test]
+fn parse_header_rejects_invalid_byte_order() {
+    let mut header = valid_header_template();
+    header[0x1C..0x1E].copy_from_slice(&0xFEFFu16.to_le_bytes());
+
+    assert!(matches!(
+        parse_header(&header),
+        Err(ParseError::InvalidStructure(message)) if message.contains("little-endian")
+    ));
+}
+
+#[test]
+fn parse_header_rejects_version_and_sector_shift_mismatch() {
+    let mut header = valid_header_template();
+    header[0x1A..0x1C].copy_from_slice(&(4u16).to_le_bytes());
+
+    assert!(matches!(
+        parse_header(&header),
+        Err(ParseError::InvalidStructure(message)) if message.contains("does not match")
     ));
 }
 
