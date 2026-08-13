@@ -20,6 +20,8 @@ type FormulaAttrs = (
     Option<String>,
 );
 
+const MAX_XLSX_COLUMN_INDEX: u32 = 16_384;
+
 pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, ParseError> {
     let mut reader = Reader::from_str(xml);
     let config = reader.config_mut();
@@ -445,6 +447,12 @@ pub(super) fn parse_column(
     }
     if max < min {
         return Err(xml_error(sheet_path, "column max is smaller than min"));
+    }
+    if max > MAX_XLSX_COLUMN_INDEX {
+        return Err(xml_error(
+            sheet_path,
+            format!("column max exceeds XLSX limit of {MAX_XLSX_COLUMN_INDEX}"),
+        ));
     }
     for idx in min..=max {
         let col_index = idx - 1;
