@@ -31,15 +31,21 @@ pub(super) fn parse_duration_ms(value: &str) -> Result<Option<u32>, ParseError> 
 
 fn parse_finite_seconds(value: &str) -> Result<Option<u32>, ParseError> {
     let seconds = value
-        .parse::<f32>()
+        .parse::<f64>()
         .map_err(|err| invalid_duration(value, err))?;
     if seconds.is_finite() && seconds >= 0.0 {
-        Ok(Some((seconds * 1000.0).round() as u32))
+        let milliseconds = (seconds * 1000.0).round();
+        if milliseconds.is_finite() && milliseconds <= u32::MAX as f64 {
+            return Ok(Some(milliseconds as u32));
+        }
     } else {
-        Err(ParseError::InvalidStructure(format!(
+        return Err(ParseError::InvalidStructure(format!(
             "Invalid ODF duration '{value}'"
-        )))
+        )));
     }
+    Err(ParseError::InvalidStructure(format!(
+        "ODF duration exceeds u32 milliseconds: '{value}'"
+    )))
 }
 
 fn invalid_duration(value: &str, err: impl std::fmt::Display) -> ParseError {
@@ -67,4 +73,19 @@ pub(super) fn classify_media_type(path: &str, media: &str) -> Option<MediaType> 
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_duration_ms;
+    use crate::error::ParseError;
+
+    #[test]
+    fn parse_duration_ms_rejects_overflowing_seconds() {
+        let err = parse_duration_ms("4294968s").expect_err("duration must fit u32 ms");
+
+        assert!(
+            matches!(err, ParseError::InvalidStructure(message) if message.contains("exceeds"))
+        );
+    }
 }
