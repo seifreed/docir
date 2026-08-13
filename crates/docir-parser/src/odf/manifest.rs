@@ -70,6 +70,11 @@ fn handle_manifest_start_event(
 ) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
         b"file-entry" => {
+            if current_entry.is_some() {
+                return Err(ParseError::InvalidStructure(
+                    "ODF manifest contains a nested file-entry".to_string(),
+                ));
+            }
             *current_entry = Some(parse_manifest_entry(e)?);
         }
         b"encryption-data" => {
@@ -95,7 +100,14 @@ fn handle_manifest_empty_event(
     current_entry: &mut Option<OdfManifestEntry>,
 ) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
-        b"file-entry" => entries.push(parse_manifest_entry(e)?),
+        b"file-entry" => {
+            if current_entry.is_some() {
+                return Err(ParseError::InvalidStructure(
+                    "ODF manifest contains a nested file-entry".to_string(),
+                ));
+            }
+            entries.push(parse_manifest_entry(e)?);
+        }
         b"encryption-data" => {
             apply_entry_encryption_attrs(current_entry, e, apply_encryption_data_attrs)?;
         }
@@ -387,6 +399,23 @@ mod tests {
             parse_manifest(xml),
             Err(crate::error::ParseError::InvalidStructure(message))
                 if message.contains("duplicate file-entry path")
+        ));
+    }
+
+    #[test]
+    fn parse_manifest_rejects_nested_file_entries() {
+        let xml = r#"
+            <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <manifest:file-entry manifest:full-path="outer.xml">
+                <manifest:file-entry manifest:full-path="inner.xml"/>
+              </manifest:file-entry>
+            </manifest:manifest>
+        "#;
+
+        assert!(matches!(
+            parse_manifest(xml),
+            Err(crate::error::ParseError::InvalidStructure(message))
+                if message.contains("nested file-entry")
         ));
     }
 
