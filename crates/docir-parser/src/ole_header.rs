@@ -111,10 +111,20 @@ pub(crate) fn read_fat_table(
     difat: &[u32],
     num_fat_sectors: u32,
 ) -> Result<Vec<u32>, ParseError> {
+    let required_sectors = usize::try_from(num_fat_sectors).map_err(|_| {
+        ParseError::ResourceLimit("OLE FAT sector count does not fit in usize".to_string())
+    })?;
+    if difat.len() < required_sectors {
+        return Err(ParseError::InvalidStructure(
+            "OLE DIFAT contains fewer FAT sectors than declared".to_string(),
+        ));
+    }
     let mut fat = Vec::new();
-    for &fat_sector in difat.iter().take(num_fat_sectors as usize) {
+    for &fat_sector in &difat[..required_sectors] {
         if fat_sector == FREE_SECT || fat_sector == END_OF_CHAIN || fat_sector == FAT_SECT {
-            continue;
+            return Err(ParseError::InvalidStructure(
+                "OLE DIFAT contains a reserved FAT sector entry".to_string(),
+            ));
         }
         let sector = crate::ole::read_sector(data, sector_size, fat_sector)?;
         for i in 0..(sector_size / 4) as usize {

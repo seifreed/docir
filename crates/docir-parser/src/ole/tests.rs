@@ -1,5 +1,5 @@
 use super::*;
-use crate::ole_header::{END_OF_CHAIN, FREE_SECT, SIGNATURE};
+use crate::ole_header::{END_OF_CHAIN, FAT_SECT, FREE_SECT, SIGNATURE};
 use std::collections::HashMap;
 
 fn valid_header_template() -> Vec<u8> {
@@ -64,6 +64,19 @@ fn difat_chain_rejects_premature_end_marker() {
     let parsed = parse_header(&header).expect("header");
     assert!(matches!(
         read_difat_chain(&header, &parsed),
+        Err(ParseError::InvalidStructure(_))
+    ));
+}
+
+#[test]
+fn fat_table_rejects_incomplete_or_reserved_difat_entries() {
+    let data = vec![0u8; 512];
+    assert!(matches!(
+        read_fat_table(&data, 512, &[0], 2),
+        Err(ParseError::InvalidStructure(_))
+    ));
+    assert!(matches!(
+        read_fat_table(&data, 512, &[FAT_SECT], 1),
         Err(ParseError::InvalidStructure(_))
     ));
 }
