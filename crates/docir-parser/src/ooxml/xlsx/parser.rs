@@ -17,8 +17,8 @@ use quick_xml::Reader;
 use quick_xml::events::BytesStart;
 use std::collections::{HashMap, HashSet};
 
-use super::relationships::classify_relationship;
 use super::workbook::{WorkbookInfo, parse_workbook_info};
+use super::{relationships::classify_relationship, validate_cell_coordinates};
 #[path = "parser_xml.rs"]
 mod parser_xml;
 
@@ -184,9 +184,10 @@ impl XlsxParser {
         let reference = try_attr_value(start, b"r", sheet_path)?.ok_or_else(|| {
             ParseError::InvalidStructure("Cell missing reference attribute".to_string())
         })?;
-        let (col, row) = parse_cell_reference(&reference).ok_or_else(|| {
+        let coordinates = parse_cell_reference(&reference).ok_or_else(|| {
             ParseError::InvalidStructure(format!("Invalid cell reference: {reference}"))
         })?;
+        let (col, row) = validate_cell_coordinates(&reference, coordinates)?;
 
         let mut cell = Cell::new(reference, col, row);
         cell.span = Some(SourceSpan::new(sheet_path));

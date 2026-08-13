@@ -20,8 +20,6 @@ type FormulaAttrs = (
     Option<String>,
 );
 
-const MAX_XLSX_COLUMN_INDEX: u32 = 16_384;
-
 pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, ParseError> {
     let mut reader = Reader::from_str(xml);
     let config = reader.config_mut();
@@ -449,10 +447,13 @@ pub(super) fn parse_column(
     if max < min {
         return Err(xml_error(sheet_path, "column max is smaller than min"));
     }
-    if max > MAX_XLSX_COLUMN_INDEX {
+    if max > super::super::MAX_XLSX_COLUMN_INDEX {
         return Err(xml_error(
             sheet_path,
-            format!("column max exceeds XLSX limit of {MAX_XLSX_COLUMN_INDEX}"),
+            format!(
+                "column max exceeds XLSX limit of {}",
+                super::super::MAX_XLSX_COLUMN_INDEX
+            ),
         ));
     }
     for idx in min..=max {
@@ -491,10 +492,14 @@ pub(super) fn parse_merge_cell(
         return Err(xml_error(sheet_path, "mergeCell ref has too many ranges"));
     }
 
-    let (start_col, start_row) = parse_cell_reference(start)
+    let start_coordinates = parse_cell_reference(start)
         .ok_or_else(|| xml_error(sheet_path, format!("invalid mergeCell start ref: {start}")))?;
-    let (end_col, end_row) = parse_cell_reference(end)
+    let end_coordinates = parse_cell_reference(end)
         .ok_or_else(|| xml_error(sheet_path, format!("invalid mergeCell end ref: {end}")))?;
+    let (start_col, start_row) = super::validate_cell_coordinates(start, start_coordinates)
+        .map_err(|err| xml_error(sheet_path, err))?;
+    let (end_col, end_row) = super::validate_cell_coordinates(end, end_coordinates)
+        .map_err(|err| xml_error(sheet_path, err))?;
 
     Ok(Some(MergedCellRange {
         start_col,

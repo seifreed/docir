@@ -19,9 +19,10 @@ impl XlsxParser {
         sheet_path: &str,
     ) -> Result<Cell, ParseError> {
         let attrs = CellAttributes::from_start(start, sheet_path)?;
-        let (col, row) = super::parse_cell_reference(&attrs.reference).ok_or_else(|| {
+        let coordinates = super::parse_cell_reference(&attrs.reference).ok_or_else(|| {
             ParseError::InvalidStructure(format!("Invalid cell reference: {}", attrs.reference))
         })?;
+        let (col, row) = super::validate_cell_coordinates(&attrs.reference, coordinates)?;
         let contents = CellContents::parse(reader, sheet_path)?;
 
         let mut cell = Cell::new(attrs.reference.clone(), col, row);
@@ -259,6 +260,17 @@ mod tests {
             ParseError::InvalidStructure(msg) => assert!(msg.contains("missing reference")),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_cell_rejects_references_outside_xlsx_limits() {
+        let mut parser = XlsxParser::new();
+        let err = parse_cell_from_xml(&mut parser, r#"<c r="XFE1"><v>1</v></c>"#)
+            .expect_err("column past XFD must fail");
+
+        assert!(
+            matches!(err, ParseError::InvalidStructure(message) if message.contains("worksheet limits"))
+        );
     }
 
     #[test]

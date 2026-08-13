@@ -142,6 +142,22 @@ fn test_parse_empty_cell_and_formula_helpers() {
         .expect_err("missing ref must fail");
     assert!(matches!(err, ParseError::InvalidStructure(_)));
 
+    let mut out_of_range_reader = Reader::from_str(r#"<c r="A1048577"/>"#);
+    buf.clear();
+    let out_of_range = match out_of_range_reader
+        .read_event_into(&mut buf)
+        .expect("cell start")
+    {
+        Event::Empty(e) => e.into_owned(),
+        other => panic!("unexpected event: {other:?}"),
+    };
+    let err = parser
+        .parse_empty_cell(&out_of_range, "xl/worksheets/sheet1.xml")
+        .expect_err("row past XLSX limit must fail");
+    assert!(
+        matches!(err, ParseError::InvalidStructure(message) if message.contains("worksheet limits"))
+    );
+
     let mut formula_reader = Reader::from_str(r#"<f t="shared" si="7" ref="A1:A3">SUM(A1:A3)</f>"#);
     formula_reader.config_mut().trim_text(true);
     buf.clear();

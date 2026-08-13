@@ -81,6 +81,19 @@ fn test_parse_column_and_merge_helpers() {
         other => panic!("unexpected event: {other:?}"),
     };
     assert!(parse_merge_cell(&missing, "xl/worksheets/sheet1.xml").is_err());
+
+    let mut out_of_range_reader = Reader::from_str(r#"<mergeCell ref="XFE1:XFE2"/>"#);
+    buf.clear();
+    let out_of_range = match out_of_range_reader
+        .read_event_into(&mut buf)
+        .expect("out-of-range merge")
+    {
+        Event::Empty(e) => e.into_owned(),
+        other => panic!("unexpected event: {other:?}"),
+    };
+    let err = parse_merge_cell(&out_of_range, "xl/worksheets/sheet1.xml")
+        .expect_err("merge outside worksheet limits must fail");
+    assert!(matches!(err, ParseError::Xml { .. }));
 }
 
 #[test]

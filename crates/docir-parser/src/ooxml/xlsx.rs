@@ -27,6 +27,22 @@ mod worksheet;
 mod worksheet_parts;
 mod xlm;
 
+const MAX_XLSX_COLUMN_INDEX: u32 = 16_384;
+const MAX_XLSX_ROW_INDEX: u32 = 1_048_576;
+
+fn validate_cell_coordinates(
+    reference: &str,
+    coordinates: (u32, u32),
+) -> Result<(u32, u32), ParseError> {
+    let (col, row) = coordinates;
+    if col >= MAX_XLSX_COLUMN_INDEX || row >= MAX_XLSX_ROW_INDEX {
+        return Err(ParseError::InvalidStructure(format!(
+            "XLSX cell reference is outside worksheet limits: {reference}"
+        )));
+    }
+    Ok(coordinates)
+}
+
 pub(crate) use parser::*;
 pub(crate) use shared_strings::parse_shared_strings_table;
 
