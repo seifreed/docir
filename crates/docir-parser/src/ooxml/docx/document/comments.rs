@@ -42,8 +42,8 @@ impl DocxParser {
                 Ok(Event::Empty(e)) | Ok(Event::Start(e))
                     if local_name(e.name().as_ref()) == b"commentExt" =>
                 {
-                    let comment_id = try_attr_value(&e, b"w:id", "word/commentsExtended.xml")?
-                        .unwrap_or_default();
+                    let comment_id =
+                        required_comment_attr(&e, b"w:id", "word/commentsExtended.xml")?;
                     let entry = CommentExtension {
                         comment_id,
                         para_id: try_attr_value(&e, b"w16cid:paraId", "word/commentsExtended.xml")?,
@@ -84,8 +84,7 @@ impl DocxParser {
                     if local_name(e.name().as_ref()) == b"commentId" =>
                 {
                     let entry = CommentIdMapEntry {
-                        comment_id: try_attr_value(&e, b"w:id", "word/commentsIds.xml")?
-                            .unwrap_or_default(),
+                        comment_id: required_comment_attr(&e, b"w:id", "word/commentsIds.xml")?,
                         para_id: try_attr_value(&e, b"w16cid:paraId", "word/commentsIds.xml")?,
                         parent_para_id: try_attr_value(
                             &e,
@@ -126,8 +125,7 @@ fn parse_comments_like(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
                 b"comment" => {
-                    let comment_id =
-                        try_attr_value(&e, b"w:id", "word/comments.xml")?.unwrap_or_default();
+                    let comment_id = required_comment_attr(&e, b"w:id", "word/comments.xml")?;
                     let mut comment = Comment::new(comment_id);
                     comment.author = try_attr_value(&e, b"w:author", "word/comments.xml")?;
                     comment.initials = try_attr_value(&e, b"w:initials", "word/comments.xml")?;
@@ -145,8 +143,7 @@ fn parse_comments_like(
                 }
                 b"footnote" => {
                     if matches!(kind, Some(NoteKind::Footnote)) {
-                        let note_id =
-                            try_attr_value(&e, b"w:id", "word/comments.xml")?.unwrap_or_default();
+                        let note_id = required_comment_attr(&e, b"w:id", "word/comments.xml")?;
                         let mut note = Footnote::new(note_id);
                         note.note_type = try_attr_value(&e, b"w:type", "word/comments.xml")?;
                         note.content = parse_block_until(parser, &mut reader, rels, b"footnote")?;
@@ -157,8 +154,7 @@ fn parse_comments_like(
                 }
                 b"endnote" => {
                     if matches!(kind, Some(NoteKind::Endnote)) {
-                        let note_id =
-                            try_attr_value(&e, b"w:id", "word/comments.xml")?.unwrap_or_default();
+                        let note_id = required_comment_attr(&e, b"w:id", "word/comments.xml")?;
                         let mut note = Endnote::new(note_id);
                         note.note_type = try_attr_value(&e, b"w:type", "word/comments.xml")?;
                         note.content = parse_block_until(parser, &mut reader, rels, b"endnote")?;
@@ -179,4 +175,17 @@ fn parse_comments_like(
     }
 
     Ok(nodes)
+}
+
+fn required_comment_attr(
+    event: &quick_xml::events::BytesStart<'_>,
+    name: &[u8],
+    path: &str,
+) -> Result<String, ParseError> {
+    try_attr_value(event, name, path)?.ok_or_else(|| {
+        ParseError::InvalidStructure(format!(
+            "{path} comment or note is missing {}",
+            String::from_utf8_lossy(name)
+        ))
+    })
 }

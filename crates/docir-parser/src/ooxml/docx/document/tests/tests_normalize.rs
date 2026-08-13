@@ -49,6 +49,35 @@ fn test_parse_comments_extended_and_ids() {
 }
 
 #[test]
+fn test_parse_comment_variants_reject_missing_ids() {
+    let mut parser = DocxParser::new();
+    let comments = r#"
+        <w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:comment><w:p/></w:comment>
+        </w:comments>
+    "#;
+    assert!(
+        parser
+            .parse_comments(comments, &Relationships::default())
+            .is_err()
+    );
+
+    let extended = r#"
+        <w16cid:commentsEx xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">
+          <w16cid:commentExt/>
+        </w16cid:commentsEx>
+    "#;
+    assert!(parser.parse_comments_extended(extended).is_err());
+
+    let ids = r#"
+        <w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">
+          <w16cid:commentId/>
+        </w16cid:commentsIds>
+    "#;
+    assert!(parser.parse_comments_ids(ids).is_err());
+}
+
+#[test]
 fn test_parse_notes_endnote_kind_filters_footnotes() {
     let notes_xml = r#"
         <w:endnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
