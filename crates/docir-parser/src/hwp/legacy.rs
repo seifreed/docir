@@ -52,7 +52,12 @@ struct HwpRecord<'a> {
 
 fn for_each_record<F: FnMut(HwpRecord)>(data: &[u8], mut f: F) -> Result<(), ParseError> {
     let mut offset = 0usize;
-    while offset + 4 <= data.len() {
+    while offset < data.len() {
+        if data.len() - offset < 4 {
+            return Err(ParseError::InvalidStructure(
+                "Trailing bytes after HWP record stream".to_string(),
+            ));
+        }
         let header = read_u32_le(data, offset)
             .ok_or_else(|| ParseError::InvalidStructure("Invalid record header".to_string()))?;
         offset += 4;
@@ -61,7 +66,7 @@ fn for_each_record<F: FnMut(HwpRecord)>(data: &[u8], mut f: F) -> Result<(), Par
         let _level = ((header >> 10) & 0x3FF) as u16;
         let mut size = (header >> 20) & 0xFFF;
         if size == 0xFFF {
-            if offset + 4 > data.len() {
+            if data.len() - offset < 4 {
                 return Err(ParseError::InvalidStructure(
                     "Extended record size missing".to_string(),
                 ));

@@ -68,6 +68,18 @@ fn parse_docinfo_section_count_supports_normal_and_extended_records() {
 }
 
 #[test]
+fn parse_docinfo_section_count_rejects_trailing_record_bytes() {
+    let mut stream = make_record(HWPTAG_DOCUMENT_PROPERTIES, &3u16.to_le_bytes());
+    stream.extend_from_slice(&[0xaa, 0xbb]);
+
+    let err = parse_docinfo_section_count(&stream).expect_err("trailing record bytes must fail");
+
+    assert!(
+        matches!(err, ParseError::InvalidStructure(message) if message.contains("Trailing bytes"))
+    );
+}
+
+#[test]
 fn parse_hwp_section_stream_emits_paragraphs_and_runs() {
     let mut stream = Vec::new();
     stream.extend(make_record(HWPTAG_PARA_HEADER, &4u32.to_le_bytes()));
