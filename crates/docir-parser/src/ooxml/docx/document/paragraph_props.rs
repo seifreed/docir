@@ -43,7 +43,12 @@ pub(crate) fn parse_paragraph_properties(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pPr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    DOC_PATH,
+                    "unexpected end of paragraph properties",
+                ));
+            }
             Err(e) => {
                 return Err(xml_error(DOC_PATH, e));
             }
@@ -187,7 +192,9 @@ pub(crate) fn parse_paragraph_borders(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"pBdr" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(DOC_PATH, "unexpected end of paragraph borders"));
+            }
             Err(e) => {
                 return Err(xml_error(DOC_PATH, e));
             }

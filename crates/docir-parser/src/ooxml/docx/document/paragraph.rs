@@ -37,7 +37,12 @@ pub(super) fn parse_paragraph(
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"p" => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(
+                    "word/document.xml",
+                    "unexpected end of paragraph",
+                ));
+            }
             Err(e) => {
                 return Err(xml_error("word/document.xml", e));
             }

@@ -1,9 +1,10 @@
 use super::paragraph_props::{alignment_from_val, parse_paragraph_borders};
 use super::{
-    DocxParser, FieldState, Paragraph, RunParse, handle_field_char, parse_paragraph_properties,
-    update_field_from_run,
+    DocxParser, FieldState, Paragraph, RunParse, handle_field_char, parse_paragraph,
+    parse_paragraph_properties, update_field_from_run,
 };
 use crate::error::ParseError;
+use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::reader_from_str;
 use docir_core::ir::BorderStyle;
 use docir_core::ir::{LineSpacingRule, TextAlignment};
@@ -71,6 +72,49 @@ fn parse_paragraph_borders_returns_none_when_no_valid_entries() {
 
     let borders = parse_paragraph_borders(&mut reader).expect("paragraph borders parse");
     assert!(borders.is_none());
+}
+
+#[test]
+fn parse_paragraph_rejects_missing_end() {
+    let xml = r#"<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:r><w:t>Broken</w:t></w:r>"#;
+    let mut reader = reader_from_str(xml);
+    let mut buf = Vec::new();
+    assert!(matches!(
+        reader.read_event_into(&mut buf),
+        Ok(Event::Start(_))
+    ));
+
+    let mut parser = DocxParser::new();
+    let err = match parse_paragraph(&mut parser, &mut reader, &Relationships::default(), None) {
+        Ok(_) => panic!("truncated paragraph must fail"),
+        Err(err) => err,
+    };
+    assert!(matches!(err, ParseError::Xml { .. }));
+}
+
+#[test]
+fn parse_paragraph_properties_rejects_missing_end() {
+    let xml = r#"<w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:keepNext/>"#;
+    let mut reader = reader_from_str(xml);
+    let mut para = Paragraph::new();
+    let err = parse_paragraph_properties(&mut reader, &mut para, None)
+        .expect_err("truncated paragraph properties must fail");
+    assert!(matches!(err, ParseError::Xml { .. }));
+}
+
+#[test]
+fn parse_paragraph_borders_rejects_missing_end() {
+    let xml = r#"<w:pBdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:top w:val="single"/>"#;
+    let mut reader = reader_from_str(xml);
+    let mut buf = Vec::new();
+    assert!(matches!(
+        reader.read_event_into(&mut buf),
+        Ok(Event::Start(_))
+    ));
+
+    let err =
+        parse_paragraph_borders(&mut reader).expect_err("truncated paragraph borders must fail");
+    assert!(matches!(err, ParseError::Xml { .. }));
 }
 
 #[test]
