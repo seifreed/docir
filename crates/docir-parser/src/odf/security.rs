@@ -3,7 +3,7 @@ use crate::diagnostics::push_entry;
 use crate::error::ParseError;
 use crate::security_scan::OdfXmlInputs;
 use crate::security_utils::parse_dde_formula;
-use crate::xml_utils::{XmlScanControl, attr_value_by_suffix, local_name, scan_xml_events};
+use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, try_attr_value_by_suffix};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document, IRNode};
 use docir_core::security::{DdeField, ExternalRefType, ExternalReference, OleObject};
@@ -21,14 +21,15 @@ pub(crate) struct OdfFormulaScan {
 
 fn visit_start_or_empty(
     xml: &str,
-    mut on_element: impl FnMut(&BytesStart<'_>) -> bool,
+    source: &str,
+    mut on_element: impl FnMut(&BytesStart<'_>) -> Result<bool, ParseError>,
 ) -> Result<(), ParseError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
-    scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
+    scan_xml_events(&mut reader, &mut buf, source, |event| {
         match event {
-            Event::Start(e) | Event::Empty(e) if on_element(&e) => {
+            Event::Start(e) | Event::Empty(e) if on_element(&e)? => {
                 return Ok(XmlScanControl::Break);
             }
             _ => {}
@@ -42,19 +43,19 @@ pub(crate) fn scan_external_links(
     location: &str,
 ) -> Result<Vec<ExternalReference>, ParseError> {
     let mut refs = Vec::new();
-    visit_start_or_empty(xml, |e| {
-        if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
+    visit_start_or_empty(xml, location, |e| {
+        if let Some(href) = try_attr_value_by_suffix(e, &[b":href"], location)? {
             let ref_type = match local_name(e.name().as_ref()) {
                 b"image" => ExternalRefType::Image,
                 b"a" => ExternalRefType::Hyperlink,
-                b"object" | b"object-ole" => return false,
+                b"object" | b"object-ole" => return Ok(false),
                 _ => ExternalRefType::Other,
             };
             let mut ext = ExternalReference::new(ref_type, href);
             ext.span = Some(SourceSpan::new(location));
             refs.push(ext);
         }
-        false
+        Ok(false)
     })?;
     Ok(refs)
 }
@@ -64,10 +65,10 @@ pub(crate) fn scan_odf_objects(
 ) -> Result<(Vec<OleObject>, Vec<ExternalReference>), ParseError> {
     let mut oles = Vec::new();
     let mut refs = Vec::new();
-    visit_start_or_empty(xml, |e| {
+    visit_start_or_empty(xml, "content.xml", |e| {
         match local_name(e.name().as_ref()) {
             b"object" | b"object-ole" => {
-                if let Some(href) = attr_value_by_suffix(e, &[b":href"]) {
+                if let Some(href) = try_attr_value_by_suffix(e, &[b":href"], "content.xml")? {
                     let is_linked = is_external_target(&href);
                     let mut ole = OleObject::new();
                     ole.is_linked = is_linked;
@@ -83,7 +84,7 @@ pub(crate) fn scan_odf_objects(
             }
             _ => {}
         }
-        false
+        Ok(false)
     })?;
     Ok((oles, refs))
 }
@@ -111,17 +112,21 @@ pub(crate) fn scan_embedded_objects(
 
 pub(crate) fn scan_odf_filters(xml: &str) -> Result<Vec<String>, ParseError> {
     let mut out = Vec::new();
-    visit_start_or_empty(xml, |e| {
+    visit_start_or_empty(xml, "content.xml", |e| {
         if matches!(
             local_name(e.name().as_ref()),
             b"filter" | b"filter-and" | b"filter-or"
         ) {
-            let target = attr_value_by_suffix(e, &[b":target-range-address"])
-                .or_else(|| attr_value_by_suffix(e, &[b":condition"]))
+            let target = try_attr_value_by_suffix(e, &[b":target-range-address"], "content.xml")?
+                .or(try_attr_value_by_suffix(
+                    e,
+                    &[b":condition"],
+                    "content.xml",
+                )?)
                 .unwrap_or_else(|| "unknown".to_string());
             out.push(target);
         }
-        false
+        Ok(false)
     })?;
     Ok(out)
 }
@@ -136,7 +141,9 @@ pub(crate) fn scan_odf_formula_security(xml: &str) -> Result<OdfFormulaScan, Par
     scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
         match event {
             Event::Start(e) | Event::Empty(e) => {
-                if let Some(formula_attr) = attr_value_by_suffix(&e, &[b":formula"]) {
+                if let Some(formula_attr) =
+                    try_attr_value_by_suffix(&e, &[b":formula"], "content.xml")?
+                {
                     process_formula(&formula_attr, &mut scan, &mut unsupported, &mut has_array);
                 }
             }
@@ -300,14 +307,14 @@ pub(crate) fn scan_odf_security(
 pub(crate) fn scan_odf_protection(xml: &str) -> Result<Vec<DiagnosticEntry>, ParseError> {
     let mut entries = Vec::new();
     let mut protected = false;
-    visit_start_or_empty(xml, |e| {
-        if let Some(value) = attr_value_by_suffix(e, &[b":protected"])
+    visit_start_or_empty(xml, "content.xml", |e| {
+        if let Some(value) = try_attr_value_by_suffix(e, &[b":protected"], "content.xml")?
             && value == "true"
         {
             protected = true;
-            return true;
+            return Ok(true);
         }
-        false
+        Ok(false)
     })?;
     if protected {
         push_entry(
@@ -326,24 +333,26 @@ pub(crate) fn scan_odf_advanced_features(xml: &str) -> Result<Vec<DiagnosticEntr
     let mut conditional_advanced = false;
     let mut pivot_advanced = false;
     let mut odp_advanced = false;
-    visit_start_or_empty(xml, |e| {
+    visit_start_or_empty(xml, "content.xml", |e| {
         match local_name(e.name().as_ref()) {
             b"conditional-format" => {
-                if let Some(condition) = attr_value_by_suffix(e, &[b":condition"])
+                if let Some(condition) =
+                    try_attr_value_by_suffix(e, &[b":condition"], "content.xml")?
                     && parse_odf_condition_operator(&condition).is_none()
                 {
                     conditional_advanced = true;
                 }
             }
             b"pivot-table" | b"data-pilot-table"
-                if attr_value_by_suffix(e, &[b":target-range-address"]).is_some() =>
+                if try_attr_value_by_suffix(e, &[b":target-range-address"], "content.xml")?
+                    .is_some() =>
             {
                 pivot_advanced = true;
             }
             b"object" | b"object-ole" => odp_advanced = true,
             _ => {}
         }
-        false
+        Ok(false)
     })?;
     if conditional_advanced {
         push_entry(

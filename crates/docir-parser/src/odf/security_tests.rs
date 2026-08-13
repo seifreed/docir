@@ -57,6 +57,22 @@ fn scan_external_links_accepts_alternate_namespace_prefixes() {
 }
 
 #[test]
+fn scan_external_links_reports_invalid_attribute_entity() {
+    let xml = r#"<office:document-content
+        xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        xmlns:lnk="http://www.w3.org/1999/xlink">
+        <office:a lnk:href="https://example.test/bad &"/>
+    </office:document-content>"#;
+
+    match scan_external_links(xml, "styles.xml")
+        .expect_err("invalid external link entity must fail")
+    {
+        ParseError::Xml { file, .. } => assert_eq!(file, "styles.xml"),
+        other => panic!("expected XML error, got {other:?}"),
+    }
+}
+
+#[test]
 fn scan_odf_objects_accepts_alternate_namespace_prefixes() {
     let xml = r#"
             <office:document-content
