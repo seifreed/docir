@@ -241,3 +241,12 @@ fn inspect_metadata_rejects_property_value_offset_inside_property_table() {
         .expect_err("property value inside property table must fail");
     assert!(err.to_string().contains("property table"));
 }
+
+#[test]
+fn parse_metadata_lpstr_rejects_overflowing_value_bounds() {
+    let mut property = vec![0u8; 8];
+    property[4..8].copy_from_slice(&u32::MAX.to_le_bytes());
+
+    let err = super::parse_property_value(&property, 30).expect_err("overflow must fail");
+    assert!(err.to_string().contains("LPSTR value"));
+}

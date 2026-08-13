@@ -89,11 +89,28 @@ fn parse_section_entries(
         Some(off) => off,
         None => return Ok(Vec::new()),
     };
-    if descriptor_offset + 20 > data.len() {
+    let descriptor_end = descriptor_offset.checked_add(20).ok_or_else(|| {
+        ParserParseError::InvalidStructure(
+            "OLE property set descriptor offset overflow".to_string(),
+        )
+    })?;
+    if descriptor_end > data.len() {
         return Ok(Vec::new());
     }
-    let section_offset = read_u32(data, descriptor_offset + 16)? as usize;
-    if section_offset + SECTION_HEADER_SIZE > data.len() {
+    let section_offset_field = descriptor_offset.checked_add(16).ok_or_else(|| {
+        ParserParseError::InvalidStructure(
+            "OLE property set descriptor offset overflow".to_string(),
+        )
+    })?;
+    let section_offset = read_u32(data, section_offset_field)? as usize;
+    let section_header_end = section_offset
+        .checked_add(SECTION_HEADER_SIZE)
+        .ok_or_else(|| {
+            ParserParseError::InvalidStructure(
+                "OLE property set section offset overflow".to_string(),
+            )
+        })?;
+    if section_header_end > data.len() {
         return Err(ParserParseError::InvalidStructure(format!(
             "OLE property set section offset is out of bounds for {}",
             path
@@ -106,7 +123,10 @@ fn parse_section_entries(
             "OLE property set section size is too small".to_string(),
         ));
     }
-    let property_count = read_u32(data, section_offset + 4)? as usize;
+    let property_count_offset = section_offset.checked_add(4).ok_or_else(|| {
+        ParserParseError::InvalidStructure("OLE property set section offset overflow".to_string())
+    })?;
+    let property_count = read_u32(data, property_count_offset)? as usize;
     let section_end = section_offset.checked_add(section_size).ok_or_else(|| {
         ParserParseError::InvalidStructure("OLE property set section size overflow".to_string())
     })?;
@@ -156,11 +176,17 @@ fn parse_property_entries(
             Some(off) => off,
             None => break,
         };
-        if entry_offset + 8 > section_end {
+        let entry_end = entry_offset.checked_add(8).ok_or_else(|| {
+            ParserParseError::InvalidStructure("OLE property set entry offset overflow".to_string())
+        })?;
+        if entry_end > section_end {
             break;
         }
         let property_id = read_u32(data, entry_offset)?;
-        let value_offset = read_u32(data, entry_offset + 4)? as usize;
+        let value_offset_field = entry_offset.checked_add(4).ok_or_else(|| {
+            ParserParseError::InvalidStructure("OLE property set entry offset overflow".to_string())
+        })?;
+        let value_offset = read_u32(data, value_offset_field)? as usize;
         let absolute_offset = section_offset.checked_add(value_offset).ok_or_else(|| {
             ParserParseError::InvalidStructure(
                 "OLE property set property value offset overflow".to_string(),
@@ -251,12 +277,17 @@ fn parse_property_value(
         20 => Ok(Some(("i64", read_i64(data, 4)?.to_string(), None))),
         30 => {
             let len = read_u32(data, 4)? as usize;
-            if 8 + len > data.len() {
+            let end = 8usize.checked_add(len).ok_or_else(|| {
+                ParserParseError::InvalidStructure(
+                    "OLE metadata LPSTR value bounds overflow".to_string(),
+                )
+            })?;
+            if end > data.len() {
                 return Err(ParserParseError::InvalidStructure(
                     "OLE metadata LPSTR value exceeds property bounds".to_string(),
                 ));
             }
-            let bytes = &data[8..8 + len];
+            let bytes = &data[8..end];
             let text = bytes.strip_suffix(&[0]).unwrap_or(bytes);
             Ok(Some((
                 "lpstr",
