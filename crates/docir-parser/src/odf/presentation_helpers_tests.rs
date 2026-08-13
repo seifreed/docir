@@ -87,6 +87,18 @@ fn parse_draw_page_rejects_missing_end() {
 }
 
 #[test]
+fn parse_notes_rejects_missing_notes_end() {
+    let mut reader = Reader::from_reader(std::io::Cursor::new(
+        &br#"<text:p xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">Broken</text:p>"#
+            [..],
+    ));
+    reader.config_mut().trim_text(false);
+
+    let err = super::parse_notes(&mut reader).expect_err("truncated notes must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+}
+
+#[test]
 fn parse_draw_frame_presentation_returns_none_for_unrecognized_content() {
     let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
 <draw:frame xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0">

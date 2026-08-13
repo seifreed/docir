@@ -38,6 +38,7 @@ pub(crate) struct ValidationDef {
 pub(crate) fn parse_notes(reader: &mut OdfReader<'_>) -> Result<Option<String>, ParseError> {
     let mut buf = Vec::new();
     let mut text = String::new();
+    let mut reached_notes_end = false;
     scan_xml_events_with_reader(reader, &mut buf, ODF_CONTENT_XML, |reader, event| {
         match event {
             Event::Start(e) if local_name(e.name().as_ref()) == b"p" => {
@@ -48,12 +49,19 @@ pub(crate) fn parse_notes(reader: &mut OdfReader<'_>) -> Result<Option<String>, 
                 text.push_str(&para);
             }
             Event::End(e) if local_name(e.name().as_ref()) == b"notes" => {
+                reached_notes_end = true;
                 return Ok(XmlScanControl::Break);
             }
             _ => {}
         }
         Ok(XmlScanControl::Continue)
     })?;
+    if !reached_notes_end {
+        return Err(xml_error(
+            ODF_CONTENT_XML,
+            "unexpected end of XML before closing notes",
+        ));
+    }
 
     if text.is_empty() {
         Ok(None)
