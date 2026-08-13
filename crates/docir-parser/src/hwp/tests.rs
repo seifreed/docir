@@ -77,6 +77,8 @@ fn build_hwpx_zip_with_parts(
 fn test_hwpx_mimetype_detection() {
     assert!(is_hwpx_mimetype("application/hwp+zip"));
     assert!(is_hwpx_mimetype("application/vnd.hancom.hwpx"));
+    assert!(!is_hwpx_mimetype("application/not-hwpx"));
+    assert!(!is_hwpx_mimetype("application/x-hwp+zip-malformed"));
     assert!(!is_hwpx_mimetype("application/vnd.oasis.opendocument.text"));
 }
 

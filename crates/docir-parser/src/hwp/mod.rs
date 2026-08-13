@@ -34,8 +34,9 @@ use security::scan_hwpx_security;
 
 /// Returns true if the mimetype indicates HWPX.
 pub fn is_hwpx_mimetype(value: &str) -> bool {
-    let lower = value.trim().to_ascii_lowercase();
-    lower.contains("hwp+zip") || lower.contains("hwpx")
+    let value = value.trim();
+    value.eq_ignore_ascii_case("application/hwp+zip")
+        || value.eq_ignore_ascii_case("application/vnd.hancom.hwpx")
 }
 
 /// Parser for legacy HWP (OLE/CFB).

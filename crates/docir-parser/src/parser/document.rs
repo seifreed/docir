@@ -76,10 +76,8 @@ impl DocumentParser {
         let is_ooxml = inspector.contains("[Content_Types].xml");
         let is_odf = inspector.contains("mimetype");
         let is_hwpx = if is_odf {
-            inspector
-                .read_file_string("mimetype")
-                .map(|m| is_hwpx_mimetype(&m))
-                .unwrap_or(false)
+            let mimetype = inspector.read_file_string("mimetype")?;
+            is_hwpx_mimetype(&mimetype)
         } else {
             false
         };
@@ -146,5 +144,31 @@ impl PostprocessStage for DocumentParser {}
 impl Default for OoxmlParser {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Cursor, Write};
+    use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
+
+    #[test]
+    fn detect_format_propagates_mimetype_encoding_errors() {
+        let mut data = Vec::new();
+        let mut writer = ZipWriter::new(Cursor::new(&mut data));
+        writer
+            .start_file("mimetype", SimpleFileOptions::default())
+            .expect("mimetype entry");
+        writer.write_all(&[0xff]).expect("mimetype bytes");
+        writer.finish().expect("zip finish");
+
+        let parser = DocumentParser::new();
+        let error = match parser.detect_format(&mut Cursor::new(data)) {
+            Ok(_) => panic!("invalid mimetype UTF-8 must fail"),
+            Err(error) => error,
+        };
+        assert!(matches!(error, ParseError::Encoding(_)));
     }
 }
