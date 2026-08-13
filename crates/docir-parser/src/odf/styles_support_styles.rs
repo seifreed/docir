@@ -275,7 +275,8 @@ fn parse_font_size(value: &str) -> Option<u32> {
 fn parse_finite_font_size(value: &str) -> Option<u32> {
     let size = value.parse::<f32>().ok()?;
     if size.is_finite() && size >= 0.0 {
-        Some(size.round() as u32)
+        let rounded = f64::from(size.round());
+        (rounded <= u32::MAX as f64).then_some(rounded as u32)
     } else {
         None
     }
@@ -294,5 +295,10 @@ mod tests {
     #[test]
     fn parse_font_size_rejects_negative_values() {
         assert_eq!(parse_font_size("-1pt"), None);
+    }
+
+    #[test]
+    fn parse_font_size_rejects_values_that_overflow_u32() {
+        assert_eq!(parse_font_size("4294967296pt"), None);
     }
 }
