@@ -55,6 +55,7 @@ mod tests {
                 <hp:pic xlink:href="BinData/image1.png" />
               </hp:p>
               <hp:list><hp:li><hp:t>item</hp:t></hp:li></hp:list>
+              <hp:p/>
               <hp:table>
                 <hp:row>
                   <hp:cell><hp:p><hp:t>A1</hp:t></hp:p></hp:cell>
@@ -104,6 +105,10 @@ mod tests {
         );
         assert!(store.values().any(|n| matches!(n, IRNode::Shape(_))));
         assert!(store.values().any(|n| matches!(n, IRNode::Table(_))));
+        assert!(store.values().any(|n| matches!(
+            n,
+            IRNode::Paragraph(paragraph) if paragraph.runs.is_empty()
+        )));
     }
 
     #[test]

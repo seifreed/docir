@@ -127,6 +127,20 @@ pub(super) fn handle_hwpx_empty(
 ) -> Result<(), ParseError> {
     let name = e.name().as_ref().to_vec();
     let local = local_name(&name);
+    if local == b"p" {
+        start_hwpx_paragraph(e, source, store, state)?;
+        if let Some(note) = state.note_stack.last_mut() {
+            finalize_note_paragraph(note, store);
+        } else {
+            finalize_paragraph_hwpx(
+                &mut state.current_para,
+                &mut state.current_cell,
+                &mut state.content,
+                store,
+            );
+        }
+        return Ok(());
+    }
     if push_hwpx_comment_reference(e, local, source, store, state)? {
         return Ok(());
     }
