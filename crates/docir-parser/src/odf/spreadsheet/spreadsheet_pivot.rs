@@ -1,7 +1,9 @@
 use super::super::super::helpers::ValidationDef;
 use super::super::super::{OdfReader, scan_xml_events_with_reader};
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, local_name, try_attr_value_by_suffix};
+use crate::xml_utils::{
+    XmlScanControl, local_name, track_xml_root_event, try_attr_value_by_suffix,
+};
 use docir_core::ir::{IRNode, PivotCache, PivotCacheRecords, PivotTable};
 use docir_core::types::{NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -153,8 +155,11 @@ pub(super) fn parse_ods_pivots_from_xml(
     let mut pivot_links: PivotLinks = Vec::new();
     let mut pivot_caches: Vec<NodeId> = Vec::new();
     let mut next_cache_id: u32 = 1;
+    let mut root_name = None;
+    let mut root_closed = false;
 
     scan_xml_events_with_reader(&mut reader, &mut buf, "content.xml", |reader, event| {
+        track_xml_root_event(&event, &mut root_name, &mut root_closed, "content.xml")?;
         match event {
             Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"spreadsheet" => in_spreadsheet = true,
@@ -257,6 +262,17 @@ mod tests {
 
         let err = parse_ods_pivot_table_full(&mut reader, &start, 1)
             .expect_err("truncated pivot must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+    }
+
+    #[test]
+    fn parse_ods_pivots_from_xml_rejects_missing_root_end() {
+        let xml = br#"<office:document-content
+            xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0">"#;
+        let mut store = IrStore::new();
+
+        let err = parse_ods_pivots_from_xml(xml, &mut store)
+            .expect_err("truncated content XML must fail");
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
     }
 }
