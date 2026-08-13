@@ -59,6 +59,7 @@ mod tests {
               <hp:table>
                 <hp:row>
                   <hp:cell><hp:p><hp:t>A1</hp:t></hp:p></hp:cell>
+                  <hp:cell/>
                 </hp:row>
               </hp:table>
             </hp:section>
@@ -104,7 +105,19 @@ mod tests {
                 .any(|n| matches!(n, IRNode::CommentReference(_)))
         );
         assert!(store.values().any(|n| matches!(n, IRNode::Shape(_))));
-        assert!(store.values().any(|n| matches!(n, IRNode::Table(_))));
+        let table = store
+            .values()
+            .find_map(|node| match node {
+                IRNode::Table(table) => Some(table),
+                _ => None,
+            })
+            .expect("table node");
+        assert_eq!(table.rows.len(), 1);
+        let row = match store.get(table.rows[0]).expect("table row") {
+            IRNode::TableRow(row) => row,
+            node => panic!("unexpected table row node: {node:?}"),
+        };
+        assert_eq!(row.cells.len(), 2);
         assert!(store.values().any(|n| matches!(
             n,
             IRNode::Paragraph(paragraph) if paragraph.runs.is_empty()

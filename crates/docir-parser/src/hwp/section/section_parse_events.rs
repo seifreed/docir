@@ -141,6 +141,40 @@ pub(super) fn handle_hwpx_empty(
         }
         return Ok(());
     }
+    match local {
+        b"tbl" | b"table" => {
+            finalize_paragraph_hwpx(
+                &mut state.current_para,
+                &mut state.current_cell,
+                &mut state.content,
+                store,
+            );
+            let table = Table::new();
+            let table_id = table.id;
+            store.insert(IRNode::Table(table));
+            state.content.push(table_id);
+            return Ok(());
+        }
+        b"tr" | b"row" if state.current_table.is_some() => {
+            let row = TableRow::new();
+            let row_id = row.id;
+            store.insert(IRNode::TableRow(row));
+            if let Some(table) = state.current_table.as_mut() {
+                table.rows.push(row_id);
+            }
+            return Ok(());
+        }
+        b"tc" | b"cell" if state.current_row.is_some() => {
+            let cell = TableCell::new();
+            let cell_id = cell.id;
+            store.insert(IRNode::TableCell(cell));
+            if let Some(row) = state.current_row.as_mut() {
+                row.cells.push(cell_id);
+            }
+            return Ok(());
+        }
+        _ => {}
+    }
     if push_hwpx_comment_reference(e, local, source, store, state)? {
         return Ok(());
     }
