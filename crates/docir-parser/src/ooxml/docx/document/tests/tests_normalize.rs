@@ -97,6 +97,12 @@ fn test_parse_comment_variants_reject_truncated_roots() {
         .parse_comments_ids(ids)
         .expect_err("truncated commentsIds root must fail");
     assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/commentsIds.xml"));
+
+    let multiple_roots = r#"<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/><w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>"#;
+    let err = parser
+        .parse_comments(multiple_roots, &Relationships::default())
+        .expect_err("multiple comments roots must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/comments.xml"));
 }
 
 #[test]
@@ -344,11 +350,11 @@ fn test_parse_vml_picture_rejects_truncated_scope() {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) if e.name().as_ref() == b"w:r" => {
-                let err = parse_run(&mut parser, &mut reader, &Relationships::default())
-                    .expect_err("truncated pict must fail");
-                match err {
-                    ParseError::Xml { file, .. } => assert_eq!(file, "word/document.xml"),
-                    other => panic!("unexpected error: {other:?}"),
+                let result = parse_run(&mut parser, &mut reader, &Relationships::default());
+                match result {
+                    Err(ParseError::Xml { file, .. }) => assert_eq!(file, "word/document.xml"),
+                    Err(other) => panic!("unexpected error: {other:?}"),
+                    Ok(_) => panic!("truncated pict must fail"),
                 }
                 break;
             }

@@ -78,24 +78,15 @@ fn test_parse_metadata_meta_and_smartart_variants() {
 }
 
 #[test]
-fn test_parse_metadata_tolerates_truncated_parts() {
+fn test_parse_metadata_rejects_truncated_parts() {
     let bad_pres = r#"<p:presentationPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:bad>"#;
-    let props = parse_presentation_properties(bad_pres, "ppt/presProps.xml")
-        .expect("presentation props parser should be tolerant here");
-    assert!(props.auto_compress_pictures.is_none());
-    assert!(props.compat_mode.is_none());
+    assert!(parse_presentation_properties(bad_pres, "ppt/presProps.xml").is_err());
 
     let bad_view = r#"<p:viewPr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:zoom>"#;
-    let view =
-        parse_view_properties(bad_view, "ppt/viewProps.xml").expect("view parser tolerates eof");
-    assert!(view.last_view.is_none());
-    assert!(view.zoom.is_none());
+    assert!(parse_view_properties(bad_view, "ppt/viewProps.xml").is_err());
 
     let bad_styles = r#"<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:tblStyle>"#;
-    let styles = parse_table_styles(bad_styles, "ppt/tableStyles.xml")
-        .expect("table styles parser tolerates eof");
-    assert!(styles.default_style_id.is_none());
-    assert!(styles.styles.is_empty());
+    assert!(parse_table_styles(bad_styles, "ppt/tableStyles.xml").is_err());
 
     let bad_tags =
         r#"<p:tagLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:tag"#;
@@ -107,9 +98,16 @@ fn test_parse_metadata_tolerates_truncated_parts() {
     }
 
     let bad_smartart = r#"<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"><dgm:pt>"#;
-    let smartart = parse_smartart_part(bad_smartart, "ppt/diagrams/data1.xml")
-        .expect("smartart parser tolerates eof");
-    assert_eq!(smartart.kind, "data");
+    assert!(parse_smartart_part(bad_smartart, "ppt/diagrams/data1.xml").is_err());
+
+    let bad_tags = r#"<p:tagLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:tag name="x" val="y">"#;
+    assert!(parse_presentation_tags(bad_tags, "ppt/tags/tag1.xml").is_err());
+
+    let bad_master = r#"<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" preserve="1">"#;
+    assert!(parse_slide_master_meta(bad_master, "ppt/slideMasters/slideMaster1.xml").is_err());
+
+    let bad_layout = r#"<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="title">"#;
+    assert!(parse_slide_layout_meta(bad_layout, "ppt/slideLayouts/slideLayout1.xml").is_err());
 }
 
 #[test]

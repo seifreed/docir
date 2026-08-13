@@ -33,8 +33,8 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
         if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
             break;
         }
-        match event {
-            Event::Start(e) => match local_name(e.name().as_ref()) {
+        if let Event::Start(e) = event {
+            match local_name(e.name().as_ref()) {
                 b"Signature" => {
                     visit_attributes(&e, path, |attr| {
                         if attr.key.as_ref() == b"Id" {
@@ -62,8 +62,7 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
                     sig.signer = Some(decoded_text(&text).map_err(|err| xml_error(path, err))?);
                 }
                 _ => {}
-            },
-            _ => {}
+            }
         }
         buf.clear();
     }

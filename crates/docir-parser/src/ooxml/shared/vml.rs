@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, track_xml_document_event, visit_attributes, xml_error};
+use crate::xml_utils::{local_name, visit_attributes, xml_error};
 use docir_core::ir::{VmlDrawing, VmlShape};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -22,22 +22,46 @@ pub fn parse_vml_drawing(
     let mut current: Option<VmlShape> = None;
 
     let mut buf = Vec::new();
-    let mut depth = 0usize;
+    let mut root_name: Option<Vec<u8>> = None;
     let mut root_closed = false;
     loop {
         let event = reader
             .read_event_into(&mut buf)
             .map_err(|err| xml_error(path, err))?;
-        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
-            break;
+        if root_closed && matches!(&event, Event::Start(_) | Event::Empty(_)) {
+            return Err(xml_error(path, "XML document contains multiple roots"));
+        }
+        match &event {
+            Event::Start(e) if root_name.is_none() => {
+                root_name = Some(e.name().as_ref().to_vec());
+            }
+            Event::Empty(e) if root_name.is_none() => {
+                root_name = Some(e.name().as_ref().to_vec());
+                root_closed = true;
+            }
+            Event::End(e)
+                if root_name
+                    .as_deref()
+                    .is_some_and(|name| name == e.name().as_ref()) =>
+            {
+                root_closed = true;
+            }
+            Event::Eof if root_closed => break,
+            Event::Eof => {
+                return Err(xml_error(
+                    path,
+                    "XML document ends before its root is closed",
+                ));
+            }
+            _ => {}
         }
         match event {
-            Ok(Event::Start(e)) => {
+            Event::Start(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
                 handle_vml_element_start(&mut current, local, &e, path, rels, &mut reader, false)?;
             }
-            Ok(Event::Empty(e)) => {
+            Event::Empty(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
                 if let Some(shape) = handle_vml_element_start(
@@ -52,7 +76,7 @@ pub fn parse_vml_drawing(
                     shapes.push(shape);
                 }
             }
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 let name = e.name().as_ref().to_vec();
                 let local = local_name(&name);
                 if local == b"shape"
@@ -293,6 +317,14 @@ mod tests {
         let err = parse_vml_drawing("<v:shape>", "word/bad.vml", &Relationships::default())
             .expect_err("truncated VML must fail");
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/bad.vml"));
+
+        let err = parse_vml_drawing(
+            "<xml/><xml/>",
+            "word/multiple-roots.vml",
+            &Relationships::default(),
+        )
+        .expect_err("multiple VML roots must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/multiple-roots.vml"));
     }
 
     #[test]

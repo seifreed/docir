@@ -2,7 +2,7 @@ use super::{
     ParseError, PresentationProperties, PresentationTag, ShapeType, SmartArtPart, SourceSpan,
     TableStyle, TableStyleSet, ViewProperties,
 };
-use crate::xml_utils::{local_name, lossy_attr_value, xml_error};
+use crate::xml_utils::{local_name, lossy_attr_value, track_xml_document_event, xml_error};
 use docir_core::types::NodeId;
 use quick_xml::Reader;
 use quick_xml::events::BytesStart;
@@ -30,10 +30,18 @@ pub(super) fn parse_presentation_properties(
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e)
                 if local_name(e.name().as_ref()) == b"presentationPr" =>
             {
                 visit_attributes(&e, path, |attr| match attr.key.as_ref() {
@@ -73,10 +81,6 @@ pub(super) fn parse_presentation_properties(
                     _ => Ok(()),
                 })?;
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
             _ => {}
         }
         buf.clear();
@@ -92,10 +96,18 @@ pub(super) fn parse_view_properties(xml: &str, path: &str) -> Result<ViewPropert
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
                 b"viewPr" => {
                     visit_attributes(&e, path, |attr| match attr.key.as_ref() {
                         b"lastView" => {
@@ -149,10 +161,6 @@ pub(super) fn parse_view_properties(xml: &str, path: &str) -> Result<ViewPropert
                 }
                 _ => {}
             },
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
             _ => {}
         }
         buf.clear();
@@ -168,10 +176,18 @@ pub(super) fn parse_table_styles(xml: &str, path: &str) -> Result<TableStyleSet,
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
                 b"tblStyleLst" => {
                     visit_attributes(&e, path, |attr| {
                         if attr.key.as_ref() == b"def" {
@@ -200,10 +216,6 @@ pub(super) fn parse_table_styles(xml: &str, path: &str) -> Result<TableStyleSet,
                 }
                 _ => {}
             },
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
             _ => {}
         }
         buf.clear();
@@ -220,12 +232,18 @@ pub(super) fn parse_presentation_tags(
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e))
-                if local_name(e.name().as_ref()) == b"tag" =>
-            {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) if local_name(e.name().as_ref()) == b"tag" => {
                 let mut name = None;
                 let mut val = None;
                 visit_attributes(&e, path, |attr| match attr.key.as_ref() {
@@ -248,10 +266,6 @@ pub(super) fn parse_presentation_tags(
                     });
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
             _ => {}
         }
         buf.clear();
@@ -268,9 +282,17 @@ pub(super) fn parse_smartart_part(xml: &str, path: &str) -> Result<SmartArtPart,
     let mut point_count: u32 = 0;
     let mut connection_count: u32 = 0;
     let mut rel_ids: Vec<String> = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
                 if root.is_none() {
                     root = Some(String::from_utf8_lossy(e.name().as_ref()).to_string());
                 }
@@ -294,10 +316,6 @@ pub(super) fn parse_smartart_part(xml: &str, path: &str) -> Result<SmartArtPart,
                         Ok(())
                     })?;
                 }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -349,11 +367,17 @@ pub(super) fn parse_slide_master_meta(
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e))
-                if local_name(e.name().as_ref()) == b"sldMaster" =>
-            {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) if local_name(e.name().as_ref()) == b"sldMaster" => {
                 visit_attributes(&e, path, |attr| {
                     let value = lossy_attr_value(attr);
                     match attr.key.as_ref() {
@@ -375,11 +399,6 @@ pub(super) fn parse_slide_master_meta(
                         _ => Ok(()),
                     }
                 })?;
-                break;
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
             }
             _ => {}
         }
@@ -405,11 +424,17 @@ pub(super) fn parse_slide_layout_meta(
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e))
-                if local_name(e.name().as_ref()) == b"sldLayout" =>
-            {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) if local_name(e.name().as_ref()) == b"sldLayout" => {
                 visit_attributes(&e, path, |attr| {
                     let value = lossy_attr_value(attr);
                     match attr.key.as_ref() {
@@ -439,11 +464,6 @@ pub(super) fn parse_slide_layout_meta(
                         _ => Ok(()),
                     }
                 })?;
-                break;
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
             }
             _ => {}
         }

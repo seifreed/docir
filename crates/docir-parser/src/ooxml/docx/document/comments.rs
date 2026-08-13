@@ -52,7 +52,7 @@ impl DocxParser {
                 break;
             }
             match event {
-                Ok(Event::Empty(e)) | Ok(Event::Start(e))
+                Event::Empty(e) | Event::Start(e)
                     if local_name(e.name().as_ref()) == b"commentExt" =>
                 {
                     let comment_id =
@@ -102,7 +102,7 @@ impl DocxParser {
                 break;
             }
             match event {
-                Ok(Event::Empty(e)) | Ok(Event::Start(e))
+                Event::Empty(e) | Event::Start(e)
                     if local_name(e.name().as_ref()) == b"commentId" =>
                 {
                     let entry = CommentIdMapEntry {
@@ -144,6 +144,12 @@ fn parse_comments_like(
         let event = reader
             .read_event_into(&mut buf)
             .map_err(|err| xml_error("word/comments.xml", err))?;
+        if root_closed && matches!(&event, Event::Start(_) | Event::Empty(_)) {
+            return Err(xml_error(
+                "word/comments.xml",
+                "XML document contains multiple roots",
+            ));
+        }
         match &event {
             Event::Start(e) if root_name.is_none() => {
                 root_name = Some(e.name().as_ref().to_vec());
@@ -168,8 +174,8 @@ fn parse_comments_like(
             }
             _ => {}
         }
-        match event {
-            Event::Start(e) => match local_name(e.name().as_ref()) {
+        if let Event::Start(e) = event {
+            match local_name(e.name().as_ref()) {
                 b"comment" => {
                     let comment_id = required_comment_attr(&e, b"w:id", "word/comments.xml")?;
                     let mut comment = Comment::new(comment_id);
@@ -210,8 +216,7 @@ fn parse_comments_like(
                     }
                 }
                 _ => {}
-            },
-            _ => {}
+            }
         }
         buf.clear();
     }
