@@ -316,3 +316,23 @@ fn secure_zip_reader_rejects_suspicious_compression_ratio() {
     .expect("compression ratio limit error");
     assert!(matches!(err, ParseError::ResourceLimit(_)));
 }
+
+#[test]
+fn secure_zip_reader_rejects_non_finite_compression_ratio_configuration() {
+    let bytes = make_zip(
+        &[("word/document.xml", b"content")],
+        CompressionMethod::Stored,
+    );
+    for ratio in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let err = SecureZipReader::new(
+            Cursor::new(bytes.clone()),
+            ZipConfig {
+                max_compression_ratio: ratio,
+                ..ZipConfig::default()
+            },
+        )
+        .err()
+        .expect("non-finite compression ratio must be rejected");
+        assert!(matches!(err, ParseError::InvalidStructure(_)));
+    }
+}

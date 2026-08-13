@@ -66,6 +66,11 @@ pub struct SecureZipReader<R: Read + Seek> {
 impl<R: Read + Seek> SecureZipReader<R> {
     /// Opens a ZIP archive with security checks.
     pub fn new(mut reader: R, config: ZipConfig) -> Result<Self, ParseError> {
+        if !config.max_compression_ratio.is_finite() || config.max_compression_ratio < 0.0 {
+            return Err(ParseError::InvalidStructure(
+                "ZIP maximum compression ratio must be finite and non-negative".to_string(),
+            ));
+        }
         reject_duplicate_central_directory_names(&mut reader, config.max_file_count)?;
         let mut archive = ZipArchive::new(reader)?;
 
