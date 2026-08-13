@@ -37,7 +37,12 @@ pub(crate) fn parse_body_sections(
             Event::End(e) if local_name(e.name().as_ref()) == b"body" => {
                 break;
             }
-            Event::Eof => break,
+            Event::Eof => {
+                return Err(crate::xml_utils::xml_error(
+                    "word/document.xml",
+                    "unexpected end of body",
+                ));
+            }
             _ => {}
         }
         buf.clear();
@@ -152,7 +157,12 @@ pub(crate) fn parse_block_until(
             Event::End(e) if local_name(e.name().as_ref()) == local_name(end_tag) => {
                 break;
             }
-            Event::Eof => break,
+            Event::Eof => {
+                return Err(crate::xml_utils::xml_error(
+                    "word/document.xml",
+                    "unexpected end of block",
+                ));
+            }
             _ => {}
         }
         buf.clear();
@@ -214,6 +224,33 @@ mod tests {
         let content = parse_block_until(&mut parser, &mut reader, &rels, b"w:comment")
             .expect("comment block should parse");
         assert_eq!(content.len(), 2);
+    }
+
+    #[test]
+    fn parse_body_sections_rejects_missing_body_end() {
+        let xml = r#"<w:body xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Broken</w:t></w:r></w:p>"#;
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let err = parse_body_sections(&mut parser, &mut reader, &Relationships::default(), None)
+            .expect_err("truncated body must fail");
+
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_block_until_rejects_missing_end_tag() {
+        let xml = r#"<w:comment xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Broken</w:t></w:r></w:p>"#;
+        let mut reader = reader_from_str(xml);
+        let mut parser = DocxParser::new();
+        let err = parse_block_until(
+            &mut parser,
+            &mut reader,
+            &Relationships::default(),
+            b"w:comment",
+        )
+        .expect_err("truncated block must fail");
+
+        assert!(matches!(err, ParseError::Xml { .. }));
     }
 
     #[test]
