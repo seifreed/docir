@@ -48,13 +48,20 @@ pub(crate) fn parse_dir_entries(data: &[u8]) -> Result<Vec<DirEntry>, ParseError
         let name_len_raw = read_u16(chunk, 64)?;
         let name_len = name_len_raw as usize;
         let name_raw = &chunk[..64];
+        let object_type = chunk[66];
+        if matches!(object_type, 1 | 2)
+            && (!(2..=64).contains(&name_len) || !name_len.is_multiple_of(2))
+        {
+            return Err(ParseError::InvalidStructure(format!(
+                "OLE directory entry {object_type} has invalid name length {name_len_raw}"
+            )));
+        }
         let name = if (2..=64).contains(&name_len) && name_len.is_multiple_of(2) {
             let bytes = &name_raw[..name_len - 2];
             utf16le_to_string(bytes)
         } else {
             String::new()
         };
-        let object_type = chunk[66];
         let color_flag = chunk[67];
         let left = read_u32(chunk, 68)?;
         let right = read_u32(chunk, 72)?;

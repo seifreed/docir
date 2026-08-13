@@ -278,6 +278,20 @@ fn directory_parsing_rejects_truncated_entry() {
 }
 
 #[test]
+fn directory_parsing_rejects_invalid_name_lengths_for_live_entries() {
+    for object_type in [1u8, 2] {
+        let mut data = vec![0u8; 128];
+        data[64..66].copy_from_slice(&1u16.to_le_bytes());
+        data[66] = object_type;
+
+        assert!(matches!(
+            directory::parse_dir_entries(&data),
+            Err(ParseError::InvalidStructure(message)) if message.contains("name length")
+        ));
+    }
+}
+
+#[test]
 fn directory_metadata_walk_rejects_recursive_pointer_cycles() {
     let entries = vec![
         super::types::DirEntry {
