@@ -189,4 +189,36 @@ mod tests {
             matches!(err, ParseError::ResourceLimit(message) if message.contains("expanded spaces"))
         );
     }
+
+    #[test]
+    fn parse_paragraph_rejects_cumulative_expanded_text() {
+        let controls = r#"<text:s text:c="1000000"/>"#.repeat(11);
+        let xml = format!(
+            r#"<text:p xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">{controls}</text:p>"#
+        );
+        let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+
+        let mut store = IrStore::new();
+        let mut inline_nodes = Vec::new();
+        let limits = OdfLimits::new(&ParserConfig::default(), false);
+        let err = parse_paragraph(
+            &mut reader,
+            b"text:p",
+            None,
+            None,
+            &mut store,
+            &mut inline_nodes,
+            &limits,
+        )
+        .expect_err("cumulative ODF expansion must fail");
+
+        assert!(
+            matches!(err, ParseError::ResourceLimit(message) if message.contains("expanded text"))
+        );
+    }
 }

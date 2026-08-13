@@ -18,6 +18,7 @@ use quick_xml::events::{BytesStart, Event};
 
 const ODF_CONTENT_XML: &str = "content.xml";
 pub(crate) const MAX_ODF_EXPANDED_SPACES: usize = 1_000_000;
+pub(crate) const MAX_ODF_EXPANDED_TEXT: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ValidationDef {
@@ -247,6 +248,15 @@ pub(crate) fn append_odf_spaces(text: &mut String, count: usize) -> Result<(), P
         return Err(ParseError::ResourceLimit(format!(
             "ODF expanded spaces exceed limit: {} (max: {})",
             count, MAX_ODF_EXPANDED_SPACES
+        )));
+    }
+    let expanded_len = text.len().checked_add(count).ok_or_else(|| {
+        ParseError::ResourceLimit("ODF expanded text length overflow".to_string())
+    })?;
+    if expanded_len > MAX_ODF_EXPANDED_TEXT {
+        return Err(ParseError::ResourceLimit(format!(
+            "ODF expanded text exceeds limit: {} (max: {})",
+            expanded_len, MAX_ODF_EXPANDED_TEXT
         )));
     }
     text.extend(std::iter::repeat_n(' ', count));
