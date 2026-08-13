@@ -192,7 +192,9 @@ impl<R: Read + Seek> SecureZipReader<R> {
 
     /// Returns all file names in the archive.
     pub fn file_names(&self) -> impl Iterator<Item = &str> {
-        self.file_index.keys().map(|s| s.as_str())
+        let mut names: Vec<&str> = self.file_index.keys().map(|s| s.as_str()).collect();
+        names.sort_unstable();
+        names.into_iter()
     }
 
     /// Returns the number of files in the archive.
@@ -207,20 +209,26 @@ impl<R: Read + Seek> SecureZipReader<R> {
 
     /// Lists files matching a prefix.
     pub fn list_prefix(&self, prefix: &str) -> Vec<&str> {
-        self.file_index
+        let mut paths: Vec<&str> = self
+            .file_index
             .keys()
             .filter(|name| name.starts_with(prefix))
             .map(|s| s.as_str())
-            .collect()
+            .collect();
+        paths.sort_unstable();
+        paths
     }
 
     /// Lists files matching a suffix.
     pub fn list_suffix(&self, suffix: &str) -> Vec<&str> {
-        self.file_index
+        let mut paths: Vec<&str> = self
+            .file_index
             .keys()
             .filter(|name| name.ends_with(suffix))
             .map(|s| s.as_str())
-            .collect()
+            .collect();
+        paths.sort_unstable();
+        paths
     }
 }
 

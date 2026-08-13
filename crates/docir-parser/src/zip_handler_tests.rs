@@ -184,11 +184,10 @@ fn secure_zip_reader_reads_and_lists_files() {
     );
     assert_eq!(reader.file_size("word/document.xml").expect("size"), 6);
 
-    let mut names = reader
+    let names = reader
         .file_names()
         .map(ToString::to_string)
         .collect::<Vec<_>>();
-    names.sort();
     assert_eq!(
         names,
         vec![
@@ -197,8 +196,7 @@ fn secure_zip_reader_reads_and_lists_files() {
         ]
     );
 
-    let mut prefix = reader.list_prefix("word/").to_vec();
-    prefix.sort();
+    let prefix = reader.list_prefix("word/").to_vec();
     assert_eq!(prefix.len(), 2);
     assert_eq!(
         reader.list_suffix(".rels"),
