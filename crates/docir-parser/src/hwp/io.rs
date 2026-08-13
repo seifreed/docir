@@ -6,8 +6,7 @@ use sha1::{Digest as Sha1Digest, Sha1};
 use sha2::Sha256;
 
 use aes::Aes128;
-use cbc::Decryptor;
-use cbc::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
+use aes::cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray};
 
 pub(super) fn prepare_hwp_stream_data(
     data: &[u8],
@@ -117,58 +116,76 @@ pub(super) fn dump_hwp_streams(
     }
 }
 
-/// Derive an AES-128 key and full SHA-1 digest from a password.
+const MAX_HWP_PASSWORD_BYTES: usize = 80;
+
+/// Derive the AES-128 key used by HWP 5.x password-protected streams.
 ///
 /// Security note: SHA-1 without salt or iterations is a weak key derivation
 /// function. This matches the HWP binary format specification and cannot be
 /// changed while still reading existing HWP files. A proper
 /// KDF (PBKDF2 with salt, or Argon2id) should be used for new designs.
-fn derive_hwp_key(password: &str) -> ([u8; 16], [u8; 20]) {
+fn derive_hwp_key(password: &str) -> Result<[u8; 16], ParseError> {
+    let password = password.as_bytes();
+    if password.len() > MAX_HWP_PASSWORD_BYTES {
+        return Err(ParseError::ResourceLimit(format!(
+            "HWP password exceeds {} bytes",
+            MAX_HWP_PASSWORD_BYTES
+        )));
+    }
+    let mut password_material = [0u8; MAX_HWP_PASSWORD_BYTES * 2];
+    for (index, byte) in password.iter().copied().enumerate() {
+        let previous = if index == 0 { 236 } else { password[index - 1] };
+        password_material[index * 2] = previous.rotate_left(1);
+        password_material[index * 2 + 1] = byte;
+    }
     let mut hasher = Sha1::new();
-    hasher.update(password.as_bytes());
+    hasher.update(&password_material[..password.len() * 2]);
     let digest = hasher.finalize();
     let mut key = [0u8; 16];
     key.copy_from_slice(&digest[..16]);
-    let digest_bytes: [u8; 20] = digest.into();
-    (key, digest_bytes)
-}
-
-/// Derive an IV from the SHA-1 digest material.
-///
-/// Since HWP uses a zero IV in its specification, we derive a non-zero IV
-/// from the SHA-1 digest bytes not used for the key. This provides better
-/// semantic security than a zero IV while remaining deterministic for the
-/// same password.
-fn derive_hwp_iv(digest: &[u8; 20]) -> [u8; 16] {
-    let mut iv = [0u8; 16];
-    for i in 0..16 {
-        iv[i] = digest[i] ^ digest[(i + 4) % 20];
-    }
-    iv
+    Ok(key)
 }
 
 fn decrypt_hwp_stream(data: &[u8], password: &str, source: &str) -> Result<Vec<u8>, ParseError> {
-    if !data.len().is_multiple_of(16) {
-        return Err(ParseError::InvalidStructure(format!(
-            "HWP encrypted stream {} length not aligned",
-            source
-        )));
-    }
-    let (key, digest) = derive_hwp_key(password);
-    let iv = derive_hwp_iv(&digest);
-    let mut buffer = data.to_vec();
-    let decryptor = Decryptor::<Aes128>::new_from_slices(&key, &iv).map_err(|e| {
-        ParseError::InvalidStructure(format!(
-            "Failed to init HWP decryptor for {}: {}",
-            source, e
-        ))
+    let key = derive_hwp_key(password)?;
+    let cipher = Aes128::new_from_slice(&key).map_err(|e| {
+        ParseError::InvalidStructure(format!("Failed to init HWP cipher for {}: {}", source, e))
     })?;
-    let decrypted = decryptor
-        .decrypt_padded_mut::<Pkcs7>(&mut buffer)
-        .map_err(|e| {
-            ParseError::InvalidStructure(format!("Failed to decrypt HWP stream {}: {}", source, e))
-        })?;
-    Ok(decrypted.to_vec())
+    let mut padded = data.to_vec();
+    let remainder = padded.len() % 16;
+    if remainder != 0 {
+        padded.extend(std::iter::repeat_n((16 - remainder) as u8, 16 - remainder));
+    }
+
+    let mut feedback = [0u8; 16];
+    let mut output = Vec::with_capacity(padded.len());
+    for block in padded.chunks_exact(16) {
+        let mut decrypted = [0u8; 16];
+        decrypted.copy_from_slice(block);
+        for bit_index in 0..128 {
+            let mut encrypted_feedback = GenericArray::clone_from_slice(&feedback);
+            cipher.encrypt_block(&mut encrypted_feedback);
+            let keystream_bit = encrypted_feedback[0] & 0x80;
+            let input_bit = (decrypted[bit_index / 8] >> (7 - (bit_index % 8))) & 1;
+            let mut index = 1;
+            for _ in 0..3 {
+                let first = feedback[index];
+                feedback[index - 1] = feedback[index - 1].wrapping_shl(1) | (first >> 7);
+                let second = feedback[index + 1];
+                let third = feedback[index + 2];
+                feedback[index] = first.wrapping_shl(1) | (second >> 7);
+                feedback[index + 1] = second.wrapping_shl(1) | (third >> 7);
+                let fourth = feedback[index + 3];
+                feedback[index + 2] = third.wrapping_shl(1) | (fourth >> 7);
+                feedback[index + 3] = fourth.wrapping_shl(1) | (feedback[index + 4] >> 7);
+                index += 5;
+            }
+            feedback[15] = feedback[15].wrapping_shl(1) | input_bit;
+            decrypted[bit_index / 8] ^= keystream_bit >> (bit_index % 8);
+        }
+        output.extend_from_slice(&decrypted);
+    }
+    Ok(output)
 }
 
 #[cfg(test)]
@@ -197,20 +214,40 @@ mod tests {
 
     #[test]
     fn derive_hwp_key_is_stable_and_password_sensitive() {
-        let (key_a, digest_a) = derive_hwp_key("secret");
-        let (key_b, digest_b) = derive_hwp_key("secret");
-        let (key_c, digest_c) = derive_hwp_key("different");
+        let key_a = derive_hwp_key("secret").expect("key");
+        let key_b = derive_hwp_key("secret").expect("key");
+        let key_c = derive_hwp_key("different").expect("key");
         assert_eq!(key_a, key_b);
-        assert_eq!(digest_a, digest_b);
         assert_ne!(key_a, key_c);
-        assert_ne!(digest_a, digest_c);
+        assert_eq!(
+            key_a,
+            [
+                0x54, 0xd6, 0x91, 0xad, 0x45, 0x96, 0x2e, 0xa8, 0x95, 0xc0, 0xbf, 0xf2, 0x9e, 0xc2,
+                0x0d, 0xae,
+            ]
+        );
     }
 
     #[test]
-    fn decrypt_hwp_stream_rejects_non_aligned_input() {
-        let err =
-            decrypt_hwp_stream(b"1234567890", "pw", "BodyText/Section0").expect_err("must fail");
-        assert!(matches!(err, ParseError::InvalidStructure(_)));
+    fn decrypt_hwp_stream_matches_hwp_v5_vector() {
+        let ciphertext = [
+            0xf0, 0x4e, 0x52, 0xaa, 0xc8, 0xa8, 0xe1, 0x04, 0x6f, 0x95, 0x5d, 0x82, 0x07, 0xf1,
+            0x88, 0xa9,
+        ];
+
+        let plaintext = decrypt_hwp_stream(&ciphertext, "secret", "BodyText/Section0")
+            .expect("HWP vector must decrypt");
+
+        assert_eq!(plaintext, b"0123456789ABCDEF");
+    }
+
+    #[test]
+    fn derive_hwp_key_rejects_oversized_passwords() {
+        let password = "x".repeat(MAX_HWP_PASSWORD_BYTES + 1);
+
+        let err = derive_hwp_key(&password).expect_err("oversized password must fail");
+
+        assert!(matches!(err, ParseError::ResourceLimit(_)));
     }
 
     #[test]
@@ -269,10 +306,11 @@ mod tests {
     #[test]
     fn prepare_hwp_stream_data_reports_decrypt_failure_with_password() {
         let mut diagnostics = Diagnostics::new();
+        let password = "x".repeat(MAX_HWP_PASSWORD_BYTES + 1);
         let result = prepare_hwp_stream_data(
-            b"short",
+            b"ciphertext",
             true,
-            Some("pw"),
+            Some(&password),
             false,
             false,
             "BodyText/SectionX",
@@ -290,11 +328,12 @@ mod tests {
     #[test]
     fn prepare_hwp_stream_data_force_parse_fallbacks_after_decrypt_failure() {
         let mut diagnostics = Diagnostics::new();
-        let payload = b"unaligned";
+        let payload = b"ciphertext";
+        let password = "x".repeat(MAX_HWP_PASSWORD_BYTES + 1);
         let result = prepare_hwp_stream_data(
             payload,
             true,
-            Some("pw"),
+            Some(&password),
             true,
             false,
             "BodyText/SectionY",
