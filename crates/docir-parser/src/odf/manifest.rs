@@ -8,6 +8,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use quick_xml::Reader;
 use quick_xml::events::Event;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct OdfManifestEntry {
@@ -49,6 +50,16 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
         }
         Ok(XmlScanControl::Continue)
     })?;
+
+    let mut seen_paths = HashSet::with_capacity(entries.len());
+    for entry in &entries {
+        if !seen_paths.insert(entry.path.clone()) {
+            return Err(ParseError::InvalidStructure(format!(
+                "ODF manifest contains duplicate file-entry path: {}",
+                entry.path
+            )));
+        }
+    }
 
     Ok(entries)
 }
@@ -361,6 +372,22 @@ mod tests {
         ] {
             assert!(parse_manifest(xml).is_err());
         }
+    }
+
+    #[test]
+    fn parse_manifest_rejects_duplicate_file_entry_paths() {
+        let xml = r#"
+            <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+              <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="application/xml"/>
+            </manifest:manifest>
+        "#;
+
+        assert!(matches!(
+            parse_manifest(xml),
+            Err(crate::error::ParseError::InvalidStructure(message))
+                if message.contains("duplicate file-entry path")
+        ));
     }
 
     #[test]
