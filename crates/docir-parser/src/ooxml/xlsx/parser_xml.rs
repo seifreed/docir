@@ -414,9 +414,8 @@ pub(super) fn parse_column(
         return Err(err);
     }
 
-    let (Some(min), Some(max)) = (min, max) else {
-        return Ok(());
-    };
+    let min = min.ok_or_else(|| xml_error(sheet_path, "column is missing min"))?;
+    let max = max.ok_or_else(|| xml_error(sheet_path, "column is missing max"))?;
     if min == 0 || max == 0 {
         return Err(xml_error(sheet_path, "column indexes must be 1-based"));
     }

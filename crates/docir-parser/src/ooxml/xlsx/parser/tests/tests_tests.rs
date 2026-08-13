@@ -30,7 +30,7 @@ fn test_parse_column_and_merge_helpers() {
         Event::Empty(e) => e.into_owned(),
         other => panic!("unexpected event: {other:?}"),
     };
-    parse_column(&ignored, &mut columns, "xl/worksheets/sheet1.xml").expect("ignored column");
+    assert!(parse_column(&ignored, &mut columns, "xl/worksheets/sheet1.xml").is_err());
     assert_eq!(columns.len(), 3, "incomplete columns are ignored");
 
     let mut merge_reader = Reader::from_str(r#"<mergeCell ref="A1:C3"/>"#);
