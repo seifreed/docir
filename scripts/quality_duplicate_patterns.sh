@@ -28,7 +28,10 @@ repo_root = Path(sys.argv[1])
 min_count = int(sys.argv[2])
 min_lines = int(sys.argv[3])
 
-RUST_FILES = sorted(repo_root.glob("crates/*/src/**/*.rs")) + sorted(repo_root.glob("crates/*/src/*.rs"))
+RUST_FILES = sorted(
+    set(repo_root.glob("crates/*/src/**/*.rs"))
+    | set(repo_root.glob("crates/*/src/*.rs"))
+)
 
 keywords = {
     "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",

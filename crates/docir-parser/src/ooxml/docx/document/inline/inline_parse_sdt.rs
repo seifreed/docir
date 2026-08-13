@@ -227,47 +227,48 @@ fn insert_comment_range_start(
     parser: &mut DocxParser,
     start: &BytesStart<'_>,
 ) -> Result<Option<NodeId>, ParseError> {
-    let Some(cid) = try_attr_value(start, b"w:id", super::DOC_XML_PATH)? else {
-        return Ok(None);
-    };
-    let mut node = CommentRangeStart::new(cid);
-    node.span = Some(SourceSpan::new(super::DOC_XML_PATH));
-    let node_id = node.id;
-    parser
-        .store
-        .insert(docir_core::ir::IRNode::CommentRangeStart(node));
-    Ok(Some(node_id))
+    insert_id_node(parser, start, |cid| {
+        let mut node = CommentRangeStart::new(cid);
+        node.span = Some(SourceSpan::new(super::DOC_XML_PATH));
+        Ok((node.id, docir_core::ir::IRNode::CommentRangeStart(node)))
+    })
 }
 
 fn insert_comment_range_end(
     parser: &mut DocxParser,
     start: &BytesStart<'_>,
 ) -> Result<Option<NodeId>, ParseError> {
-    let Some(cid) = try_attr_value(start, b"w:id", super::DOC_XML_PATH)? else {
-        return Ok(None);
-    };
-    let mut node = CommentRangeEnd::new(cid);
-    node.span = Some(SourceSpan::new(super::DOC_XML_PATH));
-    let node_id = node.id;
-    parser
-        .store
-        .insert(docir_core::ir::IRNode::CommentRangeEnd(node));
-    Ok(Some(node_id))
+    insert_id_node(parser, start, |cid| {
+        let mut node = CommentRangeEnd::new(cid);
+        node.span = Some(SourceSpan::new(super::DOC_XML_PATH));
+        Ok((node.id, docir_core::ir::IRNode::CommentRangeEnd(node)))
+    })
 }
 
 fn insert_comment_reference(
     parser: &mut DocxParser,
     start: &BytesStart<'_>,
 ) -> Result<Option<NodeId>, ParseError> {
-    let Some(cid) = try_attr_value(start, b"w:id", super::DOC_XML_PATH)? else {
+    insert_id_node(parser, start, |cid| {
+        let mut node = CommentReference::new(cid);
+        node.span = Some(SourceSpan::new(super::DOC_XML_PATH));
+        Ok((node.id, docir_core::ir::IRNode::CommentReference(node)))
+    })
+}
+
+fn insert_id_node<F>(
+    parser: &mut DocxParser,
+    start: &BytesStart<'_>,
+    build: F,
+) -> Result<Option<NodeId>, ParseError>
+where
+    F: FnOnce(String) -> Result<(NodeId, docir_core::ir::IRNode), ParseError>,
+{
+    let Some(id) = try_attr_value(start, b"w:id", super::DOC_XML_PATH)? else {
         return Ok(None);
     };
-    let mut node = CommentReference::new(cid);
-    node.span = Some(SourceSpan::new(super::DOC_XML_PATH));
-    let node_id = node.id;
-    parser
-        .store
-        .insert(docir_core::ir::IRNode::CommentReference(node));
+    let (node_id, node) = build(id)?;
+    parser.store.insert(node);
     Ok(Some(node_id))
 }
 
