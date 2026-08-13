@@ -205,8 +205,10 @@ pub(super) fn maybe_decompress_stream(
     }
     let mut out = Vec::new();
     let zlib_result = {
-        let mut decoder = ZlibDecoder::new(data);
-        decoder.read_to_end(&mut out)
+        let decoder = ZlibDecoder::new(data);
+        decoder
+            .take(MAX_HWP_DECOMPRESSED_SIZE as u64 + 1)
+            .read_to_end(&mut out)
     };
     if zlib_result.is_ok() {
         if out.len() > MAX_HWP_DECOMPRESSED_SIZE {
@@ -217,10 +219,13 @@ pub(super) fn maybe_decompress_stream(
         return Ok(out);
     }
     out.clear();
-    let mut decoder = DeflateDecoder::new(data);
-    decoder.read_to_end(&mut out).map_err(|e| {
-        ParseError::InvalidStructure(format!("Failed to decompress HWP stream {}: {e}", source))
-    })?;
+    let decoder = DeflateDecoder::new(data);
+    decoder
+        .take(MAX_HWP_DECOMPRESSED_SIZE as u64 + 1)
+        .read_to_end(&mut out)
+        .map_err(|e| {
+            ParseError::InvalidStructure(format!("Failed to decompress HWP stream {}: {e}", source))
+        })?;
     if out.len() > MAX_HWP_DECOMPRESSED_SIZE {
         return Err(ParseError::ResourceLimit(
             "HWP decompressed stream exceeds size limit".to_string(),

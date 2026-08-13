@@ -1,6 +1,9 @@
 use super::*;
 use crate::test_support::build_test_cfb;
 use docir_core::ir::IRNode;
+use flate2::Compression;
+use flate2::write::ZlibEncoder;
+use std::io::Write;
 
 fn patch_cfb_fat_entry(bytes: &[u8], fat_index: u32, value: u32) -> Vec<u8> {
     let mut out = bytes.to_vec();
@@ -116,6 +119,19 @@ fn decompression_handles_passthrough_and_invalid_payloads() {
         err.to_string()
             .contains("Failed to decompress HWP stream bad")
     );
+}
+
+#[test]
+fn decompression_rejects_output_above_resource_limit() {
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
+    encoder
+        .write_all(&vec![b'A'; MAX_HWP_DECOMPRESSED_SIZE + 1])
+        .expect("write compressed payload");
+    let compressed = encoder.finish().expect("finish compressed payload");
+
+    let err = maybe_decompress_stream(&compressed, true, "oversized")
+        .expect_err("decompressed output above limit must fail");
+    assert!(matches!(err, ParseError::ResourceLimit(_)));
 }
 
 #[test]
