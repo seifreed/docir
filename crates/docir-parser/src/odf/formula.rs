@@ -7,6 +7,7 @@ mod formula_parse_utils;
 use formula_parse_utils::*;
 
 const MAX_FORMULA_EVALUATION_DEPTH: usize = 256;
+const MAX_FORMULA_RANGE_CELLS: u64 = 1_000_000;
 
 #[derive(Debug, Clone)]
 struct CellRef {
@@ -115,8 +116,12 @@ impl<'a> FormulaEvalContext<'a> {
         let row_end = range.start.row.max(range.end.row);
         let col_start = range.start.col.min(range.end.col);
         let col_end = range.start.col.max(range.end.col);
-        let total = (row_end - row_start + 1) as u64 * (col_end - col_start + 1) as u64;
-        if total > 1_000_000 {
+        let row_span = u64::from(row_end) - u64::from(row_start) + 1;
+        let col_span = u64::from(col_end) - u64::from(col_start) + 1;
+        if row_span > MAX_FORMULA_RANGE_CELLS
+            || col_span > MAX_FORMULA_RANGE_CELLS
+            || row_span > MAX_FORMULA_RANGE_CELLS / col_span
+        {
             return None;
         }
         let mut values = Vec::new();
@@ -522,5 +527,13 @@ mod tests {
         let mut ctx = FormulaEvalContext::new("Sheet1", HashMap::new(), &formulas);
 
         assert!(ctx.eval_formula("A1").is_none());
+    }
+
+    #[test]
+    fn evaluate_ods_formulas_rejects_overflowing_range_span() {
+        let formulas = HashMap::new();
+        let mut ctx = FormulaEvalContext::new("Sheet1", HashMap::new(), &formulas);
+
+        assert!(ctx.eval_formula("SUM([.A1:.A4294967295])").is_none());
     }
 }
