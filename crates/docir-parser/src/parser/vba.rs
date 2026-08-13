@@ -7,6 +7,8 @@ type VbaProjectTextParse = (
     bool,
 );
 
+const MAX_VBA_DECOMPRESSED_SIZE: usize = 10 * 1024 * 1024;
+
 pub(super) fn parse_vba_project_text(text: &str) -> VbaProjectTextParse {
     let mut project_name = None;
     let mut modules = Vec::new();
@@ -76,12 +78,13 @@ pub(super) fn parse_vba_project_text(text: &str) -> VbaProjectTextParse {
 }
 
 pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
-    const MAX_DECOMPRESSED_SIZE: usize = 10 * 1024 * 1024; // 10 MiB safety limit
-
     if data.is_empty() {
         return None;
     }
     if data[0] != 0x01 {
+        if data.len() > MAX_VBA_DECOMPRESSED_SIZE {
+            return None;
+        }
         return Some(data.to_vec());
     }
 
@@ -98,7 +101,7 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
         }
         saw_chunk = true;
         if !compressed {
-            if out.len().saturating_add(chunk_size) > MAX_DECOMPRESSED_SIZE {
+            if out.len().saturating_add(chunk_size) > MAX_VBA_DECOMPRESSED_SIZE {
                 return None;
             }
             out.extend_from_slice(&data[pos..pos + chunk_size]);
@@ -138,7 +141,7 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
                 }
             }
         }
-        if out.len().saturating_add(chunk_out.len()) > MAX_DECOMPRESSED_SIZE {
+        if out.len().saturating_add(chunk_out.len()) > MAX_VBA_DECOMPRESSED_SIZE {
             return None;
         }
         out.extend_from_slice(&chunk_out);
@@ -267,5 +270,12 @@ mod tests {
         // The flags byte requests a two-byte copy token, but only one byte remains.
         let encoded = [0x01, 0x02, 0x80, 0x01, 0x00];
         assert_eq!(vba_decompress(&encoded), None);
+    }
+
+    #[test]
+    fn vba_decompress_rejects_oversized_plain_payload() {
+        let payload = vec![b'A'; MAX_VBA_DECOMPRESSED_SIZE + 1];
+
+        assert_eq!(vba_decompress(&payload), None);
     }
 }
