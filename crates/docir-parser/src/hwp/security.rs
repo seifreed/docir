@@ -1,6 +1,6 @@
 use crate::diagnostics::{push_info, push_warning};
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, scan_xml_events, xml_error};
+use crate::xml_utils::{XmlScanControl, scan_xml_events, try_decoded_attr_value, xml_error};
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::Diagnostics;
 use docir_core::ir::{Document, IRNode};
@@ -196,7 +196,7 @@ fn scan_hwpx_external_refs(xml: &str, source: &str) -> Result<Vec<ExternalRefere
                     let attr = attr.map_err(|err| xml_error(source, err))?;
                     let key = attr.key.as_ref();
                     if key.ends_with(b"href") || key.ends_with(b"src") || key.ends_with(b"link") {
-                        let target = crate::xml_utils::decoded_attr_value(&attr, e.decoder());
+                        let target = try_decoded_attr_value(&attr, e.decoder(), source)?;
                         if target.is_empty() {
                             continue;
                         }
@@ -211,4 +211,17 @@ fn scan_hwpx_external_refs(xml: &str, source: &str) -> Result<Vec<ExternalRefere
         Ok(XmlScanControl::Continue)
     })?;
     Ok(refs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scan_hwpx_external_refs;
+    use crate::error::ParseError;
+
+    #[test]
+    fn scan_hwpx_external_refs_reports_invalid_attribute_entity() {
+        let err = scan_hwpx_external_refs(r#"<hp:link href="bad &"/>"#, "section.xml")
+            .expect_err("invalid external reference entity must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "section.xml"));
+    }
 }
