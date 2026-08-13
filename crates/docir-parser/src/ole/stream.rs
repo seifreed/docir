@@ -15,7 +15,9 @@ pub(crate) fn read_stream_from_fat(
     let mut out = Vec::new();
     let mut sector = start_sector;
     let mut guard = 0usize;
-    while sector != END_OF_CHAIN {
+    while sector != END_OF_CHAIN
+        && expected_size.is_none_or(|expected_size| out.len() < expected_size)
+    {
         if sector == FREE_SECT {
             return Err(ParseError::InvalidStructure(
                 "OLE FAT chain terminated at a free sector".to_string(),

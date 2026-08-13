@@ -110,6 +110,13 @@ fn read_sector_and_stream_helpers_handle_bounds_and_chains() {
     let truncated_fat = vec![2];
     assert!(read_stream_from_fat(&data, 512, &truncated_fat, 0, None).is_err());
     assert!(read_stream_from_fat(&data, 512, &fat, 0, Some(1025)).is_err());
+
+    let bounded_data = vec![0u8; 1024];
+    let bounded_fat = vec![1, END_OF_CHAIN];
+    let bounded = read_stream_from_fat(&bounded_data, 512, &bounded_fat, 0, Some(1))
+        .expect("declared stream size should stop FAT traversal");
+    assert_eq!(bounded.len(), 512);
+
     assert!(matches!(
         read_stream_from_fat(
             &[],
