@@ -171,9 +171,9 @@ impl MergedCellRange {
         format!(
             "{}{}:{}{}",
             column_to_letter(self.start_col),
-            self.start_row + 1,
+            u64::from(self.start_row) + 1,
             column_to_letter(self.end_col),
-            self.end_row + 1
+            u64::from(self.end_row) + 1
         )
     }
 }
@@ -334,4 +334,21 @@ pub struct CalcChainEntry {
     pub level: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub new_value: Option<bool>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MergedCellRange;
+
+    #[test]
+    fn merged_cell_range_formats_maximum_rows_without_overflow() {
+        let range = MergedCellRange {
+            start_col: 0,
+            start_row: u32::MAX,
+            end_col: 1,
+            end_row: u32::MAX,
+        };
+
+        assert_eq!(range.to_a1_notation(), "A4294967296:B4294967296");
+    }
 }
