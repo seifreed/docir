@@ -259,7 +259,10 @@ fn probe_odf_mimetype(lower: &str, signals: &mut Vec<String>) -> Option<FormatPr
             signals.clone(),
         ));
     }
-    if lower.contains("opendocument.text") {
+    if matches!(
+        lower,
+        "application/vnd.oasis.opendocument.text" | "application/vnd.sun.xml.writer"
+    ) {
         signals.push(format!("mimetype:{lower}"));
         return Some(FormatProbe::new(
             "odt",
@@ -270,7 +273,10 @@ fn probe_odf_mimetype(lower: &str, signals: &mut Vec<String>) -> Option<FormatPr
             signals.clone(),
         ));
     }
-    if lower.contains("opendocument.spreadsheet") {
+    if matches!(
+        lower,
+        "application/vnd.oasis.opendocument.spreadsheet" | "application/vnd.sun.xml.calc"
+    ) {
         signals.push(format!("mimetype:{lower}"));
         return Some(FormatProbe::new(
             "ods",
@@ -281,7 +287,10 @@ fn probe_odf_mimetype(lower: &str, signals: &mut Vec<String>) -> Option<FormatPr
             signals.clone(),
         ));
     }
-    if lower.contains("opendocument.presentation") {
+    if matches!(
+        lower,
+        "application/vnd.oasis.opendocument.presentation" | "application/vnd.sun.xml.impress"
+    ) {
         signals.push(format!("mimetype:{lower}"));
         return Some(FormatProbe::new(
             "odp",
@@ -395,7 +404,7 @@ fn is_swf(data: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{FormatProbe, probe_format_bytes};
+    use super::{FormatProbe, probe_format_bytes, probe_odf_mimetype};
     use crate::{ParserConfig, test_support::build_test_cfb};
     use std::io::Write;
     use zip::write::FileOptions;
@@ -469,6 +478,16 @@ mod tests {
     #[test]
     fn probe_format_identifies_odt() {
         let probe = probe_format_bytes(&write_odt(), &ParserConfig::default());
+        assert_probe(probe, "odt", "zip-odf", "odt");
+    }
+
+    #[test]
+    fn probe_odf_mimetype_requires_exact_supported_type() {
+        let mut signals = Vec::new();
+        assert!(probe_odf_mimetype("application/not-opendocument.text", &mut signals).is_none());
+
+        let probe = probe_odf_mimetype("application/vnd.sun.xml.writer", &mut signals)
+            .expect("legacy ODF writer MIME");
         assert_probe(probe, "odt", "zip-odf", "odt");
     }
 
