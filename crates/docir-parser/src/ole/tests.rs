@@ -82,6 +82,14 @@ fn fat_table_rejects_incomplete_or_reserved_difat_entries() {
 }
 
 #[test]
+fn mini_fat_rejects_declared_chain_without_start_sector() {
+    assert!(matches!(
+        read_mini_fat_table(&[], 512, &[], END_OF_CHAIN, 1),
+        Err(ParseError::InvalidStructure(_))
+    ));
+}
+
+#[test]
 fn read_sector_and_stream_helpers_handle_bounds_and_chains() {
     let mut data = vec![0u8; 1536];
     data[512..1024].fill(1);

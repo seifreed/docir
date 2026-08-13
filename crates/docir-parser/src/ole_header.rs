@@ -141,8 +141,13 @@ pub(crate) fn read_mini_fat_table(
     first_mini_fat: u32,
     num_mini_fat: u32,
 ) -> Result<Vec<u32>, ParseError> {
-    if num_mini_fat == 0 || first_mini_fat == END_OF_CHAIN {
+    if num_mini_fat == 0 {
         return Ok(Vec::new());
+    }
+    if first_mini_fat == END_OF_CHAIN || first_mini_fat == FREE_SECT {
+        return Err(ParseError::InvalidStructure(
+            "OLE mini-FAT is declared but has no starting sector".to_string(),
+        ));
     }
     let mini_fat_stream =
         crate::ole::read_stream_from_fat(data, sector_size, fat, first_mini_fat, None)?;
