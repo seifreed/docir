@@ -283,6 +283,7 @@ pub(crate) fn track_xml_document_event(
 pub(crate) fn track_xml_root_event(
     event: &Event<'_>,
     root_name: &mut Option<Vec<u8>>,
+    depth: &mut usize,
     root_closed: &mut bool,
     file: &str,
 ) -> Result<(), ParseError> {
@@ -293,6 +294,11 @@ pub(crate) fn track_xml_root_event(
             }
             if root_name.is_none() {
                 *root_name = Some(start.name().as_ref().to_vec());
+                *depth = 1;
+            } else if root_name.as_deref() == Some(start.name().as_ref()) {
+                *depth = depth
+                    .checked_add(1)
+                    .ok_or_else(|| xml_error(file, "XML root nesting depth overflow"))?;
             }
         }
         Event::Empty(empty) => {
@@ -306,7 +312,16 @@ pub(crate) fn track_xml_root_event(
         }
         Event::End(end) => {
             if root_name.as_deref() == Some(end.name().as_ref()) {
-                *root_closed = true;
+                if *depth == 0 {
+                    return Err(xml_error(
+                        file,
+                        "XML document contains an unexpected closing root element",
+                    ));
+                }
+                *depth -= 1;
+                if *depth == 0 {
+                    *root_closed = true;
+                }
             }
         }
         Event::Eof => {
@@ -602,6 +617,28 @@ mod tests {
             Ok(XmlScanControl::Continue)
         })
         .expect_err("malformed xml should fail");
+        assert!(format!("{err}").contains("broken.xml"));
+    }
+
+    #[test]
+    fn track_xml_root_event_rejects_truncated_nested_same_name() {
+        let mut reader = Reader::from_str("<root><root></root>");
+        let mut buf = Vec::new();
+        let mut root_name = None;
+        let mut depth = 0;
+        let mut root_closed = false;
+        let err = scan_xml_events_with_reader(&mut reader, &mut buf, "broken.xml", |_, event| {
+            track_xml_root_event(
+                &event,
+                &mut root_name,
+                &mut depth,
+                &mut root_closed,
+                "broken.xml",
+            )?;
+            Ok(XmlScanControl::Continue)
+        })
+        .expect_err("nested root with missing outer close must fail");
+
         assert!(format!("{err}").contains("broken.xml"));
     }
 

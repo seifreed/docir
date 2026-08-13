@@ -156,10 +156,17 @@ pub(super) fn parse_ods_pivots_from_xml(
     let mut pivot_caches: Vec<NodeId> = Vec::new();
     let mut next_cache_id: u32 = 1;
     let mut root_name = None;
+    let mut root_depth = 0;
     let mut root_closed = false;
 
     scan_xml_events_with_reader(&mut reader, &mut buf, "content.xml", |reader, event| {
-        track_xml_root_event(&event, &mut root_name, &mut root_closed, "content.xml")?;
+        track_xml_root_event(
+            &event,
+            &mut root_name,
+            &mut root_depth,
+            &mut root_closed,
+            "content.xml",
+        )?;
         match event {
             Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"spreadsheet" => in_spreadsheet = true,

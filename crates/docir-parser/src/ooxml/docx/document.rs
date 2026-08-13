@@ -97,6 +97,7 @@ impl DocxParser {
         let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut root_name = None;
+        let mut root_depth = 0;
         let mut root_closed = false;
 
         scan_xml_events_with_reader(
@@ -107,6 +108,7 @@ impl DocxParser {
                 track_xml_root_event(
                     &event,
                     &mut root_name,
+                    &mut root_depth,
                     &mut root_closed,
                     "word/document.xml",
                 )?;
@@ -141,6 +143,7 @@ impl DocxParser {
         let mut reader = reader_from_str(xml);
         let mut buf = Vec::new();
         let mut root_name = None;
+        let mut root_depth = 0;
         let mut root_closed = false;
 
         scan_xml_events_with_reader(
@@ -151,6 +154,7 @@ impl DocxParser {
                 track_xml_root_event(
                     &event,
                     &mut root_name,
+                    &mut root_depth,
                     &mut root_closed,
                     "word/glossary/document.xml",
                 )?;

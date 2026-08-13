@@ -46,10 +46,17 @@ pub(crate) fn parse_workbook_info(xml: &str) -> Result<WorkbookInfo, ParseError>
     let mut pivot_cache_refs: Vec<PivotCacheRef> = Vec::new();
     let mut workbook_properties: Option<WorkbookProperties> = None;
     let mut root_name = None;
+    let mut root_depth = 0;
     let mut root_closed = false;
 
     scan_xml_events_with_reader(&mut reader, &mut buf, "xl/workbook.xml", |reader, event| {
-        track_xml_root_event(&event, &mut root_name, &mut root_closed, "xl/workbook.xml")?;
+        track_xml_root_event(
+            &event,
+            &mut root_name,
+            &mut root_depth,
+            &mut root_closed,
+            "xl/workbook.xml",
+        )?;
         let _ = dispatch_start_or_empty(reader, &event, |reader, e, is_start| {
             handle_workbook_event(
                 reader,
