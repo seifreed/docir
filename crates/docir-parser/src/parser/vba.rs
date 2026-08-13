@@ -8,6 +8,7 @@ type VbaProjectTextParse = (
 );
 
 const MAX_VBA_DECOMPRESSED_SIZE: usize = 10 * 1024 * 1024;
+const MAX_VBA_CHUNK_SIZE: usize = 4096;
 
 pub(super) fn parse_vba_project_text(text: &str) -> VbaProjectTextParse {
     let mut project_name = None;
@@ -127,7 +128,10 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
                     }
                     let token = u16::from_le_bytes([data[pos], data[pos + 1]]);
                     pos += 2;
-                    let (offset, length) = decode_copy_token(token, chunk_out.len());
+                    let (offset, length) = decode_copy_token(token, chunk_out.len())?;
+                    if chunk_out.len().checked_add(length)? > MAX_VBA_CHUNK_SIZE {
+                        return None;
+                    }
                     for _ in 0..length {
                         // offset == 0 indicates malformed token (would cause underflow)
                         // offset > chunk_out.len() would cause index out of bounds
@@ -159,24 +163,22 @@ pub(super) fn normalize_vba_source_text(data: &[u8]) -> String {
     text.replace("\r\n", "\n").replace('\r', "\n")
 }
 
-fn decode_copy_token(token: u16, decompressed_len: usize) -> (usize, usize) {
-    let mut bit_count = 0usize;
-    let mut val = if decompressed_len == 0 {
-        1
-    } else {
-        decompressed_len
-    };
-    while val > 0 {
-        bit_count += 1;
-        val >>= 1;
+fn decode_copy_token(token: u16, decompressed_len: usize) -> Option<(usize, usize)> {
+    if decompressed_len == 0 || decompressed_len > MAX_VBA_CHUNK_SIZE {
+        return None;
     }
-    let offset_bits = if bit_count < 4 { 4 } else { bit_count };
+    let bit_count = if decompressed_len <= 1 {
+        0
+    } else {
+        (usize::BITS - (decompressed_len - 1).leading_zeros()) as usize
+    };
+    let offset_bits = bit_count.clamp(4, 12);
     let length_bits = 16 - offset_bits;
     let offset_mask = (1u16 << offset_bits) - 1;
     let length_mask = (1u16 << length_bits) - 1;
     let offset = ((token >> length_bits) & offset_mask) as usize + 1;
     let length = (token & length_mask) as usize + 3;
-    (offset, length)
+    Some((offset, length))
 }
 
 #[cfg(test)]
@@ -277,5 +279,29 @@ mod tests {
         let payload = vec![b'A'; MAX_VBA_DECOMPRESSED_SIZE + 1];
 
         assert_eq!(vba_decompress(&payload), None);
+    }
+
+    #[test]
+    fn decode_copy_token_uses_spec_chunk_boundaries() {
+        assert_eq!(decode_copy_token(0xF000, 16), Some((16, 3)));
+        assert_eq!(decode_copy_token(0x7800, 17), Some((16, 3)));
+    }
+
+    #[test]
+    fn vba_decompress_rejects_copy_expansion_past_chunk_limit() {
+        let mut chunk = vec![0x00, b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H'];
+        const COPY_GROUP: [u8; 17] = [
+            0xFF, 0x0F, 0x00, 0x0F, 0x00, 0x0F, 0x00, 0x0F, 0x00, 0x0F, 0x00, 0x0F, 0x00, 0x0F,
+            0x00, 0x0F, 0x00,
+        ];
+        for _ in 0..40 {
+            chunk.extend_from_slice(&COPY_GROUP);
+        }
+        let chunk_size = u16::try_from(chunk.len() - 3).expect("test chunk size");
+        let mut encoded = vec![0x01];
+        encoded.extend_from_slice(&(0x8000 | chunk_size).to_le_bytes());
+        encoded.extend_from_slice(&chunk);
+
+        assert_eq!(vba_decompress(&encoded), None);
     }
 }
