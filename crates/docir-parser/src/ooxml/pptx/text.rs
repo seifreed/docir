@@ -79,16 +79,13 @@ fn parse_text_paragraph(
                     runs.push(run);
                 }
                 b"br" => {
-                    runs.push(ShapeTextRun {
-                        text: "\n".to_string(),
-                        bold: None,
-                        italic: None,
-                        font_size: None,
-                        font_family: None,
-                    });
+                    runs.push(line_break_run());
                 }
                 _ => {}
             },
+            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"br" => {
+                runs.push(line_break_run());
+            }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"p" => {
                 break;
             }
@@ -107,6 +104,16 @@ fn parse_text_paragraph(
     }
 
     Ok(ShapeTextParagraph { runs, alignment })
+}
+
+fn line_break_run() -> ShapeTextRun {
+    ShapeTextRun {
+        text: "\n".to_string(),
+        bold: None,
+        italic: None,
+        font_size: None,
+        font_family: None,
+    }
 }
 
 fn parse_text_run(
@@ -239,6 +246,24 @@ mod tests {
 
         assert_eq!(text.paragraphs.len(), 1);
         assert!(text.paragraphs[0].runs.is_empty());
+    }
+
+    #[test]
+    fn parse_text_paragraph_preserves_empty_line_break() {
+        let xml = r#"
+            <a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:r><a:t>before</a:t></a:r>
+              <a:br/>
+              <a:r><a:t>after</a:t></a:r>
+            </a:p>
+        "#;
+        let mut reader = reader_after_start(xml, b"p");
+
+        let paragraph = parse_text_paragraph(&mut reader, "ppt/slides/line-break.xml")
+            .expect("empty line break should parse");
+
+        assert_eq!(paragraph.runs.len(), 3);
+        assert_eq!(paragraph.runs[1].text, "\n");
     }
 
     #[test]
