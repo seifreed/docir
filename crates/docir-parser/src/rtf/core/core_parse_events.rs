@@ -23,9 +23,9 @@ pub(crate) fn parse_control(
     ctx: &mut RtfParseContext,
     store: &mut IrStore,
 ) -> Result<(), ParseError> {
-    let Some(next) = cursor.next() else {
-        return Ok(());
-    };
+    let next = cursor.next().ok_or_else(|| {
+        ParseError::InvalidStructure("RTF ends after a control escape".to_string())
+    })?;
 
     if try_handle_simple_control(cursor, ctx, next)? {
         return Ok(());
@@ -52,15 +52,23 @@ fn try_handle_simple_control(
             return Ok(true);
         }
         b'\'' => {
-            let Some(hi) = cursor.next() else {
-                return Ok(true);
-            };
-            let Some(lo) = cursor.next() else {
-                return Ok(true);
-            };
-            if let (Some(h), Some(l)) = (hex_val(hi), hex_val(lo)) {
-                append_text_byte(ctx, (h << 4) | l);
-            }
+            let hi = cursor.next().ok_or_else(|| {
+                ParseError::InvalidStructure(
+                    "RTF hex escape is missing its high nibble".to_string(),
+                )
+            })?;
+            let lo = cursor.next().ok_or_else(|| {
+                ParseError::InvalidStructure("RTF hex escape is missing its low nibble".to_string())
+            })?;
+            let h = hex_val(hi).ok_or_else(|| {
+                ParseError::InvalidStructure(
+                    "RTF hex escape has an invalid high nibble".to_string(),
+                )
+            })?;
+            let l = hex_val(lo).ok_or_else(|| {
+                ParseError::InvalidStructure("RTF hex escape has an invalid low nibble".to_string())
+            })?;
+            append_text_byte(ctx, (h << 4) | l);
             return Ok(true);
         }
         b'*' => {

@@ -231,6 +231,28 @@ fn parse_rtf_rejects_unmatched_closing_groups() {
 }
 
 #[test]
+fn parse_rtf_rejects_trailing_control_escape() {
+    let parser = RtfParser::new();
+    let err = parser
+        .parse_bytes(b"{\\rtf1\\ansi text}\\")
+        .expect_err("trailing RTF control escape must fail");
+
+    assert!(
+        matches!(err, ParseError::InvalidStructure(message) if message.contains("control escape"))
+    );
+}
+
+#[test]
+fn parse_rtf_rejects_incomplete_hex_escape() {
+    let parser = RtfParser::new();
+    let err = parser
+        .parse_bytes(b"{\\rtf1\\ansi text}\\'A")
+        .expect_err("incomplete RTF hex escape must fail");
+
+    assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("low nibble")));
+}
+
+#[test]
 fn parse_reader_enforces_max_input_size_before_parse() {
     let config = ParserConfig {
         max_input_size: 8,
