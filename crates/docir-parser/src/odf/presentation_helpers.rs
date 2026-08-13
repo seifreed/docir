@@ -229,6 +229,12 @@ fn parse_shape_text(
                     alignment: None,
                 });
             }
+            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"p" => {
+                paragraphs.push(ShapeTextParagraph {
+                    runs: Vec::new(),
+                    alignment: None,
+                });
+            }
             Ok(Event::End(e)) if e.name().as_ref() == end_tag => {
                 break;
             }

@@ -36,6 +36,7 @@ fn parse_draw_page_extracts_metadata_transition_notes_and_shape_text() {
     <d:frame d:name="TitleShape">
       <d:text-box>
         <t:p>Hello ODP</t:p>
+        <t:p/>
       </d:text-box>
     </d:frame>
     <p:notes>
@@ -71,8 +72,9 @@ fn parse_draw_page_extracts_metadata_transition_notes_and_shape_text() {
     assert_eq!(shape.name.as_deref(), Some("TitleShape"));
     assert_eq!(shape.shape_type, ShapeType::TextBox);
     let text = shape.text.as_ref().expect("expected shape text");
-    assert_eq!(text.paragraphs.len(), 1);
+    assert_eq!(text.paragraphs.len(), 2);
     assert_eq!(text.paragraphs[0].runs[0].text, "Hello ODP");
+    assert!(text.paragraphs[1].runs.is_empty());
 }
 
 #[test]
