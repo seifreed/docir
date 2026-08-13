@@ -96,6 +96,37 @@ fn parse_ods_table_evaluates_formula_and_flushes_validations() {
 }
 
 #[test]
+fn parse_ods_table_rejects_row_index_overflow_without_limits() {
+    let xml: &[u8] =
+        br#"<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <table:table>
+    <table:table-row table:number-rows-repeated="4294967295"/>
+    <table:table-row/>
+  </table:table>
+</office:spreadsheet>"#;
+    let (mut reader, table_start) = parse_table_start(xml);
+    let mut config = ParserConfig::default();
+    config.odf.max_rows = None;
+    let limits = OdfLimits::new(&config, false);
+    let mut store = IrStore::new();
+
+    let err = parse_ods_table(
+        &mut reader,
+        &table_start,
+        1,
+        &mut store,
+        &HashMap::new(),
+        &limits,
+    )
+    .expect_err("row index overflow must be rejected");
+
+    assert!(
+        matches!(err, ParseError::InvalidStructure(message) if message.contains("row index overflow"))
+    );
+}
+
+#[test]
 fn parse_ods_table_accepts_alternate_namespace_prefixes() {
     let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
 <pkg:spreadsheet xmlns:pkg="urn:oasis:names:tc:opendocument:xmlns:office:1.0"

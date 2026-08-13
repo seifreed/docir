@@ -44,6 +44,13 @@ struct FastTableContext<'a> {
     validation_ranges: &'a mut HashMap<String, Vec<String>>,
 }
 
+fn advance_row_index(row_idx: &mut u32, rows: u32) -> Result<(), ParseError> {
+    *row_idx = row_idx
+        .checked_add(rows)
+        .ok_or_else(|| ParseError::InvalidStructure("ODF row index overflow".to_string()))?;
+    Ok(())
+}
+
 pub(crate) fn parse_ods_table(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
@@ -220,7 +227,7 @@ fn handle_table_start_full(
                     limits,
                     &mut row_state,
                 )?;
-                *row_idx += 1;
+                advance_row_index(row_idx, 1)?;
             }
         }
         b"frame" => {
@@ -255,7 +262,7 @@ fn handle_table_empty_full(
         b"table-row" => {
             let row_repeat = row_repeat_from(empty)?;
             limits.bump_rows(row_repeat as u64)?;
-            *row_idx += row_repeat;
+            advance_row_index(row_idx, row_repeat)?;
         }
         b"frame" => {
             if let Some(shape_id) = spreadsheet::parse_draw_frame_spreadsheet(reader, empty, store)?
@@ -315,14 +322,14 @@ fn handle_table_start_fast(
                         limits,
                         validation_ranges,
                     )?;
-                    *row_idx += 1;
+                    advance_row_index(row_idx, 1)?;
                 }
                 if row_repeat > repeat {
-                    *row_idx += row_repeat - repeat;
+                    advance_row_index(row_idx, row_repeat - repeat)?;
                 }
             } else {
                 spreadsheet::skip_element(reader, start.name().as_ref())?;
-                *row_idx += row_repeat;
+                advance_row_index(row_idx, row_repeat)?;
             }
         }
         b"frame" => {
@@ -341,7 +348,7 @@ fn handle_table_empty_fast(
     if local_name(empty.name().as_ref()) == b"table-row" {
         let row_repeat = row_repeat_from(empty)?;
         limits.bump_rows(row_repeat as u64)?;
-        *row_idx += row_repeat;
+        advance_row_index(row_idx, row_repeat)?;
     }
     Ok(())
 }
@@ -441,4 +448,22 @@ fn ods_cell_u32_attr(start: &BytesStart<'_>, suffix: &[u8]) -> Result<Option<u32
             Ok(parsed)
         })
         .transpose()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::advance_row_index;
+    use crate::error::ParseError;
+
+    #[test]
+    fn advance_row_index_rejects_overflow() {
+        let mut row_idx = u32::MAX;
+
+        let err = advance_row_index(&mut row_idx, 1).expect_err("row index must not wrap");
+
+        assert!(
+            matches!(err, ParseError::InvalidStructure(message) if message.contains("row index overflow"))
+        );
+        assert_eq!(row_idx, u32::MAX);
+    }
 }
