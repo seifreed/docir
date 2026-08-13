@@ -84,17 +84,26 @@ impl Relationships {
                         Ok(())
                     })?;
 
-                    if let (Some(id), Some(rel_type), Some(target)) = (id, rel_type, target) {
-                        let rel = Relationship {
-                            id: id.clone(),
-                            rel_type: rel_type.clone(),
-                            target,
-                            target_mode,
-                        };
+                    let id = id.ok_or_else(|| {
+                        ParseError::InvalidStructure(format!("{path} relationship is missing Id"))
+                    })?;
+                    let rel_type = rel_type.ok_or_else(|| {
+                        ParseError::InvalidStructure(format!("{path} relationship is missing Type"))
+                    })?;
+                    let target = target.ok_or_else(|| {
+                        ParseError::InvalidStructure(format!(
+                            "{path} relationship is missing Target"
+                        ))
+                    })?;
+                    let rel = Relationship {
+                        id: id.clone(),
+                        rel_type: rel_type.clone(),
+                        target,
+                        target_mode,
+                    };
 
-                        rels.by_type.entry(rel_type).or_default().push(id.clone());
-                        rels.by_id.insert(id, rel);
-                    }
+                    rels.by_type.entry(rel_type).or_default().push(id.clone());
+                    rels.by_id.insert(id, rel);
                 }
                 Event::Eof => break,
                 _ => {}
@@ -262,6 +271,29 @@ mod tests {
         match Relationships::parse(xml).expect_err("invalid relationship entity must fail") {
             ParseError::Xml { file, .. } => assert_eq!(file, ".rels"),
             other => panic!("expected XML error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_rejects_relationships_missing_required_attributes() {
+        for xml in [
+            r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Type="http://example.test/type" Target="document.xml"/>
+            </Relationships>
+            "#,
+            r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Target="document.xml"/>
+            </Relationships>
+            "#,
+            r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://example.test/type"/>
+            </Relationships>
+            "#,
+        ] {
+            assert!(Relationships::parse(xml).is_err());
         }
     }
 
