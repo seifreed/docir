@@ -20,7 +20,9 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
     sig.span = Some(SourceSpan::new(path));
 
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
 
     let mut buf = Vec::new();
     let mut depth = 0usize;

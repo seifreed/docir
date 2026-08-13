@@ -22,7 +22,9 @@ type FormulaAttrs = (
 
 pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
 
     let mut chain = CalcChain::new();
     chain.span = Some(SourceSpan::new(path));

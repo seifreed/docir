@@ -14,7 +14,9 @@ pub fn parse_vml_drawing(
     rels: &Relationships,
 ) -> Result<(VmlDrawing, Vec<VmlShape>), ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
 
     let mut drawing = VmlDrawing::new(path);
     drawing.span = Some(SourceSpan::new(path));

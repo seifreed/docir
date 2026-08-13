@@ -28,7 +28,9 @@ pub(super) fn parse_presentation_properties(
     props.span = Some(SourceSpan::new(path));
 
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut root_closed = false;
@@ -94,7 +96,9 @@ pub(super) fn parse_view_properties(xml: &str, path: &str) -> Result<ViewPropert
     props.span = Some(SourceSpan::new(path));
 
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut root_closed = false;
@@ -174,7 +178,9 @@ pub(super) fn parse_table_styles(xml: &str, path: &str) -> Result<TableStyleSet,
     styles.span = Some(SourceSpan::new(path));
 
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut root_closed = false;
@@ -230,7 +236,9 @@ pub(super) fn parse_presentation_tags(
 ) -> Result<Vec<PresentationTag>, ParseError> {
     let mut tags: Vec<PresentationTag> = Vec::new();
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut root_closed = false;
@@ -276,7 +284,9 @@ pub(super) fn parse_presentation_tags(
 
 pub(super) fn parse_smartart_part(xml: &str, path: &str) -> Result<SmartArtPart, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut root = None;
     let mut point_count: u32 = 0;
@@ -365,7 +375,9 @@ pub(super) fn parse_slide_master_meta(
 ) -> Result<SlideMasterMeta, ParseError> {
     let mut meta = SlideMasterMeta::default();
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut root_closed = false;
@@ -422,7 +434,9 @@ pub(super) fn parse_slide_layout_meta(
 ) -> Result<SlideLayoutMeta, ParseError> {
     let mut meta = SlideLayoutMeta::default();
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut root_closed = false;

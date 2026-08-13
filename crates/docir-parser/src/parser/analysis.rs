@@ -13,7 +13,9 @@ pub(super) fn parse_activex_xml(
     use quick_xml::events::Event;
 
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut control = docir_core::security::ActiveXControl::new();
 
@@ -66,7 +68,9 @@ pub(super) fn parse_smartart_part(
     use quick_xml::events::Event;
 
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
 
     let mut root_element: Option<String> = None;
@@ -143,7 +147,9 @@ pub(super) fn parse_chart_data(
     let mut state = ChartParseState::new(chart_path);
 
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut root_closed = false;
@@ -477,5 +483,17 @@ mod tests {
         )
         .expect_err("truncated chart must fail");
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "xl/charts/truncated.xml"));
+    }
+
+    #[test]
+    fn parse_chart_data_rejects_mismatched_nested_end_tag() {
+        let mut store = IrStore::new();
+        let err = parse_chart_data(
+            "<c:chart><c:title></c:titlex></c:chart>",
+            "xl/charts/mismatched.xml",
+            &mut store,
+        )
+        .expect_err("mismatched XML must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "xl/charts/mismatched.xml"));
     }
 }

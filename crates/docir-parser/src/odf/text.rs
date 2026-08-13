@@ -49,7 +49,9 @@ pub(super) fn parse_content_text(
         return parse_content_spreadsheet_fast(xml, store, limits);
     }
     let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
-    reader.config_mut().trim_text(false);
+    let config = reader.config_mut();
+    config.trim_text(false);
+    config.check_end_names = true;
     let mut buf = Vec::new();
 
     let mut section = Section::new();

@@ -14,7 +14,9 @@ pub(crate) fn parse_odf_headers_footers(
     config: &ParserConfig,
 ) -> Result<(Vec<NodeId>, Vec<NodeId>), ParseError> {
     let mut reader = Reader::from_reader(std::io::Cursor::new(xml.as_bytes()));
-    reader.config_mut().trim_text(false);
+    let reader_config = reader.config_mut();
+    reader_config.trim_text(false);
+    reader_config.check_end_names = true;
     let mut buf = Vec::new();
     let mut headers = Vec::new();
     let mut footers = Vec::new();

@@ -15,7 +15,9 @@ impl DocxParser {
     pub fn parse_numbering(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let mut set = NumberingSet::new();
         let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let config = reader.config_mut();
+        config.trim_text(true);
+        config.check_end_names = true;
         let mut buf = Vec::new();
 
         let mut current_abs: Option<u32> = None;

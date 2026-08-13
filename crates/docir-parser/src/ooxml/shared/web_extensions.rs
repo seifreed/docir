@@ -14,7 +14,9 @@ pub fn parse_web_extension(xml: &str, path: &str) -> Result<WebExtension, ParseE
 
 fn parse_web_extension_impl(xml: &str, path: &str) -> Result<WebExtension, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
 
     let mut ext = WebExtension::new();
     ext.span = Some(SourceSpan::new(path));
@@ -67,7 +69,9 @@ pub fn parse_web_extension_taskpanes(
     path: &str,
 ) -> Result<Vec<WebExtensionTaskpane>, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
 
     let mut panes: Vec<WebExtensionTaskpane> = Vec::new();
     let mut current: Option<WebExtensionTaskpane> = None;

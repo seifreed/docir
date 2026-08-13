@@ -15,7 +15,9 @@ pub fn parse_drawingml_part(
     rels: &Relationships,
 ) -> Result<(DrawingPart, Vec<Shape>), ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
 
     let mut part = DrawingPart::new(path);
     part.span = Some(SourceSpan::new(path));

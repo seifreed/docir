@@ -14,7 +14,9 @@ pub(super) fn parse_content_presentation(
     _limits: &dyn OdfLimitCounter,
 ) -> Result<OdfContentResult, ParseError> {
     let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut in_presentation = false;
     let mut slide_no = 1u32;
@@ -168,6 +170,18 @@ mod tests {
 
         let err = parse_content_presentation(xml, &mut store, &limits)
             .expect_err("truncated presentation document must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+    }
+
+    #[test]
+    fn parse_content_presentation_rejects_mismatched_nested_end_tag() {
+        let xml: &[u8] =
+            br#"<office:document-content><office:body></office:bodyx></office:document-content>"#;
+        let mut store = IrStore::new();
+        let limits = OdfLimits::new(&ParserConfig::default(), false);
+
+        let err = parse_content_presentation(xml, &mut store, &limits)
+            .expect_err("mismatched XML must fail");
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
     }
 }

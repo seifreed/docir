@@ -16,7 +16,9 @@ pub(super) fn parse_sheet_comments_impl(
     flavor: CommentFlavor,
 ) -> Result<Vec<SheetComment>, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
 
     let mut buf = Vec::new();
     let mut state = CommentParseState::default();

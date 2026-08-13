@@ -17,7 +17,9 @@ impl PptxParser {
         zip: &mut impl PackageReader,
     ) -> Result<Vec<NodeId>, ParseError> {
         let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let config = reader.config_mut();
+        config.trim_text(true);
+        config.check_end_names = true;
         let mut buf = Vec::new();
         let mut shapes = Vec::new();
         let mut root_name: Option<Vec<u8>> = None;

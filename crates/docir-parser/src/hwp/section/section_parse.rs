@@ -108,7 +108,9 @@ pub(crate) fn parse_hwpx_section(
     media_lookup: &HashMap<String, NodeId>,
 ) -> Result<Vec<NodeId>, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(false);
+    let config = reader.config_mut();
+    config.trim_text(false);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut state = HwpxSectionState::new();
     let mut depth = 0usize;

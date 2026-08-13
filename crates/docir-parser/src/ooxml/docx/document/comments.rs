@@ -34,7 +34,9 @@ impl DocxParser {
     pub fn parse_comments_extended(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let mut set = CommentExtensionSet::new();
         let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let config = reader.config_mut();
+        config.trim_text(true);
+        config.check_end_names = true;
         let mut buf = Vec::new();
         let mut depth = 0usize;
         let mut root_closed = false;
@@ -84,7 +86,9 @@ impl DocxParser {
     pub fn parse_comments_ids(&mut self, xml: &str) -> Result<NodeId, ParseError> {
         let mut map = CommentIdMap::new();
         let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
+        let config = reader.config_mut();
+        config.trim_text(true);
+        config.check_end_names = true;
         let mut buf = Vec::new();
         let mut depth = 0usize;
         let mut root_closed = false;
@@ -134,7 +138,9 @@ fn parse_comments_like(
     kind: Option<NoteKind>,
 ) -> Result<Vec<NodeId>, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut nodes = Vec::new();
     let mut root_name: Option<Vec<u8>> = None;

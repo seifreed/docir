@@ -216,7 +216,9 @@ impl Default for PptxParser {
 
 fn parse_slide_list(xml: &str) -> Result<Vec<String>, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
 
     let mut buf = Vec::new();
     let mut slide_ids = Vec::new();
@@ -323,7 +325,9 @@ fn apply_show_properties(
 
 fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationInfo>, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
 
     let mut info = PresentationInfo::new();
     let mut buf = Vec::new();
@@ -378,7 +382,9 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
 
 fn extract_c_sld_name(xml: &str, path: &str) -> Result<Option<String>, ParseError> {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut depth = 0usize;
     let mut root_closed = false;
@@ -415,7 +421,9 @@ fn parse_notes_slide(
     slide.shapes = shapes;
 
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.check_end_names = true;
     let mut buf = Vec::new();
     let mut text = String::new();
     let mut depth = 0usize;
