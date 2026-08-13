@@ -7,8 +7,8 @@ use crate::ooxml::part_utils::{
 };
 use crate::ooxml::relationships::{Relationship, Relationships, TargetMode, rel_type};
 use crate::xml_utils::{
-    attr_u64_from_bytes, local_name, read_event, try_attr_value, try_attr_value_by_suffix,
-    xml_error,
+    attr_u64_from_bytes, local_name, read_event, track_xml_document_event, try_attr_value,
+    try_attr_value_by_suffix, xml_error,
 };
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
@@ -220,20 +220,24 @@ fn parse_slide_list(xml: &str) -> Result<Vec<String>, ParseError> {
 
     let mut buf = Vec::new();
     let mut slide_ids = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(e)) | Ok(Event::Start(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error("ppt/presentation.xml", err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, "ppt/presentation.xml")? {
+            break;
+        }
+        match event {
+            Event::Empty(e) | Event::Start(e) => {
                 if local_name(e.name().as_ref()) == b"sldId"
                     && let Some(rel_id) =
                         try_attr_value_by_suffix(&e, &[b":id"], "ppt/presentation.xml")?
                 {
                     slide_ids.push(rel_id);
                 }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error("ppt/presentation.xml", e));
             }
             _ => {}
         }
@@ -324,10 +328,18 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
     let mut info = PresentationInfo::new();
     let mut buf = Vec::new();
     let mut found = false;
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
                 let name_bytes = e.name().as_ref().to_vec();
                 let name = name_bytes.as_slice();
                 let name = local_name(name);
@@ -356,10 +368,6 @@ fn parse_presentation_info(xml: &str, path: &str) -> Result<Option<PresentationI
                     found = true;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
-            }
             _ => {}
         }
         buf.clear();
@@ -372,18 +380,25 @@ fn extract_c_sld_name(xml: &str, path: &str) -> Result<Option<String>, ParseErro
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
+    let mut name = None;
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref().ends_with(b"cSld") => {
-                return try_attr_value(&e, b"name", path);
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) if e.name().as_ref().ends_with(b"cSld") => {
+                name = try_attr_value(&e, b"name", path)?;
             }
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error(path, e)),
             _ => {}
         }
         buf.clear();
     }
-    Ok(None)
+    Ok(name)
 }
 
 fn parse_notes_slide(
@@ -403,10 +418,18 @@ fn parse_notes_slide(
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut text = String::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Text(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Text(e) => {
                 let value =
                     crate::xml_utils::decoded_text(&e).map_err(|err| xml_error(path, err))?;
                 if !text.is_empty() {
@@ -414,17 +437,13 @@ fn parse_notes_slide(
                 }
                 text.push_str(&value);
             }
-            Ok(Event::GeneralRef(e)) => {
+            Event::GeneralRef(e) => {
                 let value = crate::xml_utils::decoded_general_ref(&e)
                     .map_err(|err| xml_error(path, err))?;
                 if !text.is_empty() {
                     text.push(' ');
                 }
                 text.push_str(&value);
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
             }
             _ => {}
         }

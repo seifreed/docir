@@ -133,6 +133,12 @@ fn test_parse_slide_layout_reports_malformed_csld_name_attributes() {
 }
 
 #[test]
+fn test_extract_c_sld_name_rejects_truncated_root() {
+    let xml = r#"<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld name="Master">"#;
+    assert!(extract_c_sld_name(xml, "ppt/slideMasters/slideMaster1.xml").is_err());
+}
+
+#[test]
 fn test_parse_notes_and_handout_master_shapes() {
     let notes_master_xml = r#"
         <p:notesMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"

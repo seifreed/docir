@@ -228,6 +228,23 @@ fn test_parse_notes_slide_reports_xml_error_for_malformed_input() {
 }
 
 #[test]
+fn test_parse_notes_slide_rejects_truncated_root() {
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+    let err = parse_notes_slide(
+        "<p:notes xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"><p:cSld>",
+        "ppt/notesSlides/notesSlide-truncated.xml",
+        &Relationships::default(),
+        &mut parser,
+        &mut zip,
+    )
+    .expect_err("truncated notes slide must fail");
+    assert!(
+        matches!(err, ParseError::Xml { file, .. } if file == "ppt/notesSlides/notesSlide-truncated.xml")
+    );
+}
+
+#[test]
 fn parse_presentation_reports_unreadable_notes_slide() {
     let presentation_xml = r#"
         <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"

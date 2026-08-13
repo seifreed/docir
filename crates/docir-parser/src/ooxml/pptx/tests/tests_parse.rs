@@ -68,6 +68,12 @@ fn test_parse_slide_list_reports_malformed_relationship_attributes() {
 }
 
 #[test]
+fn test_parse_slide_list_rejects_truncated_root() {
+    let xml = r#"<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldIdLst><p:sldId r:id="rId1"/>"#;
+    assert!(parse_slide_list(xml).is_err());
+}
+
+#[test]
 fn test_parse_presentation_info() {
     let xml = r#"
         <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -155,6 +161,12 @@ fn test_parse_presentation_info_reports_malformed_first_slide_number() {
         ParseError::Xml { file, .. } => assert_eq!(file, "ppt/presentation.xml"),
         other => panic!("unexpected error: {other:?}"),
     }
+}
+
+#[test]
+fn test_parse_presentation_info_rejects_truncated_root() {
+    let xml = r#"<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldSz cx="9144000" cy="6858000">"#;
+    assert!(parse_presentation_info(xml, "ppt/presentation.xml").is_err());
 }
 
 #[test]
