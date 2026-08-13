@@ -55,9 +55,7 @@ impl OoxmlParser {
             let (start_row, start_col) = range.start().unwrap_or((0, 0));
             let mut cell_ids = Vec::new();
             for (row, col, value) in range.used_cells() {
-                let abs_row = start_row + row as u32;
-                let abs_col = start_col + col as u32;
-                let reference = format!("{}{}", column_to_letter(abs_col), abs_row + 1);
+                let (reference, abs_row, abs_col) = xlsb_cell((start_row, start_col), (row, col))?;
                 let mut cell = Cell::new(reference, abs_col, abs_row);
                 cell.value = match value {
                     Data::Empty => CellValue::Empty,
@@ -92,13 +90,33 @@ impl OoxmlParser {
     }
 }
 
+fn xlsb_cell(start: (u32, u32), offset: (usize, usize)) -> Result<(String, u32, u32), ParseError> {
+    let row_offset = u32::try_from(offset.0).map_err(|_| {
+        ParseError::InvalidStructure("XLSB row offset does not fit in u32".to_string())
+    })?;
+    let col_offset = u32::try_from(offset.1).map_err(|_| {
+        ParseError::InvalidStructure("XLSB column offset does not fit in u32".to_string())
+    })?;
+    let row = start
+        .0
+        .checked_add(row_offset)
+        .ok_or_else(|| ParseError::InvalidStructure("XLSB row coordinate overflow".to_string()))?;
+    let col = start.1.checked_add(col_offset).ok_or_else(|| {
+        ParseError::InvalidStructure("XLSB column coordinate overflow".to_string())
+    })?;
+    let row_number = row
+        .checked_add(1)
+        .ok_or_else(|| ParseError::InvalidStructure("XLSB row number overflow".to_string()))?;
+    Ok((format!("{}{}", column_to_letter(col), row_number), row, col))
+}
+
 fn xlsb_sheet_error(name: &str, err: calamine::XlsbError) -> ParseError {
     ParseError::InvalidFormat(format!("XLSB sheet '{name}' parse error: {err}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::xlsb_sheet_error;
+    use super::{xlsb_cell, xlsb_sheet_error};
     use crate::ParseError;
 
     #[test]
@@ -112,5 +130,15 @@ mod tests {
             }
             other => panic!("expected invalid XLSB sheet error, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn xlsb_cell_rejects_coordinate_overflow() {
+        assert!(xlsb_cell((u32::MAX, 0), (0, 0)).is_err());
+        assert!(xlsb_cell((0, u32::MAX), (0, 1)).is_err());
+        assert_eq!(
+            xlsb_cell((4, 1), (2, 3)).expect("cell"),
+            ("E7".to_string(), 6, 4)
+        );
     }
 }
