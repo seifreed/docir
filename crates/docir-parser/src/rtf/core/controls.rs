@@ -291,6 +291,7 @@ mod tests {
             style: crate::rtf::core::state::RtfStyleState::default(),
             unicode_fallback_count: ctx.unicode_fallback_count,
             unicode_skip: ctx.unicode_skip,
+            unicode_high_surrogate: ctx.unicode_high_surrogate,
         });
         ctx.current_paragraph = Some(Paragraph::new());
         assert!(handle_group_controls("ls", Some(5), &mut ctx).expect("ls pending"));
