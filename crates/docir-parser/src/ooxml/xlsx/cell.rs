@@ -3,7 +3,8 @@ use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::visit_attributes;
 use crate::xml_utils::{
-    XmlScanControl, decoded_text, local_name, scan_xml_events_with_reader, xml_error,
+    XmlScanControl, decoded_text, is_end_event_local, local_name, scan_xml_events_until_end,
+    xml_error,
 };
 use docir_core::ir::{Cell, CellFormula, CellValue};
 use docir_core::types::SourceSpan;
@@ -91,25 +92,26 @@ impl CellContents {
             formula: None,
         };
         let mut buf = Vec::new();
-        scan_xml_events_with_reader(reader, &mut buf, sheet_path, |reader, event| {
-            contents.handle_event(reader, event, sheet_path)
-        })?;
+        scan_xml_events_until_end(
+            reader,
+            &mut buf,
+            sheet_path,
+            |event| is_end_event_local(event, b"c"),
+            |reader, event| contents.handle_event(reader, event, sheet_path),
+        )?;
         Ok(contents)
     }
 
     fn handle_event(
         &mut self,
         reader: &mut Reader<&[u8]>,
-        event: Event<'_>,
+        event: &Event<'_>,
         sheet_path: &str,
     ) -> Result<XmlScanControl, ParseError> {
         match event {
-            Event::Start(e) => self.handle_start(reader, &e, sheet_path)?,
+            Event::Start(e) => self.handle_start(reader, e, sheet_path)?,
             Event::Empty(e) if local_name(e.name().as_ref()) == b"f" => {
-                self.formula = Some(super::parse_formula_empty(&e, sheet_path)?);
-            }
-            Event::End(e) if local_name(e.name().as_ref()) == b"c" => {
-                return Ok(XmlScanControl::Break);
+                self.formula = Some(super::parse_formula_empty(e, sheet_path)?);
             }
             _ => {}
         }
@@ -255,6 +257,15 @@ mod tests {
             ParseError::InvalidStructure(msg) => assert!(msg.contains("missing reference")),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_cell_rejects_truncated_xml() {
+        let mut parser = XlsxParser::new();
+        let err = parse_cell_from_xml(&mut parser, r#"<c r="A1"><v>1</v>"#)
+            .expect_err("truncated cell must fail");
+
+        assert!(matches!(err, ParseError::Xml { .. }));
     }
 
     #[test]
