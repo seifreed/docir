@@ -5,8 +5,9 @@ use docir_app::{
     ArtifactExtractionOptions, ExportDocumentRef, ParserConfig, Phase0ArtifactManifestExport,
     extract_artifacts_from_bytes,
 };
+use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::commands::util::{build_app, prepare_output_dir, source_format_label};
 
@@ -47,8 +48,10 @@ pub fn run(
     );
 
     let mut manifest = bundle.manifest;
+    let mut written_paths = HashSet::from([String::from("manifest.json")]);
     for payload in bundle.payloads {
-        let output_path = out_dir.join(&payload.relative_path);
+        let relative_path = unique_relative_path(&payload.relative_path, &mut written_paths);
+        let output_path = out_dir.join(&relative_path);
         // Validate that the output path stays within the output directory
         // to prevent path traversal via malicious relative_path values.
         // Use the parent directory (which must exist) for canonicalization,
@@ -79,7 +82,7 @@ pub fn run(
             .iter_mut()
             .find(|artifact| artifact.id == payload.artifact_id)
         {
-            artifact.output_path = Some(payload.relative_path);
+            artifact.output_path = Some(relative_path);
         }
     }
 
@@ -98,12 +101,59 @@ pub fn run(
     Ok(())
 }
 
+fn unique_relative_path(relative_path: &str, used_paths: &mut HashSet<String>) -> String {
+    if used_paths.insert(relative_path.to_string()) {
+        return relative_path.to_string();
+    }
+
+    let path = Path::new(relative_path);
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty());
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("artifact");
+    let extension = path.extension().and_then(|extension| extension.to_str());
+    let mut suffix = 2usize;
+
+    loop {
+        let file_name = match extension {
+            Some(extension) => format!("{stem}_{suffix}.{extension}"),
+            None => format!("{stem}_{suffix}"),
+        };
+        let candidate = parent
+            .map(|parent| parent.join(&file_name))
+            .unwrap_or_else(|| PathBuf::from(&file_name));
+        let candidate = candidate.to_string_lossy().into_owned();
+        if used_paths.insert(candidate.clone()) {
+            return candidate;
+        }
+        suffix += 1;
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ExtractArtifactsOptions, run};
+    use super::{ExtractArtifactsOptions, run, unique_relative_path};
     use crate::test_support;
     use docir_app::{ParserConfig, test_support::build_test_cfb};
+    use std::collections::HashSet;
     use std::fs;
+
+    #[test]
+    fn unique_relative_path_suffixes_colliding_payload_names() {
+        let mut used = HashSet::from([String::from("payloads/payload.bin")]);
+
+        assert_eq!(
+            unique_relative_path("payloads/payload.bin", &mut used),
+            "payloads/payload_2.bin"
+        );
+        assert_eq!(
+            unique_relative_path("payloads/payload.bin", &mut used),
+            "payloads/payload_3.bin"
+        );
+    }
 
     #[test]
     fn extract_artifacts_rtf_writes_manifest_and_blob() {
