@@ -59,6 +59,13 @@ pub(crate) fn parse_table(
     Ok(id)
 }
 
+pub(crate) fn parse_empty_table(parser: &mut DocxParser) -> NodeId {
+    let table = Table::new();
+    let id = table.id;
+    parser.store.insert(docir_core::ir::IRNode::Table(table));
+    id
+}
+
 pub(crate) fn parse_table_row(
     parser: &mut DocxParser,
     reader: &mut Reader<&[u8]>,
@@ -123,9 +130,11 @@ pub(crate) fn parse_table_cell(
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"p" => {
-                cell.content.push(parse_empty_paragraph(parser, reader));
-            }
+            Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+                b"p" => cell.content.push(parse_empty_paragraph(parser, reader)),
+                b"tbl" => cell.content.push(parse_empty_table(parser)),
+                _ => {}
+            },
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tc" => {
                 break;
             }
