@@ -76,6 +76,17 @@ fn parse_draw_page_extracts_metadata_transition_notes_and_shape_text() {
 }
 
 #[test]
+fn parse_draw_page_rejects_missing_end() {
+    let xml: &[u8] = br#"<draw:page xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"><draw:frame/>"#;
+    let (mut reader, page_start) = parse_page_start(xml);
+    let mut store = IrStore::new();
+
+    let err = parse_draw_page(&mut reader, &page_start, 1, &mut store)
+        .expect_err("truncated page must fail");
+    assert!(matches!(err, ParseError::Xml { .. }));
+}
+
+#[test]
 fn parse_draw_frame_presentation_returns_none_for_unrecognized_content() {
     let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
 <draw:frame xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0">
@@ -98,6 +109,23 @@ fn parse_draw_frame_presentation_returns_none_for_unrecognized_content() {
     let shape = parse_draw_frame_presentation(&mut reader, &frame_start, &mut store).unwrap();
     assert!(shape.is_none());
     assert_eq!(store.values().count(), 0);
+}
+
+#[test]
+fn parse_draw_frame_presentation_rejects_missing_end() {
+    let xml: &[u8] = br#"<draw:frame xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"><draw:unknown/>"#;
+    let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+    reader.config_mut().trim_text(false);
+    let mut buf = Vec::new();
+    let frame_start = match reader.read_event_into(&mut buf).unwrap() {
+        Event::Start(e) => e.into_owned(),
+        other => panic!("unexpected frame start: {other:?}"),
+    };
+    let mut store = IrStore::new();
+
+    let err = parse_draw_frame_presentation(&mut reader, &frame_start, &mut store)
+        .expect_err("truncated frame must fail");
+    assert!(matches!(err, ParseError::Xml { .. }));
 }
 
 #[test]
@@ -203,6 +231,39 @@ fn parse_custom_shape_presentation_preserves_text_runs() {
     assert_eq!(text.paragraphs.len(), 2);
     assert_eq!(text.paragraphs[0].runs[0].text, "First line");
     assert_eq!(text.paragraphs[1].runs[0].text, "Second line");
+}
+
+#[test]
+fn parse_custom_shape_presentation_rejects_missing_end() {
+    let xml: &[u8] = br#"<draw:custom-shape xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><text:p>Broken</text:p>"#;
+    let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+    reader.config_mut().trim_text(false);
+    let mut buf = Vec::new();
+    let shape_start = match reader.read_event_into(&mut buf).unwrap() {
+        Event::Start(e) => e.into_owned(),
+        other => panic!("unexpected shape start: {other:?}"),
+    };
+    let mut store = IrStore::new();
+
+    let err = parse_custom_shape_presentation(&mut reader, &shape_start, &mut store)
+        .expect_err("truncated custom shape must fail");
+    assert!(matches!(err, ParseError::Xml { .. }));
+}
+
+#[test]
+fn parse_odf_chart_rejects_missing_end() {
+    let xml: &[u8] =
+        br#"<chart:chart xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0">"#;
+    let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
+    reader.config_mut().trim_text(false);
+    let mut buf = Vec::new();
+    let chart_start = match reader.read_event_into(&mut buf).unwrap() {
+        Event::Start(e) => e.into_owned(),
+        other => panic!("unexpected chart start: {other:?}"),
+    };
+
+    let err = parse_odf_chart(&mut reader, &chart_start).expect_err("truncated chart must fail");
+    assert!(matches!(err, ParseError::Xml { .. }));
 }
 
 #[test]

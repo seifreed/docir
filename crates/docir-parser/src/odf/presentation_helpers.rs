@@ -47,7 +47,9 @@ pub(super) fn parse_draw_page(
             Event::End(e) if local_name(e.name().as_ref()) == b"page" => {
                 break;
             }
-            Event::Eof => break,
+            Event::Eof => {
+                return Err(xml_error("content.xml", "unexpected end of page"));
+            }
             _ => {}
         }
         buf.clear();
@@ -139,7 +141,9 @@ pub(super) fn parse_draw_frame_presentation(
             Event::End(e) if local_name(e.name().as_ref()) == b"frame" => {
                 break;
             }
-            Event::Eof => break,
+            Event::Eof => {
+                return Err(xml_error("content.xml", "unexpected end of frame"));
+            }
             _ => {}
         }
         buf.clear();
@@ -228,7 +232,9 @@ fn parse_shape_text(
             Ok(Event::End(e)) if e.name().as_ref() == end_tag => {
                 break;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error("content.xml", "unexpected end of shape text"));
+            }
             Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
@@ -320,7 +326,9 @@ pub(super) fn parse_odf_chart(
                     break;
                 }
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error("content.xml", "unexpected end of chart"));
+            }
             Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
