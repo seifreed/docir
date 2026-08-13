@@ -133,7 +133,9 @@ fn handle_style_empty(
 }
 
 fn build_style(event: &BytesStart<'_>) -> Result<Style, ParseError> {
-    let style_id = try_attr_value(event, b"w:styleId", STYLES_PATH)?.unwrap_or_default();
+    let style_id = try_attr_value(event, b"w:styleId", STYLES_PATH)?.ok_or_else(|| {
+        ParseError::InvalidStructure("word/styles.xml style is missing w:styleId".to_string())
+    })?;
     let mut style = Style {
         style_id,
         name: None,

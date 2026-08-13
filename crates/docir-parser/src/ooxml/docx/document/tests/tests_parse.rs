@@ -682,3 +682,18 @@ fn test_parse_comments_reports_malformed_attributes() {
         other => panic!("unexpected error: {other:?}"),
     }
 }
+
+#[test]
+fn test_parse_styles_rejects_missing_style_id() {
+    let styles_xml = r#"
+        <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:style w:type="paragraph"></w:style>
+        </w:styles>
+    "#;
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_styles(styles_xml)
+        .expect_err("style without id must fail");
+
+    assert!(matches!(err, ParseError::InvalidStructure(_)));
+}
