@@ -205,6 +205,38 @@ fn secure_zip_reader_reads_and_lists_files() {
 }
 
 #[test]
+fn secure_zip_reader_matches_part_names_case_insensitively() {
+    let bytes = make_zip(
+        &[("WORD/DOCUMENT.XML", b"<doc/>")],
+        CompressionMethod::Stored,
+    );
+    let mut reader =
+        SecureZipReader::new(Cursor::new(bytes), ZipConfig::default()).expect("reader");
+
+    assert!(reader.contains("word/document.xml"));
+    assert_eq!(
+        reader.read_file("word/document.xml").expect("bytes"),
+        b"<doc/>".to_vec()
+    );
+    assert_eq!(reader.file_size("word/document.xml").expect("size"), 6);
+    assert_eq!(reader.list_prefix("word/"), vec!["WORD/DOCUMENT.XML"]);
+    assert_eq!(reader.list_suffix(".xml"), vec!["WORD/DOCUMENT.XML"]);
+}
+
+#[test]
+fn secure_zip_reader_rejects_case_insensitive_duplicate_file_names() {
+    let bytes = make_zip(
+        &[("word/document.xml", b"a"), ("WORD/DOCUMENT.XML", b"b")],
+        CompressionMethod::Stored,
+    );
+
+    let err = SecureZipReader::new(Cursor::new(bytes), ZipConfig::default())
+        .err()
+        .expect("case-insensitive duplicate must fail");
+    assert!(matches!(err, ParseError::InvalidZip(_)));
+}
+
+#[test]
 fn secure_zip_reader_reports_missing_and_encoding_errors() {
     let bytes = make_zip(
         &[

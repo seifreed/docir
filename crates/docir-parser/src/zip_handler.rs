@@ -61,6 +61,7 @@ pub struct SecureZipReader<R: Read + Seek> {
     archive: ZipArchive<R>,
     config: ZipConfig,
     file_index: HashMap<String, usize>,
+    normalized_file_index: HashMap<String, usize>,
     observed_file_sizes: HashMap<usize, u64>,
     observed_total_uncompressed: u64,
 }
@@ -85,6 +86,7 @@ impl<R: Read + Seek> SecureZipReader<R> {
         }
 
         let mut file_index = HashMap::new();
+        let mut normalized_file_index = HashMap::new();
         let mut total_uncompressed = 0u64;
 
         for i in 0..archive.len() {
@@ -97,6 +99,14 @@ impl<R: Read + Seek> SecureZipReader<R> {
             if file_index.contains_key(&name) {
                 return Err(ParseError::InvalidZip(format!(
                     "Duplicate file name in archive: {name}"
+                )));
+            }
+            if normalized_file_index
+                .insert(name.to_ascii_lowercase(), i)
+                .is_some()
+            {
+                return Err(ParseError::InvalidZip(format!(
+                    "Duplicate file name in archive (case-insensitive): {name}"
                 )));
             }
             total_uncompressed = total_uncompressed
@@ -113,6 +123,7 @@ impl<R: Read + Seek> SecureZipReader<R> {
             archive,
             config,
             file_index,
+            normalized_file_index,
             observed_file_sizes: HashMap::new(),
             observed_total_uncompressed: total_uncompressed,
         })
@@ -121,11 +132,10 @@ impl<R: Read + Seek> SecureZipReader<R> {
     /// Reads a file from the archive by name.
     pub fn read_file(&mut self, name: &str) -> Result<Vec<u8>, ParseError> {
         let index = self
-            .file_index
-            .get(name)
+            .index_for(name)
             .ok_or_else(|| ParseError::MissingPart(name.to_string()))?;
 
-        let file = self.archive.by_index(*index)?;
+        let file = self.archive.by_index(index)?;
         let declared_size = file.size();
 
         // Double-check size before reading
@@ -150,7 +160,7 @@ impl<R: Read + Seek> SecureZipReader<R> {
         let actual_size = contents.len() as u64;
         let previous_size = self
             .observed_file_sizes
-            .get(index)
+            .get(&index)
             .copied()
             .unwrap_or(declared_size);
         if actual_size > previous_size {
@@ -161,7 +171,7 @@ impl<R: Read + Seek> SecureZipReader<R> {
                 .ok_or_else(|| {
                     ParseError::ResourceLimit("Total uncompressed size overflow".to_string())
                 })?;
-            self.observed_file_sizes.insert(*index, actual_size);
+            self.observed_file_sizes.insert(index, actual_size);
             validate_total_size(self.observed_total_uncompressed, &self.config)?;
         }
 
@@ -178,16 +188,15 @@ impl<R: Read + Seek> SecureZipReader<R> {
     /// Returns the uncompressed size for a file.
     pub fn file_size(&mut self, name: &str) -> Result<u64, ParseError> {
         let index = self
-            .file_index
-            .get(name)
+            .index_for(name)
             .ok_or_else(|| ParseError::MissingPart(name.to_string()))?;
-        let file = self.archive.by_index(*index)?;
+        let file = self.archive.by_index(index)?;
         Ok(file.size())
     }
 
     /// Checks if a file exists in the archive.
     pub fn contains(&self, name: &str) -> bool {
-        self.file_index.contains_key(name)
+        self.index_for(name).is_some()
     }
 
     /// Returns all file names in the archive.
@@ -209,10 +218,11 @@ impl<R: Read + Seek> SecureZipReader<R> {
 
     /// Lists files matching a prefix.
     pub fn list_prefix(&self, prefix: &str) -> Vec<&str> {
+        let normalized_prefix = prefix.to_ascii_lowercase();
         let mut paths: Vec<&str> = self
             .file_index
             .keys()
-            .filter(|name| name.starts_with(prefix))
+            .filter(|name| name.to_ascii_lowercase().starts_with(&normalized_prefix))
             .map(|s| s.as_str())
             .collect();
         paths.sort_unstable();
@@ -221,14 +231,23 @@ impl<R: Read + Seek> SecureZipReader<R> {
 
     /// Lists files matching a suffix.
     pub fn list_suffix(&self, suffix: &str) -> Vec<&str> {
+        let normalized_suffix = suffix.to_ascii_lowercase();
         let mut paths: Vec<&str> = self
             .file_index
             .keys()
-            .filter(|name| name.ends_with(suffix))
+            .filter(|name| name.to_ascii_lowercase().ends_with(&normalized_suffix))
             .map(|s| s.as_str())
             .collect();
         paths.sort_unstable();
         paths
+    }
+
+    fn index_for(&self, name: &str) -> Option<usize> {
+        self.file_index.get(name).copied().or_else(|| {
+            self.normalized_file_index
+                .get(&name.to_ascii_lowercase())
+                .copied()
+        })
     }
 }
 
@@ -374,9 +393,10 @@ fn reject_duplicate_central_directory_names<R: Read + Seek>(
         let comment_len = u16::from_le_bytes([header[32], header[33]]) as i64;
         let mut name = vec![0; name_len];
         reader.read_exact(&mut name)?;
-        if !seen.insert(name.clone()) {
+        let normalized_name = String::from_utf8_lossy(&name).to_ascii_lowercase();
+        if !seen.insert(normalized_name) {
             return Err(ParseError::InvalidZip(format!(
-                "Duplicate file name in archive: {}",
+                "Duplicate file name in archive (case-insensitive): {}",
                 String::from_utf8_lossy(&name)
             )));
         }
