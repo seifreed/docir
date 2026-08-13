@@ -29,11 +29,13 @@ pub(crate) fn read_directory_entries_and_root_stream(
 }
 
 pub(crate) fn parse_dir_entries(data: &[u8]) -> Result<Vec<DirEntry>, ParseError> {
+    if !data.len().is_multiple_of(128) {
+        return Err(ParseError::InvalidStructure(
+            "OLE directory stream has a truncated entry".to_string(),
+        ));
+    }
     let mut entries = Vec::new();
     for chunk in data.chunks(128) {
-        if chunk.len() < 128 {
-            break;
-        }
         if entries.len() >= MAX_DIR_ENTRIES {
             return Err(ParseError::ResourceLimit(
                 "OLE directory entry count exceeds maximum".to_string(),

@@ -198,6 +198,16 @@ fn directory_parsing_and_tree_walk_collect_stream_paths() {
 }
 
 #[test]
+fn directory_parsing_rejects_truncated_entry() {
+    let data = vec![0u8; 128 + 1];
+
+    assert!(matches!(
+        directory::parse_dir_entries(&data),
+        Err(ParseError::InvalidStructure(message)) if message.contains("truncated entry")
+    ));
+}
+
+#[test]
 fn directory_metadata_walk_rejects_recursive_pointer_cycles() {
     let entries = vec![
         super::types::DirEntry {
