@@ -55,18 +55,49 @@ pub(super) fn parse_content_text(
     let mut section = Section::new();
     section.name = Some("body".to_string());
     let mut state = OdfTextState::new();
+    let mut root_name: Option<Vec<u8>> = None;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error("content.xml", err))?;
+        if root_closed && matches!(&event, Event::Start(_) | Event::Empty(_)) {
+            return Err(xml_error(
+                "content.xml",
+                "XML document contains multiple roots",
+            ));
+        }
+        match &event {
+            Event::Start(e) if root_name.is_none() => {
+                root_name = Some(e.name().as_ref().to_vec());
+            }
+            Event::Empty(e) if root_name.is_none() => {
+                root_name = Some(e.name().as_ref().to_vec());
+                root_closed = true;
+            }
+            Event::End(e)
+                if root_name
+                    .as_deref()
+                    .is_some_and(|name| name == e.name().as_ref()) =>
+            {
+                root_closed = true;
+            }
+            Event::Eof if root_closed => break,
+            Event::Eof => {
+                return Err(xml_error(
+                    "content.xml",
+                    "XML document ends before its root is closed",
+                ));
+            }
+            _ => {}
+        }
+        match event {
+            Event::Start(e) => {
                 handle_text_start(&e, &mut reader, store, limits, &mut section, &mut state)?
             }
-            Ok(Event::Empty(e)) => handle_text_empty(&e, store, &mut section, &mut state)?,
-            Ok(Event::End(e)) => handle_text_end(&e, &mut state),
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error("content.xml", e));
-            }
+            Event::Empty(e) => handle_text_empty(&e, store, &mut section, &mut state)?,
+            Event::End(e) => handle_text_end(&e, &mut state),
             _ => {}
         }
         buf.clear();
@@ -354,4 +385,22 @@ pub(super) fn build_paragraph(
     let para_id = paragraph.id;
     store.insert(IRNode::Paragraph(paragraph));
     para_id
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::odf::OdfLimits;
+    use crate::parser::ParserConfig;
+
+    #[test]
+    fn parse_content_text_rejects_truncated_document_root() {
+        let xml = br#"<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:body><office:text>"#;
+        let mut store = IrStore::new();
+        let limits = OdfLimits::new(&ParserConfig::default(), false);
+
+        let err = parse_content_text(xml, &mut store, &limits)
+            .expect_err("truncated text document must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+    }
 }

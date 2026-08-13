@@ -18,12 +18,47 @@ pub(crate) fn parse_odf_headers_footers(
     let mut buf = Vec::new();
     let mut headers = Vec::new();
     let mut footers = Vec::new();
+    let mut root_name: Option<Vec<u8>> = None;
+    let mut root_closed = false;
 
     let limits = OdfLimits::new(config, false);
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error("styles.xml", err))?;
+        if root_closed && matches!(&event, Event::Start(_) | Event::Empty(_)) {
+            return Err(xml_error(
+                "styles.xml",
+                "XML document contains multiple roots",
+            ));
+        }
+        match &event {
+            Event::Start(e) if root_name.is_none() => {
+                root_name = Some(e.name().as_ref().to_vec());
+            }
+            Event::Empty(e) if root_name.is_none() => {
+                root_name = Some(e.name().as_ref().to_vec());
+                root_closed = true;
+            }
+            Event::End(e)
+                if root_name
+                    .as_deref()
+                    .is_some_and(|name| name == e.name().as_ref()) =>
+            {
+                root_closed = true;
+            }
+            Event::Eof if root_closed => break,
+            Event::Eof => {
+                return Err(xml_error(
+                    "styles.xml",
+                    "XML document ends before its root is closed",
+                ));
+            }
+            _ => {}
+        }
+        if let Event::Start(e) = event {
+            match local_name(e.name().as_ref()) {
                 b"header" | b"header-left" => {
                     let content = parse_odf_header_footer_block(
                         &mut reader,
@@ -53,12 +88,7 @@ pub(crate) fn parse_odf_headers_footers(
                     footers.push(id);
                 }
                 _ => {}
-            },
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error("styles.xml", e));
             }
-            _ => {}
         }
         buf.clear();
     }

@@ -109,6 +109,15 @@ mod tests {
     }
 
     #[test]
+    fn parse_odf_headers_footers_rejects_truncated_document_root() {
+        let truncated = r#"<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:styles>"#;
+        let mut store = IrStore::new();
+        let err = parse_odf_headers_footers(truncated, &mut store, &ParserConfig::default())
+            .expect_err("truncated styles document must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "styles.xml"));
+    }
+
+    #[test]
     fn parse_odf_headers_footers_reports_malformed_outline_attributes() {
         for xml in [
             r#"<?xml version="1.0" encoding="UTF-8"?>

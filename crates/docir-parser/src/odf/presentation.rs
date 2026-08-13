@@ -19,10 +19,45 @@ pub(super) fn parse_content_presentation(
     let mut in_presentation = false;
     let mut slide_no = 1u32;
     let mut slides = Vec::new();
+    let mut root_name: Option<Vec<u8>> = None;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error("content.xml", err))?;
+        if root_closed && matches!(&event, Event::Start(_) | Event::Empty(_)) {
+            return Err(xml_error(
+                "content.xml",
+                "XML document contains multiple roots",
+            ));
+        }
+        match &event {
+            Event::Start(e) if root_name.is_none() => {
+                root_name = Some(e.name().as_ref().to_vec());
+            }
+            Event::Empty(e) if root_name.is_none() => {
+                root_name = Some(e.name().as_ref().to_vec());
+                root_closed = true;
+            }
+            Event::End(e)
+                if root_name
+                    .as_deref()
+                    .is_some_and(|name| name == e.name().as_ref()) =>
+            {
+                root_closed = true;
+            }
+            Event::Eof if root_closed => break,
+            Event::Eof => {
+                return Err(xml_error(
+                    "content.xml",
+                    "XML document ends before its root is closed",
+                ));
+            }
+            _ => {}
+        }
+        match event {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"presentation" => in_presentation = true,
                 b"page" if in_presentation => {
                     let slide = parse_draw_page(&mut reader, &e, slide_no, store)?;
@@ -33,7 +68,7 @@ pub(super) fn parse_content_presentation(
                 }
                 _ => {}
             },
-            Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
+            Event::Empty(e) => match local_name(e.name().as_ref()) {
                 b"page" if in_presentation => {
                     let mut slide = Slide::new(slide_no);
                     slide.name = try_attr_value_by_suffix(&e, &[b":name"], "content.xml")?;
@@ -45,11 +80,9 @@ pub(super) fn parse_content_presentation(
                 }
                 _ => {}
             },
-            Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"presentation" => {
+            Event::End(e) if local_name(e.name().as_ref()) == b"presentation" => {
                 in_presentation = false;
             }
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(xml_error("content.xml", e)),
             _ => {}
         }
         buf.clear();
@@ -125,5 +158,16 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_content_presentation_rejects_truncated_document_root() {
+        let xml: &[u8] = br#"<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:body><office:presentation>"#;
+        let mut store = IrStore::new();
+        let limits = OdfLimits::new(&ParserConfig::default(), false);
+
+        let err = parse_content_presentation(xml, &mut store, &limits)
+            .expect_err("truncated presentation document must fail");
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
     }
 }
