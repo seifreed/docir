@@ -116,7 +116,7 @@ impl<R: Read + Seek> SecureZipReader<R> {
             .get(name)
             .ok_or_else(|| ParseError::MissingPart(name.to_string()))?;
 
-        let mut file = self.archive.by_index(*index)?;
+        let file = self.archive.by_index(*index)?;
 
         // Double-check size before reading
         if file.size() > self.config.max_file_size {
@@ -127,8 +127,16 @@ impl<R: Read + Seek> SecureZipReader<R> {
             )));
         }
 
-        let mut contents = Vec::with_capacity(file.size() as usize);
-        file.read_to_end(&mut contents)?;
+        let read_limit = self.config.max_file_size.saturating_add(1);
+        let capacity = file.size().min(self.config.max_file_size) as usize;
+        let mut contents = Vec::with_capacity(capacity);
+        file.take(read_limit).read_to_end(&mut contents)?;
+        if contents.len() as u64 > self.config.max_file_size {
+            return Err(ParseError::ResourceLimit(format!(
+                "File contents exceed limit: {} (max: {} bytes)",
+                name, self.config.max_file_size
+            )));
+        }
 
         Ok(contents)
     }
