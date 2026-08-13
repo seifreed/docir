@@ -406,6 +406,19 @@ fn test_parse_styles_rejects_truncated_root() {
 }
 
 #[test]
+fn test_parse_styles_rejects_truncated_nested_same_name_root() {
+    let xml = r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:styles></w:styles>
+    "#;
+
+    let mut parser = DocxParser::new();
+    let err = parser
+        .parse_styles(xml)
+        .expect_err("truncated nested styles XML must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "word/styles.xml"));
+}
+
+#[test]
 fn test_parse_font_table_collects_font_entries() {
     let xml = r#"
         <w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

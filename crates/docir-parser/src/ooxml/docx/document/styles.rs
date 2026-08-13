@@ -1,6 +1,6 @@
 use super::DocxParser;
 use crate::error::ParseError;
-use crate::xml_utils::{local_name, try_attr_value, xml_error};
+use crate::xml_utils::{local_name, track_xml_root_event, try_attr_value, xml_error};
 use docir_core::ir::{Paragraph, RunProperties, Style, StyleSet, StyleType};
 use docir_core::types::NodeId;
 use quick_xml::Reader;
@@ -24,38 +24,19 @@ impl DocxParser {
         let mut current: Option<Style> = None;
         let mut in_name = false;
         let mut root_name = None;
+        let mut root_depth = 0;
         let mut root_closed = false;
 
         loop {
             let event = reader.read_event_into(&mut buf);
-            match &event {
-                Ok(Event::Start(e)) if root_name.is_none() => {
-                    root_name = Some(e.name().as_ref().to_vec());
-                }
-                Ok(Event::Empty(e)) if root_name.is_none() => {
-                    root_name = Some(e.name().as_ref().to_vec());
-                    root_closed = true;
-                }
-                Ok(Event::Start(_) | Event::Empty(_)) if root_closed => {
-                    return Err(xml_error(
-                        STYLES_PATH,
-                        "XML document contains multiple roots",
-                    ));
-                }
-                Ok(Event::End(e))
-                    if root_name
-                        .as_deref()
-                        .is_some_and(|name| name == e.name().as_ref()) =>
-                {
-                    root_closed = true;
-                }
-                Ok(Event::Eof) if !root_closed => {
-                    return Err(xml_error(
-                        STYLES_PATH,
-                        "XML document ends before its root is closed",
-                    ));
-                }
-                _ => {}
+            if let Ok(event) = &event {
+                track_xml_root_event(
+                    event,
+                    &mut root_name,
+                    &mut root_depth,
+                    &mut root_closed,
+                    STYLES_PATH,
+                )?;
             }
 
             if !handle_style_event(event, &mut reader, &mut styles, &mut current, &mut in_name)? {
