@@ -133,6 +133,29 @@ mod tests {
     }
 
     #[test]
+    fn parse_hwpx_section_rejects_truncated_root() {
+        let xml = r#"<hp:section xmlns:hp="http://www.hancom.co.kr/hwpml"><hp:p><hp:t>broken</hp:t></hp:p>"#;
+        let mut store = IrStore::new();
+        let mut comments = Vec::new();
+        let mut footnotes = Vec::new();
+        let mut endnotes = Vec::new();
+        let media_lookup = HashMap::new();
+
+        let err = parse_hwpx_section(
+            xml,
+            "Contents/section0.xml",
+            &mut store,
+            &mut comments,
+            &mut footnotes,
+            &mut endnotes,
+            &media_lookup,
+        )
+        .expect_err("truncated HWPX section must fail");
+
+        assert!(matches!(err, ParseError::Xml { file, .. } if file == "Contents/section0.xml"));
+    }
+
+    #[test]
     fn parse_hwpx_section_reports_invalid_text_entity() {
         let xml = r#"<hp:section xmlns:hp="http://www.hancom.co.kr/hwpml"><hp:p><hp:t>before &invalid; after</hp:t></hp:p></hp:section>"#;
         let mut store = IrStore::new();

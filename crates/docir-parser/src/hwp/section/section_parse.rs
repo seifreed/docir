@@ -111,17 +111,30 @@ pub(crate) fn parse_hwpx_section(
     reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut state = HwpxSectionState::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
+                depth += 1;
                 handle_hwpx_start(&e, source, store, media_lookup, &mut state)?;
             }
             Ok(Event::Empty(e)) => {
+                if depth == 0 {
+                    root_closed = true;
+                }
                 handle_hwpx_empty(&e, source, store, media_lookup, &mut state)?;
             }
             Ok(Event::End(e)) => {
                 handle_hwpx_end(&e, source, store, comments, footnotes, endnotes, &mut state);
+                if depth == 0 {
+                    return Err(xml_error(source, "unexpected end of HWPX section"));
+                }
+                depth -= 1;
+                if depth == 0 {
+                    root_closed = true;
+                }
             }
             Ok(Event::Text(e)) => {
                 handle_hwpx_text(&e, source, store, &mut state)?;
@@ -129,7 +142,10 @@ pub(crate) fn parse_hwpx_section(
             Ok(Event::GeneralRef(e)) => {
                 section_parse_events::handle_hwpx_general_ref(&e, source, store, &mut state)?;
             }
-            Ok(Event::Eof) => break,
+            Ok(Event::Eof) if root_closed => break,
+            Ok(Event::Eof) => {
+                return Err(xml_error(source, "unexpected end of HWPX section"));
+            }
             Err(e) => {
                 return Err(xml_error(source, e));
             }
