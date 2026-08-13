@@ -130,6 +130,30 @@ fn test_parse_odt_minimal() {
 }
 
 #[test]
+fn test_parse_odt_preserves_empty_paragraph() {
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <office:body><office:text><text:p/></office:text></office:body>
+</office:document-content>
+"#;
+    let zip_data = build_odf_zip("application/vnd.oasis.opendocument.text", content_xml, None);
+    let parsed = DocumentParser::new()
+        .parse_reader(Cursor::new(zip_data))
+        .expect("empty paragraph should parse");
+    let document = parsed.document().expect("document should exist");
+    let section_id = document.content[0];
+
+    assert!(matches!(
+        parsed.store.get(section_id),
+        Some(docir_core::ir::IRNode::Section(section))
+            if section.content.iter().any(|id| matches!(
+                parsed.store.get(*id),
+        Some(docir_core::ir::IRNode::Paragraph(paragraph)) if paragraph.runs.is_empty()
+    ))
+    ));
+}
+
+#[test]
 fn test_parse_odt_reports_malformed_list_attributes() {
     let mimetype = "application/vnd.oasis.opendocument.text";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>

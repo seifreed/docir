@@ -80,7 +80,7 @@ pub(super) fn parse_content_text(
             Event::Start(e) => {
                 handle_text_start(&e, &mut reader, store, limits, &mut section, &mut state)?
             }
-            Event::Empty(e) => handle_text_empty(&e, store, &mut section, &mut state)?,
+            Event::Empty(e) => handle_text_empty(&e, store, limits, &mut section, &mut state)?,
             Event::End(e) => handle_text_end(&e, &mut state),
             _ => {}
         }
@@ -260,10 +260,23 @@ fn parse_text_tracked_changes(
 fn handle_text_empty(
     e: &BytesStart<'_>,
     store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
     section: &mut Section,
     state: &mut OdfTextState,
 ) -> Result<(), ParseError> {
     match local_name(e.name().as_ref()) {
+        b"p" | b"h" if state.in_text => {
+            let outline_level = parse_outline_level(e, "content.xml")?;
+            let numbering = state.list_stack.last().map(|ctx| NumberingInfo {
+                num_id: ctx.num_id,
+                level: ctx.level,
+                format: None,
+            });
+            limits.bump_paragraphs(1)?;
+            section
+                .content
+                .push(build_paragraph(store, "", numbering, outline_level));
+        }
         b"table" if state.in_text => {
             section.content.push(parse_empty_table(store));
         }
