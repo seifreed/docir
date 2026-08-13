@@ -17,6 +17,7 @@ use docir_core::visitor::IrStore;
 use quick_xml::events::{BytesStart, Event};
 
 const ODF_CONTENT_XML: &str = "content.xml";
+pub(crate) const MAX_ODF_EXPANDED_SPACES: usize = 1_000_000;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ValidationDef {
@@ -232,12 +233,23 @@ fn append_text_control(text: &mut String, e: &BytesStart<'_>) -> Result<(), Pars
                 })
                 .transpose()?
                 .unwrap_or(1);
-            text.extend(std::iter::repeat_n(' ', count));
+            append_odf_spaces(text, count)?;
         }
         b"tab" => text.push('\t'),
         b"line-break" => text.push('\n'),
         _ => {}
     }
+    Ok(())
+}
+
+pub(crate) fn append_odf_spaces(text: &mut String, count: usize) -> Result<(), ParseError> {
+    if count > MAX_ODF_EXPANDED_SPACES {
+        return Err(ParseError::ResourceLimit(format!(
+            "ODF expanded spaces exceed limit: {} (max: {})",
+            count, MAX_ODF_EXPANDED_SPACES
+        )));
+    }
+    text.extend(std::iter::repeat_n(' ', count));
     Ok(())
 }
 

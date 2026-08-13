@@ -822,3 +822,31 @@ fn parse_ods_table_rejects_zero_repeat_attributes() {
 
     assert!(matches!(err, ParseError::Xml { .. }));
 }
+
+#[test]
+fn parse_ods_table_skips_huge_empty_column_repeats() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <table:table table:name="Sheet1">
+    <table:table-row>
+      <table:table-cell table:number-columns-repeated="4294967295" />
+    </table:table-row>
+  </table:table>
+</office:spreadsheet>
+"#;
+
+    let (mut reader, table_start) = parse_table_start(xml);
+    let mut store = IrStore::new();
+    let worksheet = parse_ods_table(
+        &mut reader,
+        &table_start,
+        1,
+        &mut store,
+        &HashMap::new(),
+        &default_limits(),
+    )
+    .expect("empty repeated cells should not require expansion");
+
+    assert!(worksheet.cells.is_empty());
+}

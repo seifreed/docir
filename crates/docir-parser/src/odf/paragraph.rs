@@ -1,3 +1,4 @@
+use super::helpers::append_odf_spaces;
 use super::{
     BookmarkEnd, BookmarkStart, Field, FieldInstruction, FieldKind, IRNode, IrStore, NodeId,
     NumberingInfo, OdfLimitCounter, OdfReader, ParseError, text,
@@ -69,7 +70,7 @@ fn handle_inline_event(
                 })
                 .transpose()?
                 .unwrap_or(1);
-            text.extend(std::iter::repeat_n(' ', count));
+            append_odf_spaces(text, count)?;
         }
         b"tab" => text.push('\t'),
         b"line-break" => text.push('\n'),
@@ -158,5 +159,34 @@ mod tests {
         };
 
         assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_paragraph_rejects_excessive_expanded_spaces() {
+        let xml = r#"<text:p xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><text:s text:c="1000001"/></text:p>"#;
+        let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+
+        let mut store = IrStore::new();
+        let mut inline_nodes = Vec::new();
+        let limits = OdfLimits::new(&ParserConfig::default(), false);
+        let err = parse_paragraph(
+            &mut reader,
+            b"text:p",
+            None,
+            None,
+            &mut store,
+            &mut inline_nodes,
+            &limits,
+        )
+        .expect_err("excessive ODF spaces must fail");
+
+        assert!(
+            matches!(err, ParseError::ResourceLimit(message) if message.contains("expanded spaces"))
+        );
     }
 }
