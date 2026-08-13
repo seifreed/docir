@@ -1,7 +1,8 @@
 //! CFB data types and directory entry structures.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use crate::error::ParseError;
 use crate::ole_header::{END_OF_CHAIN, FREE_SECT};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,47 +96,93 @@ pub(crate) const MAX_DIR_ENTRIES: usize = 65_536;
 pub(crate) const MAX_RECURSION_DEPTH: u32 = 256;
 pub(crate) const MAX_LINKED_DEPTH: u32 = 256;
 
-pub(crate) fn collect_stream_entries(entries: &[DirEntry]) -> HashMap<String, DirEntry> {
-    use std::collections::HashSet;
+pub(crate) fn collect_stream_entries(
+    entries: &[DirEntry],
+) -> Result<HashMap<String, DirEntry>, ParseError> {
     let mut streams = HashMap::new();
+    let mut normalized_names = HashSet::new();
     if let Some(child) = entries.first().map(|e| e.child) {
         let mut visited = HashSet::new();
-        walk_siblings(child, "", entries, &mut streams, 0, &mut visited);
+        collect_streams_with_unique_names(
+            child,
+            "",
+            entries,
+            &mut streams,
+            &mut normalized_names,
+            0,
+            &mut visited,
+        )?;
     }
-    streams
+    Ok(streams)
 }
 
-pub(crate) fn walk_siblings(
+fn collect_streams_with_unique_names(
     idx: u32,
     parent: &str,
     entries: &[DirEntry],
     out: &mut HashMap<String, DirEntry>,
+    normalized_names: &mut HashSet<String>,
     depth: u32,
-    visited: &mut std::collections::HashSet<u32>,
-) {
+    visited: &mut HashSet<u32>,
+) -> Result<(), ParseError> {
     if idx == FREE_SECT || idx == END_OF_CHAIN || depth > MAX_RECURSION_DEPTH {
-        return;
+        return Ok(());
     }
     if !visited.insert(idx) {
-        return;
+        return Ok(());
     }
     let idx_usize = idx as usize;
     if idx_usize >= entries.len() {
-        return;
+        return Ok(());
     }
     let entry = &entries[idx_usize];
-    walk_siblings(entry.left, parent, entries, out, depth + 1, visited);
-    let mut path = String::new();
-    if !parent.is_empty() {
-        path.push_str(parent);
-        path.push('/');
-    }
-    path.push_str(&entry.name);
+    collect_streams_with_unique_names(
+        entry.left,
+        parent,
+        entries,
+        out,
+        normalized_names,
+        depth + 1,
+        visited,
+    )?;
+
+    let path = if parent.is_empty() {
+        entry.name.clone()
+    } else {
+        format!("{parent}/{}", entry.name)
+    };
     if entry.object_type == 2 {
+        let normalized = normalize_cfb_path(&path);
+        if !normalized_names.insert(normalized) {
+            return Err(ParseError::InvalidStructure(format!(
+                "Duplicate CFB stream name: {path}"
+            )));
+        }
         out.insert(path.clone(), entry.clone());
     }
     if (entry.object_type == 1 || entry.object_type == 5) && entry.child != FREE_SECT {
-        walk_siblings(entry.child, &path, entries, out, depth + 1, visited);
+        collect_streams_with_unique_names(
+            entry.child,
+            &path,
+            entries,
+            out,
+            normalized_names,
+            depth + 1,
+            visited,
+        )?;
     }
-    walk_siblings(entry.right, parent, entries, out, depth + 1, visited);
+    collect_streams_with_unique_names(
+        entry.right,
+        parent,
+        entries,
+        out,
+        normalized_names,
+        depth + 1,
+        visited,
+    )?;
+    Ok(())
+}
+
+pub(crate) fn normalize_cfb_path(path: &str) -> String {
+    path.replace('\\', "/").to_uppercase()
 }

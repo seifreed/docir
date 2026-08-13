@@ -257,9 +257,7 @@ fn directory_parsing_and_tree_walk_collect_stream_paths() {
     assert_eq!(entries[1].name, "VBA");
     assert_eq!(entries[2].name, "dir");
 
-    let mut out = HashMap::new();
-    let mut visited = std::collections::HashSet::new();
-    types::walk_siblings(entries[0].child, "", &entries, &mut out, 0, &mut visited);
+    let out = types::collect_stream_entries(&entries).expect("stream entries");
     assert!(out.contains_key("VBA"));
     assert!(out.contains_key("dir"));
 
@@ -644,6 +642,29 @@ fn read_stream_from_mini_handles_out_of_bounds_and_chain_breaks() {
 
     let mini_stream = b"abcdefghijklmnop".to_vec();
     assert!(read_stream_from_mini(&mini_stream, 8, &mini_fat, 0, 12).is_err());
+}
+
+#[test]
+fn cfb_stream_lookup_is_case_insensitive_and_duplicate_names_fail() {
+    let cfb = Cfb::parse(crate::test_support::build_test_cfb(&[(
+        "WordDocument",
+        b"document",
+    )]))
+    .expect("CFB");
+    assert!(cfb.has_stream("worddocument"));
+    assert_eq!(
+        cfb.read_stream("worddocument").expect("stream"),
+        Some(b"document".to_vec())
+    );
+
+    let duplicate = crate::test_support::build_test_cfb(&[
+        ("WordDocument", b"first"),
+        ("worddocument", b"second"),
+    ]);
+    assert!(matches!(
+        Cfb::parse(duplicate),
+        Err(ParseError::InvalidStructure(message)) if message.contains("Duplicate CFB stream name")
+    ));
 }
 
 #[test]

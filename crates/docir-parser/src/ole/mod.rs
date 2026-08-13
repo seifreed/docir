@@ -30,7 +30,7 @@ use directory::{
     collect_directory_slots, collect_entry_metadata, read_directory_entries_and_root_stream,
 };
 use stream::{collect_chain_with_terminal, read_stream_from_mini};
-use types::{DirEntry, collect_stream_entries};
+use types::{DirEntry, collect_stream_entries, normalize_cfb_path};
 
 /// Parsed CFB file with streams.
 pub struct Cfb {
@@ -72,7 +72,7 @@ impl Cfb {
             header.first_mini_fat,
             header.num_mini_fat,
         )?;
-        let streams = collect_stream_entries(&entries);
+        let streams = collect_stream_entries(&entries)?;
         let directory_slots = collect_directory_slots(&entries);
         let entries = collect_entry_metadata(&entries);
 
@@ -290,9 +290,16 @@ impl Cfb {
     }
 
     fn resolve_stream_entry(&self, path: &str) -> Option<&DirEntry> {
+        let normalized = normalize_cfb_path(path);
         self.streams
             .get(path)
             .or_else(|| self.streams.get(&path.replace('\\', "/")))
+            .or_else(|| {
+                self.streams
+                    .iter()
+                    .find(|(candidate, _)| normalize_cfb_path(candidate) == normalized)
+                    .map(|(_, entry)| entry)
+            })
     }
 
     fn should_use_mini_stream(&self, entry: &DirEntry) -> bool {
