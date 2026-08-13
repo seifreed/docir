@@ -73,6 +73,9 @@ fn read_sector_and_stream_helpers_handle_bounds_and_chains() {
     assert_eq!(stream[0], 1);
     assert_eq!(stream[512], 2);
 
+    let truncated_fat = vec![2];
+    assert!(read_stream_from_fat(&data, 512, &truncated_fat, 0).is_err());
+
     let mini_stream = b"abcdEFGHijklMNOP".to_vec();
     let mini_fat = vec![1, END_OF_CHAIN];
     let mini = read_stream_from_mini(&mini_stream, 8, &mini_fat, 0, 12).expect("mini stream");
@@ -458,12 +461,10 @@ fn cfb_reader_reports_corrupt_stream_read_errors() {
 fn read_stream_from_mini_handles_out_of_bounds_and_chain_breaks() {
     let mini_stream = b"abcdEFGH".to_vec();
     let mini_fat = vec![END_OF_CHAIN];
-    let out = read_stream_from_mini(&mini_stream, 8, &mini_fat, 10, 4).expect("mini stream");
-    assert!(out.is_empty());
+    assert!(read_stream_from_mini(&mini_stream, 8, &mini_fat, 10, 4).is_err());
 
     let mini_stream = b"abcdefghijklmnop".to_vec();
-    let out = read_stream_from_mini(&mini_stream, 8, &mini_fat, 0, 12).expect("mini stream");
-    assert_eq!(out, b"abcdefgh".to_vec());
+    assert!(read_stream_from_mini(&mini_stream, 8, &mini_fat, 0, 12).is_err());
 }
 
 #[test]

@@ -112,13 +112,13 @@ impl Cfb {
         }
 
         if self.should_use_mini_stream(entry) {
-            return Ok(read_stream_from_mini(
+            return Ok(Some(read_stream_from_mini(
                 &self.root_stream,
                 self.mini_sector_size,
                 &self.mini_fat,
                 entry.start_sector,
                 entry.size as usize,
-            ));
+            )?));
         }
 
         let data = self.read_regular_stream(entry)?;

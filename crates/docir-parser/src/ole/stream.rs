@@ -14,9 +14,16 @@ pub(crate) fn read_stream_from_fat(
     let mut out = Vec::new();
     let mut sector = start_sector;
     let mut guard = 0usize;
-    while sector != END_OF_CHAIN && sector != FREE_SECT {
+    while sector != END_OF_CHAIN {
+        if sector == FREE_SECT {
+            return Err(ParseError::InvalidStructure(
+                "OLE FAT chain terminated at a free sector".to_string(),
+            ));
+        }
         if guard >= fat.len() {
-            break;
+            return Err(ParseError::InvalidStructure(
+                "OLE FAT chain exceeds the FAT table".to_string(),
+            ));
         }
         if out.len() >= MAX_STREAM_SIZE {
             return Err(ParseError::ResourceLimit(
@@ -25,7 +32,9 @@ pub(crate) fn read_stream_from_fat(
         }
         let sec = read_sector(data, sector_size, sector)?;
         out.extend_from_slice(&sec);
-        let next = *fat.get(sector as usize).unwrap_or(&END_OF_CHAIN);
+        let next = fat.get(sector as usize).copied().ok_or_else(|| {
+            ParseError::InvalidStructure("OLE FAT sector is out of range".to_string())
+        })?;
         sector = next;
         guard += 1;
     }
@@ -38,29 +47,51 @@ pub(crate) fn read_stream_from_mini(
     mini_fat: &[u32],
     start_sector: u32,
     size: usize,
-) -> Option<Vec<u8>> {
+) -> Result<Vec<u8>, ParseError> {
+    if size == 0 {
+        return Ok(Vec::new());
+    }
     let mut out = Vec::new();
     let mut sector = start_sector;
     let mut guard = 0usize;
-    while sector != END_OF_CHAIN && sector != FREE_SECT && out.len() < size {
+    while out.len() < size {
+        if sector == END_OF_CHAIN || sector == FREE_SECT {
+            return Err(ParseError::InvalidStructure(
+                "OLE mini-FAT chain ended before the stream size".to_string(),
+            ));
+        }
         if guard >= mini_fat.len() {
-            break;
+            return Err(ParseError::InvalidStructure(
+                "OLE mini-FAT chain exceeds the mini-FAT table".to_string(),
+            ));
         }
         let offset = match (sector as usize).checked_mul(mini_sector_size as usize) {
             Some(o) => o,
-            None => break,
+            None => {
+                return Err(ParseError::InvalidStructure(
+                    "OLE mini-sector offset overflow".to_string(),
+                ));
+            }
         };
-        let end = offset + mini_sector_size as usize;
+        let end = offset
+            .checked_add(mini_sector_size as usize)
+            .ok_or_else(|| {
+                ParseError::InvalidStructure("OLE mini-sector end overflow".to_string())
+            })?;
         if end > mini_stream.len() {
-            break;
+            return Err(ParseError::InvalidStructure(
+                "OLE mini-sector is out of bounds".to_string(),
+            ));
         }
         out.extend_from_slice(&mini_stream[offset..end]);
-        let next = *mini_fat.get(sector as usize).unwrap_or(&END_OF_CHAIN);
+        let next = mini_fat.get(sector as usize).copied().ok_or_else(|| {
+            ParseError::InvalidStructure("OLE mini-sector is out of range".to_string())
+        })?;
         sector = next;
         guard += 1;
     }
     out.truncate(size);
-    Some(out)
+    Ok(out)
 }
 
 pub(crate) fn collect_chain_with_terminal(table: &[u32], start_sector: u32) -> (Vec<u32>, u32) {
