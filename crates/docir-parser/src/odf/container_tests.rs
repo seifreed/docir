@@ -8,6 +8,20 @@ use cbc::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
 use pbkdf2::pbkdf2_hmac;
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
+use std::io::{Cursor, Write};
+use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
+
+fn zip_with_mimetype(bytes: &[u8]) -> SecureZipReader<Cursor<Vec<u8>>> {
+    let mut data = Vec::new();
+    let mut writer = ZipWriter::new(Cursor::new(&mut data));
+    writer
+        .start_file("mimetype", SimpleFileOptions::default())
+        .expect("mimetype entry");
+    writer.write_all(bytes).expect("mimetype bytes");
+    writer.finish().expect("zip finish");
+    SecureZipReader::new(Cursor::new(data), Default::default()).expect("zip reader")
+}
 
 fn encryption_data() -> OdfEncryptionData {
     OdfEncryptionData {
@@ -39,6 +53,16 @@ fn detect_odf_format_supports_expected_mimetypes() {
         Some(DocumentFormat::OdfPresentation)
     );
     assert_eq!(detect_odf_format("application/octet-stream"), None);
+}
+
+#[test]
+fn load_mimetype_propagates_encoding_errors() {
+    let parser = OdfParser::new();
+    let mut zip = zip_with_mimetype(&[0xff]);
+    let error = parser
+        .load_mimetype_and_manifest(&mut zip)
+        .expect_err("invalid mimetype UTF-8 must fail");
+    assert!(matches!(error, ParseError::Encoding(_)));
 }
 
 #[test]

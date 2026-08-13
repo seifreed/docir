@@ -12,10 +12,15 @@ impl OdfParser {
         &self,
         zip: &mut SecureZipReader<R>,
     ) -> Result<(DocumentFormat, Vec<OdfManifestEntry>), ParseError> {
-        let mimetype = zip
-            .read_file_string("mimetype")
-            .map(|s| s.trim().to_string())
-            .map_err(|_| ParseError::UnsupportedFormat("Missing ODF mimetype".to_string()))?;
+        let mimetype = match zip.read_file_string("mimetype") {
+            Ok(value) => value.trim().to_string(),
+            Err(ParseError::MissingPart(_)) => {
+                return Err(ParseError::UnsupportedFormat(
+                    "Missing ODF mimetype".to_string(),
+                ));
+            }
+            Err(error) => return Err(error),
+        };
 
         let format = detect_odf_format(&mimetype).ok_or_else(|| {
             ParseError::UnsupportedFormat(format!("Unsupported ODF mimetype: {mimetype}"))
