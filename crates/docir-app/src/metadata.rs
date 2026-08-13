@@ -83,19 +83,36 @@ fn parse_section_entries(
     path: &str,
 ) -> Result<Vec<MetadataProperty>, ParserParseError> {
     const SECTION_HEADER_SIZE: usize = 8;
+    const SECTION_DESCRIPTOR_SIZE: usize = 20;
     const PROPERTY_ENTRY_SIZE: usize = 8;
 
-    let descriptor_offset = match 28usize.checked_add(section_index.saturating_mul(20)) {
-        Some(off) => off,
-        None => return Ok(Vec::new()),
-    };
-    let descriptor_end = descriptor_offset.checked_add(20).ok_or_else(|| {
-        ParserParseError::InvalidStructure(
-            "OLE property set descriptor offset overflow".to_string(),
+    let descriptor_offset = 28usize
+        .checked_add(
+            section_index
+                .checked_mul(SECTION_DESCRIPTOR_SIZE)
+                .ok_or_else(|| {
+                    ParserParseError::InvalidStructure(
+                        "OLE property set descriptor offset overflow".to_string(),
+                    )
+                })?,
         )
-    })?;
+        .ok_or_else(|| {
+            ParserParseError::InvalidStructure(
+                "OLE property set descriptor offset overflow".to_string(),
+            )
+        })?;
+    let descriptor_end = descriptor_offset
+        .checked_add(SECTION_DESCRIPTOR_SIZE)
+        .ok_or_else(|| {
+            ParserParseError::InvalidStructure(
+                "OLE property set descriptor offset overflow".to_string(),
+            )
+        })?;
     if descriptor_end > data.len() {
-        return Ok(Vec::new());
+        return Err(ParserParseError::InvalidStructure(format!(
+            "OLE property set section descriptor is out of bounds for {}",
+            path
+        )));
     }
     let section_offset_field = descriptor_offset.checked_add(16).ok_or_else(|| {
         ParserParseError::InvalidStructure(

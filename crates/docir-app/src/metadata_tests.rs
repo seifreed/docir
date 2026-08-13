@@ -187,6 +187,16 @@ fn inspect_metadata_rejects_truncated_property_section() {
 }
 
 #[test]
+fn inspect_metadata_rejects_truncated_section_descriptor() {
+    let mut summary = build_test_property_set_stream(&[]);
+    summary[24..28].copy_from_slice(&2u32.to_le_bytes());
+
+    let err = inspect_metadata_bytes(&build_test_cfb(&[(SUMMARY_INFO_STREAM, &summary)]))
+        .expect_err("truncated section descriptor must fail");
+    assert!(err.to_string().contains("section descriptor"));
+}
+
+#[test]
 fn inspect_metadata_rejects_property_section_smaller_than_header() {
     let mut summary = build_test_property_set_stream(&[(2, TestPropertyValue::Str("Specimen"))]);
     summary[0x30..0x34].copy_from_slice(&4u32.to_le_bytes());
