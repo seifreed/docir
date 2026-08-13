@@ -1,7 +1,7 @@
 //! [Content_Types].xml parser.
 
 use crate::error::ParseError;
-use crate::xml_utils::{attr_each, local_name, read_event, reader_from_str};
+use crate::xml_utils::{local_name, read_event, reader_from_str, try_attr_value};
 use quick_xml::events::Event;
 use std::collections::HashMap;
 
@@ -26,15 +26,13 @@ impl ContentTypes {
             match read_event(&mut reader, &mut buf, "[Content_Types].xml")? {
                 Event::Empty(e) | Event::Start(e) => match local_name(e.name().as_ref()) {
                     b"Default" => {
-                        if let Some((ext, ct)) = parse_default_entry(&e)? {
-                            content_types.defaults.insert(ext, ct);
-                        }
+                        let (ext, ct) = parse_default_entry(&e)?;
+                        content_types.defaults.insert(ext, ct);
                     }
                     b"Override" => {
-                        if let Some((pn, ct)) = parse_override_entry(&e)? {
-                            let normalized = normalize_part_name(&pn);
-                            content_types.overrides.insert(normalized, ct);
-                        }
+                        let (pn, ct) = parse_override_entry(&e)?;
+                        let normalized = normalize_part_name(&pn);
+                        content_types.overrides.insert(normalized, ct);
                     }
                     _ => {}
                 },
@@ -109,33 +107,29 @@ impl ContentTypes {
 
 fn parse_default_entry(
     element: &quick_xml::events::BytesStart<'_>,
-) -> Result<Option<(String, String)>, ParseError> {
-    let mut extension = None;
-    let mut content_type = None;
-    attr_each(element, "[Content_Types].xml", |key, value| match key {
-        b"Extension" => extension = Some(String::from_utf8_lossy(value).to_string()),
-        b"ContentType" => content_type = Some(String::from_utf8_lossy(value).to_string()),
-        _ => {}
-    })?;
-    Ok(match (extension, content_type) {
-        (Some(extension), Some(content_type)) => Some((extension, content_type)),
-        _ => None,
-    })
+) -> Result<(String, String), ParseError> {
+    let extension = required_content_type_attr(element, b"Extension")?;
+    let content_type = required_content_type_attr(element, b"ContentType")?;
+    Ok((extension, content_type))
 }
 
 fn parse_override_entry(
     element: &quick_xml::events::BytesStart<'_>,
-) -> Result<Option<(String, String)>, ParseError> {
-    let mut part_name = None;
-    let mut content_type = None;
-    attr_each(element, "[Content_Types].xml", |key, value| match key {
-        b"PartName" => part_name = Some(String::from_utf8_lossy(value).to_string()),
-        b"ContentType" => content_type = Some(String::from_utf8_lossy(value).to_string()),
-        _ => {}
-    })?;
-    Ok(match (part_name, content_type) {
-        (Some(part_name), Some(content_type)) => Some((part_name, content_type)),
-        _ => None,
+) -> Result<(String, String), ParseError> {
+    let part_name = required_content_type_attr(element, b"PartName")?;
+    let content_type = required_content_type_attr(element, b"ContentType")?;
+    Ok((part_name, content_type))
+}
+
+fn required_content_type_attr(
+    element: &quick_xml::events::BytesStart<'_>,
+    name: &[u8],
+) -> Result<String, ParseError> {
+    try_attr_value(element, name, "[Content_Types].xml")?.ok_or_else(|| {
+        ParseError::InvalidStructure(format!(
+            "[Content_Types].xml entry is missing {}",
+            String::from_utf8_lossy(name)
+        ))
     })
 }
 
@@ -342,6 +336,24 @@ mod tests {
         match err {
             ParseError::Xml { file, .. } => assert_eq!(file, "[Content_Types].xml"),
             other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_rejects_incomplete_default_and_override_entries() {
+        for xml in [
+            r#"
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default ContentType="application/xml"/>
+            </Types>
+            "#,
+            r#"
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Override PartName="/word/document.xml"/>
+            </Types>
+            "#,
+        ] {
+            assert!(ContentTypes::parse(xml).is_err());
         }
     }
 }
