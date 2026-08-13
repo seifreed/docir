@@ -58,6 +58,17 @@ fn parse_header_rejects_nonstandard_mini_sector_shift() {
 }
 
 #[test]
+fn parse_header_rejects_nonstandard_mini_stream_cutoff() {
+    let mut header = valid_header_template();
+    header[0x38..0x3C].copy_from_slice(&(4095u32).to_le_bytes());
+
+    assert!(matches!(
+        parse_header(&header),
+        Err(ParseError::InvalidStructure(message)) if message.contains("mini stream cutoff")
+    ));
+}
+
+#[test]
 fn parse_header_rejects_invalid_byte_order() {
     let mut header = valid_header_template();
     header[0x1C..0x1E].copy_from_slice(&0xFEFFu16.to_le_bytes());

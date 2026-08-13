@@ -22,6 +22,7 @@ pub(crate) struct OleHeader {
 
 const MAX_SECTOR_SHIFT: u32 = 12; // CFB spec: only 9 (512 bytes, v3) and 12 (4096 bytes, v4) are valid
 const MINI_SECTOR_SHIFT: u32 = 6; // CFB spec: mini-sectors are always 64 bytes
+const MINI_STREAM_CUTOFF_SIZE: u32 = 4096; // CFB spec: streams below this size use the mini-stream
 const MAX_FAT_SECTORS: u32 = 1 << 20; // reasonable upper bound
 const MAX_DIFAT_CHAIN: u32 = 1 << 16; // reasonable upper bound for DIFAT chain iterations
 
@@ -75,6 +76,12 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<OleHeader, ParseError> {
             "OLE header mini sector shift must be 6".to_string(),
         ));
     }
+    let mini_cutoff = read_u32(data, 0x38)?;
+    if mini_cutoff != MINI_STREAM_CUTOFF_SIZE {
+        return Err(ParseError::InvalidStructure(format!(
+            "OLE mini stream cutoff must be {MINI_STREAM_CUTOFF_SIZE}"
+        )));
+    }
     let num_fat_sectors = read_u32(data, 0x2C)?;
     if num_fat_sectors > MAX_FAT_SECTORS {
         return Err(ParseError::ResourceLimit(format!(
@@ -92,7 +99,7 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<OleHeader, ParseError> {
         mini_sector_size: 1u32 << mini_sector_shift,
         num_fat_sectors,
         first_dir_sector: read_u32(data, 0x30)?,
-        mini_cutoff: read_u32(data, 0x38)?,
+        mini_cutoff,
         first_mini_fat: read_u32(data, 0x3C)?,
         num_mini_fat: read_u32(data, 0x40)?,
         first_difat: read_u32(data, 0x44)?,
