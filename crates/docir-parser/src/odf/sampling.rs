@@ -2,7 +2,7 @@ use super::helpers::{OdsCellData, OdsRow, parse_ods_covered_cell, parse_ods_cove
 use super::ods::{parse_ods_cell, parse_ods_cell_empty};
 use super::{OdfReader, spreadsheet};
 use crate::error::ParseError;
-use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value_by_suffix, xml_error};
 use docir_core::visitor::IrStore;
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
@@ -147,7 +147,8 @@ fn skip_sampled_cell(
 }
 
 fn repeated_columns(e: &BytesStart<'_>) -> Result<u32, ParseError> {
-    attr_value_by_suffix(e, &[b":number-columns-repeated"])
+    let value = try_attr_value_by_suffix(e, &[b":number-columns-repeated"], "content.xml")?;
+    value
         .map(|value| {
             value
                 .parse::<u32>()

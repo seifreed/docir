@@ -510,6 +510,39 @@ fn parse_ods_table_fast_reports_malformed_row_repeats() {
 }
 
 #[test]
+fn parse_ods_table_fast_reports_invalid_row_repeat_attribute_entity() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <table:table table:name="FastBadEntity">
+    <table:table-row table:number-rows-repeated="1&"/>
+  </table:table>
+</office:spreadsheet>
+"#;
+    let (mut reader, table_start) = parse_table_start(xml);
+    let mut store = IrStore::new();
+    let mut config = ParserConfig::default();
+    config.odf.fast_sample_rows = 1;
+    config.odf.fast_sample_cols = 1;
+    let limits = OdfLimits::new(&config, true);
+
+    let err = parse_ods_table_fast(
+        &mut reader,
+        &table_start,
+        1,
+        &mut store,
+        &HashMap::new(),
+        &limits,
+    )
+    .expect_err("invalid row repeat entity must fail");
+
+    match err {
+        ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
 fn parse_ods_table_reports_malformed_numeric_cell_value() {
     let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
 <office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"

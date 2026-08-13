@@ -1,7 +1,7 @@
 //! ODF presentation parsing helpers extracted from the main module.
 
 use super::helpers::{parse_notes, parse_text_element};
-use crate::xml_utils::{attr_value_by_suffix, local_name, try_attr_value_by_suffix, xml_error};
+use crate::xml_utils::{local_name, try_attr_value_by_suffix, xml_error};
 #[path = "presentation_helpers_utils.rs"]
 mod presentation_helpers_utils;
 use super::{
@@ -128,7 +128,7 @@ pub(super) fn parse_draw_frame_presentation(
     let mut state = DrawFrameState {
         frame: FrameShapeState::new(),
         text: None,
-        name: attr_value_by_suffix(start, &[b":name"]),
+        name: try_attr_value_by_suffix(start, &[b":name"], "content.xml")?,
     };
     let mut buf = Vec::new();
 

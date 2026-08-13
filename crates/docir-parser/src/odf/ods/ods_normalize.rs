@@ -1,11 +1,12 @@
 use super::super::helpers::parse_text_element;
 use crate::odf::{CellFormula, CellValue, OdfReader, ParseError};
-use crate::xml_utils::{attr_value_by_suffix, local_name, xml_error};
+use crate::xml_utils::{local_name, try_attr_value_by_suffix, xml_error};
 use quick_xml::events::{BytesStart, Event};
 use std::collections::HashMap;
 
 pub(crate) fn row_repeat_from(start: &BytesStart<'_>) -> Result<u32, ParseError> {
-    attr_value_by_suffix(start, &[b":number-rows-repeated"])
+    let value = try_attr_value_by_suffix(start, &[b":number-rows-repeated"], "content.xml")?;
+    value
         .map(|value| {
             value
                 .parse::<u32>()
@@ -72,17 +73,19 @@ pub(crate) fn resolve_style_id(
     start: &BytesStart<'_>,
     style_map: &mut HashMap<String, u32>,
     next_style_id: &mut u32,
-) -> Option<u32> {
-    attr_value_by_suffix(start, &[b":style-name"]).map(|name| {
-        if let Some(id) = style_map.get(&name) {
-            *id
-        } else {
-            let id = *next_style_id;
-            *next_style_id += 1;
-            style_map.insert(name, id);
-            id
-        }
-    })
+) -> Result<Option<u32>, ParseError> {
+    Ok(
+        try_attr_value_by_suffix(start, &[b":style-name"], "content.xml")?.map(|name| {
+            if let Some(id) = style_map.get(&name) {
+                *id
+            } else {
+                let id = *next_style_id;
+                *next_style_id += 1;
+                style_map.insert(name, id);
+                id
+            }
+        }),
+    )
 }
 
 pub(crate) fn parse_cell_formula(formula_attr: Option<String>) -> Option<CellFormula> {
