@@ -9,7 +9,7 @@ use crate::hwp::{
     attr_any, finalize_cell_hwpx, finalize_row_hwpx, finalize_table_hwpx, parse_hwpx_shape,
     run_properties_from_attrs,
 };
-use crate::xml_utils::{local_name, xml_error};
+use crate::xml_utils::{local_name, track_xml_document_event, xml_error};
 use docir_core::ir::{
     IRNode, NumberingInfo, Paragraph, Revision, RevisionType, Run, RunProperties, Table, TableCell,
     TableRow,
@@ -115,39 +115,28 @@ pub(crate) fn parse_hwpx_section(
     let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                depth += 1;
+        let event = match reader.read_event_into(&mut buf) {
+            Ok(event) => event,
+            Err(e) => return Err(xml_error(source, e)),
+        };
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, source)? {
+            break;
+        }
+        match event {
+            Event::Start(e) => {
                 handle_hwpx_start(&e, source, store, media_lookup, &mut state)?;
             }
-            Ok(Event::Empty(e)) => {
-                if depth == 0 {
-                    root_closed = true;
-                }
+            Event::Empty(e) => {
                 handle_hwpx_empty(&e, source, store, media_lookup, &mut state)?;
             }
-            Ok(Event::End(e)) => {
+            Event::End(e) => {
                 handle_hwpx_end(&e, source, store, comments, footnotes, endnotes, &mut state);
-                if depth == 0 {
-                    return Err(xml_error(source, "unexpected end of HWPX section"));
-                }
-                depth -= 1;
-                if depth == 0 {
-                    root_closed = true;
-                }
             }
-            Ok(Event::Text(e)) => {
+            Event::Text(e) => {
                 handle_hwpx_text(&e, source, store, &mut state)?;
             }
-            Ok(Event::GeneralRef(e)) => {
+            Event::GeneralRef(e) => {
                 section_parse_events::handle_hwpx_general_ref(&e, source, store, &mut state)?;
-            }
-            Ok(Event::Eof) if root_closed => break,
-            Ok(Event::Eof) => {
-                return Err(xml_error(source, "unexpected end of HWPX section"));
-            }
-            Err(e) => {
-                return Err(xml_error(source, e));
             }
             _ => {}
         }

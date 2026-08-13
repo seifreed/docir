@@ -233,6 +233,53 @@ pub(crate) fn read_event<'a, R: BufRead>(
     })
 }
 
+pub(crate) fn track_xml_document_event(
+    event: &Event<'_>,
+    depth: &mut usize,
+    root_closed: &mut bool,
+    file: &str,
+) -> Result<bool, ParseError> {
+    match event {
+        Event::Start(_) => {
+            if *root_closed {
+                return Err(xml_error(file, "XML document contains multiple roots"));
+            }
+            *depth += 1;
+        }
+        Event::Empty(_) => {
+            if *root_closed {
+                return Err(xml_error(file, "XML document contains multiple roots"));
+            }
+            if *depth == 0 {
+                *root_closed = true;
+            }
+        }
+        Event::End(_) => {
+            if *depth == 0 {
+                return Err(xml_error(
+                    file,
+                    "XML document contains an unexpected closing element",
+                ));
+            }
+            *depth -= 1;
+            if *depth == 0 {
+                *root_closed = true;
+            }
+        }
+        Event::Eof => {
+            if *root_closed {
+                return Ok(true);
+            }
+            return Err(xml_error(
+                file,
+                "XML document ends before its root is closed",
+            ));
+        }
+        _ => {}
+    }
+    Ok(false)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum XmlScanControl {
     Continue,

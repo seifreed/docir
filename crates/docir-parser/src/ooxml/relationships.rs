@@ -3,7 +3,8 @@
 use crate::error::ParseError;
 use crate::xml_utils::local_name;
 use crate::xml_utils::{
-    read_event, reader_from_str, try_decoded_attr_value, visit_attributes_result,
+    read_event, reader_from_str, track_xml_document_event, try_decoded_attr_value,
+    visit_attributes_result,
 };
 use quick_xml::events::Event;
 use std::collections::HashMap;
@@ -56,21 +57,8 @@ impl Relationships {
 
         loop {
             let event = read_event(&mut reader, &mut buf, path)?;
-            match &event {
-                Event::Start(_) => depth += 1,
-                Event::Empty(_) if depth == 0 => root_closed = true,
-                Event::End(_) => {
-                    if depth == 0 {
-                        return Err(ParseError::InvalidStructure(format!(
-                            "{path} contains an unexpected closing element"
-                        )));
-                    }
-                    depth -= 1;
-                    if depth == 0 {
-                        root_closed = true;
-                    }
-                }
-                _ => {}
+            if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+                break;
             }
 
             match event {
@@ -129,12 +117,6 @@ impl Relationships {
                     }
                     rels.by_type.entry(rel_type).or_default().push(id.clone());
                     rels.by_id.insert(id, rel);
-                }
-                Event::Eof if root_closed => break,
-                Event::Eof => {
-                    return Err(ParseError::InvalidStructure(format!(
-                        "{path} has an unexpected end of XML"
-                    )));
                 }
                 _ => {}
             }
@@ -299,7 +281,7 @@ mod tests {
 
         let err = Relationships::parse(xml).expect_err("truncated relationships must fail");
         assert!(
-            matches!(err, ParseError::InvalidStructure(message) if message.contains("unexpected end of XML"))
+            matches!(err, ParseError::Xml { file, message } if file == ".rels" && message.contains("root is closed"))
         );
     }
 

@@ -1,7 +1,9 @@
 //! [Content_Types].xml parser.
 
 use crate::error::ParseError;
-use crate::xml_utils::{local_name, read_event, reader_from_str, try_attr_value};
+use crate::xml_utils::{
+    local_name, read_event, reader_from_str, track_xml_document_event, try_attr_value,
+};
 use quick_xml::events::Event;
 use std::collections::HashMap;
 
@@ -21,9 +23,20 @@ impl ContentTypes {
 
         let mut content_types = ContentTypes::default();
         let mut buf = Vec::new();
+        let mut depth = 0usize;
+        let mut root_closed = false;
 
         loop {
-            match read_event(&mut reader, &mut buf, "[Content_Types].xml")? {
+            let event = read_event(&mut reader, &mut buf, "[Content_Types].xml")?;
+            if track_xml_document_event(
+                &event,
+                &mut depth,
+                &mut root_closed,
+                "[Content_Types].xml",
+            )? {
+                break;
+            }
+            match event {
                 Event::Empty(e) | Event::Start(e) => match local_name(e.name().as_ref()) {
                     b"Default" => {
                         let (ext, ct) = parse_default_entry(&e)?;
@@ -355,5 +368,18 @@ mod tests {
         ] {
             assert!(ContentTypes::parse(xml).is_err());
         }
+    }
+
+    #[test]
+    fn parse_rejects_truncated_content_types_document() {
+        let xml = r#"
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        "#;
+
+        let err = ContentTypes::parse(xml).expect_err("truncated content types must fail");
+        assert!(
+            matches!(err, ParseError::Xml { file, message } if file == "[Content_Types].xml" && message.contains("root is closed"))
+        );
     }
 }
