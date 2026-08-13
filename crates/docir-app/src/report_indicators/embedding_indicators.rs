@@ -48,6 +48,10 @@ pub(super) fn collect_embedding_indicators(parsed: &ParsedDocument) -> Embedding
             _ => {}
         }
     }
+    ole_evidence.sort_unstable();
+    activex_evidence.sort_unstable();
+    external_reference_evidence.sort_unstable();
+    native_payload_evidence.sort_unstable();
     EmbeddingIndicators {
         ole_evidence,
         activex_evidence,

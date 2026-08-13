@@ -8,7 +8,7 @@ use crate::test_support::{
 use docir_core::ir::{Document, IRNode};
 use docir_core::security::{
     ActiveXControl, DdeField, DdeFieldType, ExternalRefType, ExternalReference, MacroModule,
-    MacroModuleType, MacroProject, ThreatIndicator, ThreatIndicatorType, ThreatLevel,
+    MacroModuleType, MacroProject, OleObject, ThreatIndicator, ThreatIndicatorType, ThreatLevel,
 };
 use docir_core::types::{DocumentFormat, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -132,6 +132,47 @@ fn report_indicators_marks_absent_when_no_security_content_exists() {
             .iter()
             .all(|indicator| indicator.key == "format-container" || indicator.value == "absent")
     );
+}
+
+#[test]
+fn report_indicators_orders_ole_evidence_stably() {
+    for _ in 0..8 {
+        let mut store = IrStore::new();
+        let document = Document::new(DocumentFormat::WordProcessing);
+        let root_id = document.id;
+        for path in [
+            "word/embeddings/z.bin",
+            "word/embeddings/a.bin",
+            "word/embeddings/m.bin",
+        ] {
+            let mut ole = OleObject::new();
+            ole.source_path = Some(path.to_string());
+            store.insert(IRNode::OleObject(ole));
+        }
+        store.insert(IRNode::Document(document));
+
+        let parsed = ParsedDocument::new(docir_parser::parser::ParsedDocument {
+            root_id,
+            format: DocumentFormat::WordProcessing,
+            store,
+            metrics: None,
+        });
+        let report = IndicatorReport::from_parsed(&parsed);
+        let indicator = report
+            .indicators
+            .iter()
+            .find(|indicator| indicator.key == "ole-objects")
+            .expect("OLE indicator");
+
+        assert_eq!(
+            indicator.evidence,
+            vec![
+                "word/embeddings/a.bin",
+                "word/embeddings/m.bin",
+                "word/embeddings/z.bin"
+            ]
+        );
+    }
 }
 
 #[test]
