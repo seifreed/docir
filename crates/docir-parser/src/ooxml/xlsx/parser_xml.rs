@@ -1,6 +1,8 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{attr_bool_like, decoded_text, local_name, visit_attributes, xml_error};
+use crate::xml_utils::{
+    attr_bool_like, decoded_text, local_name, track_xml_document_event, visit_attributes, xml_error,
+};
 use docir_core::ir::{
     CalcChain, CalcChainEntry, CellError, CellFormula, ColumnDefinition, ConditionalFormat,
     ConditionalRule, FormulaType, MergedCellRange, parse_cell_reference,
@@ -26,9 +28,17 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
     chain.span = Some(SourceSpan::new(path));
 
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"c" => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(path, err))?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
+            Event::Start(e) | Event::Empty(e) if local_name(e.name().as_ref()) == b"c" => {
                 let mut cell_ref = None;
                 let mut sheet_id = None;
                 let mut index = None;
@@ -66,10 +76,6 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
                     level,
                     new_value,
                 });
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => {
-                return Err(xml_error(path, e));
             }
             _ => {}
         }

@@ -496,6 +496,13 @@ fn test_parse_calc_chain_reports_malformed_attributes() {
 }
 
 #[test]
+fn test_parse_calc_chain_rejects_truncated_root() {
+    let err = parse_calc_chain("<calcChain><c r=\"A1\"/>", "xl/calcChain-truncated.xml")
+        .expect_err("truncated calc chain must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "xl/calcChain-truncated.xml"));
+}
+
+#[test]
 fn test_parse_sheet_comments() {
     let xml = r#"
         <comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -562,6 +569,17 @@ fn test_parse_sheet_comments_reports_malformed_author_id() {
         ParseError::Xml { file, .. } => assert_eq!(file, "xl/comments1.xml"),
         other => panic!("unexpected error: {other:?}"),
     }
+}
+
+#[test]
+fn test_parse_sheet_comments_rejects_truncated_root() {
+    let err = parse_sheet_comments(
+        "<comments><commentList><comment ref=\"A1\"><text><t>broken</t></text>",
+        "xl/comments-truncated.xml",
+        Some("Sheet1"),
+    )
+    .expect_err("truncated comments must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "xl/comments-truncated.xml"));
 }
 
 #[test]

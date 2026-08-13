@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{local_name, try_attr_value, xml_error};
+use crate::xml_utils::{local_name, track_xml_document_event, try_attr_value, xml_error};
 use docir_core::ir::SheetComment;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
@@ -20,8 +20,14 @@ pub(super) fn parse_sheet_comments_impl(
 
     let mut buf = Vec::new();
     let mut state = CommentParseState::default();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match crate::xml_utils::read_event(&mut reader, &mut buf, path)? {
+        let event = crate::xml_utils::read_event(&mut reader, &mut buf, path)?;
+        if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
+            break;
+        }
+        match event {
             Event::Start(e) => handle_comment_start(&e, path, &flavor, &mut state)?,
             Event::Text(e) => {
                 let text =
@@ -48,7 +54,6 @@ pub(super) fn parse_sheet_comments_impl(
                 sheet_name,
                 &mut state,
             )?,
-            Event::Eof => break,
             _ => {}
         }
         buf.clear();
