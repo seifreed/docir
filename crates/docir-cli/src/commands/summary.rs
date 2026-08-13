@@ -12,7 +12,8 @@ pub fn run(input: PathBuf, parser_config: &ParserConfig) -> Result<()> {
     let source = input.to_string_lossy();
     let summary_text = app
         .format_summary(&parsed, Some(&source))
-        .context("Failed to build document summary")?;
+        .context("Failed to build document summary")?
+        .context("Document summary is unavailable")?;
 
     write_text_output(&summary_text, None)
 }

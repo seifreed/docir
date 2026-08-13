@@ -123,8 +123,8 @@ pub(crate) type AnalyzeSecurity<F> = AnalyzeSecurityUseCase<F>;
 pub(crate) struct SummarizeUseCase;
 
 impl SummarizeUseCase {
-    pub(crate) fn run(&self, parsed: &ParsedDocument) -> Option<DocumentSummary> {
-        crate::summarize_document(parsed)
+    pub(crate) fn run(&self, parsed: &ParsedDocument) -> AppResult<Option<DocumentSummary>> {
+        crate::summarize_document(parsed).map_err(crate::AppError::from)
     }
 }
 
@@ -401,6 +401,7 @@ mod tests {
         let use_case = SummarizeUseCase;
         let summary = use_case
             .run(&parsed)
+            .expect("summary traversal")
             .expect("word processing must be summarized");
         assert_eq!(
             summary.security.threat_level,

@@ -109,6 +109,9 @@ pub type AppResult<T> = Result<T, AppError>;
 /// High-level error type for application workflows.
 #[derive(Debug, Error)]
 pub enum AppError {
+    /// IR traversal failure while building an application result.
+    #[error(transparent)]
+    Core(#[from] docir_core::CoreError),
     /// Parser pipeline failure.
     #[error(transparent)]
     Parse(#[from] ParserParseError),
@@ -319,7 +322,7 @@ impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
     }
 
     /// Builds a structured summary for a parsed document.
-    pub fn build_summary(&self, parsed: &ParsedDocument) -> Option<DocumentSummary> {
+    pub fn build_summary(&self, parsed: &ParsedDocument) -> AppResult<Option<DocumentSummary>> {
         self.summarize_use_case().run(parsed)
     }
 
@@ -381,9 +384,14 @@ impl<P: ParserPort + SecurityScannerPort> DocirApp<P> {
     }
 
     /// Builds and formats a structured summary for output adapters.
-    pub fn format_summary(&self, parsed: &ParsedDocument, source: Option<&str>) -> Option<String> {
-        self.build_summary(parsed)
-            .map(|summary| self.summary_presenter.format_summary(&summary, source))
+    pub fn format_summary(
+        &self,
+        parsed: &ParsedDocument,
+        source: Option<&str>,
+    ) -> AppResult<Option<String>> {
+        self.build_summary(parsed).map(|summary| {
+            summary.map(|summary| self.summary_presenter.format_summary(&summary, source))
+        })
     }
 
     /// Runs security analysis for a parsed document.

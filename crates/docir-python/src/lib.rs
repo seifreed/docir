@@ -84,6 +84,7 @@ fn query(
 fn summary(path: String) -> PyResult<String> {
     let (app, parsed) = build_app_and_parse(&path)?;
     app.format_summary(&parsed, Some(&path))
+        .map_err(to_py_value_error)?
         .ok_or_else(|| PyValueError::new_err("Could not build document summary"))
 }
 

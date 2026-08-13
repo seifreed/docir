@@ -64,14 +64,18 @@ pub struct DocumentSummary {
 }
 
 /// Public API entrypoint: summarize_document.
-pub fn summarize_document(parsed: &ParsedDocument) -> Option<DocumentSummary> {
-    let doc = parsed.document()?;
+pub fn summarize_document(
+    parsed: &ParsedDocument,
+) -> Result<Option<DocumentSummary>, docir_core::CoreError> {
+    let Some(doc) = parsed.document() else {
+        return Ok(None);
+    };
 
-    Some(DocumentSummary {
+    Ok(Some(DocumentSummary {
         format: doc.format.display_name().to_string(),
         metadata: build_metadata_summary(parsed, doc.metadata),
-        node_counts: build_node_counts(parsed),
-        text_stats: build_text_stats(parsed),
+        node_counts: build_node_counts(parsed)?,
+        text_stats: build_text_stats(parsed)?,
         metrics: build_metrics_summary(parsed),
         security: SecuritySummary::from(doc),
         threat_indicators: doc
@@ -80,7 +84,7 @@ pub fn summarize_document(parsed: &ParsedDocument) -> Option<DocumentSummary> {
             .iter()
             .map(ThreatIndicatorSummary::from)
             .collect(),
-    })
+    }))
 }
 
 fn build_metadata_summary(
@@ -101,10 +105,10 @@ fn build_metadata_summary(
     }
 }
 
-fn build_node_counts(parsed: &ParsedDocument) -> Vec<NodeCount> {
+fn build_node_counts(parsed: &ParsedDocument) -> Result<Vec<NodeCount>, docir_core::CoreError> {
     let mut counter = NodeCounter::new();
     let mut walker = PreOrderWalker::new(parsed.store(), parsed.root_id());
-    let _ = walker.walk(&mut counter);
+    walker.walk(&mut counter)?;
     let mut counts: Vec<_> = counter
         .counts
         .iter()
@@ -114,17 +118,17 @@ fn build_node_counts(parsed: &ParsedDocument) -> Vec<NodeCount> {
         })
         .collect();
     counts.sort_by_key(|count| std::cmp::Reverse(count.count));
-    counts
+    Ok(counts)
 }
 
-fn build_text_stats(parsed: &ParsedDocument) -> TextStatsSummary {
+fn build_text_stats(parsed: &ParsedDocument) -> Result<TextStatsSummary, docir_core::CoreError> {
     let mut text_collector = TextStats::new();
     let mut walker = PreOrderWalker::new(parsed.store(), parsed.root_id());
-    let _ = walker.walk(&mut text_collector);
-    TextStatsSummary {
+    walker.walk(&mut text_collector)?;
+    Ok(TextStatsSummary {
         char_count: text_collector.char_count,
         word_count: text_collector.word_count,
-    }
+    })
 }
 
 fn build_metrics_summary(parsed: &ParsedDocument) -> Option<ParseMetricsSummary> {
@@ -261,13 +265,19 @@ mod tests {
             },
             metrics: None,
         };
-        assert!(summarize_document(&parsed).is_none());
+        assert!(
+            summarize_document(&parsed)
+                .expect("summary traversal")
+                .is_none()
+        );
     }
 
     #[test]
     fn summarize_document_builds_metadata_security_counts_and_text_stats() {
         let parsed = parsed_with_document(true);
-        let summary = summarize_document(&parsed).expect("summary");
+        let summary = summarize_document(&parsed)
+            .expect("summary traversal")
+            .expect("summary");
 
         assert_eq!(summary.format, "Word Document");
         assert_eq!(summary.metadata.title.as_deref(), Some("Doc"));
@@ -290,7 +300,9 @@ mod tests {
     #[test]
     fn summarize_document_uses_default_metadata_when_missing_node() {
         let parsed = parsed_with_document(false);
-        let summary = summarize_document(&parsed).expect("summary");
+        let summary = summarize_document(&parsed)
+            .expect("summary traversal")
+            .expect("summary");
         assert!(summary.metadata.title.is_none());
         assert!(summary.metadata.author.is_none());
     }
