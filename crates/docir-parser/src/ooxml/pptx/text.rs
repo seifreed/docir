@@ -32,6 +32,12 @@ fn parse_text_body_with_end(
                 let paragraph = parse_text_paragraph(reader, slide_path)?;
                 paragraphs.push(paragraph);
             }
+            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"p" => {
+                paragraphs.push(ShapeTextParagraph {
+                    runs: Vec::new(),
+                    alignment: None,
+                });
+            }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == end_tag => {
                 break;
             }
@@ -234,6 +240,18 @@ mod tests {
         let mut reader = reader_after_start(xml, b"txBody");
 
         assert_xml_error(parse_text_body(&mut reader, "ppt/slides/broken-text.xml"));
+    }
+
+    #[test]
+    fn parse_text_body_preserves_empty_paragraph() {
+        let xml = r#"<a:txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:p/></a:txBody>"#;
+        let mut reader = reader_after_start(xml, b"txBody");
+
+        let text = parse_text_body(&mut reader, "ppt/slides/empty-text.xml")
+            .expect("empty paragraph should parse");
+
+        assert_eq!(text.paragraphs.len(), 1);
+        assert!(text.paragraphs[0].runs.is_empty());
     }
 
     #[test]
