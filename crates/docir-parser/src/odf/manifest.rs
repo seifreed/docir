@@ -123,8 +123,18 @@ fn apply_entry_encryption_attrs(
 fn parse_manifest_entry(
     e: &quick_xml::events::BytesStart<'_>,
 ) -> Result<OdfManifestEntry, ParseError> {
-    let path =
-        try_attr_value_by_suffix(e, &[b":full-path"], "META-INF/manifest.xml")?.unwrap_or_default();
+    let path = try_attr_value_by_suffix(e, &[b":full-path"], "META-INF/manifest.xml")?.ok_or_else(
+        || {
+            ParseError::InvalidStructure(
+                "ODF manifest file-entry is missing manifest:full-path".to_string(),
+            )
+        },
+    )?;
+    if path.is_empty() {
+        return Err(ParseError::InvalidStructure(
+            "ODF manifest file-entry has an empty manifest:full-path".to_string(),
+        ));
+    }
     let media_type = try_attr_value_by_suffix(e, &[b":media-type"], "META-INF/manifest.xml")?;
     Ok(OdfManifestEntry {
         path,
@@ -285,6 +295,24 @@ mod tests {
                 assert_eq!(file, "META-INF/manifest.xml");
             }
             other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_manifest_rejects_missing_or_empty_file_entry_path() {
+        for xml in [
+            r#"
+            <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <manifest:file-entry manifest:media-type="text/xml"/>
+            </manifest:manifest>
+        "#,
+            r#"
+            <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+              <manifest:file-entry manifest:full-path="" manifest:media-type="text/xml"/>
+            </manifest:manifest>
+        "#,
+        ] {
+            assert!(parse_manifest(xml).is_err());
         }
     }
 
