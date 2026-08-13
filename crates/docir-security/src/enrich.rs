@@ -67,6 +67,7 @@ fn rebuild_security_info(store: &IrStore, security: &mut docir_core::security::S
         .filter(|id| !existing_ole.contains(id))
         .collect();
     security.ole_objects.extend(missing_ole);
+    security.ole_objects.sort_unstable_by_key(NodeId::as_u64);
 
     let existing_refs: std::collections::HashSet<NodeId> =
         security.external_refs.iter().copied().collect();
@@ -82,6 +83,7 @@ fn rebuild_security_info(store: &IrStore, security: &mut docir_core::security::S
         .filter(|id| !existing_refs.contains(id))
         .collect();
     security.external_refs.extend(missing_refs);
+    security.external_refs.sort_unstable_by_key(NodeId::as_u64);
 
     let existing_activex: std::collections::HashSet<NodeId> =
         security.activex_controls.iter().copied().collect();
@@ -97,6 +99,9 @@ fn rebuild_security_info(store: &IrStore, security: &mut docir_core::security::S
         .filter(|id| !existing_activex.contains(id))
         .collect();
     security.activex_controls.extend(missing_activex);
+    security
+        .activex_controls
+        .sort_unstable_by_key(NodeId::as_u64);
 
     if security.dde_fields.is_empty() {
         security.dde_fields = scan_dde_fields(store);
@@ -119,6 +124,14 @@ fn scan_dde_fields(store: &IrStore) -> Vec<DdeField> {
             out.push(dde);
         }
     }
+    out.sort_unstable_by(|left, right| {
+        let left_location = left.location.as_ref();
+        let right_location = right.location.as_ref();
+        left_location
+            .map(|span| (&span.file_path, span.line, span.column))
+            .cmp(&right_location.map(|span| (&span.file_path, span.line, span.column)))
+            .then_with(|| left.instruction.cmp(&right.instruction))
+    });
     out
 }
 
@@ -204,6 +217,75 @@ mod tests {
                 && i.description.contains("OLE object found at")
                 && i.location.as_deref() == Some("word/embeddings/object1.bin")
         }));
+    }
+
+    #[test]
+    fn populate_security_indicators_orders_rebuilt_security_collections() {
+        let mut store = IrStore::new();
+        let doc = Document::new(DocumentFormat::WordProcessing);
+        let root_id = doc.id;
+        let mut ole_first = OleObject::new();
+        ole_first.span = Some(SourceSpan::new("word/embeddings/first.bin"));
+        let mut ole_second = OleObject::new();
+        ole_second.span = Some(SourceSpan::new("word/embeddings/second.bin"));
+        let ole_ids = [ole_first.id, ole_second.id];
+        let mut external_first =
+            ExternalReference::new(ExternalRefType::Hyperlink, "https://first.test");
+        external_first.span = Some(SourceSpan::new("word/document.xml"));
+        let mut external_second =
+            ExternalReference::new(ExternalRefType::Hyperlink, "https://second.test");
+        external_second.span = Some(SourceSpan::new("word/header1.xml"));
+        let external_ids = [external_first.id, external_second.id];
+        let mut activex_first = ActiveXControl::new();
+        activex_first.span = Some(SourceSpan::new("word/activeX/first.bin"));
+        let mut activex_second = ActiveXControl::new();
+        activex_second.span = Some(SourceSpan::new("word/activeX/second.bin"));
+        let activex_ids = [activex_first.id, activex_second.id];
+        let mut dde_first = Field::new(Some(r#"DDEAUTO "cmd" "/c first" "A1""#.to_string()));
+        dde_first.span = Some(SourceSpan::new("z.xml"));
+        let mut dde_second = Field::new(Some(r#"DDEAUTO "cmd" "/c second" "A1""#.to_string()));
+        dde_second.span = Some(SourceSpan::new("a.xml"));
+
+        store.insert(IRNode::Document(doc));
+        store.insert(IRNode::OleObject(ole_second));
+        store.insert(IRNode::OleObject(ole_first));
+        store.insert(IRNode::ExternalReference(external_second));
+        store.insert(IRNode::ExternalReference(external_first));
+        store.insert(IRNode::ActiveXControl(activex_second));
+        store.insert(IRNode::ActiveXControl(activex_first));
+        store.insert(IRNode::Field(dde_first));
+        store.insert(IRNode::Field(dde_second));
+
+        populate_security_indicators(&mut store, root_id);
+
+        let Some(IRNode::Document(doc)) = store.get(root_id) else {
+            panic!("missing document");
+        };
+        let mut expected_ole = ole_ids.to_vec();
+        expected_ole.sort_unstable_by_key(NodeId::as_u64);
+        let mut expected_external = external_ids.to_vec();
+        expected_external.sort_unstable_by_key(NodeId::as_u64);
+        let mut expected_activex = activex_ids.to_vec();
+        expected_activex.sort_unstable_by_key(NodeId::as_u64);
+        assert_eq!(doc.security.ole_objects, expected_ole);
+        assert_eq!(doc.security.external_refs, expected_external);
+        assert_eq!(doc.security.activex_controls, expected_activex);
+        assert_eq!(
+            doc.security.dde_fields[0]
+                .location
+                .as_ref()
+                .unwrap()
+                .file_path,
+            "a.xml"
+        );
+        assert_eq!(
+            doc.security.dde_fields[1]
+                .location
+                .as_ref()
+                .unwrap()
+                .file_path,
+            "z.xml"
+        );
     }
 
     #[test]
