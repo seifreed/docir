@@ -362,7 +362,7 @@ fn push_time_field(store: &mut IrStore, section: &mut Section) {
     section.content.push(field_id);
 }
 
-pub(super) fn build_paragraph(
+pub(crate) fn build_paragraph(
     store: &mut IrStore,
     text: &str,
     numbering: Option<NumberingInfo>,

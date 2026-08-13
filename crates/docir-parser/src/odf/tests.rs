@@ -506,9 +506,10 @@ fn test_parse_odt_keeps_content_after_nested_table() {
     <office:text>
       <table:table table:name="Outer">
         <table:table-row><table:table-cell><text:p>before</text:p></table:table-cell></table:table-row>
-        <table:table-row>
-          <table:table-cell>
+          <table:table-row>
+            <table:table-cell>
             <text:p>nested parent</text:p>
+            <text:p/>
             <table:table table:name="Nested">
               <table:table-row><table:table-cell><text:p>nested</text:p></table:table-cell></table:table-row>
             </table:table>
@@ -546,6 +547,10 @@ fn test_parse_odt_keeps_content_after_nested_table() {
         .collect();
     assert!(texts.iter().any(|text| text == "before"));
     assert!(texts.iter().any(|text| text == "after"));
+    assert!(parsed.store.values().any(|node| matches!(
+        node,
+        IRNode::Paragraph(paragraph) if paragraph.runs.is_empty()
+    )));
 }
 
 #[test]

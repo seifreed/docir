@@ -3,6 +3,7 @@ use super::{
     TableCell, TableCellProperties, TableRow, XmlScanControl, scan_xml_events_until_end,
 };
 use crate::odf::paragraph::parse_paragraph;
+use crate::odf::text::build_paragraph;
 use crate::xml_utils::{is_end_event_local, local_name, try_attr_value_by_suffix, xml_error};
 use docir_core::visitor::IrStore;
 use quick_xml::events::BytesStart;
@@ -137,6 +138,11 @@ pub(super) fn parse_table_cell(
                 && local_name(e.name().as_ref()) == b"table"
             {
                 cell.content.push(parse_empty_table(store));
+            } else if let Event::Empty(e) = event
+                && local_name(e.name().as_ref()) == b"p"
+            {
+                limits.bump_paragraphs(1)?;
+                cell.content.push(build_paragraph(store, "", None, None));
             }
             Ok(XmlScanControl::Continue)
         },
