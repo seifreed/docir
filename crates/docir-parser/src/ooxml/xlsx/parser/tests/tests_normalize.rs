@@ -479,6 +479,10 @@ fn test_parse_calc_chain_reports_malformed_attributes() {
             r#"<calcChain><c r="A1" si="bad"/></calcChain>"#,
             "xl/calcChain-sheet-id-broken.xml",
         ),
+        (
+            r#"<calcChain><c i="0"/></calcChain>"#,
+            "xl/calcChain-missing-ref.xml",
+        ),
     ] {
         let err = parse_calc_chain(xml, path).expect_err("malformed calc chain attrs must fail");
         assert!(matches!(

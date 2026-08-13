@@ -57,15 +57,15 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
                 if let Some(err) = numeric_error {
                     return Err(err);
                 }
-                if let Some(cell_ref) = cell_ref {
-                    chain.entries.push(CalcChainEntry {
-                        cell_ref,
-                        sheet_id,
-                        index,
-                        level,
-                        new_value,
-                    });
-                }
+                let cell_ref =
+                    cell_ref.ok_or_else(|| xml_error(path, "calcChain cell is missing r"))?;
+                chain.entries.push(CalcChainEntry {
+                    cell_ref,
+                    sheet_id,
+                    index,
+                    level,
+                    new_value,
+                });
             }
             Ok(Event::Eof) => break,
             Err(e) => {
