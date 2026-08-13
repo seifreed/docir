@@ -51,9 +51,29 @@ impl Relationships {
 
         let mut rels = Relationships::default();
         let mut buf = Vec::new();
+        let mut depth = 0usize;
+        let mut root_closed = false;
 
         loop {
-            match read_event(&mut reader, &mut buf, path)? {
+            let event = read_event(&mut reader, &mut buf, path)?;
+            match &event {
+                Event::Start(_) => depth += 1,
+                Event::Empty(_) if depth == 0 => root_closed = true,
+                Event::End(_) => {
+                    if depth == 0 {
+                        return Err(ParseError::InvalidStructure(format!(
+                            "{path} contains an unexpected closing element"
+                        )));
+                    }
+                    depth -= 1;
+                    if depth == 0 {
+                        root_closed = true;
+                    }
+                }
+                _ => {}
+            }
+
+            match event {
                 Event::Empty(e) | Event::Start(e)
                     if local_name(e.name().as_ref()) == b"Relationship" =>
                 {
@@ -110,7 +130,12 @@ impl Relationships {
                     rels.by_type.entry(rel_type).or_default().push(id.clone());
                     rels.by_id.insert(id, rel);
                 }
-                Event::Eof => break,
+                Event::Eof if root_closed => break,
+                Event::Eof => {
+                    return Err(ParseError::InvalidStructure(format!(
+                        "{path} has an unexpected end of XML"
+                    )));
+                }
                 _ => {}
             }
             buf.clear();
@@ -261,6 +286,21 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, ".rels"),
             other => panic!("expected XML error, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_rejects_truncated_relationships_document() {
+        let xml = r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1"
+                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                Target="media/image1.png"/>
+        "#;
+
+        let err = Relationships::parse(xml).expect_err("truncated relationships must fail");
+        assert!(
+            matches!(err, ParseError::InvalidStructure(message) if message.contains("unexpected end of XML"))
+        );
     }
 
     #[test]
