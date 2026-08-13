@@ -175,8 +175,13 @@ pub(crate) fn parse_cell_value_empty(
 fn parse_numeric_value(value_attr: Option<&str>) -> Result<Option<f64>, ParseError> {
     value_attr
         .map(|v| {
-            v.parse::<f64>()
-                .map_err(|err| xml_error("content.xml", err))
+            let parsed = v
+                .parse::<f64>()
+                .map_err(|err| xml_error("content.xml", err))?;
+            if !parsed.is_finite() {
+                return Err(xml_error("content.xml", "numeric value must be finite"));
+            }
+            Ok(parsed)
         })
         .transpose()
 }
@@ -210,6 +215,13 @@ mod tests {
         ));
 
         let err = read_ods_cell_text(&mut reader).expect_err("truncated table cell must fail");
+        assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_numeric_value_rejects_non_finite_values() {
+        let err = parse_numeric_value(Some("NaN")).expect_err("NaN must not enter the IR");
+
         assert!(matches!(err, ParseError::Xml { .. }));
     }
 }

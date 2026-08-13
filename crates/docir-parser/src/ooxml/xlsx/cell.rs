@@ -204,15 +204,17 @@ fn parse_boolean_value(value: &str) -> CellValue {
 
 fn parse_datetime_value(value: String) -> CellValue {
     match value.trim().parse::<f64>() {
-        Ok(v) => CellValue::DateTime(v),
+        Ok(v) if v.is_finite() => CellValue::DateTime(v),
         Err(_) => CellValue::String(value),
+        Ok(_) => CellValue::String(value),
     }
 }
 
 fn parse_number_or_string(value: String) -> CellValue {
     match value.trim().parse::<f64>() {
-        Ok(v) => CellValue::Number(v),
+        Ok(v) if v.is_finite() => CellValue::Number(v),
         Err(_) => CellValue::String(value),
+        Ok(_) => CellValue::String(value),
     }
 }
 
@@ -301,6 +303,14 @@ mod tests {
             parse_cell_from_xml(&mut parser, r#"<c r="G1"><v>not-a-number</v></c>"#)
                 .expect("fallback string");
         assert!(matches!(fallback_string.value, CellValue::String(ref v) if v == "not-a-number"));
+
+        let non_finite_number =
+            parse_cell_from_xml(&mut parser, r#"<c r="G2"><v>NaN</v></c>"#).expect("NaN cell");
+        assert!(matches!(non_finite_number.value, CellValue::String(ref v) if v == "NaN"));
+
+        let non_finite_date = parse_cell_from_xml(&mut parser, r#"<c r="G3" t="d"><v>NaN</v></c>"#)
+            .expect("NaN date cell");
+        assert!(matches!(non_finite_date.value, CellValue::String(ref v) if v == "NaN"));
 
         let empty = parse_cell_from_xml(&mut parser, r#"<c r="H1"></c>"#).expect("empty");
         assert!(matches!(empty.value, CellValue::Empty));
