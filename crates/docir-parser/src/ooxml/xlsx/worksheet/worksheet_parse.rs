@@ -122,7 +122,9 @@ impl XlsxParser {
             &mut reader,
             &mut buf,
             sheet_path,
-            |event| is_end_event_local(event, b"worksheet"),
+            |event| {
+                is_end_event_local(event, b"worksheet") || is_end_event_local(event, b"chartsheet")
+            },
             |reader, event| {
                 match event {
                     Event::Start(start) => {
