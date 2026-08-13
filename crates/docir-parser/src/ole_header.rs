@@ -159,7 +159,10 @@ pub(crate) fn read_mini_fat_table(
 }
 
 pub(crate) fn read_u16(data: &[u8], offset: usize) -> Result<u16, ParseError> {
-    if offset + 2 > data.len() {
+    let end = offset
+        .checked_add(2)
+        .ok_or_else(|| ParseError::InvalidStructure("OLE read_u16 offset overflow".to_string()))?;
+    if end > data.len() {
         return Err(ParseError::InvalidStructure(
             "OLE read_u16 out of bounds".to_string(),
         ));
@@ -168,7 +171,10 @@ pub(crate) fn read_u16(data: &[u8], offset: usize) -> Result<u16, ParseError> {
 }
 
 pub(crate) fn read_u32(data: &[u8], offset: usize) -> Result<u32, ParseError> {
-    if offset + 4 > data.len() {
+    let end = offset
+        .checked_add(4)
+        .ok_or_else(|| ParseError::InvalidStructure("OLE read_u32 offset overflow".to_string()))?;
+    if end > data.len() {
         return Err(ParseError::InvalidStructure(
             "OLE read_u32 out of bounds".to_string(),
         ));

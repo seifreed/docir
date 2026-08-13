@@ -135,6 +135,13 @@ fn read_sector_and_stream_helpers_handle_bounds_and_chains() {
 }
 
 #[test]
+fn ole_scalar_readers_reject_overflowing_offsets() {
+    assert!(super::stream::read_u64(&[], usize::MAX).is_err());
+    assert!(crate::ole_header::read_u16(&[], usize::MAX).is_err());
+    assert!(crate::ole_header::read_u32(&[], usize::MAX).is_err());
+}
+
+#[test]
 fn directory_parsing_and_tree_walk_collect_stream_paths() {
     let mut dir = vec![0u8; 128 * 3];
 

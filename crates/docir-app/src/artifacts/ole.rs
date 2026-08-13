@@ -73,12 +73,14 @@ pub(super) fn parse_ole10_native(data: &[u8]) -> Option<Ole10NativePayload> {
     let source_path = read_c_string(data, &mut offset)?;
     offset = offset.checked_add(8)?;
     let temp_path = read_c_string(data, &mut offset)?;
-    if offset + 4 > data.len() {
+    let size_end = offset.checked_add(4)?;
+    if size_end > data.len() {
         return None;
     }
-    let size = u32::from_le_bytes(data[offset..offset + 4].try_into().ok()?) as usize;
-    offset += 4;
-    if offset + size > data.len() {
+    let size = u32::from_le_bytes(data[offset..size_end].try_into().ok()?) as usize;
+    offset = size_end;
+    let payload_end = offset.checked_add(size)?;
+    if payload_end > data.len() {
         return None;
     }
 
@@ -86,7 +88,7 @@ pub(super) fn parse_ole10_native(data: &[u8]) -> Option<Ole10NativePayload> {
         file_name: empty_to_none(file_name),
         source_path: empty_to_none(source_path),
         temp_path: empty_to_none(temp_path),
-        data: data[offset..offset + size].to_vec(),
+        data: data[offset..payload_end].to_vec(),
     })
 }
 

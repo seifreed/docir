@@ -144,7 +144,10 @@ pub(crate) fn read_sector(
 use crate::ole_header::FREE_SECT;
 
 pub(crate) fn read_u64(data: &[u8], offset: usize) -> Result<u64, ParseError> {
-    if offset + 8 > data.len() {
+    let end = offset
+        .checked_add(8)
+        .ok_or_else(|| ParseError::InvalidStructure("OLE read_u64 offset overflow".to_string()))?;
+    if end > data.len() {
         return Err(ParseError::InvalidStructure(
             "OLE read_u64 out of bounds".to_string(),
         ));

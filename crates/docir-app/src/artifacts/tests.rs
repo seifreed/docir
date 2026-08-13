@@ -147,6 +147,18 @@ fn parse_ole10_native_extracts_metadata_and_payload() {
 }
 
 #[test]
+fn parse_ole10_native_rejects_truncated_payload_size() {
+    let mut blob = vec![0u8; 4];
+    blob.extend_from_slice(&0u16.to_le_bytes());
+    blob.extend_from_slice(b"file\0source\0");
+    blob.extend_from_slice(&[0u8; 8]);
+    blob.extend_from_slice(b"temp\0");
+    blob.extend_from_slice(&u32::MAX.to_le_bytes());
+
+    assert!(parse_ole10_native(&blob).is_none());
+}
+
+#[test]
 fn scan_rtf_objdata_decodes_embedded_hex() {
     let blobs = scan_rtf_objdata(br"{\rtf1{\object{\objdata 4d5a9000}}}");
     assert_eq!(blobs, vec![vec![0x4d, 0x5a, 0x90, 0x00]]);
