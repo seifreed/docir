@@ -52,6 +52,7 @@ fn detect_odf_format_supports_expected_mimetypes() {
         detect_odf_format("application/vnd.oasis.opendocument.presentation"),
         Some(DocumentFormat::OdfPresentation)
     );
+    assert_eq!(detect_odf_format("application/not-opendocument.text"), None);
     assert_eq!(detect_odf_format("application/octet-stream"), None);
 }
 

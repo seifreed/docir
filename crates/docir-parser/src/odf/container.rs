@@ -70,12 +70,17 @@ impl OdfParser {
 }
 
 pub(super) fn detect_odf_format(mimetype: &str) -> Option<DocumentFormat> {
-    let lower = mimetype.to_ascii_lowercase();
-    if lower.contains("opendocument.text") || lower.contains("vnd.sun.xml.writer") {
+    if mimetype.eq_ignore_ascii_case("application/vnd.oasis.opendocument.text")
+        || mimetype.eq_ignore_ascii_case("application/vnd.sun.xml.writer")
+    {
         Some(DocumentFormat::OdfText)
-    } else if lower.contains("opendocument.spreadsheet") || lower.contains("vnd.sun.xml.calc") {
+    } else if mimetype.eq_ignore_ascii_case("application/vnd.oasis.opendocument.spreadsheet")
+        || mimetype.eq_ignore_ascii_case("application/vnd.sun.xml.calc")
+    {
         Some(DocumentFormat::OdfSpreadsheet)
-    } else if lower.contains("opendocument.presentation") || lower.contains("vnd.sun.xml.impress") {
+    } else if mimetype.eq_ignore_ascii_case("application/vnd.oasis.opendocument.presentation")
+        || mimetype.eq_ignore_ascii_case("application/vnd.sun.xml.impress")
+    {
         Some(DocumentFormat::OdfPresentation)
     } else {
         None
