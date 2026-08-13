@@ -379,12 +379,22 @@ where
     B: for<'e> FnMut(&Event<'e>) -> bool,
     F: for<'e> FnMut(&mut Reader<R>, &'e Event<'e>) -> Result<XmlScanControl, ParseError>,
 {
+    let mut reached_end = false;
     scan_xml_events_with_reader(reader, buf, file, |reader, event| {
         if is_end(&event) {
+            reached_end = true;
             return Ok(XmlScanControl::Break);
         }
         on_event(reader, &event)
-    })
+    })?;
+    if reached_end {
+        Ok(())
+    } else {
+        Err(xml_error(
+            file,
+            "unexpected end of XML before closing element",
+        ))
+    }
 }
 
 pub(crate) fn scan_xml_events_until_end_dispatch<R, B, FStart, FEmpty, FOther>(
@@ -403,8 +413,10 @@ where
     FEmpty: for<'e> FnMut(&mut Reader<R>, &BytesStart<'e>) -> Result<(), ParseError>,
     FOther: for<'e> FnMut(&mut Reader<R>, &Event<'e>) -> Result<(), ParseError>,
 {
+    let mut reached_end = false;
     scan_xml_events_with_reader(reader, buf, file, |reader, event| {
         if is_end(&event) {
+            reached_end = true;
             return Ok(XmlScanControl::Break);
         }
 
@@ -415,7 +427,15 @@ where
         }
 
         Ok(XmlScanControl::Continue)
-    })
+    })?;
+    if reached_end {
+        Ok(())
+    } else {
+        Err(xml_error(
+            file,
+            "unexpected end of XML before closing element",
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -515,5 +535,22 @@ mod tests {
         .expect("scan should stop on predicate");
 
         assert_eq!(names, vec!["root".to_string(), "a".to_string()]);
+    }
+
+    #[test]
+    fn scan_xml_events_until_end_rejects_missing_end() {
+        let mut reader = Reader::from_str("<root><a>");
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        let err = scan_xml_events_until_end(
+            &mut reader,
+            &mut buf,
+            "scan_until.xml",
+            |event| matches!(event, Event::End(e) if e.name().as_ref() == b"a"),
+            |_, _| Ok(XmlScanControl::Continue),
+        )
+        .expect_err("missing closing element must fail");
+
+        assert!(format!("{err}").contains("scan_until.xml"));
     }
 }
