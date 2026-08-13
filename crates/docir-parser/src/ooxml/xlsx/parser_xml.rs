@@ -158,15 +158,24 @@ pub(super) fn parse_conditional_formatting(
 }
 
 fn conditional_ranges(start: &BytesStart, sheet_path: &str) -> Result<Vec<String>, ParseError> {
-    let mut ranges = Vec::new();
+    let mut raw_ranges = None;
     visit_attributes(start, sheet_path, |attr| {
         if attr.key.as_ref() == b"sqref" {
-            ranges = lossy_attr_value(attr)
-                .split_whitespace()
-                .map(|s| s.to_string())
-                .collect();
+            raw_ranges = Some(lossy_attr_value(attr).to_string());
         }
     })?;
+    let raw_ranges = raw_ranges
+        .ok_or_else(|| xml_error(sheet_path, "conditionalFormatting is missing sqref"))?;
+    let ranges: Vec<String> = raw_ranges
+        .split_whitespace()
+        .map(|s| s.to_string())
+        .collect();
+    if ranges.is_empty() {
+        return Err(xml_error(
+            sheet_path,
+            "conditionalFormatting sqref is empty",
+        ));
+    }
     Ok(ranges)
 }
 

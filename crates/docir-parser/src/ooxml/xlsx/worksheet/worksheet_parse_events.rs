@@ -121,13 +121,24 @@ pub(crate) fn parse_conditional_formatting_empty(
     start: &BytesStart,
     sheet_path: &str,
 ) -> Result<ConditionalFormat, ParseError> {
-    let mut ranges: Vec<String> = Vec::new();
+    let mut raw_ranges = None;
     visit_attributes(start, sheet_path, |attr| {
         if attr.key.as_ref() == b"sqref" {
-            let value = lossy_attr_value(attr).to_string();
-            ranges = value.split_whitespace().map(|s| s.to_string()).collect();
+            raw_ranges = Some(lossy_attr_value(attr).to_string());
         }
     })?;
+    let raw_ranges = raw_ranges
+        .ok_or_else(|| xml_error(sheet_path, "conditionalFormatting is missing sqref"))?;
+    let ranges: Vec<String> = raw_ranges
+        .split_whitespace()
+        .map(|s| s.to_string())
+        .collect();
+    if ranges.is_empty() {
+        return Err(xml_error(
+            sheet_path,
+            "conditionalFormatting sqref is empty",
+        ));
+    }
     Ok(ConditionalFormat {
         id: NodeId::new(),
         ranges,
@@ -300,6 +311,7 @@ pub(crate) fn parse_data_validation_empty(
         formula2: None,
         span: Some(SourceSpan::new(sheet_path)),
     };
+    let mut raw_ranges = None;
 
     visit_attributes(start, sheet_path, |attr| match attr.key.as_ref() {
         b"type" => {
@@ -330,11 +342,20 @@ pub(crate) fn parse_data_validation_empty(
             validation.prompt = Some(lossy_attr_value(attr).to_string());
         }
         b"sqref" => {
-            let value = lossy_attr_value(attr).to_string();
-            validation.ranges = value.split_whitespace().map(|s| s.to_string()).collect();
+            raw_ranges = Some(lossy_attr_value(attr).to_string());
         }
         _ => {}
     })?;
+
+    let raw_ranges =
+        raw_ranges.ok_or_else(|| xml_error(sheet_path, "dataValidation is missing sqref"))?;
+    validation.ranges = raw_ranges
+        .split_whitespace()
+        .map(|s| s.to_string())
+        .collect();
+    if validation.ranges.is_empty() {
+        return Err(xml_error(sheet_path, "dataValidation sqref is empty"));
+    }
 
     Ok(validation)
 }
@@ -347,7 +368,7 @@ mod tests {
     };
     use crate::error::ParseError;
     use crate::xml_utils::reader_from_str;
-    use quick_xml::events::Event;
+    use quick_xml::events::{BytesStart, Event};
 
     #[test]
     fn parse_page_margins_reads_known_attributes() {
@@ -398,6 +419,17 @@ mod tests {
             validation.ranges,
             vec!["A1".to_string(), "A2:B2".to_string()]
         );
+    }
+
+    #[test]
+    fn parse_validation_ranges_reject_missing_sqref() {
+        let conditional = BytesStart::new("conditionalFormatting");
+        assert!(
+            parse_conditional_formatting_empty(&conditional, "xl/worksheets/sheet1.xml").is_err()
+        );
+
+        let validation = BytesStart::new("dataValidation");
+        assert!(parse_data_validation_empty(&validation, "xl/worksheets/sheet1.xml").is_err());
     }
 
     #[test]
