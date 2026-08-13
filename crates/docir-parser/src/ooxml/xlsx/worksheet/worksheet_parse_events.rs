@@ -108,8 +108,12 @@ fn parse_f64_attr(
     sheet_path: &str,
     numeric_error: &mut Option<ParseError>,
 ) -> Option<f64> {
-    match lossy_attr_value(attr).parse() {
-        Ok(value) => Some(value),
+    match lossy_attr_value(attr).parse::<f64>() {
+        Ok(value) if value.is_finite() => Some(value),
+        Ok(_) => {
+            *numeric_error = Some(xml_error(sheet_path, "numeric value must be finite"));
+            None
+        }
         Err(err) => {
             *numeric_error = Some(xml_error(sheet_path, err));
             None
@@ -396,6 +400,14 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, "xl/worksheets/sheet1.xml"),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_page_margins_rejects_non_finite_numeric_attributes() {
+        let mut start = quick_xml::events::BytesStart::new("pageMargins");
+        start.push_attribute(("left", "NaN"));
+
+        assert!(parse_page_margins(&start, "xl/worksheets/sheet1.xml").is_err());
     }
 
     #[test]

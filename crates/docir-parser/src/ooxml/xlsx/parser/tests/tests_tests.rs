@@ -111,6 +111,7 @@ fn parse_column_and_merge_helpers_report_malformed_attributes() {
         r#"<col min="4" max="2"/>"#,
         r#"<col min="1" max="4294967295"/>"#,
         r#"<col min="2" max="4" width="bad"/>"#,
+        r#"<col min="2" max="4" width="NaN"/>"#,
     ] {
         let mut reader = Reader::from_str(xml);
         buf.clear();

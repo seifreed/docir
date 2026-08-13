@@ -429,7 +429,8 @@ pub(super) fn parse_column(
             Err(err) => numeric_error = Some(err),
         },
         b"width" => match lossy_attr_value(attr).parse::<f64>() {
-            Ok(parsed) => width = Some(parsed),
+            Ok(parsed) if parsed.is_finite() => width = Some(parsed),
+            Ok(_) => numeric_error = Some(xml_error(sheet_path, "numeric value must be finite")),
             Err(err) => numeric_error = Some(xml_error(sheet_path, err)),
         },
         b"hidden" => hidden = attr_bool_like(attr.value.as_ref()),
