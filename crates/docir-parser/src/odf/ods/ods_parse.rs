@@ -74,9 +74,11 @@ pub(crate) fn parse_ods_table(
     let mut cell_values: HashMap<(u32, u32), CellValue> = HashMap::new();
     let mut formula_cells: Vec<(NodeId, u32, u32, String)> = Vec::new();
     let mut formula_map: HashMap<(u32, u32), String> = HashMap::new();
+    let mut reached_table_end = false;
 
     scan_xml_events_with_reader(reader, &mut buf, "content.xml", |reader, event| {
         if is_end_event_local(&event, b"table") {
+            reached_table_end = true;
             return Ok(XmlScanControl::Break);
         }
         let _ = dispatch_start_or_empty(reader, &event, |reader, e, is_start| {
@@ -112,6 +114,12 @@ pub(crate) fn parse_ods_table(
         })?;
         Ok(XmlScanControl::Continue)
     })?;
+    if !reached_table_end {
+        return Err(xml_error(
+            "content.xml",
+            "unexpected end of XML before closing table",
+        ));
+    }
 
     if !formula_cells.is_empty() {
         evaluate_ods_formulas(
@@ -148,9 +156,11 @@ pub(crate) fn parse_ods_table_fast(
     let sample_rows = limits.sample_rows();
     let sample_cols = limits.sample_cols();
     let sample_enabled = sample_rows > 0 && sample_cols > 0;
+    let mut reached_table_end = false;
 
     scan_xml_events_with_reader(reader, &mut buf, "content.xml", |reader, event| {
         if is_end_event_local(&event, b"table") {
+            reached_table_end = true;
             return Ok(XmlScanControl::Break);
         }
         let _ = dispatch_start_or_empty(reader, &event, |reader, e, is_start| {
@@ -177,6 +187,12 @@ pub(crate) fn parse_ods_table_fast(
         })?;
         Ok(XmlScanControl::Continue)
     })?;
+    if !reached_table_end {
+        return Err(xml_error(
+            "content.xml",
+            "unexpected end of XML before closing table",
+        ));
+    }
 
     flush_validation_ranges(
         validation_ranges,

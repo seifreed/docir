@@ -127,6 +127,56 @@ fn parse_ods_table_rejects_row_index_overflow_without_limits() {
 }
 
 #[test]
+fn parse_ods_table_rejects_missing_table_end() {
+    let xml: &[u8] =
+        br#"<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <table:table table:name="Truncated">
+"#;
+    let (mut reader, table_start) = parse_table_start(xml);
+    let mut store = IrStore::new();
+
+    let err = parse_ods_table(
+        &mut reader,
+        &table_start,
+        1,
+        &mut store,
+        &HashMap::new(),
+        &default_limits(),
+    )
+    .expect_err("truncated table must fail");
+
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+}
+
+#[test]
+fn parse_ods_table_fast_rejects_missing_table_end() {
+    let xml: &[u8] =
+        br#"<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <table:table table:name="TruncatedFast">
+"#;
+    let (mut reader, table_start) = parse_table_start(xml);
+    let mut config = ParserConfig::default();
+    config.odf.fast_sample_rows = 1;
+    config.odf.fast_sample_cols = 1;
+    let limits = OdfLimits::new(&config, true);
+    let mut store = IrStore::new();
+
+    let err = parse_ods_table_fast(
+        &mut reader,
+        &table_start,
+        1,
+        &mut store,
+        &HashMap::new(),
+        &limits,
+    )
+    .expect_err("truncated fast table must fail");
+
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+}
+
+#[test]
 fn parse_ods_table_skips_huge_repeated_empty_rows() {
     let xml: &[u8] =
         br#"<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
