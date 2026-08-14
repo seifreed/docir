@@ -63,8 +63,11 @@ impl OoxmlParser {
 
         let mut buf = Vec::new();
         let mut current_element = String::new();
+        let mut depth = 0usize;
+        let mut root_closed = false;
 
         scan_xml_events(&mut reader, &mut buf, "docProps/core.xml", |event| {
+            track_xml_document_event(&event, &mut depth, &mut root_closed, "docProps/core.xml")?;
             match event {
                 Event::Start(e) => {
                     current_element =
@@ -136,8 +139,11 @@ impl OoxmlParser {
 
         let mut buf = Vec::new();
         let mut current_element = String::new();
+        let mut depth = 0usize;
+        let mut root_closed = false;
 
         scan_xml_events(&mut reader, &mut buf, "docProps/app.xml", |event| {
+            track_xml_document_event(&event, &mut depth, &mut root_closed, "docProps/app.xml")?;
             match event {
                 Event::Start(e) => {
                     current_element =
@@ -674,6 +680,32 @@ mod tests {
             .expect_err("malformed app metadata must fail");
 
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "docProps/app.xml"));
+    }
+
+    #[test]
+    fn build_metadata_rejects_multiple_core_roots() {
+        let parser = OoxmlParser::new();
+        let mut zip =
+            TestPackageReader::new(&[("docProps/core.xml", "<coreProperties/><coreProperties/>")]);
+
+        let err = parser
+            .build_metadata(&mut zip)
+            .expect_err("core metadata XML must have one root");
+        assert!(format!("{err}").contains("multiple roots"));
+    }
+
+    #[test]
+    fn build_metadata_rejects_multiple_app_roots() {
+        let parser = OoxmlParser::new();
+        let mut zip = TestPackageReader::new(&[
+            ("docProps/core.xml", core_properties_xml()),
+            ("docProps/app.xml", "<Properties/><Properties/>"),
+        ]);
+
+        let err = parser
+            .build_metadata(&mut zip)
+            .expect_err("app metadata XML must have one root");
+        assert!(format!("{err}").contains("multiple roots"));
     }
 
     #[test]

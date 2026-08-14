@@ -18,8 +18,11 @@ pub(super) fn parse_activex_xml(
     config.check_end_names = true;
     let mut buf = Vec::new();
     let mut control = docir_core::security::ActiveXControl::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, path, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, path)?;
         if let Event::Start(e) | Event::Empty(e) = event {
             for attr in e.attributes() {
                 let attr = attr.map_err(|err| xml_error(path, err))?;
@@ -333,6 +336,17 @@ mod tests {
                 .expect("xml parses")
                 .is_none()
         );
+    }
+
+    #[test]
+    fn parse_activex_xml_rejects_multiple_roots() {
+        let err = parse_activex_xml(
+            r#"<ocx:ocx xmlns:ocx="urn:ocx" name="first"/><ocx:ocx xmlns:ocx="urn:ocx" name="second"/>"#,
+            "word/activeX/activeX1.xml",
+        )
+        .expect_err("ActiveX XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
     }
 
     #[test]
