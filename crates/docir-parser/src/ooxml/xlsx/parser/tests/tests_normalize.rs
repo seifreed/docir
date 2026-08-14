@@ -226,6 +226,13 @@ fn test_parse_styles_reports_malformed_alignment_attributes() {
               </cellXfs>
             </styleSheet>
             "#,
+        r#"
+            <styleSheet>
+              <cellXfs count="1">
+                <xf><alignment wrapText="maybe"/></xf>
+              </cellXfs>
+            </styleSheet>
+            "#,
     ] {
         let err =
             parse_styles(xml, "xl/styles.xml").expect_err("malformed style attributes must fail");

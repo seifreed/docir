@@ -218,8 +218,19 @@ fn parse_bool_attr(
     name: &[u8],
     styles_path: &str,
 ) -> Result<Option<bool>, ParseError> {
-    Ok(try_attr_value(element, name, styles_path)?
-        .map(|value| value == "1" || value.eq_ignore_ascii_case("true")))
+    let Some(value) = try_attr_value(element, name, styles_path)? else {
+        return Ok(None);
+    };
+    match value.as_str() {
+        "1" => Ok(Some(true)),
+        "0" => Ok(Some(false)),
+        value if value.eq_ignore_ascii_case("true") => Ok(Some(true)),
+        value if value.eq_ignore_ascii_case("false") => Ok(Some(false)),
+        _ => Err(xml_error(
+            styles_path,
+            format!("Invalid boolean value '{value}'"),
+        )),
+    }
 }
 
 pub(super) fn parse_protection(
