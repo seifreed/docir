@@ -54,12 +54,10 @@ pub(super) fn decrypt_odf_part(
         encryption.start_key_generation_name.as_deref(),
         encryption.start_key_size,
     )?;
-    let expected_key_len = if algorithm.contains("aes256") {
-        32
-    } else if algorithm.contains("aes128") {
-        16
-    } else {
-        return Err("Unsupported encryption algorithm".to_string());
+    let expected_key_len = match algorithm {
+        "http://www.w3.org/2001/04/xmlenc#aes256-cbc" => 32,
+        "http://www.w3.org/2001/04/xmlenc#aes128-cbc" => 16,
+        _ => return Err("Unsupported encryption algorithm".to_string()),
     };
     if let Some(key_size) = encryption.key_size
         && key_size != expected_key_len

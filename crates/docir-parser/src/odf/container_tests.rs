@@ -168,6 +168,12 @@ fn decrypt_odf_part_rejects_unsupported_algorithm_or_key_length() {
     assert!(err.contains("Unsupported encryption algorithm"));
 
     let mut enc = encryption_data();
+    enc.algorithm_name = Some("urn:custom#aes256-cbc".to_string());
+    let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw")
+        .expect_err("algorithm names must match supported identifiers exactly");
+    assert!(err.contains("Unsupported encryption algorithm"));
+
+    let mut enc = encryption_data();
     enc.start_key_generation_name = Some("urn:unknown".to_string());
     let err = decrypt_odf_part(vec![0_u8; 16], &enc, "pw")
         .expect_err("unknown start-key algorithm must be rejected");
