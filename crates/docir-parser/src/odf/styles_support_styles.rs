@@ -1,7 +1,9 @@
 use super::super::{Style, StyleSet, StyleType, parse_text_alignment};
 use crate::error::ParseError;
 use crate::xml_utils::xml_error;
-use crate::xml_utils::{local_name, parse_bool_attr, try_attr_value_by_suffix};
+use crate::xml_utils::{
+    local_name, parse_bool_attr, track_xml_document_event, try_attr_value_by_suffix,
+};
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
@@ -13,47 +15,81 @@ pub(crate) fn parse_styles(xml: &str, source: &str) -> Result<Option<StyleSet>, 
     let mut buf = Vec::new();
     let mut styles = StyleSet::new();
     let mut depth = 0usize;
+    let mut root_closed = false;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => match local_name(e.name().as_ref()) {
-                b"style" => {
-                    if let Some(mut style) = build_style_from_start(&e, false, source)? {
-                        parse_style_properties(&mut reader, &mut style, e.name().as_ref(), source)?;
-                        styles.styles.push(style);
-                    } else {
-                        skip_element(&mut reader, e.name().as_ref(), source)?;
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(source, err))?;
+        if matches!(event, Event::Start(_) | Event::Empty(_)) && depth == 0 && root_closed {
+            return Err(xml_error(source, "XML document contains multiple roots"));
+        }
+        match event {
+            Event::Start(e) => {
+                let at_root = depth == 0;
+                let name_bytes = e.name();
+                let name = local_name(name_bytes.as_ref());
+                match name {
+                    b"style" => {
+                        if let Some(mut style) = build_style_from_start(&e, false, source)? {
+                            parse_style_properties(
+                                &mut reader,
+                                &mut style,
+                                e.name().as_ref(),
+                                source,
+                            )?;
+                            styles.styles.push(style);
+                        } else {
+                            skip_element(&mut reader, e.name().as_ref(), source)?;
+                        }
                     }
-                }
-                b"default-style" => {
-                    if let Some(mut style) = build_style_from_start(&e, true, source)? {
-                        parse_style_properties(&mut reader, &mut style, e.name().as_ref(), source)?;
-                        styles.styles.push(style);
-                    } else {
-                        skip_element(&mut reader, e.name().as_ref(), source)?;
+                    b"default-style" => {
+                        if let Some(mut style) = build_style_from_start(&e, true, source)? {
+                            parse_style_properties(
+                                &mut reader,
+                                &mut style,
+                                e.name().as_ref(),
+                                source,
+                            )?;
+                            styles.styles.push(style);
+                        } else {
+                            skip_element(&mut reader, e.name().as_ref(), source)?;
+                        }
                     }
+                    _ => depth += 1,
                 }
-                _ => depth += 1,
-            },
-            Ok(Event::Empty(e)) => match local_name(e.name().as_ref()) {
-                b"style" => {
-                    if let Some(style) = build_style_from_start(&e, false, source)? {
-                        styles.styles.push(style);
+                if at_root && matches!(name, b"style" | b"default-style") {
+                    root_closed = true;
+                }
+            }
+            Event::Empty(e) => {
+                match local_name(e.name().as_ref()) {
+                    b"style" => {
+                        if let Some(style) = build_style_from_start(&e, false, source)? {
+                            styles.styles.push(style);
+                        }
                     }
-                }
-                b"default-style" => {
-                    if let Some(style) = build_style_from_start(&e, true, source)? {
-                        styles.styles.push(style);
+                    b"default-style" => {
+                        if let Some(style) = build_style_from_start(&e, true, source)? {
+                            styles.styles.push(style);
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
-            },
-            Ok(Event::End(_)) => depth = depth.saturating_sub(1),
-            Ok(Event::Eof) if depth == 0 => break,
-            Ok(Event::Eof) => {
+                if depth == 0 {
+                    root_closed = true;
+                }
+            }
+            Event::End(_) => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    root_closed = true;
+                }
+            }
+            Event::Eof if depth == 0 => break,
+            Event::Eof => {
                 return Err(xml_error(source, "Unexpected EOF while parsing ODF styles"));
             }
-            Err(err) => return Err(xml_error(source, err)),
             _ => {}
         }
         buf.clear();
@@ -99,9 +135,17 @@ fn parse_named_elements(
     let mut buf = Vec::new();
     let mut out = Vec::new();
     let mut depth = 0usize;
+    let mut document_depth = 0usize;
+    let mut root_closed = false;
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
+        let event = reader
+            .read_event_into(&mut buf)
+            .map_err(|err| xml_error(source, err))?;
+        if track_xml_document_event(&event, &mut document_depth, &mut root_closed, source)? {
+            break;
+        }
+        match event {
+            Event::Start(e) => {
                 depth += 1;
                 if local_name(e.name().as_ref()) == target_name
                     && let Some(name) = try_attr_value_by_suffix(&e, &[b":name"], source)?
@@ -109,19 +153,14 @@ fn parse_named_elements(
                     out.push(name);
                 }
             }
-            Ok(Event::Empty(e)) => {
+            Event::Empty(e) => {
                 if local_name(e.name().as_ref()) == target_name
                     && let Some(name) = try_attr_value_by_suffix(&e, &[b":name"], source)?
                 {
                     out.push(name);
                 }
             }
-            Ok(Event::End(_)) => depth = depth.saturating_sub(1),
-            Ok(Event::Eof) if depth == 0 => break,
-            Ok(Event::Eof) => {
-                return Err(xml_error(source, "Unexpected EOF while parsing ODF styles"));
-            }
-            Err(err) => return Err(xml_error(source, err)),
+            Event::End(_) => depth = depth.saturating_sub(1),
             _ => {}
         }
         buf.clear();

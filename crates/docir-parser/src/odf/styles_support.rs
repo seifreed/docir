@@ -81,6 +81,16 @@ mod tests {
     }
 
     #[test]
+    fn parse_styles_rejects_multiple_roots() {
+        let err = parse_styles(
+            "<office:document-styles/><office:document-styles/>",
+            "styles.xml",
+        )
+        .expect_err("styles XML must have one root");
+        assert!(format!("{err}").contains("multiple roots"));
+    }
+
+    #[test]
     fn parse_odf_headers_footers_reports_styles_xml_errors() {
         let malformed = r#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
@@ -323,6 +333,25 @@ mod tests {
         assert_eq!(
             parse_page_layouts(xml, "styles.xml").expect("page layouts"),
             vec!["pm1".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_master_pages_and_layouts_reject_multiple_roots() {
+        let xml = "<office:document-styles/><office:document-styles/>";
+        assert!(
+            format!(
+                "{}",
+                parse_master_pages(xml, "styles.xml").expect_err("multiple roots must fail")
+            )
+            .contains("multiple roots")
+        );
+        assert!(
+            format!(
+                "{}",
+                parse_page_layouts(xml, "styles.xml").expect_err("multiple roots must fail")
+            )
+            .contains("multiple roots")
         );
     }
 
