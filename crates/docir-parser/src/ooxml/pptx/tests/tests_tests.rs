@@ -191,6 +191,36 @@ fn test_parse_pptx_table_rejects_invalid_column_width() {
 }
 
 #[test]
+fn test_parse_pptx_table_preserves_empty_cells() {
+    let tbl_xml = r#"
+        <a:tbl xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <a:tblGrid><a:gridCol w="1000"/><a:gridCol w="1000"/></a:tblGrid>
+          <a:tr>
+            <a:tc/>
+            <a:tc><a:txBody><a:p><a:endParaRPr/></a:p></a:txBody></a:tc>
+          </a:tr>
+        </a:tbl>
+    "#;
+
+    let mut reader = quick_xml::Reader::from_str(tbl_xml);
+    reader.config_mut().trim_text(true);
+    let mut parser = PptxParser::new();
+    let table = parser
+        .parse_pptx_table(&mut reader, "ppt/tables/table-empty-cell.xml")
+        .expect("table with an empty cell");
+    let store = parser.into_store();
+
+    assert_eq!(table.rows.len(), 1);
+    let Some(IRNode::TableRow(row)) = store.get(table.rows[0]) else {
+        panic!("missing table row");
+    };
+    assert_eq!(row.cells.len(), 2);
+    assert!(
+        matches!(store.get(row.cells[0]), Some(IRNode::TableCell(cell)) if cell.content.is_empty())
+    );
+}
+
+#[test]
 fn test_parse_pptx_table_rejects_truncated_table_scope() {
     let mut reader = quick_xml::Reader::from_str(
         r#"<a:tbl xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:tr/>"#,

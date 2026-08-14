@@ -148,6 +148,13 @@ impl PptxParser {
                     self.store.insert(IRNode::TableCell(cell));
                     row.cells.push(id);
                 }
+                Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"tc" => {
+                    let mut cell = TableCell::new();
+                    cell.span = Some(SourceSpan::new(slide_path));
+                    let id = cell.id;
+                    self.store.insert(IRNode::TableCell(cell));
+                    row.cells.push(id);
+                }
                 Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tr" => {
                     break;
                 }
