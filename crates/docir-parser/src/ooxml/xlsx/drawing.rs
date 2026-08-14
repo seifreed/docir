@@ -2,7 +2,7 @@ use super::XlsxParser;
 use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode};
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, visit_attributes, xml_error};
+use crate::xml_utils::{local_name, track_xml_document_event, visit_attributes, xml_error};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{IRNode, Shape, ShapeType, WorksheetDrawing};
 use docir_core::security::{ExternalRefType, ExternalReference};
@@ -38,35 +38,31 @@ impl XlsxParser {
         config.check_end_names = true;
         let mut buf = Vec::new();
         let mut depth = 0usize;
+        let mut root_closed = false;
 
         loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) => {
-                    depth += 1;
+            let event = reader
+                .read_event_into(&mut buf)
+                .map_err(|err| xml_error(drawing_path, err))?;
+            if track_xml_document_event(&event, &mut depth, &mut root_closed, drawing_path)? {
+                break;
+            }
+            match event {
+                Event::Start(e) => {
                     handle_xlsx_drawing_start(&e, &mut state, drawing_path)?;
                 }
-                Ok(Event::Empty(e)) => {
+                Event::Empty(e) => {
                     handle_xlsx_drawing_empty(&e, &mut state, drawing_path)?;
                 }
-                Ok(Event::End(e)) => {
-                    depth = depth.saturating_sub(1);
-                    match local_name(e.name().as_ref()) {
-                        b"pic" => {
-                            self.finish_picture_shape(&mut state, drawing_path, relationships);
-                        }
-                        b"graphicFrame" => {
-                            self.finish_chart_shape(&mut state, drawing_path, relationships, zip)?;
-                        }
-                        _ => {}
+                Event::End(e) => match local_name(e.name().as_ref()) {
+                    b"pic" => {
+                        self.finish_picture_shape(&mut state, drawing_path, relationships);
                     }
-                }
-                Ok(Event::Eof) if depth == 0 => break,
-                Ok(Event::Eof) => {
-                    return Err(xml_error(drawing_path, "unexpected EOF in drawing XML"));
-                }
-                Err(e) => {
-                    return Err(xml_error(drawing_path, e));
-                }
+                    b"graphicFrame" => {
+                        self.finish_chart_shape(&mut state, drawing_path, relationships, zip)?;
+                    }
+                    _ => {}
+                },
                 _ => {}
             }
             buf.clear();
@@ -484,6 +480,23 @@ mod tests {
             )
             .expect_err("mismatched drawing XML must fail");
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "xl/drawings/drawing1.xml"));
+    }
+
+    #[test]
+    fn parse_drawing_rejects_multiple_roots() {
+        let mut parser = XlsxParser::new();
+        let rels = Relationships::parse(relationships_xml()).expect("relationships");
+        let mut zip = TestPackageReader::new(&[]);
+
+        let err = parser
+            .parse_drawing(
+                "<xdr:wsDr/><xdr:wsDr/>",
+                "xl/drawings/drawing1.xml",
+                &rels,
+                &mut zip,
+            )
+            .expect_err("drawing XML must have one root");
+        assert!(format!("{err}").contains("multiple roots"));
     }
 
     #[test]
