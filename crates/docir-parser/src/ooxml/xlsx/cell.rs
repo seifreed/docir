@@ -114,6 +114,9 @@ impl CellContents {
             Event::Empty(e) if local_name(e.name().as_ref()) == b"f" => {
                 self.formula = Some(super::parse_formula_empty(e, sheet_path)?);
             }
+            Event::Empty(e) if local_name(e.name().as_ref()) == b"is" => {
+                self.inline_text = Some(String::new());
+            }
             _ => {}
         }
         Ok(XmlScanControl::Continue)
@@ -344,6 +347,13 @@ mod tests {
             inline.span.as_ref().map(|s| s.file_path.as_str()),
             Some("xl/worksheets/sheet1.xml")
         );
+
+        let empty_inline = parse_cell_from_xml(&mut parser, r#"<c r="I2" t="inlineStr"><is/></c>"#)
+            .expect("empty inline string");
+        assert!(matches!(
+            empty_inline.value,
+            CellValue::InlineString(ref value) if value.is_empty()
+        ));
 
         let formula = parse_cell_from_xml(
             &mut parser,
