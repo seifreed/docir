@@ -96,6 +96,68 @@ fn parse_ods_table_evaluates_formula_and_flushes_validations() {
 }
 
 #[test]
+fn parse_ods_table_preserves_empty_cell_structure_and_metadata() {
+    let xml: &[u8] =
+        br#"<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <table:table table:name="Metadata">
+    <table:table-row>
+      <table:table-cell table:style-name="highlight" table:content-validation-name="rule1"
+        table:number-columns-spanned="2"/>
+    </table:table-row>
+  </table:table>
+</office:spreadsheet>"#;
+    let (mut reader, table_start) = parse_table_start(xml);
+    let mut store = IrStore::new();
+    let mut validations = HashMap::new();
+    validations.insert(
+        "rule1".to_string(),
+        ValidationDef {
+            validation_type: None,
+            operator: None,
+            allow_blank: false,
+            show_input_message: false,
+            show_error_message: false,
+            error_title: None,
+            error: None,
+            prompt_title: None,
+            prompt: None,
+            formula1: None,
+            formula2: None,
+        },
+    );
+
+    let worksheet = parse_ods_table(
+        &mut reader,
+        &table_start,
+        1,
+        &mut store,
+        &validations,
+        &default_limits(),
+    )
+    .expect("table should parse");
+
+    assert_eq!(worksheet.cells.len(), 1);
+    assert_eq!(worksheet.merged_cells.len(), 1);
+    assert_eq!(worksheet.merged_cells[0].start_col, 0);
+    assert_eq!(worksheet.merged_cells[0].start_row, 0);
+    assert_eq!(worksheet.merged_cells[0].end_col, 1);
+    assert_eq!(worksheet.merged_cells[0].end_row, 0);
+    assert_eq!(worksheet.data_validations.len(), 1);
+
+    let Some(IRNode::Cell(cell)) = store.get(worksheet.cells[0]) else {
+        panic!("expected empty metadata cell");
+    };
+    assert_eq!(cell.reference, "A1");
+    assert_eq!(cell.style_id, Some(1));
+    assert!(matches!(cell.value, CellValue::Empty));
+    let Some(IRNode::DataValidation(validation)) = store.get(worksheet.data_validations[0]) else {
+        panic!("expected data validation");
+    };
+    assert_eq!(validation.ranges, vec!["A1"]);
+}
+
+#[test]
 fn parse_ods_table_rejects_row_index_overflow_without_limits() {
     let xml: &[u8] =
         br#"<office:spreadsheet xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"

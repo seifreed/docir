@@ -31,7 +31,12 @@ pub(crate) struct OdsCellData {
 
 impl OdsCellData {
     pub(crate) fn should_emit(&self) -> bool {
-        !matches!(self.value, CellValue::Empty) || self.formula.is_some()
+        !matches!(self.value, CellValue::Empty)
+            || self.formula.is_some()
+            || self.style_id.is_some()
+            || self.validation_name.is_some()
+            || self.col_span.is_some_and(|span| span > 1)
+            || self.row_span.is_some_and(|span| span > 1)
     }
 
     pub(crate) fn merge_range(
