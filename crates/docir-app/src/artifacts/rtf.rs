@@ -86,11 +86,16 @@ pub(super) fn extract_rtf_artifacts(
 }
 
 pub(crate) fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
+    scan_rtf_objdata_with_limit(data, MAX_HEX_BLOB_SIZE)
+}
+
+fn scan_rtf_objdata_with_limit(data: &[u8], max_hex_blob_size: usize) -> Vec<Vec<u8>> {
     let mut blobs = Vec::new();
     let mut index = 0usize;
     let mut depth = 0usize;
     let mut capture_depth = None::<usize>;
     let mut hex = Vec::new();
+    let mut hex_over_limit = false;
 
     while index < data.len() {
         match data[index] {
@@ -102,10 +107,11 @@ pub(crate) fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
                 if let Some(target_depth) = capture_depth
                     && depth <= target_depth
                 {
-                    if let Some(blob) = decode_hex_blob(&hex) {
+                    if !hex_over_limit && let Some(blob) = decode_hex_blob(&hex) {
                         blobs.push(blob);
                     }
                     hex.clear();
+                    hex_over_limit = false;
                     capture_depth = None;
                 }
                 depth = depth.saturating_sub(1);
@@ -121,6 +127,7 @@ pub(crate) fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
                 if word == "objdata" {
                     capture_depth = Some(depth);
                     hex.clear();
+                    hex_over_limit = false;
                 }
                 if index < data.len() && (data[index] == b'-' || data[index].is_ascii_digit()) {
                     index += 1;
@@ -133,8 +140,12 @@ pub(crate) fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
                 }
             }
             byte => {
-                if capture_depth.is_some() && byte.is_ascii_hexdigit() {
-                    hex.push(byte);
+                if capture_depth.is_some() && byte.is_ascii_hexdigit() && !hex_over_limit {
+                    if hex.len() == max_hex_blob_size {
+                        hex_over_limit = true;
+                    } else {
+                        hex.push(byte);
+                    }
                 }
                 index += 1;
             }
@@ -142,6 +153,7 @@ pub(crate) fn scan_rtf_objdata(data: &[u8]) -> Vec<Vec<u8>> {
     }
 
     if capture_depth.is_some()
+        && !hex_over_limit
         && let Some(blob) = decode_hex_blob(&hex)
     {
         blobs.push(blob);
@@ -173,5 +185,17 @@ pub(crate) fn hex_val(byte: u8) -> Option<u8> {
         b'a'..=b'f' => Some(byte - b'a' + 10),
         b'A'..=b'F' => Some(byte - b'A' + 10),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scan_rtf_objdata_with_limit;
+
+    #[test]
+    fn scan_rtf_objdata_rejects_hex_accumulation_above_limit() {
+        let data = br"{\rtf1{\object{\objdata 0102030405}}}";
+
+        assert!(scan_rtf_objdata_with_limit(data, 4).is_empty());
     }
 }
