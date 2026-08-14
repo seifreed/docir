@@ -185,3 +185,18 @@ fn scan_odf_security_helpers_report_malformed_xml() {
         }
     }
 }
+
+#[test]
+fn scan_odf_security_helpers_reject_multiple_roots() {
+    let xml = "<document-content/><document-content/>";
+
+    for result in [
+        scan_external_links(xml, "content.xml").map(|_| ()),
+        scan_odf_objects(xml).map(|_| ()),
+        scan_odf_filters(xml).map(|_| ()),
+        scan_odf_formula_security(xml).map(|_| ()),
+    ] {
+        let err = result.expect_err("ODF security XML must have one root");
+        assert!(format!("{err}").contains("multiple roots"));
+    }
+}

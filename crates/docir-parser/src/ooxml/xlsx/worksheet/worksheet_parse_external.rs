@@ -231,6 +231,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_chartsheet_rejects_multiple_roots() {
+        let mut parser = XlsxParser::new();
+        let mut zip = MockPackageReader::default();
+        let err = parser
+            .parse_chartsheet(
+                &mut zip,
+                "<chartsheet/><chartsheet/>",
+                "xl/chartsheets/sheet1.xml",
+                &Relationships::default(),
+            )
+            .expect_err("chartsheet XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
+    }
+
+    #[test]
     fn parse_pivot_cache_reads_cache_source_without_records_part() {
         let mut parser = XlsxParser::new();
         let mut zip = MockPackageReader::default();

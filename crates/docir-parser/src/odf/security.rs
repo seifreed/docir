@@ -4,7 +4,8 @@ use crate::error::ParseError;
 use crate::security_scan::OdfXmlInputs;
 use crate::security_utils::parse_dde_formula;
 use crate::xml_utils::{
-    XmlScanControl, local_name, parse_bool_attr, scan_xml_events, try_attr_value_by_suffix,
+    XmlScanControl, local_name, parse_bool_attr, scan_xml_events, track_xml_document_event,
+    try_attr_value_by_suffix,
 };
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document, IRNode};
@@ -29,7 +30,10 @@ fn visit_start_or_empty(
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     scan_xml_events(&mut reader, &mut buf, source, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, source)?;
         match event {
             Event::Start(e) | Event::Empty(e) if on_element(&e)? => {
                 return Ok(XmlScanControl::Break);
@@ -140,7 +144,10 @@ pub(crate) fn scan_odf_formula_security(xml: &str) -> Result<OdfFormulaScan, Par
     let mut buf = Vec::new();
     let mut unsupported: Vec<String> = Vec::new();
     let mut has_array = false;
+    let mut depth = 0usize;
+    let mut root_closed = false;
     scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, "content.xml")?;
         match event {
             Event::Start(e) | Event::Empty(e) => {
                 if let Some(formula_attr) =
