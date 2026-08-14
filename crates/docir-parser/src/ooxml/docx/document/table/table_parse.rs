@@ -39,6 +39,13 @@ pub(crate) fn parse_table(
                 }
                 _ => {}
             },
+            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"tr" => {
+                let mut row = TableRow::new();
+                row.span = Some(span_from_reader(reader, DOC_PATH));
+                let row_id = row.id;
+                parser.store.insert(docir_core::ir::IRNode::TableRow(row));
+                table.rows.push(row_id);
+            }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tbl" => {
                 break;
             }
@@ -86,6 +93,13 @@ pub(crate) fn parse_table_row(
                 }
                 _ => {}
             },
+            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"tc" => {
+                let mut cell = TableCell::new();
+                cell.span = Some(span_from_reader(reader, DOC_PATH));
+                let cell_id = cell.id;
+                parser.store.insert(docir_core::ir::IRNode::TableCell(cell));
+                row.cells.push(cell_id);
+            }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tr" => {
                 break;
             }

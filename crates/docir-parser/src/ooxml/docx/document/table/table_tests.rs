@@ -472,6 +472,45 @@ mod tests {
     }
 
     #[test]
+    fn parse_table_preserves_empty_rows() {
+        let xml = r#"<w:tbl><w:tr/></w:tbl>"#;
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut reader = reader_from(xml);
+
+        seek_start(&mut reader, b"w:tbl");
+        let table_id = parse_table(&mut parser, &mut reader, &rels).expect("parse table");
+        let store = parser.into_store();
+        let Some(docir_core::ir::IRNode::Table(table)) = store.get(table_id) else {
+            panic!("expected table");
+        };
+        assert_eq!(table.rows.len(), 1);
+        let Some(docir_core::ir::IRNode::TableRow(row)) = store.get(table.rows[0]) else {
+            panic!("expected table row");
+        };
+        assert!(row.cells.is_empty());
+    }
+
+    #[test]
+    fn parse_table_row_preserves_empty_cells() {
+        let xml = r#"<w:tr><w:tc/></w:tr>"#;
+        let mut parser = DocxParser::new();
+        let rels = Relationships::default();
+        let mut reader = reader_from(xml);
+
+        seek_start(&mut reader, b"w:tr");
+        let row_id = parse_table_row(&mut parser, &mut reader, &rels).expect("parse row");
+        let store = parser.into_store();
+        let Some(docir_core::ir::IRNode::TableRow(row)) = store.get(row_id) else {
+            panic!("expected table row");
+        };
+        assert_eq!(row.cells.len(), 1);
+        assert!(
+            matches!(store.get(row.cells[0]), Some(docir_core::ir::IRNode::TableCell(cell)) if cell.content.is_empty())
+        );
+    }
+
+    #[test]
     fn parse_table_cell_properties_ignores_unknown_properties() {
         let xml = r#"
             <w:tcPr>
