@@ -116,6 +116,14 @@ fn parse_meta_extracts_known_fields_and_handles_empty_or_malformed_xml() {
 }
 
 #[test]
+fn parse_meta_rejects_multiple_roots() {
+    let err =
+        parse_meta("<office:meta/><office:meta/>").expect_err("metadata XML must have one root");
+
+    assert!(format!("{err}").contains("multiple roots"));
+}
+
+#[test]
 fn decrypt_odf_part_validates_required_encryption_fields() {
     let mut enc = encryption_data();
     enc.algorithm_name = None;
