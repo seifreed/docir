@@ -1,7 +1,9 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{local_name, track_xml_root_event, visit_attributes, xml_error};
+use crate::xml_utils::{
+    local_name, track_xml_root_event, visit_attributes, visit_attributes_result, xml_error,
+};
 use docir_core::ir::{VmlDrawing, VmlShape};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -126,23 +128,32 @@ fn apply_shape_attrs(
     e: &quick_xml::events::BytesStart<'_>,
     path: &str,
 ) -> Result<(), ParseError> {
-    visit_attributes(e, path, |attr| {
+    visit_attributes_result(e, path, |attr| {
         let key = local_name(attr.key.as_ref());
         let val = lossy_attr_value(attr).to_string();
         match key {
             b"id" | b"name" => shape.name = Some(val),
             b"type" => shape.shape_type = Some(val),
             b"style" => shape.style = Some(val),
-            b"filled" => shape.filled = Some(parse_shape_bool_attr(&val)),
-            b"stroked" => shape.stroked = Some(parse_shape_bool_attr(&val)),
+            b"filled" => shape.filled = Some(parse_shape_bool_attr(&val, path)?),
+            b"stroked" => shape.stroked = Some(parse_shape_bool_attr(&val, path)?),
             _ => {}
         }
+        Ok(())
     })?;
     Ok(())
 }
 
-fn parse_shape_bool_attr(value: &str) -> bool {
-    value == "t" || value == "true" || value == "1"
+fn parse_shape_bool_attr(value: &str, path: &str) -> Result<bool, ParseError> {
+    if value == "t" || value.eq_ignore_ascii_case("true") || value == "1" {
+        return Ok(true);
+    }
+    if value == "f" || value.eq_ignore_ascii_case("false") || value == "0" {
+        return Ok(false);
+    }
+    Err(ParseError::InvalidStructure(format!(
+        "{path} VML boolean attribute has invalid value '{value}'"
+    )))
 }
 
 fn apply_imagedata_attrs(
@@ -366,5 +377,16 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, "word/vmlDrawing1.vml"),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_vml_drawing_rejects_invalid_boolean_attributes() {
+        let err = parse_vml_drawing(
+            r#"<xml><v:shape filled="maybe"/></xml>"#,
+            "word/vmlDrawing1.vml",
+            &Relationships::default(),
+        )
+        .expect_err("invalid VML boolean must fail");
+        assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("maybe")));
     }
 }
