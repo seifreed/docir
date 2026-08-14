@@ -104,6 +104,30 @@ fn test_parse_styles_minimal() {
 }
 
 #[test]
+fn test_parse_styles_preserves_empty_style_elements() {
+    let xml = r#"
+        <styleSheet>
+          <fonts><font/></fonts>
+          <borders><border><left style="thin"/></border></borders>
+          <cellXfs><xf/></cellXfs>
+        </styleSheet>
+        "#;
+
+    let styles = parse_styles(xml, "xl/styles.xml").expect("styles");
+
+    assert_eq!(styles.fonts.len(), 1);
+    assert_eq!(styles.borders.len(), 1);
+    assert_eq!(
+        styles.borders[0]
+            .left
+            .as_ref()
+            .and_then(|side| side.style.as_deref()),
+        Some("thin")
+    );
+    assert_eq!(styles.cell_xfs.len(), 1);
+}
+
+#[test]
 fn test_parse_styles_reports_malformed_numeric_attributes() {
     let xml = r#"
         <styleSheet>

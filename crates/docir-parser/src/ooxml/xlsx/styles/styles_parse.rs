@@ -8,7 +8,6 @@ use docir_core::ir::{
     NumberFormat, SpreadsheetStyles, TableStyleDef, TableStyleInfo,
 };
 use docir_core::types::SourceSpan;
-use quick_xml::events::BytesEnd;
 use quick_xml::events::{BytesStart, Event};
 #[path = "styles_parse_utils.rs"]
 mod styles_parse_utils;
@@ -74,8 +73,11 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
     scan_xml_events(&mut reader, &mut buf, styles_path, |event| {
         match event {
             Event::Start(e) => handle_styles_start(&e, styles_path, &mut state, &mut styles)?,
-            Event::Empty(e) => handle_styles_start(&e, styles_path, &mut state, &mut styles)?,
-            Event::End(e) => handle_styles_end(&e, &mut state, &mut styles),
+            Event::End(e) => finish_styles_element(e.name().as_ref(), &mut state, &mut styles),
+            Event::Empty(e) => {
+                handle_styles_start(&e, styles_path, &mut state, &mut styles)?;
+                finish_styles_element(e.name().as_ref(), &mut state, &mut styles);
+            }
             _ => {}
         }
         Ok(XmlScanControl::Continue)
@@ -417,12 +419,12 @@ fn handle_table_style_start(
     }
 }
 
-fn handle_styles_end(
-    e: &BytesEnd<'_>,
+fn finish_styles_element(
+    name: &[u8],
     state: &mut StylesParseState,
     styles: &mut SpreadsheetStyles,
 ) {
-    match local_name(e.name().as_ref()) {
+    match local_name(name) {
         b"numFmts" => state.in_num_fmts = false,
         b"fonts" => state.in_fonts = false,
         b"fills" => state.in_fills = false,
