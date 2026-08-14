@@ -83,8 +83,8 @@ pub(crate) fn parse_run_properties(
                         props.font_size = Some(val);
                     }
                 }
-                b"b" => props.bold = Some(true),
-                b"i" => props.italic = Some(true),
+                b"b" => props.bold = Some(bool_from_val(&e, DOC_XML_PATH)?),
+                b"i" => props.italic = Some(bool_from_val(&e, DOC_XML_PATH)?),
                 b"u" => {
                     if let Some(val) = try_attr_value(&e, b"w:val", DOC_XML_PATH)? {
                         props.underline = match val.as_str() {
@@ -98,7 +98,7 @@ pub(crate) fn parse_run_properties(
                         props.underline = Some(UnderlineStyle::Single);
                     }
                 }
-                b"strike" => props.strike = Some(true),
+                b"strike" => props.strike = Some(bool_from_val(&e, DOC_XML_PATH)?),
                 b"color" => {
                     if let Some(val) = try_attr_value(&e, b"w:val", DOC_XML_PATH)? {
                         props.color = Some(val);
@@ -257,5 +257,23 @@ mod tests {
         let err = parse_run_properties(&mut reader, &mut props)
             .expect_err("truncated run properties must fail");
         assert!(matches!(err, ParseError::Xml { .. }));
+    }
+
+    #[test]
+    fn parse_run_properties_preserves_explicit_false_flags() {
+        let xml = r#"<w:rPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:b w:val="0"/><w:i w:val="false"/><w:strike w:val="off"/></w:rPr>"#;
+        let mut reader = Reader::from_str(xml);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+        let mut props = RunProperties::default();
+
+        parse_run_properties(&mut reader, &mut props).expect("run properties");
+
+        assert_eq!(props.bold, Some(false));
+        assert_eq!(props.italic, Some(false));
+        assert_eq!(props.strike, Some(false));
     }
 }
