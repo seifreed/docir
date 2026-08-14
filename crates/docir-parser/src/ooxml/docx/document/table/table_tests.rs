@@ -223,6 +223,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_table_row_properties_rejects_invalid_boolean_values() {
+        for tag in ["tblHeader", "cantSplit"] {
+            let xml = format!(r#"<w:trPr><w:{tag} w:val="maybe"/></w:trPr>"#);
+            let mut reader = reader_from(&xml);
+            let mut props = TableRowProperties::default();
+            seek_start(&mut reader, b"w:trPr");
+
+            let err = parse_table_row_properties(&mut reader, &mut props)
+                .expect_err("invalid row boolean must fail");
+            assert!(
+                matches!(err, ParseError::InvalidStructure(message) if message.contains("boolean attribute"))
+            );
+        }
+    }
+
+    #[test]
     fn parse_table_cell_properties_defaults_merge_and_alignment() {
         let xml = r#"
             <w:tcPr>

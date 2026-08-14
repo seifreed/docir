@@ -1,5 +1,6 @@
 use super::super::{
-    DocxParser, parse_border, parse_empty_paragraph, parse_paragraph_simple, span_from_reader,
+    DocxParser, parse_border, parse_empty_paragraph, parse_on_off_value, parse_paragraph_simple,
+    span_from_reader,
 };
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
@@ -384,18 +385,16 @@ pub(crate) fn parse_table_row_properties(
                     }
                 }
                 b"tblHeader" => {
-                    let is_header = !matches!(
+                    props.is_header = Some(parse_on_off_value(
                         try_attr_value(&e, b"w:val", DOC_PATH)?.as_deref(),
-                        Some("0") | Some("false")
-                    );
-                    props.is_header = Some(is_header);
+                        DOC_PATH,
+                    )?);
                 }
                 b"cantSplit" => {
-                    let cant_split = !matches!(
+                    props.cant_split = Some(parse_on_off_value(
                         try_attr_value(&e, b"w:val", DOC_PATH)?.as_deref(),
-                        Some("0") | Some("false")
-                    );
-                    props.cant_split = Some(cant_split);
+                        DOC_PATH,
+                    )?);
                 }
                 _ => {}
             },
