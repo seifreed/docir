@@ -63,8 +63,34 @@ pub(crate) fn try_attr_value(
     Ok(exact_value.or(local_value))
 }
 
-pub(crate) fn attr_bool_like(raw: &[u8]) -> bool {
-    raw == b"1" || raw.eq_ignore_ascii_case(b"true")
+pub(crate) fn parse_bool_attr(raw: &[u8], file: &str) -> Result<bool, ParseError> {
+    match raw {
+        b"1" => Ok(true),
+        b"0" => Ok(false),
+        value if value.eq_ignore_ascii_case(b"true") => Ok(true),
+        value if value.eq_ignore_ascii_case(b"false") => Ok(false),
+        value => Err(ParseError::InvalidStructure(format!(
+            "{file} boolean attribute has invalid value '{}'",
+            String::from_utf8_lossy(value)
+        ))),
+    }
+}
+
+pub(crate) fn parse_on_off_attr(raw: &[u8], file: &str) -> Result<bool, ParseError> {
+    match raw {
+        b"1" => Ok(true),
+        b"0" => Ok(false),
+        value if value.eq_ignore_ascii_case(b"true") || value.eq_ignore_ascii_case(b"on") => {
+            Ok(true)
+        }
+        value if value.eq_ignore_ascii_case(b"false") || value.eq_ignore_ascii_case(b"off") => {
+            Ok(false)
+        }
+        value => Err(ParseError::InvalidStructure(format!(
+            "{file} boolean attribute has invalid value '{}'",
+            String::from_utf8_lossy(value)
+        ))),
+    }
 }
 
 pub(crate) fn attr_u32_from_bytes(

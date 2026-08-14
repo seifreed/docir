@@ -4,7 +4,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{XmlScanControl, scan_xml_events, visit_attributes};
-use crate::xml_utils::{attr_bool_like, local_name, xml_error};
+use crate::xml_utils::{local_name, parse_bool_attr, xml_error};
 use docir_core::ir::{
     ConnectionEntry, ConnectionPart, ExternalLinkPart, ExternalLinkSheet, QueryTablePart,
     SlicerPart, TimelinePart,
@@ -116,9 +116,18 @@ fn apply_connection_attrs(
                 Ok(parsed) => entry.refreshed_version = Some(parsed),
                 Err(err) => numeric_error = Some(err),
             },
-            b"refreshOnLoad" => entry.refresh_on_load = Some(attr_bool_like(attr.value.as_ref())),
-            b"saveData" => entry.save_data = Some(attr_bool_like(attr.value.as_ref())),
-            b"background" => entry.background = Some(attr_bool_like(attr.value.as_ref())),
+            b"refreshOnLoad" => match parse_bool_attr(attr.value.as_ref(), path) {
+                Ok(parsed) => entry.refresh_on_load = Some(parsed),
+                Err(err) => numeric_error = Some(err),
+            },
+            b"saveData" => match parse_bool_attr(attr.value.as_ref(), path) {
+                Ok(parsed) => entry.save_data = Some(parsed),
+                Err(err) => numeric_error = Some(err),
+            },
+            b"background" => match parse_bool_attr(attr.value.as_ref(), path) {
+                Ok(parsed) => entry.background = Some(parsed),
+                Err(err) => numeric_error = Some(err),
+            },
             b"sourceFile" => entry.source_file = Some(value.into_owned()),
             b"odcFile" => entry.connection_file = Some(value.into_owned()),
             _ => {}

@@ -1,7 +1,8 @@
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
-    attr_bool_like, decoded_text, local_name, track_xml_document_event, visit_attributes, xml_error,
+    decoded_text, local_name, parse_bool_attr, track_xml_document_event, visit_attributes,
+    xml_error,
 };
 use docir_core::ir::{
     CalcChain, CalcChainEntry, CellError, CellFormula, ColumnDefinition, ConditionalFormat,
@@ -57,9 +58,10 @@ pub(super) fn parse_calc_chain(xml: &str, path: &str) -> Result<CalcChain, Parse
                         Ok(parsed) => level = Some(parsed),
                         Err(err) => numeric_error = Some(err),
                     },
-                    b"s" => {
-                        new_value = Some(attr_bool_like(attr.value.as_ref()));
-                    }
+                    b"s" => match parse_bool_attr(attr.value.as_ref(), path) {
+                        Ok(parsed) => new_value = Some(parsed),
+                        Err(err) => numeric_error = Some(err),
+                    },
                     b"si" => match parse_u32_attr(&lossy_attr_value(attr), path) {
                         Ok(parsed) => sheet_id = Some(parsed),
                         Err(err) => numeric_error = Some(err),
@@ -417,8 +419,14 @@ pub(super) fn parse_column(
             Ok(_) => numeric_error = Some(xml_error(sheet_path, "numeric value must be finite")),
             Err(err) => numeric_error = Some(xml_error(sheet_path, err)),
         },
-        b"hidden" => hidden = attr_bool_like(attr.value.as_ref()),
-        b"customWidth" => custom_width = attr_bool_like(attr.value.as_ref()),
+        b"hidden" => match parse_bool_attr(attr.value.as_ref(), sheet_path) {
+            Ok(parsed) => hidden = parsed,
+            Err(err) => numeric_error = Some(err),
+        },
+        b"customWidth" => match parse_bool_attr(attr.value.as_ref(), sheet_path) {
+            Ok(parsed) => custom_width = parsed,
+            Err(err) => numeric_error = Some(err),
+        },
         _ => {}
     })?;
     if let Some(err) = numeric_error {

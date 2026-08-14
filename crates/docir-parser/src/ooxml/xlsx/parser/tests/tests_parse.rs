@@ -203,6 +203,18 @@ fn test_parse_workbook_info_reports_malformed_attributes() {
 }
 
 #[test]
+fn test_parse_workbook_info_rejects_invalid_boolean_attribute() {
+    let xml = r#"
+        <workbook>
+          <workbookPr date1904="maybe"/>
+        </workbook>
+        "#;
+
+    let err = parse_workbook_info(xml).expect_err("invalid boolean attribute must fail");
+    assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("maybe")));
+}
+
+#[test]
 fn test_process_external_relationships_classification_and_dedup() {
     let rels_xml = r#"
         <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">

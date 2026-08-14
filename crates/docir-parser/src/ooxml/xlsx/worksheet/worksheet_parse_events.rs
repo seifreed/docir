@@ -5,7 +5,7 @@ use crate::ooxml::xlsx::{
 };
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
-    XmlScanControl, attr_bool_like, is_end_event_local, local_name, scan_xml_events_until_end,
+    XmlScanControl, is_end_event_local, local_name, parse_bool_attr, scan_xml_events_until_end,
     try_attr_value, visit_attributes, xml_error,
 };
 use docir_core::ir::ConditionalFormat;
@@ -316,6 +316,7 @@ pub(crate) fn parse_data_validation_empty(
         span: Some(SourceSpan::new(sheet_path)),
     };
     let mut raw_ranges = None;
+    let mut numeric_error = None;
 
     visit_attributes(start, sheet_path, |attr| match attr.key.as_ref() {
         b"type" => {
@@ -324,15 +325,18 @@ pub(crate) fn parse_data_validation_empty(
         b"operator" => {
             validation.operator = Some(lossy_attr_value(attr).to_string());
         }
-        b"allowBlank" => {
-            validation.allow_blank = attr_bool_like(attr.value.as_ref());
-        }
-        b"showInputMessage" => {
-            validation.show_input_message = attr_bool_like(attr.value.as_ref());
-        }
-        b"showErrorMessage" => {
-            validation.show_error_message = attr_bool_like(attr.value.as_ref());
-        }
+        b"allowBlank" => match parse_bool_attr(attr.value.as_ref(), sheet_path) {
+            Ok(parsed) => validation.allow_blank = parsed,
+            Err(err) => numeric_error = Some(err),
+        },
+        b"showInputMessage" => match parse_bool_attr(attr.value.as_ref(), sheet_path) {
+            Ok(parsed) => validation.show_input_message = parsed,
+            Err(err) => numeric_error = Some(err),
+        },
+        b"showErrorMessage" => match parse_bool_attr(attr.value.as_ref(), sheet_path) {
+            Ok(parsed) => validation.show_error_message = parsed,
+            Err(err) => numeric_error = Some(err),
+        },
         b"errorTitle" => {
             validation.error_title = Some(lossy_attr_value(attr).to_string());
         }
@@ -350,6 +354,10 @@ pub(crate) fn parse_data_validation_empty(
         }
         _ => {}
     })?;
+
+    if let Some(err) = numeric_error {
+        return Err(err);
+    }
 
     let raw_ranges =
         raw_ranges.ok_or_else(|| xml_error(sheet_path, "dataValidation is missing sqref"))?;

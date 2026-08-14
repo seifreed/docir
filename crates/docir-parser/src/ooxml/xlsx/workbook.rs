@@ -4,7 +4,7 @@ use super::SheetState;
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::{
-    XmlScanControl, attr_bool_like, decoded_text, dispatch_start_or_empty, local_name,
+    XmlScanControl, decoded_text, dispatch_start_or_empty, local_name, parse_bool_attr,
     reader_from_str, scan_xml_events_with_reader, track_xml_root_event, xml_error,
 };
 use docir_core::ir::{DefinedName, WorkbookProperties};
@@ -191,7 +191,7 @@ fn parse_defined_name(
             Ok(())
         }
         b"hidden" => {
-            hidden = attr_bool_like(attr.value.as_ref());
+            hidden = parse_bool_attr(attr.value.as_ref(), "xl/workbook.xml")?;
             Ok(())
         }
         b"comment" => {
@@ -233,7 +233,7 @@ fn parse_defined_name_empty(start: &BytesStart) -> Result<Option<DefinedName>, P
             Ok(())
         }
         b"hidden" => {
-            hidden = attr_bool_like(attr.value.as_ref());
+            hidden = parse_bool_attr(attr.value.as_ref(), "xl/workbook.xml")?;
             Ok(())
         }
         b"comment" => {
@@ -261,7 +261,7 @@ fn parse_workbook_pr(
     let props = props.get_or_insert_with(WorkbookProperties::new);
     visit_workbook_attributes(start, |attr| {
         if attr.key.as_ref() == b"date1904" {
-            props.date1904 = Some(attr_bool_like(attr.value.as_ref()));
+            props.date1904 = Some(parse_bool_attr(attr.value.as_ref(), "xl/workbook.xml")?);
         }
         Ok(())
     })
@@ -278,11 +278,11 @@ fn parse_calc_pr(
             Ok(())
         }
         b"fullCalcOnLoad" => {
-            props.calc_full = Some(attr_bool_like(attr.value.as_ref()));
+            props.calc_full = Some(parse_bool_attr(attr.value.as_ref(), "xl/workbook.xml")?);
             Ok(())
         }
         b"calcOnSave" => {
-            props.calc_on_save = Some(attr_bool_like(attr.value.as_ref()));
+            props.calc_on_save = Some(parse_bool_attr(attr.value.as_ref(), "xl/workbook.xml")?);
             Ok(())
         }
         _ => Ok(()),
@@ -304,15 +304,17 @@ fn parse_workbook_view(
             Ok(())
         }
         b"showHorizontalScroll" => {
-            props.show_horizontal_scroll = Some(attr_bool_like(attr.value.as_ref()));
+            props.show_horizontal_scroll =
+                Some(parse_bool_attr(attr.value.as_ref(), "xl/workbook.xml")?);
             Ok(())
         }
         b"showVerticalScroll" => {
-            props.show_vertical_scroll = Some(attr_bool_like(attr.value.as_ref()));
+            props.show_vertical_scroll =
+                Some(parse_bool_attr(attr.value.as_ref(), "xl/workbook.xml")?);
             Ok(())
         }
         b"showSheetTabs" => {
-            props.show_sheet_tabs = Some(attr_bool_like(attr.value.as_ref()));
+            props.show_sheet_tabs = Some(parse_bool_attr(attr.value.as_ref(), "xl/workbook.xml")?);
             Ok(())
         }
         b"tabRatio" => {

@@ -3,7 +3,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::ooxml::shared::normalize_docx_target;
 use crate::xml_utils::{
-    attr_bool_like, attr_u32_from_bytes, decoded_text, local_name, try_attr_value,
+    attr_u32_from_bytes, decoded_text, local_name, parse_on_off_attr, try_attr_value,
     try_attr_value_by_suffix, xml_error,
 };
 use docir_core::ir::{
@@ -408,10 +408,10 @@ fn parse_run_style_attrs(
     font_size: &mut Option<u32>,
 ) -> Result<(), ParseError> {
     if let Some(value) = try_attr_value(start, b"b", doc_path)? {
-        *bold = Some(attr_bool_like(value.as_bytes()));
+        *bold = Some(parse_on_off_attr(value.as_bytes(), doc_path)?);
     }
     if let Some(value) = try_attr_value(start, b"i", doc_path)? {
-        *italic = Some(attr_bool_like(value.as_bytes()));
+        *italic = Some(parse_on_off_attr(value.as_bytes(), doc_path)?);
     }
     *font_size = attr_u32_from_bytes(start, b"sz", doc_path)?;
     Ok(())
