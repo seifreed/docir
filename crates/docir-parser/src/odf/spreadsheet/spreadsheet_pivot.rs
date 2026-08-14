@@ -215,8 +215,18 @@ pub(super) fn collect_validation_definitions(
     let mut buf = Vec::new();
     let mut in_spreadsheet = false;
     let mut validations: HashMap<String, ValidationDef> = HashMap::new();
+    let mut root_name = None;
+    let mut root_depth = 0;
+    let mut root_closed = false;
 
     super::scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
+        track_xml_root_event(
+            &event,
+            &mut root_name,
+            &mut root_depth,
+            &mut root_closed,
+            "content.xml",
+        )?;
         match event {
             Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"spreadsheet" => in_spreadsheet = true,
@@ -281,5 +291,12 @@ mod tests {
         let err = parse_ods_pivots_from_xml(xml, &mut store)
             .expect_err("truncated content XML must fail");
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+    }
+
+    #[test]
+    fn collect_validation_definitions_rejects_multiple_roots() {
+        let err = collect_validation_definitions(b"<document-content/><document-content/>")
+            .expect_err("content XML must have one root");
+        assert!(format!("{err}").contains("multiple roots"));
     }
 }
