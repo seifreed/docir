@@ -319,7 +319,7 @@ fn parse_page_borders(reader: &mut Reader<&[u8]>) -> Result<Option<PageBorders>,
     support::parse_page_borders(reader)
 }
 
-fn bool_from_val(start: &BytesStart, file: &str) -> Result<bool, ParseError> {
+pub(super) fn bool_from_val(start: &BytesStart, file: &str) -> Result<bool, ParseError> {
     support::bool_from_val(start, file)
 }
 

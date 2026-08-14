@@ -63,10 +63,34 @@ pub(super) fn parse_page_borders(
 }
 
 pub(super) fn bool_from_val(start: &BytesStart, file: &str) -> Result<bool, ParseError> {
-    Ok(!matches!(
-        try_attr_value(start, b"w:val", file)?.as_deref(),
-        Some("0") | Some("false")
-    ))
+    parse_on_off_value(try_attr_value(start, b"w:val", file)?.as_deref(), file)
+}
+
+fn parse_on_off_value(value: Option<&str>, file: &str) -> Result<bool, ParseError> {
+    let Some(value) = value else {
+        return Ok(true);
+    };
+    match value {
+        "1" => Ok(true),
+        "0" => Ok(false),
+        value
+            if value.eq_ignore_ascii_case("true")
+                || value.eq_ignore_ascii_case("on")
+                || value.eq_ignore_ascii_case("yes") =>
+        {
+            Ok(true)
+        }
+        value
+            if value.eq_ignore_ascii_case("false")
+                || value.eq_ignore_ascii_case("off")
+                || value.eq_ignore_ascii_case("no") =>
+        {
+            Ok(false)
+        }
+        value => Err(ParseError::InvalidStructure(format!(
+            "{file} boolean attribute has invalid value '{value}'"
+        ))),
+    }
 }
 
 pub(super) fn parse_vml_style_length(style: &str, key: &str) -> Result<Option<i64>, ParseError> {

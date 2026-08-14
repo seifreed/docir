@@ -166,7 +166,7 @@ fn test_parse_run_properties_caps_and_style() {
             <w:rPr>
               <w:rStyle w:val="Emphasis"/>
               <w:caps/>
-              <w:smallCaps w:val="0"/>
+              <w:smallCaps w:val="off"/>
             </w:rPr>
             <w:t>Text</w:t>
           </w:r>

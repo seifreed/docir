@@ -1,4 +1,6 @@
-use super::super::super::{DocxParser, Field, ParagraphProperties, span_from_reader};
+use super::super::super::{
+    DocxParser, Field, ParagraphProperties, bool_from_val, span_from_reader,
+};
 use super::{DOC_XML_PATH, parse_field_instruction, parse_run};
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
@@ -108,10 +110,10 @@ pub(crate) fn parse_run_properties(
                     }
                 }
                 b"caps" => {
-                    props.all_caps = Some(try_bool_from_val(&e)?);
+                    props.all_caps = Some(bool_from_val(&e, DOC_XML_PATH)?);
                 }
                 b"smallCaps" => {
-                    props.small_caps = Some(try_bool_from_val(&e)?);
+                    props.small_caps = Some(bool_from_val(&e, DOC_XML_PATH)?);
                 }
                 b"vertAlign" => {
                     if let Some(val) = try_attr_value(&e, b"w:val", DOC_XML_PATH)? {
@@ -138,13 +140,6 @@ pub(crate) fn parse_run_properties(
         buf.clear();
     }
     Ok(())
-}
-
-fn try_bool_from_val(start: &BytesStart<'_>) -> Result<bool, ParseError> {
-    Ok(!matches!(
-        try_attr_value(start, b"w:val", DOC_XML_PATH)?.as_deref(),
-        Some("0") | Some("false")
-    ))
 }
 
 pub(crate) fn parse_hyperlink(

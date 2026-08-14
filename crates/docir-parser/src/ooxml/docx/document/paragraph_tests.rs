@@ -210,6 +210,22 @@ fn parse_paragraph_properties_reports_malformed_bool_attributes() {
 }
 
 #[test]
+fn parse_paragraph_properties_rejects_invalid_on_off_value() {
+    let xml = r#"
+            <w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:keepNext w:val="maybe"/>
+            </w:pPr>
+        "#;
+
+    let mut reader = reader_from_str(xml);
+    let mut para = Paragraph::new();
+    let err = parse_paragraph_properties(&mut reader, &mut para, None)
+        .expect_err("invalid ST_OnOff value must fail");
+
+    assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("maybe")));
+}
+
+#[test]
 fn parse_paragraph_properties_reports_malformed_numeric_attributes() {
     for (case, xml) in [
         (
