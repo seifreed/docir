@@ -2,7 +2,8 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::{
-    XmlScanControl, local_name, scan_xml_events, try_attr_value_by_suffix, xml_error,
+    XmlScanControl, local_name, scan_xml_events, track_xml_document_event,
+    try_attr_value_by_suffix, xml_error,
 };
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -38,8 +39,16 @@ pub fn parse_manifest(xml: &str) -> Result<Vec<OdfManifestEntry>, ParseError> {
     reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut current_entry: Option<OdfManifestEntry> = None;
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, "META-INF/manifest.xml", |event| {
+        track_xml_document_event(
+            &event,
+            &mut depth,
+            &mut root_closed,
+            "META-INF/manifest.xml",
+        )?;
         match event {
             Event::Start(e) => handle_manifest_start_event(&e, &mut current_entry)?,
             Event::Empty(e) => handle_manifest_empty_event(&e, &mut entries, &mut current_entry)?,
@@ -417,6 +426,14 @@ mod tests {
             Err(crate::error::ParseError::InvalidStructure(message))
                 if message.contains("nested file-entry")
         ));
+    }
+
+    #[test]
+    fn parse_manifest_rejects_multiple_roots() {
+        let error =
+            parse_manifest("<manifest/><manifest/>").expect_err("manifest XML must have one root");
+
+        assert!(format!("{error}").contains("multiple roots"));
     }
 
     #[test]
