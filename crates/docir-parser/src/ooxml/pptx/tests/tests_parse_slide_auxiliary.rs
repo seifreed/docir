@@ -480,6 +480,29 @@ fn test_parse_slide_reports_malformed_slide_attrs() {
 }
 
 #[test]
+fn test_parse_slide_rejects_invalid_boolean_attribute() {
+    let slide_xml = r#"
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" show="maybe">
+          <p:cSld><p:spTree/></p:cSld>
+        </p:sld>
+        "#;
+    let mut parser = PptxParser::new();
+    let mut zip = build_empty_zip();
+
+    let err = parser
+        .parse_slide(
+            &mut zip,
+            slide_xml,
+            1,
+            "ppt/slides/invalid-slide-bool.xml",
+            &Relationships::default(),
+            (None, None),
+        )
+        .expect_err("invalid slide boolean must fail");
+    assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("maybe")));
+}
+
+#[test]
 fn test_parse_slide_reports_malformed_transition_attrs() {
     let slide_xml = r#"
         <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">

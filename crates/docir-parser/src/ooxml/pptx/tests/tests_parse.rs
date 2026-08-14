@@ -129,6 +129,19 @@ fn test_parse_presentation_info_reports_malformed_show_attributes() {
 }
 
 #[test]
+fn test_parse_presentation_info_rejects_invalid_boolean_show_attribute() {
+    let xml = r#"
+        <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:showPr loop="maybe"/>
+        </p:presentation>
+        "#;
+
+    let err = parse_presentation_info(xml, "ppt/presentation.xml")
+        .expect_err("invalid boolean show attribute must fail");
+    assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("maybe")));
+}
+
+#[test]
 fn test_parse_presentation_info_reports_malformed_size_attributes() {
     let xml = r#"
         <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">

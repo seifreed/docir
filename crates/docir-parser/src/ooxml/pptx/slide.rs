@@ -4,6 +4,7 @@ use crate::error::ParseError;
 use crate::ooxml::relationships::{Relationships, TargetMode, rel_type};
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::parse_bool_attr;
 use crate::xml_utils::reader_from_str;
 use crate::xml_utils::track_xml_root_event;
 use crate::xml_utils::xml_error;
@@ -312,9 +313,8 @@ fn parse_slide_transition_attributes(
         match attr.key.as_ref() {
             b"spd" => transition.speed = Some(lossy_attr_value(&attr).to_string()),
             b"advClick" => {
-                let value = lossy_attr_value(&attr);
                 transition.advance_on_click =
-                    Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                    Some(parse_bool_attr(attr.value.as_ref(), slide_path)?);
             }
             b"advTm" => {
                 transition.advance_after_ms = Some(parse_u32_attr(&attr, slide_path)?);
@@ -392,10 +392,7 @@ fn update_slide_visibility(
     for attr in event.attributes() {
         let attr = attr.map_err(|err| xml_error(slide_path, err))?;
         if attr.key.as_ref() == b"show" {
-            let value = lossy_attr_value(&attr);
-            if value == "0" || value.eq_ignore_ascii_case("false") {
-                slide.hidden = true;
-            }
+            slide.hidden = !parse_bool_attr(attr.value.as_ref(), slide_path)?;
         }
     }
     Ok(())

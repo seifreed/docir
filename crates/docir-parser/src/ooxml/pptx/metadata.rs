@@ -2,6 +2,7 @@ use super::{
     ParseError, PresentationProperties, PresentationTag, ShapeType, SmartArtPart, SourceSpan,
     TableStyle, TableStyleSet, ViewProperties,
 };
+use crate::xml_utils::parse_bool_attr;
 use crate::xml_utils::{local_name, lossy_attr_value, track_xml_document_event, xml_error};
 use docir_core::types::NodeId;
 use quick_xml::Reader;
@@ -50,7 +51,7 @@ pub(super) fn parse_presentation_properties(
                     b"autoCompressPictures" => {
                         let value = lossy_attr_value(attr);
                         props.auto_compress_pictures =
-                            Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                            Some(parse_bool_attr(value.as_bytes(), path)?);
                         Ok(())
                     }
                     b"compatMode" => {
@@ -59,25 +60,24 @@ pub(super) fn parse_presentation_properties(
                     }
                     b"rtl" => {
                         let value = lossy_attr_value(attr);
-                        props.rtl = Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        props.rtl = Some(parse_bool_attr(value.as_bytes(), path)?);
                         Ok(())
                     }
                     b"showSpecialPlsOnTitleSld" => {
                         let value = lossy_attr_value(attr);
                         props.show_special_placeholders =
-                            Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                            Some(parse_bool_attr(value.as_bytes(), path)?);
                         Ok(())
                     }
                     b"removePersonalInfoOnSave" => {
                         let value = lossy_attr_value(attr);
                         props.remove_personal_info_on_save =
-                            Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                            Some(parse_bool_attr(value.as_bytes(), path)?);
                         Ok(())
                     }
                     b"showInkAnnotation" => {
                         let value = lossy_attr_value(attr);
-                        props.show_ink_annotation =
-                            Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                        props.show_ink_annotation = Some(parse_bool_attr(value.as_bytes(), path)?);
                         Ok(())
                     }
                     _ => Ok(()),
@@ -120,32 +120,29 @@ pub(super) fn parse_view_properties(xml: &str, path: &str) -> Result<ViewPropert
                         }
                         b"showComments" => {
                             let value = lossy_attr_value(attr);
-                            props.show_comments =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                            props.show_comments = Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         b"showHiddenSlides" => {
                             let value = lossy_attr_value(attr);
                             props.show_hidden_slides =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                                Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         b"showGuides" => {
                             let value = lossy_attr_value(attr);
-                            props.show_guides =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                            props.show_guides = Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         b"showGrid" => {
                             let value = lossy_attr_value(attr);
-                            props.show_grid =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                            props.show_grid = Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         b"showOutlineIcons" => {
                             let value = lossy_attr_value(attr);
                             props.show_outline_icons =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                                Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         _ => Ok(()),
@@ -394,18 +391,16 @@ pub(super) fn parse_slide_master_meta(
                     let value = lossy_attr_value(attr);
                     match attr.key.as_ref() {
                         b"preserve" => {
-                            meta.preserve =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                            meta.preserve = Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         b"showMasterSp" => {
-                            meta.show_master_sp =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                            meta.show_master_sp = Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         b"showMasterPhAnim" => {
                             meta.show_master_ph_anim =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                                Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         _ => Ok(()),
@@ -461,18 +456,16 @@ pub(super) fn parse_slide_layout_meta(
                             Ok(())
                         }
                         b"preserve" => {
-                            meta.preserve =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                            meta.preserve = Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         b"showMasterSp" => {
-                            meta.show_master_sp =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                            meta.show_master_sp = Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         b"showMasterPhAnim" => {
                             meta.show_master_ph_anim =
-                                Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                                Some(parse_bool_attr(value.as_bytes(), path)?);
                             Ok(())
                         }
                         _ => Ok(()),

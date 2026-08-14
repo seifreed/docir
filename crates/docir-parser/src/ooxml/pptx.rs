@@ -7,8 +7,8 @@ use crate::ooxml::part_utils::{
 };
 use crate::ooxml::relationships::{Relationship, Relationships, TargetMode, rel_type};
 use crate::xml_utils::{
-    attr_u64_from_bytes, local_name, read_event, track_xml_document_event, try_attr_value,
-    try_attr_value_by_suffix, xml_error,
+    attr_u64_from_bytes, local_name, parse_bool_attr as parse_bool_value, read_event,
+    track_xml_document_event, try_attr_value, try_attr_value_by_suffix, xml_error,
 };
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{
@@ -306,8 +306,9 @@ fn parse_bool_attr(
     key_name: &[u8],
     file: &str,
 ) -> Result<Option<bool>, ParseError> {
-    Ok(try_attr_value(start, key_name, file)?
-        .map(|value| value == "1" || value.eq_ignore_ascii_case("true")))
+    try_attr_value(start, key_name, file)?
+        .map(|value| parse_bool_value(value.as_bytes(), file))
+        .transpose()
 }
 
 fn parse_size_type_attr(start: &BytesStart<'_>, file: &str) -> Result<Option<String>, ParseError> {
