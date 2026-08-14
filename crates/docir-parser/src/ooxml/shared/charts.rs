@@ -1,6 +1,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::{
-    XmlScanControl, decoded_general_ref, decoded_text, local_name, scan_xml_events, xml_error,
+    XmlScanControl, decoded_general_ref, decoded_text, local_name, scan_xml_events,
+    track_xml_document_event, xml_error,
 };
 use docir_core::ir::{ChartData, ChartSeries, IRNode};
 use docir_core::types::{NodeId, SourceSpan};
@@ -32,7 +33,10 @@ pub fn parse_chart_data(
     let mut in_series = false;
     let mut section: Option<SeriesSection> = None;
     let mut current_series: Option<ChartSeries> = None;
+    let mut depth = 0usize;
+    let mut root_closed = false;
     scan_xml_events(&mut reader, &mut buf, chart_path, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, chart_path)?;
         match event {
             Event::Start(e) => {
                 let name_buf = e.name().as_ref().to_vec();
@@ -177,5 +181,20 @@ fn handle_end_event(
     }
     if matches!(name, b"tx" | b"cat" | b"val") {
         *section = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_chart_data;
+    use docir_core::visitor::IrStore;
+
+    #[test]
+    fn parse_chart_data_rejects_multiple_roots() {
+        let mut store = IrStore::new();
+        let err = parse_chart_data("<chartSpace/><chartSpace/>", "chart.xml", &mut store)
+            .expect_err("chart XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
     }
 }

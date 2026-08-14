@@ -1,6 +1,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::{
-    XmlScanControl, local_name, parse_bool_attr, scan_xml_events, try_attr_value_by_suffix,
+    XmlScanControl, local_name, parse_bool_attr, scan_xml_events, track_xml_document_event,
+    try_attr_value_by_suffix,
 };
 use docir_core::ir::{DefinedName, ShapeTransform};
 use docir_core::types::{NodeId, SourceSpan};
@@ -22,8 +23,11 @@ pub(super) fn parse_ods_named_ranges(xml: &[u8]) -> Result<Vec<DefinedName>, Par
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut out = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, "content.xml", |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, "content.xml")?;
         match event {
             Event::Start(e) | Event::Empty(e) => match local_name(e.name().as_ref()) {
                 b"named-range" => {
@@ -210,6 +214,14 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
             other => panic!("expected content.xml parse error, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn parse_ods_named_ranges_rejects_multiple_roots() {
+        let err = parse_ods_named_ranges(b"<document-content/><document-content/>")
+            .expect_err("content XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
     }
 
     #[test]

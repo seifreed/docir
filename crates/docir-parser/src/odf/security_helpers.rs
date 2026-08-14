@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::xml_utils::{
-    XmlScanControl, local_name, reader_from_str, scan_xml_events, try_attr_value,
-    try_attr_value_by_suffix, xml_error,
+    XmlScanControl, local_name, reader_from_str, scan_xml_events, track_xml_document_event,
+    try_attr_value, try_attr_value_by_suffix, xml_error,
 };
 use docir_core::ir::IRNode;
 use docir_core::security::{MacroModule, MacroModuleType, MacroProject};
@@ -66,8 +66,11 @@ pub(crate) fn scan_script_links(xml: &str, source: &str) -> Result<Vec<String>, 
     let mut links = Vec::new();
     let mut reader = reader_from_str(xml);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, source, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, source)?;
         match event {
             Event::Start(e) | Event::Empty(e) => {
                 if local_name(e.name().as_ref()) == b"script"
@@ -92,8 +95,11 @@ pub(crate) fn parse_odf_signatures(
     let mut reader = reader_from_str(xml);
     let mut buf = Vec::new();
     let mut current: Option<docir_core::ir::DigitalSignature> = None;
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, source, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, source)?;
         match event {
             Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"Signature" => current = Some(docir_core::ir::DigitalSignature::new()),
@@ -230,5 +236,13 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, "META-INF/documentsignatures.xml"),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_odf_signatures_rejects_multiple_roots() {
+        let err = parse_odf_signatures("<Signatures/><Signatures/>", "signatures.xml")
+            .expect_err("signature XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
     }
 }

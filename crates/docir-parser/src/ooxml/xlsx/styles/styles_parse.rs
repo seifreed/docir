@@ -1,7 +1,7 @@
 //! XLSX styles parsing.
 
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, scan_xml_events};
+use crate::xml_utils::{XmlScanControl, scan_xml_events, track_xml_document_event};
 use crate::xml_utils::{local_name, reader_from_str_with_options, try_attr_value, xml_error};
 use docir_core::ir::{
     BorderDef, BorderSide, CellAlignment, CellFormat, CellProtection, DxfStyle, FillDef, FontDef,
@@ -69,8 +69,11 @@ pub(crate) fn parse_styles(xml: &str, styles_path: &str) -> Result<SpreadsheetSt
 
     let mut buf = Vec::new();
     let mut state = StylesParseState::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, styles_path, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, styles_path)?;
         match event {
             Event::Start(e) => handle_styles_start(&e, styles_path, &mut state, &mut styles)?,
             Event::End(e) => finish_styles_element(e.name().as_ref(), &mut state, &mut styles),
@@ -499,3 +502,16 @@ fn finish_styles_element(
 }
 
 pub(crate) use styles_parse_utils::parse_color_attr;
+
+#[cfg(test)]
+mod tests {
+    use super::parse_styles;
+
+    #[test]
+    fn parse_styles_rejects_multiple_roots() {
+        let err = parse_styles("<styleSheet/><styleSheet/>", "xl/styles.xml")
+            .expect_err("styles XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
+    }
+}

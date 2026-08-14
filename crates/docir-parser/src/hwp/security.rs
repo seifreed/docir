@@ -1,6 +1,8 @@
 use crate::diagnostics::{push_info, push_warning};
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, scan_xml_events, try_decoded_attr_value, xml_error};
+use crate::xml_utils::{
+    XmlScanControl, scan_xml_events, track_xml_document_event, try_decoded_attr_value, xml_error,
+};
 use crate::zip_handler::SecureZipReader;
 use docir_core::ir::Diagnostics;
 use docir_core::ir::{Document, IRNode};
@@ -189,7 +191,10 @@ fn scan_hwpx_external_refs(xml: &str, source: &str) -> Result<Vec<ExternalRefere
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut refs = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     scan_xml_events(&mut reader, &mut buf, source, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, source)?;
         match event {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
@@ -223,5 +228,13 @@ mod tests {
         let err = scan_hwpx_external_refs(r#"<hp:link href="bad &"/>"#, "section.xml")
             .expect_err("invalid external reference entity must fail");
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "section.xml"));
+    }
+
+    #[test]
+    fn scan_hwpx_external_refs_rejects_multiple_roots() {
+        let err = scan_hwpx_external_refs("<hp:section/><hp:section/>", "section.xml")
+            .expect_err("HWPX XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
     }
 }
