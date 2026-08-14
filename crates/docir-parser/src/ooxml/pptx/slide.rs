@@ -261,7 +261,9 @@ impl PptxParser {
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::Start(e)) if transition.transition_type.is_none() => {
+                Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                    if transition.transition_type.is_none() =>
+                {
                     transition.transition_type =
                         Some(String::from_utf8_lossy(e.name().as_ref()).to_string());
                 }

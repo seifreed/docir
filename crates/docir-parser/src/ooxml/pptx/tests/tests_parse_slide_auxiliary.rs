@@ -339,6 +339,13 @@ fn test_parse_slide_transition_and_animation() {
         _ => panic!("missing slide"),
     };
     assert!(slide.transition.is_some());
+    assert_eq!(
+        slide
+            .transition
+            .as_ref()
+            .and_then(|transition| transition.transition_type.as_deref()),
+        Some("p:fade")
+    );
     assert_eq!(slide.animations.len(), 1);
     assert_eq!(slide.animations[0].target.as_deref(), Some("4"));
 }
