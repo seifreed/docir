@@ -1,6 +1,7 @@
 use super::{OoxmlParser, ParseError};
 use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
+use crate::xml_utils::parse_bool_attr;
 use crate::xml_utils::reader_from_str;
 use crate::xml_utils::track_xml_document_event;
 use crate::xml_utils::visit_attributes;
@@ -292,7 +293,7 @@ fn custom_property_value(tag: &str, text: String) -> Result<PropertyValue, Parse
             }
             PropertyValue::Float(value)
         }
-        "bool" => PropertyValue::Boolean(text == "true" || text == "1"),
+        "bool" => PropertyValue::Boolean(parse_bool_attr(text.as_bytes(), "docProps/custom.xml")?),
         "filetime" => PropertyValue::DateTime(text),
         "blob" => PropertyValue::Blob(text),
         _ => PropertyValue::String(text),
@@ -572,6 +573,24 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, "docProps/custom.xml"),
             other => panic!("unexpected error: {other:?}"),
         }
+        assert!(metadata.custom_properties.is_empty());
+    }
+
+    #[test]
+    fn parse_custom_properties_rejects_invalid_boolean_values() {
+        let xml = r#"
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                        xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+              <property pid="2" name="BadBool"><vt:bool>maybe</vt:bool></property>
+            </Properties>
+        "#;
+        let parser = OoxmlParser::new();
+        let mut metadata = DocumentMetadata::new();
+        let err = parser
+            .parse_custom_properties(xml, &mut metadata)
+            .expect_err("invalid boolean custom property must fail");
+
+        assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("maybe")));
         assert!(metadata.custom_properties.is_empty());
     }
 

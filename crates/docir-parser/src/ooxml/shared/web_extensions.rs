@@ -1,5 +1,7 @@
 use crate::error::ParseError;
-use crate::xml_utils::{attr_each, local_name, read_event, track_xml_document_event, xml_error};
+use crate::xml_utils::{
+    attr_each, local_name, parse_bool_attr, read_event, track_xml_document_event, xml_error,
+};
 use docir_core::ir::{WebExtension, WebExtensionProperty, WebExtensionTaskpane};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -140,7 +142,7 @@ fn apply_taskpane_attrs(
         match key.as_slice() {
             b"dockState" | b"dockstate" => pane.dock_state = Some(val.clone()),
             b"visibility" => {
-                pane.visibility = Some(val.as_bytes() == b"1" || val.eq_ignore_ascii_case("true"));
+                pane.visibility = Some(parse_bool_attr(val.as_bytes(), path)?);
             }
             b"width" => pane.width = Some(parse_u32_attr(val, path)?),
             b"height" => pane.height = Some(parse_u32_attr(val, path)?),

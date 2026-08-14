@@ -140,6 +140,19 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_web_extension_taskpanes_rejects_invalid_visibility() {
+        let xml = r#"
+        <wetp:taskpanes xmlns:wetp="http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11">
+          <wetp:taskpane visibility="maybe"/>
+        </wetp:taskpanes>
+        "#;
+
+        let err = parse_web_extension_taskpanes(xml, "word/webExtensions/taskpanes.xml")
+            .expect_err("invalid taskpane visibility must fail");
+        assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("maybe")));
+    }
+
+    #[test]
     fn test_parse_vml_drawing() {
         let xml = r##"
         <xml xmlns:v="urn:schemas-microsoft-com:vml"
