@@ -4,7 +4,6 @@ use super::helpers::{
     ListContext, parse_annotation, parse_draw_frame, parse_empty_table, parse_note, parse_table,
     parse_tracked_changes,
 };
-use super::spreadsheet::parse_content_spreadsheet_fast;
 use super::{
     BookmarkEnd, BookmarkStart, CommentReference, Field, FieldInstruction, FieldKind, IRNode,
     IrStore, NodeId, NumberingInfo, OdfContentResult, OdfLimitCounter, Paragraph,
@@ -46,9 +45,6 @@ pub(super) fn parse_content_text(
     store: &mut IrStore,
     limits: &dyn OdfLimitCounter,
 ) -> Result<OdfContentResult, ParseError> {
-    if limits.fast_mode() {
-        return parse_content_spreadsheet_fast(xml, store, limits);
-    }
     let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
     let config = reader.config_mut();
     config.trim_text(false);
@@ -402,5 +398,18 @@ mod tests {
         let err = parse_content_text(xml, &mut store, &limits)
             .expect_err("truncated text document must fail");
         assert!(matches!(err, ParseError::Xml { file, .. } if file == "content.xml"));
+    }
+
+    #[test]
+    fn parse_content_text_preserves_text_in_fast_limit_mode() {
+        let xml = br#"<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:text><text:p>Hello</text:p></office:text></office:body></office:document-content>"#;
+        let mut store = IrStore::new();
+        let limits = OdfLimits::new(&ParserConfig::default(), true);
+
+        let result = parse_content_text(xml, &mut store, &limits).expect("text should parse");
+        let Some(IRNode::Section(section)) = store.get(result.content[0]) else {
+            panic!("expected text section");
+        };
+        assert_eq!(section.content.len(), 1);
     }
 }
