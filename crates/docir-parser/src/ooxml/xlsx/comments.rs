@@ -31,6 +31,16 @@ pub(super) fn parse_sheet_comments_impl(
         }
         match event {
             Event::Start(e) => handle_comment_start(&e, path, &flavor, &mut state)?,
+            Event::Empty(e) => {
+                handle_comment_start(&e, path, &flavor, &mut state)?;
+                handle_comment_empty(
+                    local_name(e.name().as_ref()),
+                    &flavor,
+                    path,
+                    sheet_name,
+                    &mut state,
+                )?;
+            }
             Event::Text(e) => {
                 let text =
                     crate::xml_utils::decoded_text(&e).map_err(|err| xml_error(path, err))?;
@@ -105,6 +115,29 @@ fn handle_comment_start(
     Ok(())
 }
 
+fn handle_comment_empty(
+    name: &[u8],
+    flavor: &CommentFlavor,
+    path: &str,
+    sheet_name: Option<&str>,
+    state: &mut CommentParseState,
+) -> Result<(), ParseError> {
+    match name {
+        b"author" => state.in_author = false,
+        b"text" | b"t" => state.in_text = false,
+        b"comment" if matches!(flavor, CommentFlavor::Legacy) => {
+            finish_legacy_comment(path, sheet_name, state)?;
+            state.in_comment = false;
+        }
+        b"threadedComment" if matches!(flavor, CommentFlavor::Threaded) => {
+            finish_threaded_comment(sheet_name, state);
+            state.in_comment = false;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 fn handle_comment_end(
     name: &[u8],
     flavor: &CommentFlavor,
@@ -153,5 +186,55 @@ fn finish_threaded_comment(sheet_name: Option<&str>, state: &mut CommentParseSta
         comment.sheet_name = sheet_name.map(|s| s.to_string());
         comment.author = state.current_author.take();
         state.out.push(comment);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CommentFlavor, parse_sheet_comments_impl};
+
+    #[test]
+    fn parse_empty_legacy_comment_preserves_cell_and_author() {
+        let xml = r#"
+            <comments>
+              <authors><author>Alice</author></authors>
+              <commentList><comment ref="A1" authorId="0"/></commentList>
+            </comments>
+        "#;
+
+        let comments = parse_sheet_comments_impl(
+            xml,
+            "xl/comments1.xml",
+            Some("Sheet1"),
+            CommentFlavor::Legacy,
+        )
+        .expect("empty legacy comment");
+
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].cell_ref, "A1");
+        assert_eq!(comments[0].author.as_deref(), Some("Alice"));
+        assert!(comments[0].text.is_empty());
+    }
+
+    #[test]
+    fn parse_empty_threaded_comment_preserves_cell_and_author() {
+        let xml = r#"
+            <ThreadedComments>
+              <threadedComment ref="B2" personId="person-1"/>
+            </ThreadedComments>
+        "#;
+
+        let comments = parse_sheet_comments_impl(
+            xml,
+            "xl/threadedComments/threadedComment1.xml",
+            Some("Sheet1"),
+            CommentFlavor::Threaded,
+        )
+        .expect("empty threaded comment");
+
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].cell_ref, "B2");
+        assert_eq!(comments[0].author.as_deref(), Some("person-1"));
+        assert!(comments[0].text.is_empty());
     }
 }
