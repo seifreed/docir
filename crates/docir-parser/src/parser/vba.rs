@@ -93,24 +93,31 @@ pub(super) fn vba_decompress(data: &[u8]) -> Option<Vec<u8>> {
     let mut pos = 1usize;
     let mut saw_chunk = false;
     while pos + 2 <= data.len() {
+        let chunk_start = pos;
         let header = u16::from_le_bytes([data[pos], data[pos + 1]]);
         pos += 2;
         let chunk_size = ((header & 0x0FFF) as usize) + 3;
         let compressed = (header & 0x8000) != 0;
-        if pos + chunk_size > data.len() {
+        if (header >> 12) & 0x07 != 0x03
+            || (!compressed && chunk_size != MAX_VBA_CHUNK_SIZE + 2)
+            || (compressed && chunk_size > MAX_VBA_CHUNK_SIZE + 2)
+        {
+            return None;
+        }
+        let chunk_end = chunk_start.checked_add(chunk_size)?;
+        if chunk_end > data.len() {
             return None;
         }
         saw_chunk = true;
         if !compressed {
-            if out.len().saturating_add(chunk_size) > MAX_VBA_DECOMPRESSED_SIZE {
+            if out.len().saturating_add(MAX_VBA_CHUNK_SIZE) > MAX_VBA_DECOMPRESSED_SIZE {
                 return None;
             }
-            out.extend_from_slice(&data[pos..pos + chunk_size]);
-            pos += chunk_size;
+            out.extend_from_slice(&data[pos..chunk_end]);
+            pos = chunk_end;
             continue;
         }
 
-        let chunk_end = pos + chunk_size;
         let mut chunk_out = Vec::new();
         while pos < chunk_end {
             let flags = data[pos];
@@ -248,29 +255,36 @@ mod tests {
     fn vba_decompress_handles_literal_and_copy_tokens() {
         // 0x01 signature + one compressed chunk:
         // flags=0b00000100 => literal 'A', literal 'B', then copy token(offset=2, len=3)
-        let encoded = [0x01, 0x02, 0x80, 0x04, b'A', b'B', 0x00, 0x10];
+        let encoded = [0x01, 0x04, 0xB0, 0x04, b'A', b'B', 0x00, 0x10];
         let out = vba_decompress(&encoded).expect("decompress should succeed");
         assert_eq!(out, b"ABABA");
     }
 
     #[test]
+    fn vba_decompress_advances_by_encoded_chunk_size() {
+        let encoded = [0x01, 0x01, 0xB0, 0x00, b'A', 0x01, 0xB0, 0x00, b'B'];
+
+        assert_eq!(vba_decompress(&encoded), Some(b"AB".to_vec()));
+    }
+
+    #[test]
     fn vba_decompress_rejects_truncated_chunk() {
         // Declares an uncompressed chunk larger than remaining bytes.
-        let encoded = [0x01, 0x10, 0x00, b'A', b'B'];
+        let encoded = [0x01, 0x10, 0x30, b'A', b'B'];
         assert_eq!(vba_decompress(&encoded), None);
     }
 
     #[test]
     fn vba_decompress_rejects_invalid_copy_token() {
         // A copy token cannot reference bytes before the start of its chunk.
-        let encoded = [0x01, 0x03, 0x80, 0x01, 0x00, 0x00];
+        let encoded = [0x01, 0x02, 0xB0, 0x01, 0x00, 0x00];
         assert_eq!(vba_decompress(&encoded), None);
     }
 
     #[test]
     fn vba_decompress_rejects_truncated_copy_token() {
         // The flags byte requests a two-byte copy token, but only one byte remains.
-        let encoded = [0x01, 0x02, 0x80, 0x01, 0x00];
+        let encoded = [0x01, 0x01, 0xB0, 0x01, 0x00];
         assert_eq!(vba_decompress(&encoded), None);
     }
 
@@ -297,9 +311,9 @@ mod tests {
         for _ in 0..40 {
             chunk.extend_from_slice(&COPY_GROUP);
         }
-        let chunk_size = u16::try_from(chunk.len() - 3).expect("test chunk size");
+        let chunk_size = u16::try_from(chunk.len() - 1).expect("test chunk size");
         let mut encoded = vec![0x01];
-        encoded.extend_from_slice(&(0x8000 | chunk_size).to_le_bytes());
+        encoded.extend_from_slice(&(0xB000 | chunk_size).to_le_bytes());
         encoded.extend_from_slice(&chunk);
 
         assert_eq!(vba_decompress(&encoded), None);
