@@ -151,7 +151,12 @@ fn parse_sheet_info(start: &BytesStart, sheets: &mut Vec<SheetInfo>) -> Result<(
             state = match val.as_ref() {
                 "hidden" => SheetState::Hidden,
                 "veryHidden" => SheetState::VeryHidden,
-                _ => SheetState::Visible,
+                "visible" => SheetState::Visible,
+                _ => {
+                    return Err(ParseError::InvalidStructure(format!(
+                        "xl/workbook.xml sheet state has invalid value '{val}'"
+                    )));
+                }
             };
             Ok(())
         }

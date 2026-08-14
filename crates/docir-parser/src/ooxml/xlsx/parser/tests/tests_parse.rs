@@ -46,6 +46,24 @@ fn test_parse_workbook_info_sheets() {
 }
 
 #[test]
+fn test_parse_workbook_info_rejects_invalid_sheet_state() {
+    let xml = r#"
+        <workbook>
+          <sheets>
+            <sheet name="Sheet1" sheetId="1" r:id="rId1" state="invalid"/>
+          </sheets>
+        </workbook>
+        "#;
+
+    let err = parse_workbook_info(xml).expect_err("invalid sheet state must fail");
+    assert!(matches!(
+        err,
+        ParseError::InvalidStructure(message)
+            if message.contains("sheet state has invalid value")
+    ));
+}
+
+#[test]
 fn test_parse_workbook_info_accepts_prefixed_main_namespace() {
     let xml = r#"
         <x:workbook xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
