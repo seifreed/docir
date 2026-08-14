@@ -1,5 +1,11 @@
 use super::*;
+use crate::odf::OdfLimits;
+use crate::parser::ParserConfig;
 use quick_xml::Reader;
+
+fn default_limits() -> OdfLimits {
+    OdfLimits::new(&ParserConfig::default(), false)
+}
 
 fn parse_page_start(xml: &[u8]) -> (Reader<std::io::Cursor<&[u8]>>, BytesStart<'static>) {
     let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
@@ -50,7 +56,8 @@ fn parse_draw_page_extracts_metadata_transition_notes_and_shape_text() {
     let (mut reader, page_start) = parse_page_start(xml);
     let mut store = IrStore::new();
 
-    let slide = parse_draw_page(&mut reader, &page_start, 3, &mut store).unwrap();
+    let slide =
+        parse_draw_page(&mut reader, &page_start, 3, &mut store, &default_limits()).unwrap();
     assert_eq!(slide.number, 3);
     assert_eq!(slide.name.as_deref(), Some("SlideA"));
     assert_eq!(slide.master_id.as_deref(), Some("MasterA"));
@@ -93,7 +100,7 @@ fn parse_draw_page_preserves_siblings_after_empty_frame() {
     let (mut reader, page_start) = parse_page_start(xml);
     let mut store = IrStore::new();
 
-    let slide = parse_draw_page(&mut reader, &page_start, 1, &mut store)
+    let slide = parse_draw_page(&mut reader, &page_start, 1, &mut store, &default_limits())
         .expect("empty frame must not consume following page events");
     assert!(slide.shapes.is_empty());
     assert_eq!(slide.animations.len(), 1);
@@ -113,7 +120,7 @@ fn parse_draw_page_preserves_empty_custom_shape() {
     let (mut reader, page_start) = parse_page_start(xml);
     let mut store = IrStore::new();
 
-    let slide = parse_draw_page(&mut reader, &page_start, 1, &mut store)
+    let slide = parse_draw_page(&mut reader, &page_start, 1, &mut store, &default_limits())
         .expect("empty custom shape must parse");
     assert_eq!(slide.shapes.len(), 1);
     let Some(IRNode::Shape(shape)) = store.get(slide.shapes[0]) else {
@@ -129,7 +136,7 @@ fn parse_draw_page_rejects_missing_end() {
     let (mut reader, page_start) = parse_page_start(xml);
     let mut store = IrStore::new();
 
-    let err = parse_draw_page(&mut reader, &page_start, 1, &mut store)
+    let err = parse_draw_page(&mut reader, &page_start, 1, &mut store, &default_limits())
         .expect_err("truncated page must fail");
     assert!(matches!(err, ParseError::Xml { .. }));
 }
@@ -166,7 +173,9 @@ fn parse_draw_frame_presentation_returns_none_for_unrecognized_content() {
     };
     let mut store = IrStore::new();
 
-    let shape = parse_draw_frame_presentation(&mut reader, &frame_start, &mut store).unwrap();
+    let shape =
+        parse_draw_frame_presentation(&mut reader, &frame_start, &mut store, &default_limits())
+            .unwrap();
     assert!(shape.is_none());
     assert_eq!(store.values().count(), 0);
 }
@@ -183,8 +192,9 @@ fn parse_draw_frame_presentation_rejects_missing_end() {
     };
     let mut store = IrStore::new();
 
-    let err = parse_draw_frame_presentation(&mut reader, &frame_start, &mut store)
-        .expect_err("truncated frame must fail");
+    let err =
+        parse_draw_frame_presentation(&mut reader, &frame_start, &mut store, &default_limits())
+            .expect_err("truncated frame must fail");
     assert!(matches!(err, ParseError::Xml { .. }));
 }
 
@@ -210,7 +220,9 @@ fn parse_draw_frame_presentation_classifies_plugin_media() {
     };
     let mut store = IrStore::new();
 
-    let shape_id = parse_draw_frame_presentation(&mut reader, &frame_start, &mut store).unwrap();
+    let shape_id =
+        parse_draw_frame_presentation(&mut reader, &frame_start, &mut store, &default_limits())
+            .unwrap();
     let Some(shape_id) = shape_id else {
         panic!("expected shape");
     };
@@ -244,8 +256,9 @@ fn parse_draw_frame_presentation_rejects_malformed_name_attributes() {
     };
     let mut store = IrStore::new();
 
-    let err = parse_draw_frame_presentation(&mut reader, &frame_start, &mut store)
-        .expect_err("duplicate frame name attributes must fail");
+    let err =
+        parse_draw_frame_presentation(&mut reader, &frame_start, &mut store, &default_limits())
+            .expect_err("duplicate frame name attributes must fail");
 
     match err {
         ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
@@ -278,7 +291,9 @@ fn parse_custom_shape_presentation_preserves_text_runs() {
     };
     let mut store = IrStore::new();
 
-    let shape_id = parse_custom_shape_presentation(&mut reader, &shape_start, &mut store).unwrap();
+    let shape_id =
+        parse_custom_shape_presentation(&mut reader, &shape_start, &mut store, &default_limits())
+            .unwrap();
     let Some(shape_id) = shape_id else {
         panic!("expected custom shape");
     };
@@ -305,8 +320,9 @@ fn parse_custom_shape_presentation_rejects_missing_end() {
     };
     let mut store = IrStore::new();
 
-    let err = parse_custom_shape_presentation(&mut reader, &shape_start, &mut store)
-        .expect_err("truncated custom shape must fail");
+    let err =
+        parse_custom_shape_presentation(&mut reader, &shape_start, &mut store, &default_limits())
+            .expect_err("truncated custom shape must fail");
     assert!(matches!(err, ParseError::Xml { .. }));
 }
 
@@ -350,8 +366,9 @@ fn parse_custom_shape_presentation_rejects_malformed_name_attributes() {
     };
     let mut store = IrStore::new();
 
-    let err = parse_custom_shape_presentation(&mut reader, &shape_start, &mut store)
-        .expect_err("duplicate custom shape name attributes must fail");
+    let err =
+        parse_custom_shape_presentation(&mut reader, &shape_start, &mut store, &default_limits())
+            .expect_err("duplicate custom shape name attributes must fail");
 
     match err {
         ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
@@ -407,7 +424,7 @@ fn parse_draw_page_rejects_malformed_animation_attributes() {
     let (mut reader, page_start) = parse_page_start(xml);
     let mut store = IrStore::new();
 
-    let err = parse_draw_page(&mut reader, &page_start, 1, &mut store)
+    let err = parse_draw_page(&mut reader, &page_start, 1, &mut store, &default_limits())
         .expect_err("duplicate animation attributes must fail");
 
     match err {
@@ -432,7 +449,8 @@ fn parse_draw_page_accepts_alternate_animation_prefix() {
     let (mut reader, page_start) = parse_page_start(xml);
     let mut store = IrStore::new();
 
-    let slide = parse_draw_page(&mut reader, &page_start, 1, &mut store).expect("slide");
+    let slide =
+        parse_draw_page(&mut reader, &page_start, 1, &mut store, &default_limits()).expect("slide");
 
     assert_eq!(slide.animations.len(), 1);
     assert_eq!(slide.animations[0].target.as_deref(), Some("shape-1"));

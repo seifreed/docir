@@ -5,9 +5,9 @@ use crate::xml_utils::{local_name, try_attr_value_by_suffix, xml_error};
 #[path = "presentation_helpers_utils.rs"]
 mod presentation_helpers_utils;
 use super::{
-    ChartData, IRNode, IrStore, MediaAsset, MediaType, NodeId, OdfReader, ParseError, Shape,
-    ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeType, Slide, SlideAnimation, SlideTransition,
-    SourceSpan, parse_frame_transform, read_event,
+    ChartData, IRNode, IrStore, MediaAsset, MediaType, NodeId, OdfLimitCounter, OdfReader,
+    ParseError, Shape, ShapeText, ShapeTextParagraph, ShapeTextRun, ShapeType, Slide,
+    SlideAnimation, SlideTransition, SourceSpan, parse_frame_transform, read_event,
 };
 #[path = "presentation_helpers_frame.rs"]
 mod presentation_helpers_frame;
@@ -23,6 +23,7 @@ pub(super) fn parse_draw_page(
     start: &BytesStart<'_>,
     slide_no: u32,
     store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
 ) -> Result<Slide, ParseError> {
     let mut slide = Slide::new(slide_no);
     slide.name = try_attr_value_by_suffix(start, &[b":name"], "content.xml")?;
@@ -42,7 +43,7 @@ pub(super) fn parse_draw_page(
 
     loop {
         match read_event(reader, &mut buf, "content.xml")? {
-            Event::Start(e) => handle_draw_page_start_event(reader, &e, store, &mut state)?,
+            Event::Start(e) => handle_draw_page_start_event(reader, &e, store, limits, &mut state)?,
             Event::Empty(e) => handle_draw_page_empty_event(&e, store, &mut state)?,
             Event::End(e) if local_name(e.name().as_ref()) == b"page" => {
                 break;
@@ -68,16 +69,17 @@ fn handle_draw_page_start_event(
     reader: &mut OdfReader<'_>,
     event: &BytesStart<'_>,
     store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
     state: &mut DrawPageState,
 ) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
         b"frame" => {
-            if let Some(shape_id) = parse_draw_frame_presentation(reader, event, store)? {
+            if let Some(shape_id) = parse_draw_frame_presentation(reader, event, store, limits)? {
                 state.slide.shapes.push(shape_id);
             }
         }
         b"custom-shape" => {
-            if let Some(shape_id) = parse_custom_shape_presentation(reader, event, store)? {
+            if let Some(shape_id) = parse_custom_shape_presentation(reader, event, store, limits)? {
                 state.slide.shapes.push(shape_id);
             }
         }
@@ -123,6 +125,7 @@ pub(super) fn parse_draw_frame_presentation(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
     store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
 ) -> Result<Option<NodeId>, ParseError> {
     let transform = parse_frame_transform(start)?;
     let mut state = DrawFrameState {
@@ -134,7 +137,9 @@ pub(super) fn parse_draw_frame_presentation(
 
     loop {
         match read_event(reader, &mut buf, "content.xml")? {
-            Event::Start(e) => handle_draw_frame_start_event(reader, &e, store, &mut state)?,
+            Event::Start(e) => {
+                handle_draw_frame_start_event(reader, &e, store, limits, &mut state)?
+            }
             Event::Empty(e) => parse_frame_shape_empty(&e, store, &mut state.frame)?,
             Event::End(e) if local_name(e.name().as_ref()) == b"frame" => {
                 break;
@@ -172,11 +177,12 @@ fn handle_draw_frame_start_event(
     reader: &mut OdfReader<'_>,
     event: &BytesStart<'_>,
     store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
     state: &mut DrawFrameState,
 ) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
         b"text-box" => {
-            let paragraphs = parse_shape_text(reader, event.name().as_ref())?;
+            let paragraphs = parse_shape_text(reader, event.name().as_ref(), limits)?;
             if !paragraphs.is_empty() {
                 state.text = Some(ShapeText { paragraphs });
                 state.frame.shape_type = ShapeType::TextBox;
@@ -192,9 +198,10 @@ pub(super) fn parse_custom_shape_presentation(
     reader: &mut OdfReader<'_>,
     start: &BytesStart<'_>,
     store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
 ) -> Result<Option<NodeId>, ParseError> {
     let name = try_attr_value_by_suffix(start, &[b":name"], "content.xml")?;
-    let paragraphs = parse_shape_text(reader, start.name().as_ref())?;
+    let paragraphs = parse_shape_text(reader, start.name().as_ref(), limits)?;
     let mut shape = Shape::new(ShapeType::Custom);
     shape.name = name;
     if !paragraphs.is_empty() {
@@ -208,12 +215,14 @@ pub(super) fn parse_custom_shape_presentation(
 fn parse_shape_text(
     reader: &mut OdfReader<'_>,
     end_tag: &[u8],
+    limits: &dyn OdfLimitCounter,
 ) -> Result<Vec<ShapeTextParagraph>, ParseError> {
     let mut buf = Vec::new();
     let mut paragraphs = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) if local_name(e.name().as_ref()) == b"p" => {
+                limits.bump_paragraphs(1)?;
                 let text = parse_text_element(reader, e.name().as_ref())?;
                 let run = ShapeTextRun {
                     text,
@@ -228,6 +237,7 @@ fn parse_shape_text(
                 });
             }
             Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"p" => {
+                limits.bump_paragraphs(1)?;
                 paragraphs.push(ShapeTextParagraph {
                     runs: Vec::new(),
                     alignment: None,

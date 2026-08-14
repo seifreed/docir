@@ -11,7 +11,7 @@ use quick_xml::events::Event;
 pub(super) fn parse_content_presentation(
     xml: &[u8],
     store: &mut IrStore,
-    _limits: &dyn OdfLimitCounter,
+    limits: &dyn OdfLimitCounter,
 ) -> Result<OdfContentResult, ParseError> {
     let mut reader = Reader::from_reader(std::io::Cursor::new(xml));
     let config = reader.config_mut();
@@ -43,7 +43,7 @@ pub(super) fn parse_content_presentation(
             Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"presentation" => in_presentation = true,
                 b"page" if in_presentation => {
-                    let slide = parse_draw_page(&mut reader, &e, slide_no, store)?;
+                    let slide = parse_draw_page(&mut reader, &e, slide_no, store, limits)?;
                     let slide_id = slide.id;
                     store.insert(IRNode::Slide(slide));
                     slides.push(slide_id);
@@ -141,6 +141,32 @@ mod tests {
             ParseError::Xml { file, .. } => assert_eq!(file, "content.xml"),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_content_presentation_enforces_paragraph_limit_in_shape_text() {
+        let xml: &[u8] = br#"<office:document-content
+  xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <office:presentation>
+    <draw:page>
+      <draw:frame>
+        <draw:text-box><text:p/></draw:text-box>
+      </draw:frame>
+    </draw:page>
+  </office:presentation>
+</office:document-content>"#;
+        let mut config = ParserConfig::default();
+        config.odf.max_paragraphs = Some(0);
+        let limits = OdfLimits::new(&config, false);
+        let mut store = IrStore::new();
+
+        let err = parse_content_presentation(xml, &mut store, &limits)
+            .expect_err("shape text paragraph must count toward the limit");
+        assert!(
+            matches!(err, ParseError::ResourceLimit(message) if message.contains("paragraphs"))
+        );
     }
 
     #[test]
