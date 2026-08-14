@@ -174,7 +174,7 @@ fn parse_cell_value(
 
     match cell_type {
         Some("s") => parse_shared_string_value(shared_strings, reference, value),
-        Some("b") => Ok(parse_boolean_value(&value)),
+        Some("b") => parse_boolean_value(&value, reference),
         Some("str") => Ok(CellValue::String(value)),
         Some("e") => Ok(CellValue::Error(super::map_cell_error(&value))),
         Some("d") => Ok(parse_datetime_value(value)),
@@ -201,9 +201,20 @@ fn parse_shared_string_value(
         }))
 }
 
-fn parse_boolean_value(value: &str) -> CellValue {
+fn parse_boolean_value(value: &str, reference: &str) -> Result<CellValue, ParseError> {
     let bool_value = value.trim();
-    CellValue::Boolean(bool_value == "1" || bool_value.eq_ignore_ascii_case("true"))
+    let parsed = match bool_value {
+        "1" => true,
+        "0" => false,
+        value if value.eq_ignore_ascii_case("true") => true,
+        value if value.eq_ignore_ascii_case("false") => false,
+        _ => {
+            return Err(ParseError::InvalidStructure(format!(
+                "Invalid boolean value '{value}' in cell {reference}"
+            )));
+        }
+    };
+    Ok(CellValue::Boolean(parsed))
 }
 
 fn parse_datetime_value(value: String) -> CellValue {
@@ -273,6 +284,17 @@ mod tests {
 
         assert!(
             matches!(err, ParseError::InvalidStructure(message) if message.contains("worksheet limits"))
+        );
+    }
+
+    #[test]
+    fn parse_cell_rejects_invalid_boolean_value() {
+        let mut parser = XlsxParser::new();
+        let err = parse_cell_from_xml(&mut parser, r#"<c r="A1" t="b"><v>maybe</v></c>"#)
+            .expect_err("invalid boolean must fail");
+
+        assert!(
+            matches!(err, ParseError::InvalidStructure(message) if message.contains("Invalid boolean value"))
         );
     }
 
