@@ -2,7 +2,9 @@
 
 use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, xml_error};
+use crate::xml_utils::{
+    XmlScanControl, local_name, scan_xml_events, track_xml_document_event, xml_error,
+};
 use docir_core::ir::{PivotCacheRecords, PivotTable, TableColumn, TableDefinition};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
@@ -30,14 +32,14 @@ pub(crate) fn parse_table_definition(
     };
 
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     scan_xml_events(&mut reader, &mut buf, table_path, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, table_path)?;
         match event {
             Event::Start(e) => handle_table_start(&e, &mut table, table_path)?,
             Event::Empty(e) if local_name(e.name().as_ref()) == b"tableColumn" => {
                 push_table_column(&e, &mut table.columns, table_path)?;
-            }
-            Event::End(e) if local_name(e.name().as_ref()) == b"table" => {
-                return Ok(XmlScanControl::Break);
             }
             _ => {}
         }
@@ -145,7 +147,10 @@ pub(crate) fn parse_pivot_table_definition(
     };
 
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
     scan_xml_events(&mut reader, &mut buf, pivot_path, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, pivot_path)?;
         match event {
             Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"pivotTableDefinition" => {
@@ -179,9 +184,6 @@ pub(crate) fn parse_pivot_table_definition(
                     Ok(())
                 })?;
             }
-            Event::End(e) if local_name(e.name().as_ref()) == b"pivotTableDefinition" => {
-                return Ok(XmlScanControl::Break);
-            }
             _ => {}
         }
         Ok(XmlScanControl::Continue)
@@ -206,8 +208,11 @@ pub(crate) fn parse_pivot_cache_records(
     let mut max_fields: u32 = 0;
     let mut counted_records: u32 = 0;
     let mut has_count_attr = false;
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, records_path, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, records_path)?;
         match event {
             Event::Start(e) => {
                 if local_name(e.name().as_ref()) == b"pivotCacheRecords" {
@@ -340,6 +345,14 @@ mod tests {
     }
 
     #[test]
+    fn parse_table_definition_rejects_multiple_roots() {
+        let err = parse_table_definition("<table/><table/>", "xl/tables/broken-roots.xml")
+            .expect_err("table XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
+    }
+
+    #[test]
     fn parse_table_definition_reports_malformed_attributes() {
         let xml = r#"
             <table name="SalesTable" name="Other" ref="A1:C10">
@@ -428,6 +441,17 @@ mod tests {
     }
 
     #[test]
+    fn parse_pivot_table_definition_rejects_multiple_roots() {
+        let err = parse_pivot_table_definition(
+            "<pivotTableDefinition/><pivotTableDefinition/>",
+            "xl/pivotTables/broken-roots.xml",
+        )
+        .expect_err("pivot XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
+    }
+
+    #[test]
     fn parse_pivot_table_definition_reports_malformed_attributes() {
         let xml = r#"
             <pivotTableDefinition name="PivotA" name="Other" cacheId="7">
@@ -496,6 +520,17 @@ mod tests {
             .expect("records should parse");
         assert_eq!(parsed.record_count, Some(3));
         assert_eq!(parsed.field_count, Some(3));
+    }
+
+    #[test]
+    fn parse_pivot_cache_records_rejects_multiple_roots() {
+        let err = parse_pivot_cache_records(
+            "<pivotCacheRecords/><pivotCacheRecords/>",
+            "xl/pivotCache/broken-roots.xml",
+        )
+        .expect_err("pivot cache records XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
     }
 
     #[test]
