@@ -59,8 +59,8 @@ fn handle_start_event(
         b"majorFont" => state.in_major_font = true,
         b"minorFont" => state.in_minor_font = true,
         b"latin" => set_latin_typeface(start, state, path)?,
-        b"srgbClr" if state.in_clr_scheme => {
-            record_srgb_color(start, theme, state, path)?;
+        b"srgbClr" | b"sysClr" if state.in_clr_scheme => {
+            record_theme_color(start, theme, state, path)?;
         }
         _ if state.in_clr_scheme => {
             let name = String::from_utf8_lossy(start.name().as_ref()).to_string();
@@ -77,7 +77,7 @@ fn handle_empty_event(
     state: &mut ThemeParseState,
     path: &str,
 ) -> Result<(), ParseError> {
-    record_srgb_color(start, theme, state, path)?;
+    record_theme_color(start, theme, state, path)?;
 
     if local_name(start.name().as_ref()) == b"latin" {
         set_latin_typeface(start, state, path)?;
@@ -85,16 +85,16 @@ fn handle_empty_event(
     Ok(())
 }
 
-fn record_srgb_color(
+fn record_theme_color(
     start: &BytesStart<'_>,
     theme: &mut Theme,
     state: &mut ThemeParseState,
     path: &str,
 ) -> Result<(), ParseError> {
-    if !state.in_clr_scheme || local_name(start.name().as_ref()) != b"srgbClr" {
+    if !state.in_clr_scheme {
         return Ok(());
     }
-    let color_value = srgb_value(start, path)?;
+    let color_value = theme_color_value(start, path)?;
     if let Some(name) = state.current_color_name.take()
         && color_value.is_some()
     {
@@ -149,15 +149,24 @@ fn set_latin_typeface(
     Ok(())
 }
 
-fn srgb_value(start: &BytesStart<'_>, path: &str) -> Result<Option<String>, ParseError> {
-    if local_name(start.name().as_ref()) != b"srgbClr" {
-        return Ok(None);
-    }
+fn theme_color_value(start: &BytesStart<'_>, path: &str) -> Result<Option<String>, ParseError> {
+    let attribute = match local_name(start.name().as_ref()) {
+        b"srgbClr" => b"val".as_slice(),
+        b"sysClr" => b"lastClr".as_slice(),
+        _ => return Ok(None),
+    };
     let mut value = None;
     visit_attributes(start, path, |attr| {
-        if attr.key.as_ref() == b"val" {
+        if attr.key.as_ref() == attribute {
             value = Some(lossy_attr_value(attr).to_string());
         }
     })?;
+    if value.is_none() && local_name(start.name().as_ref()) == b"sysClr" {
+        visit_attributes(start, path, |attr| {
+            if attr.key.as_ref() == b"val" {
+                value = Some(lossy_attr_value(attr).to_string());
+            }
+        })?;
+    }
     Ok(value)
 }
