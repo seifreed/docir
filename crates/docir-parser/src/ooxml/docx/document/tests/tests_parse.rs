@@ -79,6 +79,22 @@ fn test_parse_document_rejects_truncated_root_after_body() {
 }
 
 #[test]
+fn test_parse_document_preserves_empty_self_closing_body() {
+    let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>"#;
+    let mut parser = DocxParser::new();
+    let document_id = parser
+        .parse_document(xml, &Relationships::default(), None)
+        .expect("self-closing body should parse");
+    let store = parser.into_store();
+    let document = match store.get(document_id) {
+        Some(docir_core::ir::IRNode::Document(document)) => document,
+        _ => panic!("missing document"),
+    };
+
+    assert_eq!(document.content.len(), 1);
+}
+
+#[test]
 fn test_parse_section_properties_reports_malformed_border_attributes() {
     let xml = r#"
         <w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

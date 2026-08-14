@@ -10,7 +10,7 @@ use crate::xml_utils::{
 use docir_core::ir::{
     Border, BorderStyle, CommentRangeEnd, CommentRangeStart, CommentReference, Document, Field,
     Footer, GlossaryDocument, Header, PageBorders, ParagraphProperties, Run, RunProperties,
-    StyleParagraphProperties, StyleRunProperties, WebSettings, WordSettings,
+    Section, StyleParagraphProperties, StyleRunProperties, WebSettings, WordSettings,
 };
 use docir_core::types::{DocumentFormat, NodeId, SourceSpan};
 use docir_core::visitor::IrStore;
@@ -112,15 +112,22 @@ impl DocxParser {
                     &mut root_closed,
                     "word/document.xml",
                 )?;
-                if let Event::Start(e) = event
-                    && local_name(e.name().as_ref()) == b"body"
-                {
-                    let sections = parse_body_sections(self, reader, rels, header_footer_map)?;
-                    for section in sections {
+                match event {
+                    Event::Start(e) if local_name(e.name().as_ref()) == b"body" => {
+                        let sections = parse_body_sections(self, reader, rels, header_footer_map)?;
+                        for section in sections {
+                            let section_id = section.id;
+                            self.store.insert(docir_core::ir::IRNode::Section(section));
+                            doc.content.push(section_id);
+                        }
+                    }
+                    Event::Empty(e) if local_name(e.name().as_ref()) == b"body" => {
+                        let section = Section::new();
                         let section_id = section.id;
                         self.store.insert(docir_core::ir::IRNode::Section(section));
                         doc.content.push(section_id);
                     }
+                    _ => {}
                 }
                 Ok(XmlScanControl::Continue)
             },
