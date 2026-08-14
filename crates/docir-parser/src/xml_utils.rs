@@ -72,10 +72,13 @@ pub(crate) fn attr_u32_from_bytes(
     name: &[u8],
     file: &str,
 ) -> Result<Option<u32>, ParseError> {
+    let requested_local = name.contains(&b':').then(|| local_name(name));
     let mut parsed = None;
     for attr in e.attributes() {
         let attr = attr.map_err(|err| xml_error(file, err))?;
-        if attr.key.as_ref() == name {
+        if attr.key.as_ref() == name
+            || requested_local.is_some_and(|local| local_name(attr.key.as_ref()) == local)
+        {
             let value =
                 std::str::from_utf8(attr.value.as_ref()).map_err(|err| xml_error(file, err))?;
             parsed = Some(value.parse::<u32>().map_err(|err| xml_error(file, err))?);
@@ -617,6 +620,29 @@ mod tests {
                     assert_eq!(
                         try_attr_value(&e, b"val", "test.xml").expect("local attr"),
                         None
+                    );
+                    break;
+                }
+                Ok(Event::Eof) => panic!("item not found"),
+                Ok(_) => {}
+                Err(err) => panic!("unexpected xml read error: {err}"),
+            }
+            buf.clear();
+        }
+    }
+
+    #[test]
+    fn attr_u32_from_bytes_accepts_alternate_prefix_for_qualified_lookup() {
+        let xml = r#"<x:item xmlns:x="urn:x" xmlns:y="urn:y" y:val="42"/>"#;
+        let mut reader = Reader::from_str(xml);
+        let mut buf = Vec::new();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(e)) => {
+                    assert_eq!(
+                        attr_u32_from_bytes(&e, b"x:val", "test.xml").expect("qualified attr"),
+                        Some(42)
                     );
                     break;
                 }
