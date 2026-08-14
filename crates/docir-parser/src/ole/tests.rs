@@ -195,6 +195,23 @@ fn root_stream_read_respects_declared_size() {
 }
 
 #[test]
+fn cfb_parse_rejects_non_root_first_directory_entry() {
+    let mut data = crate::test_support::build_test_cfb(&[("Stream", &[1_u8; 512])]);
+    let sector_size = 1usize << u16::from_le_bytes([data[0x1E], data[0x1F]]);
+    let first_dir_sector =
+        u32::from_le_bytes([data[0x30], data[0x31], data[0x32], data[0x33]]) as usize;
+    let root_offset = sector_size + first_dir_sector * sector_size;
+    data[root_offset + 66] = 2;
+
+    let result = Cfb::parse(data);
+
+    assert!(matches!(
+        result,
+        Err(ParseError::InvalidStructure(message)) if message.contains("first directory entry")
+    ));
+}
+
+#[test]
 fn mini_fat_read_respects_declared_sector_count() {
     let mut data = vec![0_u8; 1536];
     data[512..1024].fill(1);

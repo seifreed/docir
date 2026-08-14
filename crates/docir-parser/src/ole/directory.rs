@@ -24,6 +24,11 @@ pub(crate) fn read_directory_entries_and_root_stream(
     let root = entries
         .first()
         .ok_or_else(|| ParseError::InvalidStructure("Missing root entry".to_string()))?;
+    if root.object_type != 5 {
+        return Err(ParseError::InvalidStructure(
+            "OLE first directory entry must be the root storage".to_string(),
+        ));
+    }
     let root_size = usize::try_from(root.size).map_err(|_| {
         ParseError::ResourceLimit("OLE root stream size does not fit in usize".to_string())
     })?;
