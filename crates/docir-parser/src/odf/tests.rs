@@ -14,6 +14,31 @@ fn build_odf_zip(mimetype: &str, content_xml: &str, styles_xml: Option<&str>) ->
     build_odf_zip_custom(mimetype, content_xml, styles_xml, None, Vec::new())
 }
 
+#[test]
+fn parser_config_max_xml_depth_rejects_nested_package_xml() {
+    let content_xml = r#"
+        <office:document-content
+            xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+            xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+          <office:body><office:text><text:p>depth</text:p></office:text></office:body>
+        </office:document-content>
+    "#;
+    let config = ParserConfig {
+        max_xml_depth: 3,
+        ..ParserConfig::default()
+    };
+
+    let error = DocumentParser::with_config(config)
+        .parse_reader(Cursor::new(build_odf_zip(
+            "application/vnd.oasis.opendocument.text",
+            content_xml,
+            None,
+        )))
+        .expect_err("configured XML depth must be enforced");
+
+    assert!(matches!(error, ParseError::Xml { file, .. } if file == "content.xml"));
+}
+
 #[derive(Default)]
 struct RichContentNodeCounts {
     table: usize,

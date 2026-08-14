@@ -12,6 +12,7 @@ use crate::parse_utils::{finalize_and_normalize, init_store_and_document};
 use crate::parser::{
     NormalizeStage, ParseStage, ParsedDocument, PostprocessStage, run_parser_pipeline,
 };
+use crate::xml_utils::validate_zip_xml_depth;
 use crate::zip_handler::SecureZipReader;
 pub(crate) use builder_hwp::HwpHeaderContext;
 #[cfg(test)]
@@ -114,6 +115,7 @@ impl ParseStage for HwpxParser {
     fn parse_stage<R: Read + Seek>(&self, mut reader: R) -> Result<ParsedDocument, ParseError> {
         enforce_input_size(&mut reader, self.config.max_input_size)?;
         let mut zip = SecureZipReader::new(reader, self.config.zip_config.clone())?;
+        validate_zip_xml_depth(&mut zip, self.config.max_xml_depth)?;
 
         let (mut store, mut doc) = init_store_and_document(DocumentFormat::Hwpx);
 

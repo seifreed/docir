@@ -4,6 +4,7 @@ use super::{
     PostprocessStage, Read, Relationships, SecureZipReader, Seek, SeekFrom, read_all_with_limit,
     rel_type, run_parser_pipeline, security,
 };
+use crate::xml_utils::validate_zip_xml_depth;
 #[path = "ooxml_docx_parts.rs"]
 mod ooxml_docx_parts;
 
@@ -72,6 +73,7 @@ impl ParseStage for OoxmlParser {
         let data = read_all_with_limit(reader, self.config.max_input_size)?;
         let mut zip =
             SecureZipReader::new(Cursor::new(data.as_slice()), self.config.zip_config.clone())?;
+        validate_zip_xml_depth(&mut zip, self.config.max_xml_depth)?;
         let mut metrics = self.init_metrics();
         let content_types = self.read_content_types(&mut zip, &mut metrics)?;
         let format = self.detect_format(&content_types)?;

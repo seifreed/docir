@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::zip_handler::PackageReader;
 use quick_xml::Reader;
 use quick_xml::XmlVersion;
 use quick_xml::encoding::Decoder;
@@ -419,12 +420,26 @@ pub(crate) enum XmlScanControl {
     Break,
 }
 
-const MAX_XML_NESTING_DEPTH: usize = 512;
+pub(crate) const MAX_XML_NESTING_DEPTH: usize = 512;
 
 pub(crate) fn scan_xml_events<R, F>(
     reader: &mut Reader<R>,
     buf: &mut Vec<u8>,
     file: &str,
+    on_event: F,
+) -> Result<(), ParseError>
+where
+    R: BufRead,
+    F: for<'a> FnMut(Event<'a>) -> Result<XmlScanControl, ParseError>,
+{
+    scan_xml_events_with_max_depth(reader, buf, file, MAX_XML_NESTING_DEPTH, on_event)
+}
+
+pub(crate) fn scan_xml_events_with_max_depth<R, F>(
+    reader: &mut Reader<R>,
+    buf: &mut Vec<u8>,
+    file: &str,
+    max_depth: usize,
     mut on_event: F,
 ) -> Result<(), ParseError>
 where
@@ -446,7 +461,7 @@ where
         }
 
         if let Some(name) = push_open {
-            push_xml_start_element(file, &mut start_elements, name)?;
+            push_xml_start_element(file, &mut start_elements, name, max_depth)?;
         }
         if let Some(name) = check_close {
             check_xml_end_element(file, &mut start_elements, name)?;
@@ -477,14 +492,35 @@ fn push_xml_start_element(
     file: &str,
     start_elements: &mut Vec<Vec<u8>>,
     name: Vec<u8>,
+    max_depth: usize,
 ) -> Result<(), ParseError> {
-    if start_elements.len() >= MAX_XML_NESTING_DEPTH {
+    if start_elements.len() >= max_depth {
         return Err(xml_error(
             file,
-            format!("XML nesting depth exceeded maximum ({MAX_XML_NESTING_DEPTH})"),
+            format!("XML nesting depth exceeded maximum ({max_depth})"),
         ));
     }
     start_elements.push(name);
+    Ok(())
+}
+
+pub(crate) fn validate_zip_xml_depth(
+    zip: &mut impl PackageReader,
+    configured_max_depth: usize,
+) -> Result<(), ParseError> {
+    let max_depth = configured_max_depth.min(MAX_XML_NESTING_DEPTH);
+    // ponytail: one bounded preflight avoids threading depth through every format helper.
+    for path in zip.file_names().into_iter().filter(|path| {
+        let lower = path.to_ascii_lowercase();
+        lower.ends_with(".xml") || lower.ends_with(".rels") || lower.ends_with(".vml")
+    }) {
+        let bytes = zip.read_file(&path)?;
+        let mut reader = Reader::from_reader(std::io::Cursor::new(bytes.as_slice()));
+        let mut buf = Vec::new();
+        scan_xml_events_with_max_depth(&mut reader, &mut buf, &path, max_depth, |_| {
+            Ok(XmlScanControl::Continue)
+        })?;
+    }
     Ok(())
 }
 
