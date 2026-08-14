@@ -4,7 +4,8 @@ use crate::error::ParseError;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
 use crate::xml_utils::{
-    XmlScanControl, local_name, parse_bool_attr, scan_xml_events, visit_attributes, xml_error,
+    XmlScanControl, local_name, parse_bool_attr, scan_xml_events, track_xml_document_event,
+    visit_attributes, xml_error,
 };
 use docir_core::ir::{SheetMetadata, SheetMetadataType};
 use docir_core::types::SourceSpan;
@@ -15,8 +16,11 @@ pub(crate) fn parse_sheet_metadata(xml: &str, path: &str) -> Result<SheetMetadat
     let mut buf = Vec::new();
     let mut metadata = SheetMetadata::new();
     metadata.span = Some(SourceSpan::new(path));
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, path, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, path)?;
         match event {
             Event::Start(e) | Event::Empty(e) => {
                 let name_buf = e.name().as_ref().to_vec();

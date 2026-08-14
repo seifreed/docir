@@ -144,3 +144,14 @@ fn test_parse_sheet_metadata_reports_malformed_attributes() {
         }
     }
 }
+
+#[test]
+fn test_parse_sheet_metadata_rejects_multiple_roots() {
+    let err = parse_sheet_metadata(
+        "<metadata xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"/><metadata/>",
+        "xl/metadata.xml",
+    )
+    .expect_err("metadata XML must have one root");
+
+    assert!(format!("{err}").contains("multiple roots"));
+}

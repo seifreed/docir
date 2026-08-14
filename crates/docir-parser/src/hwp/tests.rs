@@ -413,6 +413,22 @@ fn test_hwpx_styles_reports_malformed_content_hpf() {
 }
 
 #[test]
+fn test_hwpx_styles_rejects_multiple_roots() {
+    let styles_xml = r#"<hp:package xmlns:hp="http://www.hancom.co.kr/hwpml"/><hp:package/>"#;
+    let section_xml = r#"<hp:section xmlns:hp="http://www.hancom.co.kr/hwpml">
+  <hp:p><hp:t>Texto</hp:t></hp:p>
+</hp:section>"#;
+    let data = build_hwpx_zip_with_parts(section_xml, Some(styles_xml), Vec::new());
+    let parser = HwpxParser::new();
+
+    let err = parser
+        .parse_bytes(&data)
+        .expect_err("HWPX styles XML must have one root");
+
+    assert!(format!("{err}").contains("multiple roots"));
+}
+
+#[test]
 fn test_hwpx_styles_reports_malformed_attributes() {
     let styles_xml = r##"<hp:package xmlns:hp="http://www.hancom.co.kr/hwpml">
   <hp:styles>

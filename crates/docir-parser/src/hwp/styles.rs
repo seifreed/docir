@@ -3,7 +3,9 @@ use super::{
     run_properties_from_attrs, style_run_props_from_run,
 };
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, parse_bool_attr, reader_from_str, scan_xml_events};
+use crate::xml_utils::{
+    XmlScanControl, parse_bool_attr, reader_from_str, scan_xml_events, track_xml_document_event,
+};
 use docir_core::ir::{Style, StyleSet, StyleType};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -13,8 +15,11 @@ pub(super) fn parse_hwpx_styles(xml: &str, source: &str) -> Result<Option<StyleS
     let mut buf = Vec::new();
     let mut styles = Vec::new();
     let mut current: Option<Style> = None;
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, source, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, source)?;
         match event {
             Event::Start(e) => {
                 let name = e.name().as_ref().to_vec();

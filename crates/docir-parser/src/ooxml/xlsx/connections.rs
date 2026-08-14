@@ -3,7 +3,9 @@
 use crate::error::ParseError;
 use crate::ooxml::relationships::Relationships;
 use crate::xml_utils::lossy_attr_value;
-use crate::xml_utils::{XmlScanControl, scan_xml_events, visit_attributes};
+use crate::xml_utils::{
+    XmlScanControl, scan_xml_events, track_xml_document_event, visit_attributes,
+};
 use crate::xml_utils::{local_name, parse_bool_attr, xml_error};
 use docir_core::ir::{
     ConnectionEntry, ConnectionPart, ExternalLinkPart, ExternalLinkSheet, QueryTablePart,
@@ -24,8 +26,11 @@ where
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, path, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, path)?;
         match event {
             Event::Start(e) | Event::Empty(e) => {
                 let name_buf = e.name().as_ref().to_vec();
@@ -48,8 +53,11 @@ pub(crate) fn parse_connections_part(xml: &str, path: &str) -> Result<Connection
     let mut part = ConnectionPart::new();
     part.span = Some(SourceSpan::new(path));
     let mut current: Option<ConnectionEntry> = None;
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, path, |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, path)?;
         match event {
             Event::Start(e) => {
                 if local_name(e.name().as_ref()) == b"connection" {
@@ -475,6 +483,14 @@ mod tests {
         for (xml, path) in connection_cases {
             assert_xml_file(parse_connections_part(xml, path), path);
         }
+    }
+
+    #[test]
+    fn connection_parsers_reject_multiple_roots() {
+        let err = parse_connections_part("<connections/><connections/>", "xl/connections.xml")
+            .expect_err("connections XML must have one root");
+
+        assert!(format!("{err}").contains("multiple roots"));
     }
 
     #[test]
