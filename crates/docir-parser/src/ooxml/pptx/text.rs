@@ -1,5 +1,5 @@
 use crate::error::ParseError;
-use crate::xml_utils::{decoded_text, local_name, lossy_attr_value, xml_error};
+use crate::xml_utils::{decoded_text, local_name, lossy_attr_value, parse_bool_attr, xml_error};
 use docir_core::ir::{ShapeText, ShapeTextParagraph, ShapeTextRun, TextAlignment};
 use quick_xml::Reader;
 use quick_xml::events::Event;
@@ -190,8 +190,8 @@ fn apply_run_formatting(
             for attr in element.attributes() {
                 let attr = attr.map_err(|err| xml_error(slide_path, err))?;
                 match attr.key.as_ref() {
-                    b"b" => *bold = Some(attr.value.as_ref() == b"1"),
-                    b"i" => *italic = Some(attr.value.as_ref() == b"1"),
+                    b"b" => *bold = Some(parse_bool_attr(&attr.value, slide_path)?),
+                    b"i" => *italic = Some(parse_bool_attr(&attr.value, slide_path)?),
                     b"sz" => {
                         *font_size = Some(
                             lossy_attr_value(&attr)
@@ -379,6 +379,23 @@ mod tests {
         assert_eq!(run.italic, Some(true));
         assert_eq!(run.font_size, Some(1800));
         assert_eq!(run.font_family.as_deref(), Some("Calibri"));
+    }
+
+    #[test]
+    fn parse_text_run_accepts_boolean_lexical_values() {
+        let xml = r#"
+            <a:r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:rPr b="true" i="false"/>
+              <a:t>text</a:t>
+            </a:r>
+        "#;
+        let mut reader = reader_after_start(xml, b"r");
+
+        let run = parse_text_run(&mut reader, "ppt/slides/boolean-formatting.xml")
+            .expect("boolean formatting should parse");
+
+        assert_eq!(run.bold, Some(true));
+        assert_eq!(run.italic, Some(false));
     }
 
     #[test]
