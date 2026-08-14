@@ -41,6 +41,13 @@ pub(crate) fn parse_shared_strings_table(
                 }
                 _ => {}
             },
+            Event::Empty(e) if local_name(e.name().as_ref()) == b"si" => {
+                strings.push(String::new());
+                table.items.push(SharedStringItem {
+                    text: String::new(),
+                    runs: Vec::new(),
+                });
+            }
             Event::Text(e) if in_si && in_t => {
                 let text = crate::xml_utils::decoded_text(&e)
                     .map_err(|err| xml_error("xl/sharedStrings.xml", err))?;
@@ -118,5 +125,16 @@ mod tests {
             table.items[1].runs,
             vec!["Foo".to_string(), "Bar".to_string()]
         );
+    }
+
+    #[test]
+    fn test_parse_shared_strings_preserves_empty_items() {
+        let xml = r#"<sst><si/><si><t>After</t></si></sst>"#;
+
+        let (table, strings) = parse_shared_strings_table(xml).expect("shared strings");
+
+        assert_eq!(strings, vec![String::new(), "After".to_string()]);
+        assert_eq!(table.items.len(), 2);
+        assert_eq!(table.items[1].text, "After");
     }
 }
