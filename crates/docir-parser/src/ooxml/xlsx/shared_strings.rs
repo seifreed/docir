@@ -1,5 +1,7 @@
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, xml_error};
+use crate::xml_utils::{
+    XmlScanControl, local_name, scan_xml_events, track_xml_document_event, xml_error,
+};
 use docir_core::ir::{SharedStringItem, SharedStringTable};
 use docir_core::types::SourceSpan;
 use quick_xml::Reader;
@@ -22,8 +24,11 @@ pub(crate) fn parse_shared_strings_table(
     let mut current = String::new();
     let mut current_run = String::new();
     let mut runs: Vec<String> = Vec::new();
+    let mut depth = 0usize;
+    let mut root_closed = false;
 
     scan_xml_events(&mut reader, &mut buf, "xl/sharedStrings.xml", |event| {
+        track_xml_document_event(&event, &mut depth, &mut root_closed, "xl/sharedStrings.xml")?;
         match event {
             Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"si" => {
@@ -136,5 +141,13 @@ mod tests {
         assert_eq!(strings, vec![String::new(), "After".to_string()]);
         assert_eq!(table.items.len(), 2);
         assert_eq!(table.items[1].text, "After");
+    }
+
+    #[test]
+    fn test_parse_shared_strings_rejects_multiple_roots() {
+        let error = parse_shared_strings_table("<sst/><sst/>")
+            .expect_err("shared strings XML must have one root");
+
+        assert!(format!("{error}").contains("multiple roots"));
     }
 }
