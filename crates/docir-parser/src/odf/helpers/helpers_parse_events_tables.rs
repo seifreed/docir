@@ -8,6 +8,8 @@ use crate::xml_utils::{is_end_event_local, local_name, try_attr_value_by_suffix,
 use docir_core::visitor::IrStore;
 use quick_xml::events::BytesStart;
 
+const MAX_ODF_TABLE_DEPTH: usize = 100;
+
 pub(super) fn parse_empty_table(store: &mut IrStore) -> NodeId {
     let table = Table::new();
     let table_id = table.id;
@@ -20,6 +22,20 @@ pub(super) fn parse_table(
     store: &mut IrStore,
     limits: &dyn OdfLimitCounter,
 ) -> Result<NodeId, ParseError> {
+    parse_table_at_depth(reader, store, limits, 0)
+}
+
+fn parse_table_at_depth(
+    reader: &mut OdfReader<'_>,
+    store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
+    depth: usize,
+) -> Result<NodeId, ParseError> {
+    if depth > MAX_ODF_TABLE_DEPTH {
+        return Err(ParseError::ResourceLimit(format!(
+            "ODF table nesting depth exceeds maximum ({MAX_ODF_TABLE_DEPTH})"
+        )));
+    }
     let mut buf = Vec::new();
     let mut table = Table::new();
     let mut current_row: Option<TableRow> = None;
@@ -36,7 +52,7 @@ pub(super) fn parse_table(
                         current_row = Some(TableRow::new());
                     }
                     b"table-cell" => {
-                        let cell_id = parse_table_cell(reader, e, store, limits)?;
+                        let cell_id = parse_table_cell(reader, e, store, limits, depth)?;
                         if let Some(row) = current_row.as_mut() {
                             row.cells.push(cell_id);
                         }
@@ -96,6 +112,7 @@ pub(super) fn parse_table_cell(
     start: &BytesStart<'_>,
     store: &mut IrStore,
     limits: &dyn OdfLimitCounter,
+    depth: usize,
 ) -> Result<NodeId, ParseError> {
     let mut cell = TableCell::new();
     if let Some(span) =
@@ -132,7 +149,10 @@ pub(super) fn parse_table_cell(
             } else if let Event::Start(e) = event
                 && local_name(e.name().as_ref()) == b"table"
             {
-                let table_id = parse_table(reader, store, limits)?;
+                let next_depth = depth.checked_add(1).ok_or_else(|| {
+                    ParseError::InvalidStructure("ODF table nesting depth overflow".to_string())
+                })?;
+                let table_id = parse_table_at_depth(reader, store, limits, next_depth)?;
                 cell.content.push(table_id);
             } else if let Event::Empty(e) = event
                 && local_name(e.name().as_ref()) == b"table"
@@ -164,4 +184,40 @@ fn parse_u32_attr(value: &str) -> Result<u32, ParseError> {
         ));
     }
     Ok(parsed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_ODF_TABLE_DEPTH, parse_table};
+    use crate::odf::limits::OdfLimits;
+    use crate::parser::ParserConfig;
+    use docir_core::visitor::IrStore;
+    use quick_xml::Reader;
+    use quick_xml::events::Event;
+    use std::io::Cursor;
+
+    #[test]
+    fn parse_table_rejects_excessive_nesting() {
+        let mut xml = String::new();
+        for _ in 0..=MAX_ODF_TABLE_DEPTH + 1 {
+            xml.push_str("<table:table><table:table-row><table:table-cell>");
+        }
+        xml.push_str("<text:p>value</text:p>");
+        for _ in 0..=MAX_ODF_TABLE_DEPTH + 1 {
+            xml.push_str("</table:table-cell></table:table-row></table:table>");
+        }
+
+        let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+        let mut buf = Vec::new();
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(_)) => {}
+            other => panic!("expected table start, got {other:?}"),
+        }
+        let mut store = IrStore::new();
+        let limits = OdfLimits::new(&ParserConfig::default(), false);
+
+        let error = parse_table(&mut reader, &mut store, &limits)
+            .expect_err("excessively nested tables must be rejected");
+        assert!(error.to_string().contains("table nesting depth"));
+    }
 }
