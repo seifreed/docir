@@ -167,55 +167,80 @@ fn parse_comments_like(
         if matches!(event, Event::Eof) {
             break;
         }
-        if let Event::Start(e) = event {
-            match local_name(e.name().as_ref()) {
-                b"comment" => {
-                    let comment_id = required_comment_attr(&e, b"w:id", "word/comments.xml")?;
-                    let mut comment = Comment::new(comment_id);
-                    comment.author = try_attr_value(&e, b"w:author", "word/comments.xml")?;
-                    comment.initials = try_attr_value(&e, b"w:initials", "word/comments.xml")?;
-                    comment.parent_id = try_attr_value(&e, b"w:parentId", "word/comments.xml")?;
-                    comment.para_id = try_attr_value(&e, b"w:paraId", "word/comments.xml")?;
-                    comment.done = try_attr_value(&e, b"w:done", "word/comments.xml")?
-                        .map(|value| {
-                            super::parse_on_off_value(Some(value.as_str()), "word/comments.xml")
-                        })
-                        .transpose()?;
-                    comment.date = try_attr_value(&e, b"w:date", "word/comments.xml")?;
-                    comment.content = parse_block_until(parser, &mut reader, rels, b"comment")?;
-                    let id = comment.id;
-                    parser.store.insert(IRNode::Comment(comment));
+        match event {
+            Event::Start(e) => {
+                if let Some(id) =
+                    parse_comment_like_element(parser, &mut reader, &e, rels, kind, true)?
+                {
                     nodes.push(id);
                 }
-                b"footnote" => {
-                    if matches!(kind, Some(NoteKind::Footnote)) {
-                        let note_id = required_comment_attr(&e, b"w:id", "word/comments.xml")?;
-                        let mut note = Footnote::new(note_id);
-                        note.note_type = try_attr_value(&e, b"w:type", "word/comments.xml")?;
-                        note.content = parse_block_until(parser, &mut reader, rels, b"footnote")?;
-                        let id = note.id;
-                        parser.store.insert(IRNode::Footnote(note));
-                        nodes.push(id);
-                    }
-                }
-                b"endnote" => {
-                    if matches!(kind, Some(NoteKind::Endnote)) {
-                        let note_id = required_comment_attr(&e, b"w:id", "word/comments.xml")?;
-                        let mut note = Endnote::new(note_id);
-                        note.note_type = try_attr_value(&e, b"w:type", "word/comments.xml")?;
-                        note.content = parse_block_until(parser, &mut reader, rels, b"endnote")?;
-                        let id = note.id;
-                        parser.store.insert(IRNode::Endnote(note));
-                        nodes.push(id);
-                    }
-                }
-                _ => {}
             }
+            Event::Empty(e) => {
+                if let Some(id) =
+                    parse_comment_like_element(parser, &mut reader, &e, rels, kind, false)?
+                {
+                    nodes.push(id);
+                }
+            }
+            _ => {}
         }
         buf.clear();
     }
 
     Ok(nodes)
+}
+
+fn parse_comment_like_element(
+    parser: &mut DocxParser,
+    reader: &mut Reader<&[u8]>,
+    element: &quick_xml::events::BytesStart<'_>,
+    rels: &Relationships,
+    kind: Option<NoteKind>,
+    has_content: bool,
+) -> Result<Option<NodeId>, ParseError> {
+    match local_name(element.name().as_ref()) {
+        b"comment" => {
+            let comment_id = required_comment_attr(element, b"w:id", "word/comments.xml")?;
+            let mut comment = Comment::new(comment_id);
+            comment.author = try_attr_value(element, b"w:author", "word/comments.xml")?;
+            comment.initials = try_attr_value(element, b"w:initials", "word/comments.xml")?;
+            comment.parent_id = try_attr_value(element, b"w:parentId", "word/comments.xml")?;
+            comment.para_id = try_attr_value(element, b"w:paraId", "word/comments.xml")?;
+            comment.done = try_attr_value(element, b"w:done", "word/comments.xml")?
+                .map(|value| super::parse_on_off_value(Some(value.as_str()), "word/comments.xml"))
+                .transpose()?;
+            comment.date = try_attr_value(element, b"w:date", "word/comments.xml")?;
+            if has_content {
+                comment.content = parse_block_until(parser, reader, rels, b"comment")?;
+            }
+            let id = comment.id;
+            parser.store.insert(IRNode::Comment(comment));
+            Ok(Some(id))
+        }
+        b"footnote" if matches!(kind, Some(NoteKind::Footnote)) => {
+            let note_id = required_comment_attr(element, b"w:id", "word/comments.xml")?;
+            let mut note = Footnote::new(note_id);
+            note.note_type = try_attr_value(element, b"w:type", "word/comments.xml")?;
+            if has_content {
+                note.content = parse_block_until(parser, reader, rels, b"footnote")?;
+            }
+            let id = note.id;
+            parser.store.insert(IRNode::Footnote(note));
+            Ok(Some(id))
+        }
+        b"endnote" if matches!(kind, Some(NoteKind::Endnote)) => {
+            let note_id = required_comment_attr(element, b"w:id", "word/comments.xml")?;
+            let mut note = Endnote::new(note_id);
+            note.note_type = try_attr_value(element, b"w:type", "word/comments.xml")?;
+            if has_content {
+                note.content = parse_block_until(parser, reader, rels, b"endnote")?;
+            }
+            let id = note.id;
+            parser.store.insert(IRNode::Endnote(note));
+            Ok(Some(id))
+        }
+        _ => Ok(None),
+    }
 }
 
 fn required_comment_attr(

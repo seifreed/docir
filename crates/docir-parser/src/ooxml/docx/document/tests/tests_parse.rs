@@ -837,6 +837,49 @@ fn test_parse_comments_and_notes_metadata() {
 }
 
 #[test]
+fn test_parse_empty_comment_preserves_node_and_metadata() {
+    let comments_xml = r#"
+        <w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:comment w:id="1" w:author="Alice" w:done="1"/>
+        </w:comments>
+        "#;
+    let mut parser = DocxParser::new();
+    let ids = parser
+        .parse_comments(comments_xml, &Relationships::default())
+        .expect("empty comment");
+    let store = parser.into_store();
+    let comment = match store.get(ids[0]) {
+        Some(docir_core::ir::IRNode::Comment(comment)) => comment,
+        _ => panic!("missing comment"),
+    };
+
+    assert_eq!(comment.author.as_deref(), Some("Alice"));
+    assert_eq!(comment.done, Some(true));
+    assert!(comment.content.is_empty());
+}
+
+#[test]
+fn test_parse_empty_footnote_preserves_node_and_metadata() {
+    let notes_xml = r#"
+        <w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:footnote w:id="2" w:type="separator"/>
+        </w:footnotes>
+        "#;
+    let mut parser = DocxParser::new();
+    let ids = parser
+        .parse_notes(notes_xml, NoteKind::Footnote, &Relationships::default())
+        .expect("empty footnote");
+    let store = parser.into_store();
+    let footnote = match store.get(ids[0]) {
+        Some(docir_core::ir::IRNode::Footnote(footnote)) => footnote,
+        _ => panic!("missing footnote"),
+    };
+
+    assert_eq!(footnote.note_type.as_deref(), Some("separator"));
+    assert!(footnote.content.is_empty());
+}
+
+#[test]
 fn test_parse_comments_reports_malformed_attributes() {
     let comments_xml = r#"
         <w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
