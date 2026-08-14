@@ -115,6 +115,14 @@ fn parse_hwp_section_stream_emits_paragraphs_and_runs() {
 }
 
 #[test]
+fn parse_docinfo_section_count_rejects_excessive_record_count() {
+    let data = vec![0u8; (MAX_HWP_RECORDS + 1) * 4];
+
+    let err = parse_docinfo_section_count(&data).expect_err("HWP record count must be bounded");
+    assert!(matches!(err, ParseError::ResourceLimit(message) if message.contains("record count")));
+}
+
+#[test]
 fn decoding_and_sanitizing_helpers_cover_utf16_and_controls() {
     assert_eq!(decode_hwp_text(&[]), "");
     assert_eq!(decode_hwp_text(b"abc"), "abc");

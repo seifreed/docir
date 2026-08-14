@@ -16,6 +16,7 @@ const HWPTAG_BEGIN: u16 = 0x010;
 const HWPTAG_DOCUMENT_PROPERTIES: u16 = HWPTAG_BEGIN;
 const HWPTAG_PARA_HEADER: u16 = HWPTAG_BEGIN + 50;
 const HWPTAG_PARA_TEXT: u16 = HWPTAG_BEGIN + 51;
+const MAX_HWP_RECORDS: usize = 1_000_000;
 
 pub(super) struct HwpHeader {
     pub(super) version: u32,
@@ -49,6 +50,7 @@ struct HwpRecord<'a> {
 
 fn for_each_record<F: FnMut(HwpRecord)>(data: &[u8], mut f: F) -> Result<(), ParseError> {
     let mut offset = 0usize;
+    let mut record_count = 0usize;
     while offset < data.len() {
         if data.len() - offset < 4 {
             return Err(ParseError::InvalidStructure(
@@ -84,6 +86,12 @@ fn for_each_record<F: FnMut(HwpRecord)>(data: &[u8], mut f: F) -> Result<(), Par
         }
         let payload = &data[offset..end];
         offset = end;
+        record_count += 1;
+        if record_count > MAX_HWP_RECORDS {
+            return Err(ParseError::ResourceLimit(format!(
+                "HWP record count exceeds maximum ({MAX_HWP_RECORDS})"
+            )));
+        }
         f(HwpRecord {
             tag_id,
             data: payload,
