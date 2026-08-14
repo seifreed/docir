@@ -183,6 +183,14 @@ fn test_run_property_helpers_reject_invalid_boolean() {
 }
 
 #[test]
+fn test_run_property_helpers_reject_invalid_font_size() {
+    let e = start_event(r#"<hp:r size="not-a-number"/>"#);
+    let err =
+        run_properties_from_attrs(&e, "test.xml").expect_err("invalid HWP font size must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "test.xml"));
+}
+
+#[test]
 fn test_run_properties_strip_only_one_color_prefix() {
     let e = start_event(r###"<hp:r color="##AABBCC" highlight="##00FF00"/>"###);
     let run = run_properties_from_attrs(&e, "test.xml").expect("run props");

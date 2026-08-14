@@ -92,9 +92,11 @@ pub(super) fn run_properties_from_attrs(
                 props.font_family = Some(value);
             }
             b"size" | b"fontSize" => {
-                if let Ok(size) = value.parse::<u32>() {
-                    props.font_size = Some(size);
-                }
+                props.font_size = Some(
+                    value
+                        .parse::<u32>()
+                        .map_err(|err| crate::xml_utils::xml_error(source, err))?,
+                );
             }
             _ => {}
         }
