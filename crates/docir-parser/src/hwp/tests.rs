@@ -228,6 +228,21 @@ fn test_paragraph_and_table_property_helpers() {
 }
 
 #[test]
+fn test_paragraph_property_helpers_reject_invalid_indent() {
+    let para = start_event(r#"<hp:p indentLeft="not-a-number"/>"#);
+    let err = parse_hwpx_paragraph_props(&para, "test.xml")
+        .expect_err("invalid HWPX indentation must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "test.xml"));
+}
+
+#[test]
+fn test_table_property_helpers_reject_invalid_width() {
+    let table = start_event(r#"<hp:tbl width="not-a-number"/>"#);
+    let err = parse_hwpx_table_props(&table, "test.xml").expect_err("invalid HWPX width must fail");
+    assert!(matches!(err, ParseError::Xml { file, .. } if file == "test.xml"));
+}
+
+#[test]
 fn test_build_hwp_diagnostics_records_parts_and_missing_patterns() {
     let paths = vec![
         "FileHeader".to_string(),

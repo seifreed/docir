@@ -131,22 +131,28 @@ pub(super) fn parse_hwpx_paragraph_props(
     }
     let mut indent = docir_core::ir::Indentation::default();
     let mut has_indent = false;
-    if let Some(value) = attr_any(e, &[b"indentLeft", b"indent-left", b"left"], source)?
-        && let Ok(left) = value.parse::<i32>()
-    {
-        indent.left = Some(left);
+    if let Some(value) = attr_any(e, &[b"indentLeft", b"indent-left", b"left"], source)? {
+        indent.left = Some(
+            value
+                .parse::<i32>()
+                .map_err(|err| crate::xml_utils::xml_error(source, err))?,
+        );
         has_indent = true;
     }
-    if let Some(value) = attr_any(e, &[b"indentRight", b"indent-right", b"right"], source)?
-        && let Ok(right) = value.parse::<i32>()
-    {
-        indent.right = Some(right);
+    if let Some(value) = attr_any(e, &[b"indentRight", b"indent-right", b"right"], source)? {
+        indent.right = Some(
+            value
+                .parse::<i32>()
+                .map_err(|err| crate::xml_utils::xml_error(source, err))?,
+        );
         has_indent = true;
     }
-    if let Some(value) = attr_any(e, &[b"firstIndent", b"first-indent", b"first"], source)?
-        && let Ok(first) = value.parse::<i32>()
-    {
-        indent.first_line = Some(first);
+    if let Some(value) = attr_any(e, &[b"firstIndent", b"first-indent", b"first"], source)? {
+        indent.first_line = Some(
+            value
+                .parse::<i32>()
+                .map_err(|err| crate::xml_utils::xml_error(source, err))?,
+        );
         has_indent = true;
     }
     if has_indent {
@@ -161,11 +167,11 @@ pub(super) fn parse_hwpx_table_props(
 ) -> Result<Option<TableProperties>, ParseError> {
     let mut props = TableProperties::default();
     let mut has_value = false;
-    if let Some(width) = attr_any(e, &[b"width", b"w", b"tableWidth"], source)?
-        && let Ok(value) = width.parse::<u32>()
-    {
+    if let Some(width) = attr_any(e, &[b"width", b"w", b"tableWidth"], source)? {
         props.width = Some(TableWidth {
-            value,
+            value: width
+                .parse::<u32>()
+                .map_err(|err| crate::xml_utils::xml_error(source, err))?,
             width_type: TableWidthType::Dxa,
         });
         has_value = true;
