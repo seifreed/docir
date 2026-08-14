@@ -62,6 +62,30 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_theme_keeps_non_empty_srgb_colors() {
+        let xml = r#"
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <a:themeElements>
+            <a:clrScheme>
+              <a:dk1><a:srgbClr val="000000"></a:srgbClr></a:dk1>
+            </a:clrScheme>
+          </a:themeElements>
+        </a:theme>
+        "#;
+
+        let theme = parse_theme(xml, "theme/theme1.xml").expect("theme parse");
+
+        assert_eq!(
+            theme
+                .colors
+                .iter()
+                .find(|color| color.name == "a:dk1")
+                .and_then(|color| color.value.as_deref()),
+            Some("000000")
+        );
+    }
+
+    #[test]
     fn test_parse_people_part() {
         let xml = r#"
         <ppl:people xmlns:ppl="http://schemas.openxmlformats.org/officeDocument/2006/relationships/people">

@@ -59,6 +59,9 @@ fn handle_start_event(
         b"majorFont" => state.in_major_font = true,
         b"minorFont" => state.in_minor_font = true,
         b"latin" => set_latin_typeface(start, state, path)?,
+        b"srgbClr" if state.in_clr_scheme => {
+            record_srgb_color(start, theme, state, path)?;
+        }
         _ if state.in_clr_scheme => {
             let name = String::from_utf8_lossy(start.name().as_ref()).to_string();
             state.current_color_name = Some(name);
@@ -74,20 +77,31 @@ fn handle_empty_event(
     state: &mut ThemeParseState,
     path: &str,
 ) -> Result<(), ParseError> {
-    if state.in_clr_scheme {
-        let color_value = srgb_value(start, path)?;
-        if let Some(name) = state.current_color_name.take()
-            && color_value.is_some()
-        {
-            theme.colors.push(ThemeColor {
-                name,
-                value: color_value,
-            });
-        }
-    }
+    record_srgb_color(start, theme, state, path)?;
 
     if local_name(start.name().as_ref()) == b"latin" {
         set_latin_typeface(start, state, path)?;
+    }
+    Ok(())
+}
+
+fn record_srgb_color(
+    start: &BytesStart<'_>,
+    theme: &mut Theme,
+    state: &mut ThemeParseState,
+    path: &str,
+) -> Result<(), ParseError> {
+    if !state.in_clr_scheme || local_name(start.name().as_ref()) != b"srgbClr" {
+        return Ok(());
+    }
+    let color_value = srgb_value(start, path)?;
+    if let Some(name) = state.current_color_name.take()
+        && color_value.is_some()
+    {
+        theme.colors.push(ThemeColor {
+            name,
+            value: color_value,
+        });
     }
     Ok(())
 }
