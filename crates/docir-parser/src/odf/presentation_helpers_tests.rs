@@ -78,6 +78,52 @@ fn parse_draw_page_extracts_metadata_transition_notes_and_shape_text() {
 }
 
 #[test]
+fn parse_draw_page_preserves_siblings_after_empty_frame() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:anim="urn:oasis:names:tc:opendocument:xmlns:animation:1.0">
+  <d:page>
+    <d:frame/>
+    <anim:animate/>
+  </d:page>
+</office:document-content>
+"#;
+
+    let (mut reader, page_start) = parse_page_start(xml);
+    let mut store = IrStore::new();
+
+    let slide = parse_draw_page(&mut reader, &page_start, 1, &mut store)
+        .expect("empty frame must not consume following page events");
+    assert!(slide.shapes.is_empty());
+    assert_eq!(slide.animations.len(), 1);
+}
+
+#[test]
+fn parse_draw_page_preserves_empty_custom_shape() {
+    let xml: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:d="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0">
+  <d:page>
+    <d:custom-shape d:name="EmptyShape"/>
+  </d:page>
+</office:document-content>
+"#;
+
+    let (mut reader, page_start) = parse_page_start(xml);
+    let mut store = IrStore::new();
+
+    let slide = parse_draw_page(&mut reader, &page_start, 1, &mut store)
+        .expect("empty custom shape must parse");
+    assert_eq!(slide.shapes.len(), 1);
+    let Some(IRNode::Shape(shape)) = store.get(slide.shapes[0]) else {
+        panic!("expected custom shape");
+    };
+    assert_eq!(shape.name.as_deref(), Some("EmptyShape"));
+    assert_eq!(shape.shape_type, ShapeType::Custom);
+}
+
+#[test]
 fn parse_draw_page_rejects_missing_end() {
     let xml: &[u8] = br#"<draw:page xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"><draw:frame/>"#;
     let (mut reader, page_start) = parse_page_start(xml);

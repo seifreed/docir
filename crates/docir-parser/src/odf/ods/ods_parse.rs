@@ -110,15 +110,7 @@ pub(crate) fn parse_ods_table(
                     },
                 )
             } else {
-                handle_table_empty_full(
-                    reader,
-                    e,
-                    store,
-                    limits,
-                    &mut row_idx,
-                    &mut worksheet,
-                    &mut shapes,
-                )
+                handle_table_empty_full(e, store, limits, &mut row_idx, &mut worksheet)
             }
         })?;
         Ok(XmlScanControl::Continue)
@@ -288,13 +280,11 @@ fn handle_table_start_full(
 }
 
 fn handle_table_empty_full(
-    reader: &mut OdfReader<'_>,
     empty: &BytesStart<'_>,
     store: &mut IrStore,
     limits: &dyn OdfLimitCounter,
     row_idx: &mut u32,
     worksheet: &mut Worksheet,
-    shapes: &mut Vec<NodeId>,
 ) -> Result<(), ParseError> {
     match local_name(empty.name().as_ref()) {
         b"table-row" => {
@@ -302,12 +292,7 @@ fn handle_table_empty_full(
             limits.bump_rows(row_repeat as u64)?;
             advance_row_index(row_idx, row_repeat)?;
         }
-        b"frame" => {
-            if let Some(shape_id) = spreadsheet::parse_draw_frame_spreadsheet(reader, empty, store)?
-            {
-                shapes.push(shape_id);
-            }
-        }
+        b"frame" => {}
         b"conditional-formatting" => {
             if let Some(cf) = parse_ods_conditional_formatting_empty(empty)? {
                 push_conditional_format(store, worksheet, cf);

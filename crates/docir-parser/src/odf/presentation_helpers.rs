@@ -43,7 +43,7 @@ pub(super) fn parse_draw_page(
     loop {
         match read_event(reader, &mut buf, "content.xml")? {
             Event::Start(e) => handle_draw_page_start_event(reader, &e, store, &mut state)?,
-            Event::Empty(e) => handle_draw_page_empty_event(reader, &e, store, &mut state)?,
+            Event::Empty(e) => handle_draw_page_empty_event(&e, store, &mut state)?,
             Event::End(e) if local_name(e.name().as_ref()) == b"page" => {
                 break;
             }
@@ -95,21 +95,19 @@ fn handle_draw_page_start_event(
 }
 
 fn handle_draw_page_empty_event(
-    reader: &mut OdfReader<'_>,
     event: &BytesStart<'_>,
     store: &mut IrStore,
     state: &mut DrawPageState,
 ) -> Result<(), ParseError> {
     match local_name(event.name().as_ref()) {
-        b"frame" => {
-            if let Some(shape_id) = parse_draw_frame_presentation(reader, event, store)? {
-                state.slide.shapes.push(shape_id);
-            }
-        }
+        b"frame" => {}
         b"custom-shape" => {
-            if let Some(shape_id) = parse_custom_shape_presentation(reader, event, store)? {
-                state.slide.shapes.push(shape_id);
-            }
+            let name = try_attr_value_by_suffix(event, &[b":name"], "content.xml")?;
+            let mut shape = Shape::new(ShapeType::Custom);
+            shape.name = name;
+            let shape_id = shape.id;
+            store.insert(IRNode::Shape(shape));
+            state.slide.shapes.push(shape_id);
         }
         _ if is_odf_animation_event(event) => {
             if let Some(anim) = parse_odf_animation(event)? {
