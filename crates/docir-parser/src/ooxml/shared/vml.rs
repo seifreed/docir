@@ -106,6 +106,9 @@ fn handle_vml_element_start(
             Ok(None)
         }
         b"textbox" => {
+            if is_empty {
+                return Ok(None);
+            }
             if let Some(shape) = current.as_mut() {
                 let text = read_textbox_text(reader, path)?;
                 if !text.is_empty() {
@@ -296,6 +299,24 @@ mod tests {
 
         assert_eq!(shapes.len(), 1);
         assert_eq!(shapes[0].text.as_deref(), Some("Hello"));
+    }
+
+    #[test]
+    fn parse_vml_drawing_preserves_siblings_after_empty_textbox() {
+        let xml = r#"
+            <xml xmlns:v="urn:schemas-microsoft-com:vml">
+              <v:shape id="empty-textbox"><v:textbox/></v:shape>
+              <v:shape id="following"/>
+            </xml>
+        "#;
+
+        let (_, shapes) = parse_vml_drawing(xml, "word/vmlDrawing3.vml", &Relationships::default())
+            .expect("empty textbox must not consume following shapes");
+
+        assert_eq!(shapes.len(), 2);
+        assert_eq!(shapes[0].name.as_deref(), Some("empty-textbox"));
+        assert_eq!(shapes[1].name.as_deref(), Some("following"));
+        assert!(shapes[0].text.is_none());
     }
 
     #[test]
