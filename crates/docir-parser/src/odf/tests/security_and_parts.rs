@@ -66,12 +66,7 @@ fn test_odf_formula_dde_and_links() {
 #[test]
 fn test_odf_encryption_metadata_diagnostics() {
     let mimetype = "application/vnd.oasis.opendocument.text";
-    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
-<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
-  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
-  <office:body><office:text><text:p>Encrypted</text:p></office:text></office:body>
-</office:document-content>
-"#;
+    let content_xml = "encrypted-content";
     let manifest_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
   <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>

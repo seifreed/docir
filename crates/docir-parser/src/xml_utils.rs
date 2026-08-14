@@ -508,9 +508,20 @@ pub(crate) fn validate_zip_xml_depth(
     zip: &mut impl PackageReader,
     configured_max_depth: usize,
 ) -> Result<(), ParseError> {
+    validate_zip_xml_depth_excluding(zip, configured_max_depth, &[])
+}
+
+pub(crate) fn validate_zip_xml_depth_excluding(
+    zip: &mut impl PackageReader,
+    configured_max_depth: usize,
+    excluded_paths: &[String],
+) -> Result<(), ParseError> {
     let max_depth = configured_max_depth.min(MAX_XML_NESTING_DEPTH);
     // ponytail: one bounded preflight avoids threading depth through every format helper.
     for path in zip.file_names().into_iter().filter(|path| {
+        if excluded_paths.iter().any(|excluded| excluded == path) {
+            return false;
+        }
         let lower = path.to_ascii_lowercase();
         lower.ends_with(".xml") || lower.ends_with(".rels") || lower.ends_with(".vml")
     }) {

@@ -15,7 +15,7 @@ use crate::input::enforce_input_size;
 use crate::parse_utils::{finalize_document, init_document_state};
 use crate::parser::{NormalizeStage, ParseStage, PostprocessStage, run_parser_pipeline};
 use crate::security_scan::SecurityScanner;
-use crate::xml_utils::validate_zip_xml_depth;
+use crate::xml_utils::validate_zip_xml_depth_excluding;
 use std::io::{Read, Seek};
 
 struct OdfReadState {
@@ -46,9 +46,10 @@ impl ParseStage for OdfParser {
     fn parse_stage<R: Read + Seek>(&self, mut reader: R) -> Result<ParsedDocument, ParseError> {
         enforce_input_size(&mut reader, self.config.max_input_size)?;
         let mut zip = SecureZipReader::new(reader, self.config.zip_config.clone())?;
-        validate_zip_xml_depth(&mut zip, self.config.max_xml_depth)?;
 
         let (format, manifest_entries) = self.load_mimetype_and_manifest(&mut zip)?;
+        let encrypted_entries = encrypted_manifest_entries(&manifest_entries);
+        validate_zip_xml_depth_excluding(&mut zip, self.config.max_xml_depth, &encrypted_entries)?;
 
         if !zip.contains("content.xml") {
             return Err(ParseError::MissingPart("content.xml".to_string()));
