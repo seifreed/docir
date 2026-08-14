@@ -404,6 +404,24 @@ mod tests {
     }
 
     #[test]
+    fn parse_odf_headers_footers_counts_empty_paragraphs_against_limit() {
+        let xml = r#"<style:header
+            xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+            xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+            <text:p/>
+        </style:header>"#;
+        let mut config = ParserConfig::default();
+        config.odf.max_paragraphs = Some(0);
+        let mut store = IrStore::new();
+
+        let err = parse_odf_headers_footers(xml, &mut store, &config)
+            .expect_err("empty header paragraph must count toward the limit");
+        assert!(
+            matches!(err, ParseError::ResourceLimit(message) if message.contains("paragraphs"))
+        );
+    }
+
+    #[test]
     fn parse_styles_and_headers_accept_alternate_namespace_prefixes() {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <pkg:document-styles xmlns:pkg="urn:oasis:names:tc:opendocument:xmlns:office:1.0"

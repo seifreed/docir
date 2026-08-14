@@ -124,6 +124,7 @@ fn parse_odf_header_footer_block(
             Ok(Event::Empty(e)) => handle_header_footer_empty(
                 &e,
                 store,
+                limits,
                 &mut content,
                 &list_stack,
                 &mut pending_inline_nodes,
@@ -204,6 +205,7 @@ fn handle_header_footer_start(
 fn handle_header_footer_empty(
     e: &BytesStart<'_>,
     store: &mut IrStore,
+    limits: &dyn OdfLimitCounter,
     content: &mut Vec<NodeId>,
     list_stack: &[ListContext],
     pending_inline_nodes: &mut Vec<NodeId>,
@@ -214,6 +216,7 @@ fn handle_header_footer_empty(
             content.push(parse_empty_table(store));
         }
         b"p" | b"h" => {
+            limits.bump_paragraphs(1)?;
             let outline_level = parse_outline_level(e)?;
             let numbering = list_stack.last().map(|ctx| NumberingInfo {
                 num_id: ctx.num_id,
