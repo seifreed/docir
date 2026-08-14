@@ -191,7 +191,7 @@ fn read_textbox_text(reader: &mut Reader<&[u8]>, path: &str) -> Result<String, P
                         .map_err(|err| xml_error(path, err))?,
                 );
             }
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+            Ok(Event::Start(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let local = local_name(&name_buf);
                 if local == b"t" {
@@ -212,6 +212,7 @@ fn read_textbox_text(reader: &mut Reader<&[u8]>, path: &str) -> Result<String, P
                     }
                 }
             }
+            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"t" => {}
             Ok(Event::End(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
                 if local_name(&name_buf) == b"textbox" {
@@ -315,6 +316,25 @@ mod tests {
 
         assert_eq!(shapes.len(), 2);
         assert_eq!(shapes[0].name.as_deref(), Some("empty-textbox"));
+        assert_eq!(shapes[1].name.as_deref(), Some("following"));
+        assert!(shapes[0].text.is_none());
+    }
+
+    #[test]
+    fn parse_vml_drawing_preserves_empty_text_tag_at_textbox_end() {
+        let xml = r#"
+            <xml xmlns:v="urn:schemas-microsoft-com:vml"
+                 xmlns:w="urn:schemas-microsoft-com:office:word">
+              <v:shape id="empty-text"><v:textbox><w:t/></v:textbox></v:shape>
+              <v:shape id="following"/>
+            </xml>
+        "#;
+
+        let (_, shapes) = parse_vml_drawing(xml, "word/vmlDrawing4.vml", &Relationships::default())
+            .expect("empty text tag must not consume the textbox end");
+
+        assert_eq!(shapes.len(), 2);
+        assert_eq!(shapes[0].name.as_deref(), Some("empty-text"));
         assert_eq!(shapes[1].name.as_deref(), Some("following"));
         assert!(shapes[0].text.is_none());
     }
