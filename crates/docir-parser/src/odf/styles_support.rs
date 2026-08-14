@@ -404,6 +404,34 @@ mod tests {
     }
 
     #[test]
+    fn parse_odf_headers_footers_preserves_empty_header_and_footer_elements() {
+        let xml = r#"
+            <office:document-styles
+                xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+                xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0">
+              <style:master-page style:name="Standard">
+                <style:header-left/>
+                <style:footer/>
+              </style:master-page>
+            </office:document-styles>
+        "#;
+        let mut store = IrStore::new();
+
+        let (headers, footers) =
+            parse_odf_headers_footers(xml, &mut store, &ParserConfig::default())
+                .expect("empty header and footer");
+
+        assert_eq!(headers.len(), 1);
+        assert_eq!(footers.len(), 1);
+        assert!(
+            matches!(store.get(headers[0]), Some(IRNode::Header(header)) if header.content.is_empty())
+        );
+        assert!(
+            matches!(store.get(footers[0]), Some(IRNode::Footer(footer)) if footer.content.is_empty())
+        );
+    }
+
+    #[test]
     fn parse_odf_headers_footers_counts_empty_paragraphs_against_limit() {
         let xml = r#"<style:header
             xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"

@@ -40,8 +40,8 @@ pub(crate) fn parse_odf_headers_footers(
         if matches!(event, Event::Eof) {
             break;
         }
-        if let Event::Start(e) = event {
-            match local_name(e.name().as_ref()) {
+        match event {
+            Event::Start(e) => match local_name(e.name().as_ref()) {
                 b"header" | b"header-left" => {
                     let content = parse_odf_header_footer_block(
                         &mut reader,
@@ -71,7 +71,25 @@ pub(crate) fn parse_odf_headers_footers(
                     footers.push(id);
                 }
                 _ => {}
-            }
+            },
+            Event::Empty(e) => match local_name(e.name().as_ref()) {
+                b"header" | b"header-left" => {
+                    let mut header = Header::new();
+                    header.span = Some(SourceSpan::new("styles.xml"));
+                    let id = header.id;
+                    store.insert(IRNode::Header(header));
+                    headers.push(id);
+                }
+                b"footer" | b"footer-left" => {
+                    let mut footer = Footer::new();
+                    footer.span = Some(SourceSpan::new("styles.xml"));
+                    let id = footer.id;
+                    store.insert(IRNode::Footer(footer));
+                    footers.push(id);
+                }
+                _ => {}
+            },
+            _ => {}
         }
         buf.clear();
     }
