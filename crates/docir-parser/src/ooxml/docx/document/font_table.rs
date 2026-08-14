@@ -32,19 +32,10 @@ impl DocxParser {
             }
             match event {
                 Event::Start(e) if local_name(e.name().as_ref()) == b"font" => {
-                    let name =
-                        try_attr_value(&e, b"w:name", FONT_TABLE_PATH)?.ok_or_else(|| {
-                            ParseError::InvalidStructure(
-                                "word/fontTable.xml font is missing w:name".to_string(),
-                            )
-                        })?;
-                    current = Some(FontEntry {
-                        name,
-                        alt_name: None,
-                        charset: None,
-                        family: None,
-                        panose: None,
-                    });
+                    current = Some(parse_font(&e)?);
+                }
+                Event::Empty(e) if local_name(e.name().as_ref()) == b"font" => {
+                    table.fonts.push(parse_font(&e)?);
                 }
                 Event::Empty(e) => match local_name(e.name().as_ref()) {
                     b"altName" => {
@@ -93,6 +84,19 @@ impl DocxParser {
         self.store.insert(docir_core::ir::IRNode::FontTable(table));
         Ok(id)
     }
+}
+
+fn parse_font(e: &quick_xml::events::BytesStart<'_>) -> Result<FontEntry, ParseError> {
+    let name = try_attr_value(e, b"w:name", FONT_TABLE_PATH)?.ok_or_else(|| {
+        ParseError::InvalidStructure("word/fontTable.xml font is missing w:name".to_string())
+    })?;
+    Ok(FontEntry {
+        name,
+        alt_name: None,
+        charset: None,
+        family: None,
+        panose: None,
+    })
 }
 
 fn charset_attr(e: &quick_xml::events::BytesStart<'_>) -> Result<Option<u32>, ParseError> {

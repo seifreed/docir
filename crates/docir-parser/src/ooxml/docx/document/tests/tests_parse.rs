@@ -429,6 +429,7 @@ fn test_parse_font_table_collects_font_entries() {
             <w:panose1 w:val="020F0502020204030204"/>
           </w:font>
           <w:font w:name="NoDetails"></w:font>
+          <w:font w:name="EmptyFont"/>
         </w:fonts>
         "#;
 
@@ -440,7 +441,7 @@ fn test_parse_font_table_collects_font_entries() {
         _ => panic!("missing font table"),
     };
 
-    assert_eq!(table.fonts.len(), 2);
+    assert_eq!(table.fonts.len(), 3);
     assert_eq!(table.fonts[0].name, "Calibri");
     assert_eq!(table.fonts[0].alt_name.as_deref(), Some("Body"));
     assert_eq!(table.fonts[0].charset, Some(204));
@@ -455,6 +456,12 @@ fn test_parse_font_table_collects_font_entries() {
     assert_eq!(table.fonts[1].charset, None);
     assert_eq!(table.fonts[1].family, None);
     assert_eq!(table.fonts[1].panose, None);
+
+    assert_eq!(table.fonts[2].name, "EmptyFont");
+    assert_eq!(table.fonts[2].alt_name, None);
+    assert_eq!(table.fonts[2].charset, None);
+    assert_eq!(table.fonts[2].family, None);
+    assert_eq!(table.fonts[2].panose, None);
 }
 #[test]
 fn test_parse_font_table_returns_xml_error_on_malformed_input() {
