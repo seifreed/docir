@@ -9,6 +9,7 @@ use formula_parse_utils::*;
 const MAX_FORMULA_EVALUATION_DEPTH: usize = 256;
 const MAX_FORMULA_PARSE_DEPTH: usize = 256;
 const MAX_FORMULA_RANGE_CELLS: u64 = 1_000_000;
+const MAX_FORMULA_LENGTH: usize = 1024 * 1024;
 
 #[derive(Debug, Clone)]
 struct CellRef {
@@ -64,6 +65,9 @@ impl<'a> FormulaEvalContext<'a> {
     }
 
     fn eval_formula(&mut self, formula: &str) -> Option<f64> {
+        if formula.len() > MAX_FORMULA_LENGTH {
+            return None;
+        }
         let tokens = tokenize_formula(formula);
         let mut parser = FormulaParser::new(tokens, self);
         let value = parser.parse_expression(0)?;
@@ -543,6 +547,15 @@ mod tests {
         let formulas = HashMap::new();
         let mut ctx = FormulaEvalContext::new("Sheet1", HashMap::new(), &formulas);
         let formula = format!("{}1", "-".repeat(MAX_FORMULA_PARSE_DEPTH + 1));
+
+        assert!(ctx.eval_formula(&formula).is_none());
+    }
+
+    #[test]
+    fn evaluate_ods_formulas_rejects_excessive_formula_length() {
+        let formulas = HashMap::new();
+        let mut ctx = FormulaEvalContext::new("Sheet1", HashMap::new(), &formulas);
+        let formula = "1".repeat(MAX_FORMULA_LENGTH + 1);
 
         assert!(ctx.eval_formula(&formula).is_none());
     }
