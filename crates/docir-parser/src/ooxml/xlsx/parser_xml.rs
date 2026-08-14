@@ -128,6 +128,9 @@ pub(super) fn parse_conditional_formatting(
                     &mut formula_text,
                 )?;
             }
+            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"cfRule" => {
+                rules.push(parse_conditional_rule(&e, sheet_path)?);
+            }
             Ok(Event::Text(e)) if in_formula => {
                 formula_text.push_str(
                     &crate::xml_utils::decoded_text(&e)

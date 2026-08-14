@@ -218,6 +218,26 @@ fn test_parse_conditional_formatting_and_threaded_comments() {
 }
 
 #[test]
+fn parse_conditional_formatting_preserves_empty_rule() {
+    let xml = r#"<conditionalFormatting sqref="A1">
+        <cfRule type="aboveAverage" priority="3"/>
+    </conditionalFormatting>"#;
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let start = match reader.read_event_into(&mut buf).expect("conditional start") {
+        Event::Start(e) => e.into_owned(),
+        other => panic!("unexpected event: {other:?}"),
+    };
+
+    let conditional = parse_conditional_formatting(&mut reader, &start, "xl/worksheets/sheet1.xml")
+        .expect("empty conditional rule should parse");
+    assert_eq!(conditional.rules.len(), 1);
+    assert_eq!(conditional.rules[0].rule_type, "aboveAverage");
+    assert_eq!(conditional.rules[0].priority, Some(3));
+}
+
+#[test]
 fn parse_conditional_formatting_reports_malformed_attributes() {
     let xml = r#"
         <conditionalFormatting sqref="A1" sqref="B2">
