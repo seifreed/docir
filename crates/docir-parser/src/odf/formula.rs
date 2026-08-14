@@ -7,6 +7,7 @@ mod formula_parse_utils;
 use formula_parse_utils::*;
 
 const MAX_FORMULA_EVALUATION_DEPTH: usize = 256;
+const MAX_FORMULA_PARSE_DEPTH: usize = 256;
 const MAX_FORMULA_RANGE_CELLS: u64 = 1_000_000;
 
 #[derive(Debug, Clone)]
@@ -65,7 +66,7 @@ impl<'a> FormulaEvalContext<'a> {
     fn eval_formula(&mut self, formula: &str) -> Option<f64> {
         let tokens = tokenize_formula(formula);
         let mut parser = FormulaParser::new(tokens, self);
-        let value = parser.parse_expression()?;
+        let value = parser.parse_expression(0)?;
         if !matches!(parser.peek(), FormulaToken::End) {
             return None;
         }
@@ -161,17 +162,17 @@ impl<'a, 'b> FormulaParser<'a, 'b> {
         }
     }
 
-    fn parse_expression(&mut self) -> Option<f64> {
-        let mut value = self.parse_term()?;
+    fn parse_expression(&mut self, depth: usize) -> Option<f64> {
+        let mut value = self.parse_term(depth)?;
         loop {
             match self.peek() {
                 FormulaToken::Plus => {
                     self.next();
-                    value += self.parse_term()?;
+                    value += self.parse_term(depth)?;
                 }
                 FormulaToken::Minus => {
                     self.next();
-                    value -= self.parse_term()?;
+                    value -= self.parse_term(depth)?;
                 }
                 _ => break,
             }
@@ -179,17 +180,17 @@ impl<'a, 'b> FormulaParser<'a, 'b> {
         Some(value)
     }
 
-    fn parse_term(&mut self) -> Option<f64> {
-        let mut value = self.parse_factor()?;
+    fn parse_term(&mut self, depth: usize) -> Option<f64> {
+        let mut value = self.parse_factor(depth)?;
         loop {
             match self.peek() {
                 FormulaToken::Star => {
                     self.next();
-                    value *= self.parse_factor()?;
+                    value *= self.parse_factor(depth)?;
                 }
                 FormulaToken::Slash => {
                     self.next();
-                    let denom = self.parse_factor()?;
+                    let denom = self.parse_factor(depth)?;
                     if denom == 0.0 {
                         return None;
                     }
@@ -201,12 +202,15 @@ impl<'a, 'b> FormulaParser<'a, 'b> {
         Some(value)
     }
 
-    fn parse_factor(&mut self) -> Option<f64> {
+    fn parse_factor(&mut self, depth: usize) -> Option<f64> {
+        if depth > MAX_FORMULA_PARSE_DEPTH {
+            return None;
+        }
         let token = self.peek().clone();
         match token {
             FormulaToken::Minus => {
                 self.next();
-                self.parse_factor().map(|v| -v)
+                self.parse_factor(depth + 1).map(|v| -v)
             }
             FormulaToken::Number(value) => {
                 self.next();
@@ -225,7 +229,7 @@ impl<'a, 'b> FormulaParser<'a, 'b> {
                 self.next();
                 if matches!(self.peek(), FormulaToken::LParen) {
                     self.next();
-                    let values = self.parse_function_args()?;
+                    let values = self.parse_function_args(depth + 1)?;
                     if !matches!(self.peek(), FormulaToken::RParen) {
                         return None;
                     }
@@ -237,7 +241,7 @@ impl<'a, 'b> FormulaParser<'a, 'b> {
             }
             FormulaToken::LParen => {
                 self.next();
-                let value = self.parse_expression()?;
+                let value = self.parse_expression(depth + 1)?;
                 if !matches!(self.peek(), FormulaToken::RParen) {
                     return None;
                 }
@@ -248,7 +252,7 @@ impl<'a, 'b> FormulaParser<'a, 'b> {
         }
     }
 
-    fn parse_function_args(&mut self) -> Option<Vec<f64>> {
+    fn parse_function_args(&mut self, depth: usize) -> Option<Vec<f64>> {
         let mut values = Vec::new();
         if matches!(self.peek(), FormulaToken::RParen) {
             return Some(values);
@@ -260,7 +264,7 @@ impl<'a, 'b> FormulaParser<'a, 'b> {
                     values.extend(range_values);
                 }
             } else {
-                let value = self.parse_expression()?;
+                let value = self.parse_expression(depth)?;
                 values.push(value);
             }
             match self.peek() {
@@ -532,6 +536,15 @@ mod tests {
         let mut ctx = FormulaEvalContext::new("Sheet1", HashMap::new(), &formulas);
 
         assert!(ctx.eval_formula("A1").is_none());
+    }
+
+    #[test]
+    fn evaluate_ods_formulas_rejects_excessive_parse_depth() {
+        let formulas = HashMap::new();
+        let mut ctx = FormulaEvalContext::new("Sheet1", HashMap::new(), &formulas);
+        let formula = format!("{}1", "-".repeat(MAX_FORMULA_PARSE_DEPTH + 1));
+
+        assert!(ctx.eval_formula(&formula).is_none());
     }
 
     #[test]
