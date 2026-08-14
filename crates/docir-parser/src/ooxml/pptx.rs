@@ -114,6 +114,13 @@ impl PptxParser {
                 Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"gridCol" => {
                     parse_grid_column(&e, &mut table, slide_path)?;
                 }
+                Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"tr" => {
+                    let mut row = TableRow::new();
+                    row.span = Some(SourceSpan::new(slide_path));
+                    let id = row.id;
+                    self.store.insert(IRNode::TableRow(row));
+                    table.rows.push(id);
+                }
                 Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"tbl" => {
                     break;
                 }

@@ -221,6 +221,29 @@ fn test_parse_pptx_table_preserves_empty_cells() {
 }
 
 #[test]
+fn test_parse_pptx_table_preserves_empty_rows() {
+    let tbl_xml = r#"
+        <a:tbl xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <a:tblGrid><a:gridCol w="1000"/></a:tblGrid>
+          <a:tr/>
+        </a:tbl>
+    "#;
+
+    let mut reader = quick_xml::Reader::from_str(tbl_xml);
+    reader.config_mut().trim_text(true);
+    let mut parser = PptxParser::new();
+    let table = parser
+        .parse_pptx_table(&mut reader, "ppt/tables/table-empty-row.xml")
+        .expect("table with an empty row");
+    let store = parser.into_store();
+
+    assert_eq!(table.rows.len(), 1);
+    assert!(
+        matches!(store.get(table.rows[0]), Some(IRNode::TableRow(row)) if row.cells.is_empty())
+    );
+}
+
+#[test]
 fn test_parse_pptx_table_rejects_truncated_table_scope() {
     let mut reader = quick_xml::Reader::from_str(
         r#"<a:tbl xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:tr/>"#,
