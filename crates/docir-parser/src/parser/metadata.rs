@@ -1,4 +1,5 @@
 use super::{OoxmlParser, ParseError};
+use crate::xml_utils::local_name;
 use crate::xml_utils::lossy_attr_value;
 use crate::xml_utils::reader_from_str;
 use crate::xml_utils::track_xml_document_event;
@@ -65,7 +66,8 @@ impl OoxmlParser {
         scan_xml_events(&mut reader, &mut buf, "docProps/core.xml", |event| {
             match event {
                 Event::Start(e) => {
-                    current_element = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    current_element =
+                        String::from_utf8_lossy(local_name(e.name().as_ref())).to_string();
                 }
                 Event::Text(e) => {
                     let text = crate::xml_utils::decoded_text(&e)
@@ -137,7 +139,8 @@ impl OoxmlParser {
         scan_xml_events(&mut reader, &mut buf, "docProps/app.xml", |event| {
             match event {
                 Event::Start(e) => {
-                    current_element = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    current_element =
+                        String::from_utf8_lossy(local_name(e.name().as_ref())).to_string();
                 }
                 Event::Text(e) => {
                     let text = crate::xml_utils::decoded_text(&e)
@@ -201,8 +204,9 @@ impl OoxmlParser {
             }
             match event {
                 Event::Start(e) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    if name.ends_with("property") {
+                    let element_name = e.name();
+                    let name = local_name(element_name.as_ref());
+                    if name == b"property" {
                         let mut prop = CustomProperty {
                             name: String::new(),
                             value: PropertyValue::String(String::new()),
@@ -229,8 +233,8 @@ impl OoxmlParser {
                             return Err(err);
                         }
                         current_prop = Some(prop);
-                    } else if name.starts_with("vt:") || name.contains(':') {
-                        current_value_tag = Some(name);
+                    } else if current_prop.is_some() {
+                        current_value_tag = Some(String::from_utf8_lossy(name).to_string());
                     }
                 }
                 Event::Text(e) => {
@@ -252,8 +256,8 @@ impl OoxmlParser {
                     }
                 }
                 Event::End(e) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    if name.ends_with("property") {
+                    let name = String::from_utf8_lossy(local_name(e.name().as_ref())).to_string();
+                    if name == "property" {
                         if let Some(prop) = current_prop.take() {
                             metadata.custom_properties.push(prop);
                         }
@@ -271,12 +275,12 @@ impl OoxmlParser {
 
 fn custom_property_value(tag: &str, text: String) -> Result<PropertyValue, ParseError> {
     let value = match tag {
-        "vt:lpwstr" | "vt:lpstr" | "vt:bstr" => PropertyValue::String(text),
-        "vt:i2" | "vt:i4" | "vt:int" | "vt:integer" => PropertyValue::Integer(
+        "lpwstr" | "lpstr" | "bstr" => PropertyValue::String(text),
+        "i2" | "i4" | "int" | "integer" => PropertyValue::Integer(
             text.parse::<i64>()
                 .map_err(|err| xml_error("docProps/custom.xml", err))?,
         ),
-        "vt:r4" | "vt:r8" | "vt:float" => {
+        "r4" | "r8" | "float" => {
             let value = text
                 .parse::<f64>()
                 .map_err(|err| xml_error("docProps/custom.xml", err))?;
@@ -288,9 +292,9 @@ fn custom_property_value(tag: &str, text: String) -> Result<PropertyValue, Parse
             }
             PropertyValue::Float(value)
         }
-        "vt:bool" => PropertyValue::Boolean(text == "true" || text == "1"),
-        "vt:filetime" => PropertyValue::DateTime(text),
-        "vt:blob" => PropertyValue::Blob(text),
+        "bool" => PropertyValue::Boolean(text == "true" || text == "1"),
+        "filetime" => PropertyValue::DateTime(text),
+        "blob" => PropertyValue::Blob(text),
         _ => PropertyValue::String(text),
     };
     Ok(value)
@@ -490,6 +494,48 @@ mod tests {
 
         assert_core_and_app_metadata(&metadata);
         assert_custom_metadata_values(&metadata);
+    }
+
+    #[test]
+    fn build_metadata_accepts_alternate_namespace_prefixes() {
+        let parser = OoxmlParser::new();
+        let mut zip = TestPackageReader::new(&[
+            (
+                "docProps/core.xml",
+                r#"<p:coreProperties xmlns:p="urn:core" xmlns:d="urn:dc" xmlns:t="urn:terms">
+                    <d:title>Alternate title</d:title>
+                    <p:keywords>alternate</p:keywords>
+                    <t:created>2026-08-14T00:00:00Z</t:created>
+                </p:coreProperties>"#,
+            ),
+            (
+                "docProps/app.xml",
+                r#"<a:Properties xmlns:a="urn:app"><a:Application>alternate-app</a:Application></a:Properties>"#,
+            ),
+            (
+                "docProps/custom.xml",
+                r#"<c:Properties xmlns:c="urn:custom" xmlns:v="urn:types">
+                    <c:property pid="2" name="Build"><v:i4>42</v:i4></c:property>
+                </c:Properties>"#,
+            ),
+        ]);
+
+        let metadata = parser
+            .build_metadata(&mut zip)
+            .expect("metadata parse")
+            .expect("metadata built");
+
+        assert_eq!(metadata.title.as_deref(), Some("Alternate title"));
+        assert_eq!(metadata.keywords.as_deref(), Some("alternate"));
+        assert_eq!(metadata.created.as_deref(), Some("2026-08-14T00:00:00Z"));
+        assert_eq!(metadata.application.as_deref(), Some("alternate-app"));
+        assert!(matches!(
+            metadata
+                .custom_properties
+                .first()
+                .map(|property| &property.value),
+            Some(PropertyValue::Integer(42))
+        ));
     }
 
     #[test]
