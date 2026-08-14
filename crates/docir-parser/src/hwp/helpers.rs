@@ -2,7 +2,7 @@ use super::part_registry;
 use crate::diagnostics::{push_info, push_warning};
 use crate::error::ParseError;
 use crate::text_utils::parse_text_alignment;
-use crate::xml_utils::{try_decoded_attr_value, visit_attributes_result};
+use crate::xml_utils::{parse_bool_attr, try_decoded_attr_value, visit_attributes_result};
 use docir_core::ir::{
     Diagnostics, MediaType, RunProperties, StyleParagraphProperties, StyleRunProperties,
     TableAlignment, TableProperties, TableWidth, TableWidthType,
@@ -74,10 +74,10 @@ pub(super) fn run_properties_from_attrs(
         let value = try_decoded_attr_value(attr, e.decoder(), source)?;
         match key {
             b"bold" | b"b" => {
-                props.bold = Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                props.bold = Some(parse_bool_attr(value.as_bytes(), source)?);
             }
             b"italic" | b"i" => {
-                props.italic = Some(value == "1" || value.eq_ignore_ascii_case("true"));
+                props.italic = Some(parse_bool_attr(value.as_bytes(), source)?);
             }
             b"underline" | b"u" => {
                 props.underline = Some(docir_core::ir::UnderlineStyle::Single);

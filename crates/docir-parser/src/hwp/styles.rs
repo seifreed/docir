@@ -3,7 +3,7 @@ use super::{
     run_properties_from_attrs, style_run_props_from_run,
 };
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, reader_from_str, scan_xml_events};
+use crate::xml_utils::{XmlScanControl, parse_bool_attr, reader_from_str, scan_xml_events};
 use docir_core::ir::{Style, StyleSet, StyleType};
 use docir_core::types::SourceSpan;
 use quick_xml::events::Event;
@@ -70,9 +70,10 @@ fn parse_style_attrs(
         style_type,
         based_on: attr_any(e, &[b"basedOn", b"based-on"], source)?,
         next: attr_any(e, &[b"next", b"next-style"], source)?,
-        is_default: attr_any(e, &[b"default", b"isDefault"], source)?
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false),
+        is_default: match attr_any(e, &[b"default", b"isDefault"], source)? {
+            Some(value) => parse_bool_attr(value.as_bytes(), source)?,
+            None => false,
+        },
         run_props: None,
         paragraph_props: None,
         table_props: None,
