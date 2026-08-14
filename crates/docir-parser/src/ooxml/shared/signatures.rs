@@ -35,41 +35,55 @@ fn parse_signature_impl(xml: &str, path: &str) -> Result<DigitalSignature, Parse
         if track_xml_document_event(&event, &mut depth, &mut root_closed, path)? {
             break;
         }
-        if let Event::Start(e) = event {
-            match local_name(e.name().as_ref()) {
-                b"Signature" => {
-                    visit_attributes(&e, path, |attr| {
-                        if attr.key.as_ref() == b"Id" {
-                            sig.signature_id = Some(lossy_attr_value(attr).to_string());
-                        }
-                    })?;
-                }
-                b"SignatureMethod" => {
-                    visit_attributes(&e, path, |attr| {
-                        if attr.key.as_ref() == b"Algorithm" {
-                            sig.signature_method = Some(lossy_attr_value(attr).to_string());
-                        }
-                    })?;
-                }
-                b"DigestMethod" => {
-                    visit_attributes(&e, path, |attr| {
-                        if attr.key.as_ref() == b"Algorithm" {
-                            sig.digest_methods.push(lossy_attr_value(attr).to_string());
-                        }
-                    })?;
-                }
-                b"X509SubjectName" => {
+        match event {
+            Event::Start(e) => {
+                let element_name = e.name();
+                let name = local_name(element_name.as_ref());
+                apply_signature_attributes(&e, name, path, &mut sig)?;
+                if local_name(element_name.as_ref()) == b"X509SubjectName" {
                     let text = reader.read_text(e.name()).map_err(|e| xml_error(path, e))?;
                     depth -= 1;
                     sig.signer = Some(decoded_text(&text).map_err(|err| xml_error(path, err))?);
                 }
-                _ => {}
             }
+            Event::Empty(e) => {
+                let element_name = e.name();
+                let name = local_name(element_name.as_ref());
+                apply_signature_attributes(&e, name, path, &mut sig)?;
+            }
+            _ => {}
         }
         buf.clear();
     }
 
     Ok(sig)
+}
+
+fn apply_signature_attributes(
+    element: &quick_xml::events::BytesStart<'_>,
+    name: &[u8],
+    path: &str,
+    sig: &mut DigitalSignature,
+) -> Result<(), ParseError> {
+    match name {
+        b"Signature" => visit_attributes(element, path, |attr| {
+            if attr.key.as_ref() == b"Id" {
+                sig.signature_id = Some(lossy_attr_value(attr).to_string());
+            }
+        })?,
+        b"SignatureMethod" => visit_attributes(element, path, |attr| {
+            if attr.key.as_ref() == b"Algorithm" {
+                sig.signature_method = Some(lossy_attr_value(attr).to_string());
+            }
+        })?,
+        b"DigestMethod" => visit_attributes(element, path, |attr| {
+            if attr.key.as_ref() == b"Algorithm" {
+                sig.digest_methods.push(lossy_attr_value(attr).to_string());
+            }
+        })?,
+        _ => {}
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -123,6 +137,24 @@ mod tests {
         assert_eq!(parsed.signature_method.as_deref(), Some("ecdsa-sha256"));
         assert_eq!(parsed.signer.as_deref(), Some("CN=plain signer"));
         assert_eq!(parsed.digest_methods, vec!["sha384"]);
+    }
+
+    #[test]
+    fn parse_signature_extracts_algorithms_from_empty_elements() {
+        let xml = r##"
+            <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+              <ds:SignedInfo>
+                <ds:SignatureMethod Algorithm="rsa-sha256"/>
+                <ds:Reference URI="#id">
+                  <ds:DigestMethod Algorithm="sha256"/>
+                </ds:Reference>
+              </ds:SignedInfo>
+            </ds:Signature>
+        "##;
+
+        let parsed = parse_signature(xml, "word/signatures/sig-empty.xml").expect("signature");
+        assert_eq!(parsed.signature_method.as_deref(), Some("rsa-sha256"));
+        assert_eq!(parsed.digest_methods, vec!["sha256"]);
     }
 
     #[test]
