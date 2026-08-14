@@ -842,6 +842,21 @@ fn test_parse_comments_reports_malformed_attributes() {
 }
 
 #[test]
+fn test_parse_comments_rejects_invalid_done_value() {
+    let comments_xml = r#"
+        <w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:comment w:id="1" w:done="maybe"><w:p/></w:comment>
+        </w:comments>
+        "#;
+    let mut parser = DocxParser::new();
+
+    let err = parser
+        .parse_comments(comments_xml, &Relationships::default())
+        .expect_err("invalid comment boolean must fail");
+    assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("maybe")));
+}
+
+#[test]
 fn test_parse_styles_rejects_missing_style_id() {
     let styles_xml = r#"
         <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

@@ -155,8 +155,8 @@ fn apply_section_columns(
     if let Some(val) = u32_attr(e, b"w:space")? {
         properties.column_spacing = Some(val);
     }
-    if let Some(val) = try_attr_value(e, b"w:sep", DOC_PATH)? {
-        properties.column_separator = Some(val == "1" || val.eq_ignore_ascii_case("true"));
+    if try_attr_value(e, b"w:sep", DOC_PATH)?.is_some() {
+        properties.column_separator = Some(super::bool_from_val(e, DOC_PATH)?);
     }
     Ok(())
 }

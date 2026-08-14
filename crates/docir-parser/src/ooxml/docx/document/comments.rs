@@ -68,7 +68,13 @@ impl DocxParser {
                             "word/commentsExtended.xml",
                         )?,
                         done: try_attr_value(&e, b"w:done", "word/commentsExtended.xml")?
-                            .map(|v| v == "1" || v.eq_ignore_ascii_case("true")),
+                            .map(|value| {
+                                super::parse_on_off_value(
+                                    Some(value.as_str()),
+                                    "word/commentsExtended.xml",
+                                )
+                            })
+                            .transpose()?,
                     };
                     set.entries.push(entry);
                 }
@@ -170,10 +176,11 @@ fn parse_comments_like(
                     comment.initials = try_attr_value(&e, b"w:initials", "word/comments.xml")?;
                     comment.parent_id = try_attr_value(&e, b"w:parentId", "word/comments.xml")?;
                     comment.para_id = try_attr_value(&e, b"w:paraId", "word/comments.xml")?;
-                    if let Some(val) = try_attr_value(&e, b"w:done", "word/comments.xml")? {
-                        let v = val.as_str();
-                        comment.done = Some(v == "1" || v.eq_ignore_ascii_case("true"));
-                    }
+                    comment.done = try_attr_value(&e, b"w:done", "word/comments.xml")?
+                        .map(|value| {
+                            super::parse_on_off_value(Some(value.as_str()), "word/comments.xml")
+                        })
+                        .transpose()?;
                     comment.date = try_attr_value(&e, b"w:date", "word/comments.xml")?;
                     comment.content = parse_block_until(parser, &mut reader, rels, b"comment")?;
                     let id = comment.id;

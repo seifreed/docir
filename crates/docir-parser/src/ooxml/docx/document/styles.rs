@@ -1,4 +1,4 @@
-use super::DocxParser;
+use super::{DocxParser, bool_from_val};
 use crate::error::ParseError;
 use crate::xml_utils::{local_name, track_xml_root_event, try_attr_value, xml_error};
 use docir_core::ir::{Paragraph, RunProperties, Style, StyleSet, StyleType};
@@ -189,9 +189,11 @@ fn build_style(event: &BytesStart<'_>) -> Result<Style, ParseError> {
         style_type: StyleType::Other,
         based_on: None,
         next: None,
-        is_default: try_attr_value(event, b"w:default", STYLES_PATH)?
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false),
+        is_default: if try_attr_value(event, b"w:default", STYLES_PATH)?.is_some() {
+            bool_from_val(event, STYLES_PATH)?
+        } else {
+            false
+        },
         run_props: None,
         paragraph_props: None,
         table_props: None,

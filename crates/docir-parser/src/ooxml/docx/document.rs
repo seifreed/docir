@@ -323,6 +323,10 @@ pub(super) fn bool_from_val(start: &BytesStart, file: &str) -> Result<bool, Pars
     support::bool_from_val(start, file)
 }
 
+pub(super) fn parse_on_off_value(value: Option<&str>, file: &str) -> Result<bool, ParseError> {
+    support::parse_on_off_value(value, file)
+}
+
 fn parse_settings_like(xml: &str) -> Result<WordSettings, ParseError> {
     support::parse_settings_like(xml)
 }

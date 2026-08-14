@@ -66,7 +66,7 @@ pub(super) fn bool_from_val(start: &BytesStart, file: &str) -> Result<bool, Pars
     parse_on_off_value(try_attr_value(start, b"w:val", file)?.as_deref(), file)
 }
 
-fn parse_on_off_value(value: Option<&str>, file: &str) -> Result<bool, ParseError> {
+pub(super) fn parse_on_off_value(value: Option<&str>, file: &str) -> Result<bool, ParseError> {
     let Some(value) = value else {
         return Ok(true);
     };
