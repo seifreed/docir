@@ -1,5 +1,7 @@
 use crate::error::ParseError;
-use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, try_attr_value_by_suffix};
+use crate::xml_utils::{
+    XmlScanControl, local_name, parse_bool_attr, scan_xml_events, try_attr_value_by_suffix,
+};
 use docir_core::ir::{DefinedName, ShapeTransform};
 use docir_core::types::{NodeId, SourceSpan};
 use quick_xml::Reader;
@@ -80,7 +82,7 @@ fn parse_ods_named_definition(
     };
 
     if let Some(hidden) = try_attr_value_by_suffix(element, &[b":hidden"], "content.xml")? {
-        def.hidden = hidden == "true";
+        def.hidden = parse_bool_attr(hidden.as_bytes(), "content.xml")?;
     }
     Ok(Some(def))
 }

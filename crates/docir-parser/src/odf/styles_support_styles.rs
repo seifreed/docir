@@ -1,7 +1,7 @@
 use super::super::{Style, StyleSet, StyleType, parse_text_alignment};
 use crate::error::ParseError;
 use crate::xml_utils::xml_error;
-use crate::xml_utils::{local_name, try_attr_value_by_suffix};
+use crate::xml_utils::{local_name, parse_bool_attr, try_attr_value_by_suffix};
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
@@ -169,11 +169,9 @@ fn build_style_from_start(
     };
     if let Some(family) = try_attr_value_by_suffix(start, &[b":family"], source)?
         && (family == "paragraph" || family == "text")
+        && let Some(value) = try_attr_value_by_suffix(start, &[b":default"], source)?
     {
-        style.is_default = is_default
-            || try_attr_value_by_suffix(start, &[b":default"], source)?
-                .map(|v| v == "true")
-                .unwrap_or(false);
+        style.is_default = is_default || parse_bool_attr(value.as_bytes(), source)?;
     }
     Ok(Some(style))
 }

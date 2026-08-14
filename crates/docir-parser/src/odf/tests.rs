@@ -637,6 +637,26 @@ fn test_parse_ods_cells_and_validations() {
 }
 
 #[test]
+fn test_parse_ods_rejects_invalid_validation_boolean() {
+    let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
+    let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+  <office:body><office:spreadsheet>
+    <table:content-validations>
+      <table:content-validation table:name="bad" table:allow-empty-cell="maybe"/>
+    </table:content-validations>
+  </office:spreadsheet></office:body>
+</office:document-content>"#;
+    let parser = DocumentParser::new();
+    let err = parser
+        .parse_reader(Cursor::new(build_odf_zip(mimetype, content_xml, None)))
+        .expect_err("invalid ODF validation boolean must fail");
+
+    assert!(matches!(err, ParseError::InvalidStructure(message) if message.contains("maybe")));
+}
+
+#[test]
 fn test_parse_ods_reports_malformed_cell_attributes() {
     let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
     let content_xml = r#"<?xml version="1.0" encoding="UTF-8"?>

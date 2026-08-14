@@ -3,7 +3,9 @@ use crate::diagnostics::push_entry;
 use crate::error::ParseError;
 use crate::security_scan::OdfXmlInputs;
 use crate::security_utils::parse_dde_formula;
-use crate::xml_utils::{XmlScanControl, local_name, scan_xml_events, try_attr_value_by_suffix};
+use crate::xml_utils::{
+    XmlScanControl, local_name, parse_bool_attr, scan_xml_events, try_attr_value_by_suffix,
+};
 use crate::zip_handler::PackageReader;
 use docir_core::ir::{DiagnosticEntry, DiagnosticSeverity, Diagnostics, Document, IRNode};
 use docir_core::security::{DdeField, ExternalRefType, ExternalReference, OleObject};
@@ -309,7 +311,7 @@ pub(crate) fn scan_odf_protection(xml: &str) -> Result<Vec<DiagnosticEntry>, Par
     let mut protected = false;
     visit_start_or_empty(xml, "content.xml", |e| {
         if let Some(value) = try_attr_value_by_suffix(e, &[b":protected"], "content.xml")?
-            && value == "true"
+            && parse_bool_attr(value.as_bytes(), "content.xml")?
         {
             protected = true;
             return Ok(true);

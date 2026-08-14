@@ -8,8 +8,8 @@ use crate::odf::{
     utils::parse_frame_transform,
 };
 use crate::xml_utils::{
-    XmlScanControl, local_name, scan_xml_events_until_end, scan_xml_events_with_reader,
-    try_attr_value_by_suffix, xml_error,
+    XmlScanControl, local_name, parse_bool_attr, scan_xml_events_until_end,
+    scan_xml_events_with_reader, try_attr_value_by_suffix, xml_error,
 };
 use docir_core::ir::*;
 use docir_core::types::*;
@@ -78,14 +78,17 @@ pub(crate) fn parse_validation_definition(
     };
     let condition = try_attr_value_by_suffix(start, &[b":condition"], "content.xml")?;
     let allow_blank = try_attr_value_by_suffix(start, &[b":allow-empty-cell"], "content.xml")?
-        .map(|v| v == "true")
+        .map(|v| parse_bool_attr(v.as_bytes(), "content.xml"))
+        .transpose()?
         .unwrap_or(false);
     let show_input_message = try_attr_value_by_suffix(start, &[b":display-list"], "content.xml")?
-        .map(|v| v == "true")
+        .map(|v| parse_bool_attr(v.as_bytes(), "content.xml"))
+        .transpose()?
         .unwrap_or(false);
     let show_error_message =
         try_attr_value_by_suffix(start, &[b":display-error-message"], "content.xml")?
-            .map(|v| v == "true")
+            .map(|v| parse_bool_attr(v.as_bytes(), "content.xml"))
+            .transpose()?
             .unwrap_or(false);
     let def = ValidationDef {
         validation_type: condition.clone(),
