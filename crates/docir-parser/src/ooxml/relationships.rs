@@ -85,6 +85,10 @@ impl Relationships {
                                 let mode = try_decoded_attr_value(attr, e.decoder(), path)?;
                                 if mode.eq_ignore_ascii_case("External") {
                                     target_mode = TargetMode::External;
+                                } else if !mode.eq_ignore_ascii_case("Internal") {
+                                    return Err(ParseError::InvalidStructure(format!(
+                                        "{path} relationship has invalid TargetMode: {mode}"
+                                    )));
                                 }
                             }
                             _ => {}
@@ -328,6 +332,22 @@ mod tests {
         ] {
             assert!(Relationships::parse(xml).is_err());
         }
+    }
+
+    #[test]
+    fn parse_rejects_relationships_with_invalid_target_mode() {
+        let xml = r#"
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://example.test/type"
+                Target="https://example.test" TargetMode="Unexpected"/>
+            </Relationships>
+        "#;
+
+        assert!(matches!(
+            Relationships::parse(xml),
+            Err(ParseError::InvalidStructure(message))
+                if message.contains("invalid TargetMode")
+        ));
     }
 
     #[test]
