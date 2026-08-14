@@ -244,6 +244,12 @@ fn parse_drawing_text_body(
                 let paragraph = parse_drawing_text_paragraph(reader, doc_path)?;
                 paragraphs.push(paragraph);
             }
+            Ok(Event::Empty(e)) if local_name(e.name().as_ref()) == b"p" => {
+                paragraphs.push(ShapeTextParagraph {
+                    runs: Vec::new(),
+                    alignment: None,
+                });
+            }
             Ok(Event::End(e)) if local_name(e.name().as_ref()) == b"txBody" => {
                 break;
             }
@@ -505,6 +511,23 @@ mod tests {
         assert_eq!(text.paragraphs[0].runs[0].text, "Line1");
         assert_eq!(text.paragraphs[0].runs[1].text, "\n");
         assert_eq!(text.paragraphs[0].runs[2].text, "Line2");
+    }
+
+    #[test]
+    fn parse_drawing_text_body_preserves_empty_paragraph() {
+        let xml = r#"<a:txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <a:p/>
+        </a:txBody>"#;
+        let mut reader = reader_from_str(xml);
+        let mut buf = Vec::new();
+        assert!(matches!(
+            reader.read_event_into(&mut buf),
+            Ok(Event::Start(_))
+        ));
+
+        let text = parse_drawing_text_body(&mut reader, DOC_PATH).expect("text body parse");
+        assert_eq!(text.paragraphs.len(), 1);
+        assert!(text.paragraphs[0].runs.is_empty());
     }
 
     #[test]
