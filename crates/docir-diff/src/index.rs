@@ -26,7 +26,14 @@ pub(crate) fn build_index(store: &IrStore, root: NodeId) -> BTreeMap<String, Nod
         }
         None => "Document".to_string(),
     };
-    walk_with_key(store, root, root_key, &mut index, &mut used);
+    walk_with_key(
+        store,
+        root,
+        root_key,
+        &mut index,
+        &mut used,
+        &mut HashSet::new(),
+    );
     index
 }
 
@@ -36,10 +43,14 @@ fn walk_with_key(
     key: String,
     index: &mut BTreeMap<String, NodeSnapshot>,
     used_keys: &mut HashSet<String>,
+    active_nodes: &mut HashSet<NodeId>,
 ) {
     let Some(node) = store.get(node_id) else {
         return;
     };
+    if !active_nodes.insert(node_id) {
+        return;
+    }
     let node_type = node.node_type();
 
     let summary = summarize(node, store);
@@ -72,8 +83,9 @@ fn walk_with_key(
         if !used_keys.insert(child_key.clone()) {
             continue;
         }
-        walk_with_key(store, child_id, child_key, index, used_keys);
+        walk_with_key(store, child_id, child_key, index, used_keys, active_nodes);
     }
+    active_nodes.remove(&node_id);
 }
 
 fn local_key_with_index(
@@ -180,6 +192,20 @@ mod tests {
             .collect();
         assert_eq!(run_keys.len(), 2);
         assert_ne!(run_keys[0], run_keys[1]);
+    }
+
+    #[test]
+    fn build_index_terminates_on_cyclic_ir_reference() {
+        let mut document = Document::new(DocumentFormat::WordProcessing);
+        let root_id = document.id;
+        document.content.push(root_id);
+
+        let mut store = IrStore::new();
+        store.insert(IRNode::Document(document));
+
+        let index = build_index(&store, root_id);
+
+        assert_eq!(index.len(), 1);
     }
 
     #[test]
